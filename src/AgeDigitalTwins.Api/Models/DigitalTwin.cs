@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using ApacheAGE.Types;
 
 namespace AgeDigitalTwins.Api.Models;
 
@@ -59,4 +60,26 @@ public class DigitalTwin
 
     [JsonExtensionData]
     public IDictionary<string, object> Contents { get; set; } = new Dictionary<string, object>();
+
+    public Vertex ToVertex()
+    {
+        var vertex = new Vertex
+        {
+            Label = "Twin",
+            Properties = new Dictionary<string, object?>
+            {
+                { DigitalTwinsJsonPropertyNames.DigitalTwinId, Id },
+                { DigitalTwinsJsonPropertyNames.DigitalTwinETag, ETag.ToString() },
+                { DigitalTwinsJsonPropertyNames.MetadataLastUpdateTime, LastUpdatedOn },
+                { DigitalTwinsJsonPropertyNames.DigitalTwinMetadata, Metadata }
+            }
+        };
+
+        foreach (var (key, value) in Contents)
+        {
+            vertex.Properties[key] = value;
+        }
+
+        return vertex;
+    }
 }

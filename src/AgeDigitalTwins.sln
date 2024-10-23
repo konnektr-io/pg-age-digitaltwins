@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.002.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "AgeDigitalTwins.Api", "AgeDigitalTwins.Api\AgeDigitalTwins.Api.csproj", "{723C41DF-58C6-489D-A8E0-460AB04AC1DD}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{723C41DF-58C6-489D-A8E0-460AB04AC1DD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{723C41DF-58C6-489D-A8E0-460AB04AC1DD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{723C41DF-58C6-489D-A8E0-460AB04AC1DD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{723C41DF-58C6-489D-A8E0-460AB04AC1DD}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {F9032D3D-6BA6-4932-932A-88A59F178188}
+	EndGlobalSection
+EndGlobal
