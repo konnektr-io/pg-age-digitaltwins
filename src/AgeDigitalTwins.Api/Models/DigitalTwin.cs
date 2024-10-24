@@ -3,20 +3,20 @@ using ApacheAGE.Types;
 
 namespace AgeDigitalTwins.Api.Models;
 
-[JsonConverter(typeof(BasicDigitalTwinJsonConverter))]
+// [JsonConverter(typeof(BasicDigitalTwinJsonConverter))]
 public class DigitalTwin
 {
     /// <summary>
     /// The unique Id of the digital twin in a digital twins instance. This field is present on every digital twin.
     /// </summary>
     [JsonPropertyName(DigitalTwinsJsonPropertyNames.DigitalTwinId)]
-    public string Id { get; set; }
+    public required string Id { get; set; }
 
     /// <summary>
     /// A string representing a weak ETag for the entity that this request performs an operation against, as per RFC7232.
     /// </summary>
-    [JsonPropertyName(DigitalTwinsJsonPropertyNames.DigitalTwinETag)]
-    public ETag? ETag { get; set; }
+/*     [JsonPropertyName(DigitalTwinsJsonPropertyNames.DigitalTwinETag)]
+    public ETag? ETag { get; set; } */
 
     /// <summary>
     /// The date and time the twin was last updated.
@@ -28,8 +28,8 @@ public class DigitalTwin
     /// Information about the model a digital twin conforms to.
     /// This field is present on every digital twin.
     /// </summary>
-    [JsonPropertyName(DigitalTwinsJsonPropertyNames.DigitalTwinMetadata)]
-    public DigitalTwinMetadata Metadata { get; set; } = new DigitalTwinMetadata();
+    /* [JsonPropertyName(DigitalTwinsJsonPropertyNames.DigitalTwinMetadata)]
+    public DigitalTwinMetadata Metadata { get; set; } = new DigitalTwinMetadata(); */
 
     /// <summary>
     /// This field will contain properties and components as defined in the contents section of the DTDL definition of the twin.
@@ -69,9 +69,9 @@ public class DigitalTwin
             Properties = new Dictionary<string, object?>
             {
                 { DigitalTwinsJsonPropertyNames.DigitalTwinId, Id },
-                { DigitalTwinsJsonPropertyNames.DigitalTwinETag, ETag.ToString() },
+                // { DigitalTwinsJsonPropertyNames.DigitalTwinETag, ETag.ToString() },
                 { DigitalTwinsJsonPropertyNames.MetadataLastUpdateTime, LastUpdatedOn },
-                { DigitalTwinsJsonPropertyNames.DigitalTwinMetadata, Metadata }
+                // { DigitalTwinsJsonPropertyNames.DigitalTwinMetadata, Metadata }
             }
         };
 

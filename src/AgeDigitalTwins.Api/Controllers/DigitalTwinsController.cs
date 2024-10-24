@@ -36,14 +36,15 @@ public class DigitalTwinsController(IConfiguration configuration) : ControllerBa
     }
 
     [HttpPut("{id}")]
-    public async Task<IActionResult> PutTwin(string id, [FromBody] DigitalTwin twin, CancellationToken cancellationToken)
+    public async Task<IActionResult> PutTwin(string id, [FromBody] string twin, CancellationToken cancellationToken)
     {
         await using var client = CreateAgeClient();
-        await client.OpenConnectionAsync(cancellationToken);
-        var propertiesJson = JsonSerializer.Serialize(twin);
+        await client.OpenConnectionAsync(false, cancellationToken);
+        // var propertiesJson = JsonSerializer.Serialize(twin);
+        string cypher = $"CREATE (t:Twin {{dtId:'test',name:'test'}})";
         await client.ExecuteCypherAsync(
             _DEFAULT_GRAPH_NAME,
-            $"CREATE (t:Twin {{ $dtId: '{id}', properties: '{propertiesJson}' }})",
+            cypher,
             cancellationToken);
         return CreatedAtAction(nameof(GetTwin), new { id = id }, twin);
     }
