@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using AgeDigitalTwins.Api.Controllers;
 using AgeDigitalTwins.Api.Models;
 using Microsoft.Extensions.Configuration;
@@ -19,7 +20,7 @@ public class DigitalTwinsControllerTests
     public async void Test1()
     {
         string twinId = "test";
-        string sTwin = "{\"_dtId\":\"test\",\"name\":\"test\"}";
+        JsonObject sTwin = JsonSerializer.Deserialize<JsonObject>("{\"_dtId\":\"test\",\"name\":\"test\"}")!;
         await _controller.PutTwin(twinId, sTwin, CancellationToken.None);
     }
 }

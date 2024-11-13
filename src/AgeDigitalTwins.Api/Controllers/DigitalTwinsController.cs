@@ -1,24 +1,31 @@
-using AgeDigitalTwins.Api.Models;
-using ApacheAGE;
-using ApacheAGE.Types;
-using Microsoft.AspNetCore.Mvc;
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using AgeDigitalTwins.Api.Models;
+using Microsoft.AspNetCore.Mvc;
+using Npgsql.Age;
+using Npgsql.Age.Types;
 
 namespace AgeDigitalTwins.Api.Controllers;
 
 [ApiController]
 [Route("[controller]")]
-public class DigitalTwinsController(IConfiguration configuration) : ControllerBase
+public class DigitalTwinsController : ControllerBase
 {
-    private readonly string _connectionString = configuration.GetConnectionString("DefaultConnection") ?? throw new ArgumentNullException(nameof(configuration));
-    private AgeClientBuilder CreateAgeClientBuilder() => new(_connectionString);
-    private AgeClient CreateAgeClient() => CreateAgeClientBuilder().Build();
     private const string _DEFAULT_GRAPH_NAME = "digitaltwins";
+    private readonly AgeDigitalTwinsClient _client;
+
+    public DigitalTwinsController(IConfiguration configuration)
+    {
+        string connectionString = configuration.GetConnectionString("DefaultConnection") ?? throw new ArgumentNullException(nameof(configuration));
+        _client = new AgeDigitalTwinsClient(connectionString, new());
+    }
 
     [HttpGet("{id}")]
     public async Task<IActionResult> GetTwin(string id, CancellationToken cancellationToken)
     {
-        await using var client = CreateAgeClient();
+        var result = await _client.GetDigitalTwinAsync<JsonObject>(id, cancellationToken);
+        return Ok(result);
+        /* await using var client = CreateAgeClient();
         await client.OpenConnectionAsync(cancellationToken);
         string cypher = $"MATCH (t:Twin {{ $dtId: '{id}' }}) RETURN t";
         await using var dataReader = await client.ExecuteQueryAsync(
@@ -32,13 +39,16 @@ public class DigitalTwinsController(IConfiguration configuration) : ControllerBa
             var json = JsonSerializer.Serialize(properties);
             return Ok(json);
         }
-        return NotFound();
+        return NotFound(); */
     }
 
     [HttpPut("{id}")]
-    public async Task<IActionResult> PutTwin(string id, [FromBody] string twin, CancellationToken cancellationToken)
+    public async Task<IActionResult> PutTwin(string id, [FromBody] JsonObject twin, CancellationToken cancellationToken)
     {
-        await using var client = CreateAgeClient();
+        var result = await _client.CreateOrReplaceDigitalTwinAsync(id, twin, cancellationToken);
+        return Ok(result);
+
+        /* await using var client = CreateAgeClient();
         await client.OpenConnectionAsync(false, cancellationToken);
         // var propertiesJson = JsonSerializer.Serialize(twin);
         string cypher = $"CREATE (t:Twin {{dtId:'test',name:'test'}})";
@@ -46,7 +56,7 @@ public class DigitalTwinsController(IConfiguration configuration) : ControllerBa
             _DEFAULT_GRAPH_NAME,
             cypher,
             cancellationToken);
-        return CreatedAtAction(nameof(GetTwin), new { id = id }, twin);
+        return CreatedAtAction(nameof(GetTwin), new { id = id }, twin); */
     }
 
     /* 
@@ -63,7 +73,7 @@ public class DigitalTwinsController(IConfiguration configuration) : ControllerBa
         }
      */
 
-    [HttpDelete("{id}")]
+    /* [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteTwin(string id, CancellationToken cancellationToken)
     {
         await using var client = CreateAgeClient();
@@ -72,5 +82,5 @@ public class DigitalTwinsController(IConfiguration configuration) : ControllerBa
             $"MATCH (t:Twin {{ $dtId: '{id}' }}) DELETE t",
             cancellationToken);
         return NoContent();
-    }
+    } */
 }

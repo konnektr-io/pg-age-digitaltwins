@@ -2,15 +2,17 @@
   <PropertyGroup>
     <PackageId>AgeDigitalTwins</PackageId>
     <PackageTags>postgres;postgresql;apache-age;graph;digitaltwins</PackageTags>
-    <Description>Powerful context-based expression parser and evaluator in C# using JEXL (Javascript Expression Language) expressions.</Description>
+    <Description>Digital Twins SDK for Apache Age</Description>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
+    <Nullable>enable</Nullable>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
-    <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <TargetFrameworks>net8.0;netstandard2.1</TargetFrameworks>
+    <LangVersion>10.0</LangVersion>
   </PropertyGroup>
   <ItemGroup>
     <None Include="..\README.md" Pack="true" PackagePath="\" />
@@ -20,7 +22,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\pg-age\src\ApacheAGE\ApacheAGE.csproj" />
+    <PackageReference Include="Konnektr.Npgsql.Age" Version="0.1.8" />
+    <PackageReference Include="Npgsql" Version="8.0.5" />
+    <PackageReference Include="Npgsql.OpenTelemetry" Version="8.0.5" />
+    <PackageReference Include="OpenTelemetry" Version="1.10.0" />
   </ItemGroup>
 
 </Project>
