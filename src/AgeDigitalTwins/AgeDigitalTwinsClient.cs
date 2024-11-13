@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Npgsql.Age;
 using Npgsql.Age.Types;
 using Npgsql;
+using OpenTelemetry.Trace;
 
 namespace AgeDigitalTwins;
 
@@ -48,8 +49,8 @@ public class AgeDigitalTwinsClient : IDisposable
             else return default;
         }
         catch (Exception ex)
-        {
             // scope.Failed(ex);
+        {
             throw;
         }
     }
