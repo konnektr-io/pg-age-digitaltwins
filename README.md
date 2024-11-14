@@ -9,6 +9,29 @@ AgeDigitalTwins is an SDK and API designed to support Digital Twins applications
 - **Validation**: Validate instances loaded in the graph database.
 - **Easy Transition**: Designed to make the transition from Azure Digital Twins seamless.
 
+## Roadmap
+
+- [ ] SDK:
+  - [ ] Digital Twins CRUD operations
+  - [ ] Models CRUD operations
+  - [ ] Relationships CRUD operations
+  - [ ] Model Validation with DTDLParser
+  - [ ] Twin Validation with DTDLParser
+- [ ] API:
+  - [ ] Digital Twins CRUD operations
+  - [ ] Models CRUD operations
+  - [ ] Relationships CRUD operations
+- [] Deployment:
+  - [ ] Dockerize the API
+  - [ ] Helm chart for deployment
+- [ ] Event routing:
+  - [ ] CDC connection with AgType parser (either in C# or leverage Debezium)
+  - [ ] Data History output (same format as Azure Digital Twins)
+  - [ ] CloudEvents output
+  - [ ] Kafka route
+  - [ ] ADX/Fabric Real-time route
+  - [ ] MQTT route (IoT Operations)
+
 ## Getting Started
 
 ### Prerequisites
