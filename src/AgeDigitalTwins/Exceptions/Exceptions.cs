@@ -8,3 +8,10 @@ public class ModelNotFoundException : Exception
     {
     }
 }
+
+public class DigitalTwinNotFoundException : Exception
+{
+    public DigitalTwinNotFoundException(string message) : base(message)
+    {
+    }
+}

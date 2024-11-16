@@ -62,7 +62,19 @@ public class AgeDigitalTwinsClient : IDisposable
             await using var command = _dataSource.CreateGraphCommand(_options.GraphName);
             await command.ExecuteNonQueryAsync(cancellationToken);
 
-            // TODO: Create indexes
+            // Create labels and indexes
+            using var connection = await _dataSource.OpenConnectionAsync();
+            using var batch = new NpgsqlBatch(connection);
+            batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"SELECT create_vlabel('{_options.GraphName}', 'Twin');"));
+            batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE UNIQUE INDEX twin_id_idx ON {_options.GraphName}.""Twin""
+(ag_catalog.agtype_access_operator(properties, '""$dtId""'::agtype));"));
+            batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE INDEX twin_gin_idx
+ON cypher_index.""Twin"" USING gin (properties);"));
+            batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"SELECT create_vlabel('{_options.GraphName}', 'Model');"));
+            batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE UNIQUE INDEX model_id_idx ON {_options.GraphName}.""Model""
+(ag_catalog.agtype_access_operator(properties, '""@id""'::agtype));"));
+            batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE INDEX twin_gin_idx
+ON cypher_index.""Model"" USING gin (properties);"));
         }
         catch (Exception ex)
         {
@@ -91,7 +103,7 @@ public class AgeDigitalTwinsClient : IDisposable
         // using var span = _tracer.StartActiveSpan("GetDigitalTwinAsync");
         try
         {
-            string cypher = $"MATCH (t:Twin {{ _dtId: '{digitalTwinId}' }}) RETURN t";
+            string cypher = $"MATCH (t:Twin) WHERE t['$dtId'] = '{digitalTwinId}' RETURN t";
             await using var command = _dataSource.CreateCypherCommand(_options.GraphName, cypher);
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
@@ -101,7 +113,10 @@ public class AgeDigitalTwinsClient : IDisposable
                 var vertex = (Vertex)agResult;
                 return JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(vertex.Properties));
             }
-            else return default;
+            else
+            {
+                throw new DigitalTwinNotFoundException($"Digital Twin with ID {digitalTwinId} not found");
+            }
         }
         catch (Exception ex)
         // scope.Failed(ex);
@@ -118,13 +133,13 @@ public class AgeDigitalTwinsClient : IDisposable
     {
         try
         {
-            var propertiesJson = JsonSerializer.Serialize(digitalTwin);
-            string cypher = $@"MERGE (t: Twin {{_dtId: '{digitalTwinId}'}})
-                            SET t = '{propertiesJson}'::agtype
-                            RETURN t";
-            string query = $"SELECT * FROM cypher('{_options.GraphName}', $$ {cypher} $$) as (t agtype);";
-
-            await using var command = _dataSource.CreateCommand(query);
+            var digitalTwinJson = JsonSerializer.Serialize(digitalTwin);
+            string cypher = $@"
+            WITH '{digitalTwinJson}'::agtype as twin
+            MERGE (t: Twin {{`_dtId`: '{digitalTwinId}'}})
+            SET t = twin
+            RETURN t";
+            await using var command = _dataSource.CreateCypherCommand(_options.GraphName, cypher);
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
             if (await reader.ReadAsync(cancellationToken))
