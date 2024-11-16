@@ -3,7 +3,7 @@ namespace AgeDigitalTwins.Tests
 {
     public class SampleData
     {
-        public const string DtdlSample =
+        public const string DtdlRoom =
             @"{
                 ""@id"": ""dtmi:com:adt:dtsample:room;1"",
                 ""@type"": ""Interface"",
@@ -28,5 +28,72 @@ namespace AgeDigitalTwins.Tests
                 ]
             }";
 
+        public const string DtdlCelestialBody =
+            @"{
+                ""@context"": ""dtmi:dtdl:context;3"",
+                ""@id"": ""dtmi:com:contoso:CelestialBody;1"",
+                ""@type"": ""Interface"",
+                ""displayName"": ""Celestial body"",
+                ""contents"": [
+                    {
+                        ""@type"": ""Property"",
+                        ""name"": ""name"",
+                        ""schema"": ""string""
+                    },
+                    {
+                        ""@type"": ""Property"",
+                        ""name"": ""mass"",
+                        ""schema"": ""double""
+                    },
+                    {
+                        ""@type"": ""Telemetry"",
+                        ""name"": ""temperature"",
+                        ""schema"": ""double""
+                    }
+                ]
+            }";
+
+        public const string DtdlPlanet =
+            @"{
+                ""@context"": ""dtmi:dtdl:context;3"",
+                ""@id"": ""dtmi:com:contoso:Planet;1"",
+                ""@type"": ""Interface"",
+                ""displayName"": ""Planet"",
+                ""extends"": ""dtmi:com:contoso:CelestialBody;1"",
+                ""contents"": [
+                    {
+                        ""@type"": ""Relationship"",
+                        ""name"": ""satellites"",
+                        ""target"": ""dtmi:com:contoso:Moon;1"",
+                        ""properties"": [
+                            {
+                                ""@type"": ""Property"",
+                                ""name"": ""Distance"",
+                                ""schema"": ""double""
+                            }
+                        ]
+                    },
+                    {
+                        ""@type"": ""Component"",
+                        ""name"": ""deepestCrater"",
+                        ""schema"": ""dtmi:com:contoso:Crater;1""
+                    }
+                ]
+            }";
+
+        public const string DtdlCrater =
+            @"{
+                ""@context"": ""dtmi:dtdl:context;3"",
+                ""@id"": ""dtmi:com:contoso:Crater;1"",
+                ""@type"": ""Interface"",
+                ""displayName"": ""Crater"",
+                ""contents"": [
+                    {
+                        ""@type"": ""Property"",
+                        ""name"": ""diameter"",
+                        ""schema"": ""double""
+                    }
+                ]
+            }";
     }
 }

@@ -1,39 +1,109 @@
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Configuration.Json;
+using System.Text.Json;
+using AgeDigitalTwins.Exceptions;
+using DTDLParser;
 
 namespace AgeDigitalTwins.Tests;
 
-public class DigitalTwinsClientTests
+public class ModelsTests : TestBase
 {
-    private readonly AgeDigitalTwinsClient _client;
-    private readonly string _graphName;
-
-    public DigitalTwinsClientTests()
+    [Fact]
+    public async Task CreateModels_SingleModel_ValidatedAndCreated()
     {
-        var configuration = new ConfigurationBuilder()
-            .SetBasePath(AppContext.BaseDirectory)
-            .AddJsonFile("appsettings.Development.json").Build();
+        string[] models = [SampleData.DtdlRoom];
+        var sampleDataJson = JsonDocument.Parse(SampleData.DtdlRoom);
+        var sampleDataId = sampleDataJson.RootElement.GetProperty("@id").GetString();
 
-        string connectionString = Environment.GetEnvironmentVariable("AGE_CONNECTION_STRING")
-            ?? configuration.GetConnectionString("AgeConnectionString")
-            ?? throw new ArgumentNullException("AgeConnectionString");
-        _client = new AgeDigitalTwinsClient(connectionString, new());
+        var results = await Client.CreateModelsAsync(models);
 
-        _graphName = "temp_graph" + DateTime.Now.ToString("yyyyMMddHHmmssffff");
-        _client.CreateGraphAsync(_graphName).GetAwaiter().GetResult();
-    }
+        for (int i = 0; i < models.Length; i++)
+        {
+            var resultJson = JsonDocument.Parse(results[i]);
+            var resultId = resultJson.RootElement.GetProperty("@id").GetString();
 
-    internal void Dispose()
-    {
-        _client.DropGraphAsync(_graphName).GetAwaiter().GetResult();
-        _client.Dispose();
+            Assert.Equal(sampleDataId, resultId);
+        }
+
+        var result = await Client.GetModelAsync("dtmi:com:adt:dtsample:room;1");
+        Assert.NotNull(result);
+        var parsedResult = JsonDocument.Parse(result);
+        Assert.Equal(sampleDataId, parsedResult.RootElement.GetProperty("@id").GetString());
     }
 
     [Fact]
-    public async Task CreateModels_ValidatesAndCreatesSimpleModel()
+    public async Task CreateModels_MultipleDependentModels_ValidatedAndCreated()
     {
-        var result = await _client.CreateModelsAsync([SampleData.DtdlSample]);
-        Console.WriteLine(result);
+        string[] models = [SampleData.DtdlPlanet, SampleData.DtdlCelestialBody, SampleData.DtdlCrater];
+        var results = await Client.CreateModelsAsync(models);
+
+        for (int i = 0; i < models.Length; i++)
+        {
+            var resultJson = JsonDocument.Parse(results[i]);
+            var sampleDataJson = JsonDocument.Parse(models[i]);
+
+            var resultId = resultJson.RootElement.GetProperty("@id").GetString();
+            var sampleDataId = sampleDataJson.RootElement.GetProperty("@id").GetString();
+
+            Assert.Equal(sampleDataId, resultId);
+        }
+    }
+
+
+    [Fact]
+    public async Task CreateModels_MultipleDependentModelsResolveInDb_ValidatedAndCreated()
+    {
+        await Client.CreateModelsAsync([SampleData.DtdlCelestialBody, SampleData.DtdlCrater]);
+
+        string[] models = [SampleData.DtdlPlanet];
+        var results = await Client.CreateModelsAsync(models);
+
+        for (int i = 0; i < models.Length; i++)
+        {
+            var resultJson = JsonDocument.Parse(results[i]);
+            var sampleDataJson = JsonDocument.Parse(models[i]);
+
+            var resultId = resultJson.RootElement.GetProperty("@id").GetString();
+            var sampleDataId = sampleDataJson.RootElement.GetProperty("@id").GetString();
+
+            Assert.Equal(sampleDataId, resultId);
+        }
+    }
+
+    [Fact]
+    public async Task CreateModels_MissingDependency_ThrowsFailedToResolve()
+    {
+        // First make sure to delete the dependent models
+        try
+        {
+            await Client.DeleteModelAsync("dtmi:com:contoso:CelestialBody;1");
+        }
+        catch (ModelNotFoundException)
+        {
+            // Ignore exception if model does not exist
+        }
+        try
+        {
+            await Client.DeleteModelAsync("dtmi:com:contoso:Crater;1");
+        }
+        catch (ModelNotFoundException)
+        {
+            // Ignore exception if model does not exist
+        }
+
+        bool exceptionThrown = false;
+        try
+        {
+            string[] models = [SampleData.DtdlPlanet];
+            var results = await Client.CreateModelsAsync(models);
+        }
+        catch (Exception ex)
+        {
+            exceptionThrown = true;
+            Assert.IsType<ResolutionException>(ex);
+            Assert.Contains("failed to resolve", ex.Message);
+            Assert.Contains("dtmi:com:contoso:CelestialBody;1", ex.Message);
+            Assert.Contains("dtmi:com:contoso:Crater;1", ex.Message);
+        }
+        Assert.True(exceptionThrown);
     }
 
     /* [Fact]
@@ -42,4 +112,5 @@ public class DigitalTwinsClientTests
         var result = await _client.GetDigitalTwinAsync("unittest");
         Console.WriteLine(result);
     } */
+
 }
