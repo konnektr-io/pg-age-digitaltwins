@@ -18,19 +18,12 @@ namespace AgeDigitalTwins;
 
 public class AgeDigitalTwinsClient : IDisposable
 {
-    // private readonly ILogger<AgeDigitalTwinsClient> _logger;
-    // private readonly Tracer _tracer;
     private readonly NpgsqlDataSource _dataSource;
     private readonly AgeDigitalTwinsOptions _options;
     private readonly ModelParser _modelParser;
 
     public AgeDigitalTwinsClient(string connectionString, AgeDigitalTwinsOptions? options)
     {
-        // Initialize logger
-        // _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        // _tracer = tracer ?? throw new ArgumentNullException(nameof(tracer));
-        // Initialize data source
-
         _options = options ?? new();
 
         NpgsqlConnectionStringBuilder connectionStringBuilder = new(connectionString)
@@ -40,7 +33,10 @@ public class AgeDigitalTwinsClient : IDisposable
 
         var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionStringBuilder.ConnectionString);
 
-        _dataSource = dataSourceBuilder.UseAge(options?.SuperUser ?? false).Build();
+        _dataSource = dataSourceBuilder
+            .UseLoggerFactory(options?.LoggerFactory)
+            .UseAge(options?.SuperUser ?? false)
+            .Build();
 
         _modelParser = new(new ParsingOptions()
         {
@@ -125,6 +121,18 @@ ON cypher_index.""Model"" USING gin (properties);"));
         }
     }
 
+    private string SchemaValidator(DTEntityInfo s, string v)
+    {
+        IReadOnlyCollection<string> violations = s.ValidateInstance($"{v}");
+        return violations.Any() ? string.Join(" AND ", violations) : $"{v} IS A VALID {s.Id}";
+    }
+
+    private string SchemaValidator(DTEntityInfo s, JsonElement v)
+    {
+        IReadOnlyCollection<string> violations = s.ValidateInstance(v);
+        return violations.Any() ? string.Join(" AND ", violations) : $"{v} IS A VALID {s.Id}";
+    }
+
     public virtual async Task<T?> CreateOrReplaceDigitalTwinAsync<T>(
             string digitalTwinId,
             T digitalTwin,
@@ -134,9 +142,37 @@ ON cypher_index.""Model"" USING gin (properties);"));
         try
         {
             var digitalTwinJson = JsonSerializer.Serialize(digitalTwin);
+
+            using var digitalTwinDocument = JsonDocument.Parse(digitalTwinJson);
+            string modelId = digitalTwinDocument.RootElement.GetProperty("$metadata").GetProperty("$model").GetString() ?? throw new ArgumentException("Digital Twin must have a $model property");
+
+            // Get the model and parse it
+            var modelJson = await GetModelAsync(modelId, cancellationToken);
+            var parsedModelEntities = await _modelParser.ParseAsync(modelJson, cancellationToken: cancellationToken);
+            var dtInterfaceInfo = (DTInterfaceInfo)parsedModelEntities.FirstOrDefault(e => e.Value is DTInterfaceInfo).Value;
+
+            foreach (var kv in digitalTwinDocument.RootElement.EnumerateObject())
+            {
+                var property = kv.Name;
+                var value = kv.Value;
+
+                if (property == "$metadata" || property == "$dtId" || property == "$etag")
+                {
+                    continue;
+                }
+
+                var propertyDef = (DTPropertyInfo)dtInterfaceInfo.Contents[property];
+
+                Console.WriteLine(propertyDef);
+
+                string validationResult = SchemaValidator(propertyDef.Schema, value);
+
+                Console.WriteLine(validationResult);
+            }
+
             string cypher = $@"
             WITH '{digitalTwinJson}'::agtype as twin
-            MERGE (t: Twin {{`_dtId`: '{digitalTwinId}'}})
+            MERGE (t: Twin {{`$dtId`: '{digitalTwinId}'}})
             SET t = twin
             RETURN t";
             await using var command = _dataSource.CreateCypherCommand(_options.GraphName, cypher);
@@ -209,6 +245,22 @@ ON cypher_index.""Model"" USING gin (properties);"));
             CREATE (m:Model)
             SET m = modelAgtype
             RETURN m";
+
+            // Add edges based on the 'extends' field (especially needed for the 'IS_OF_MODEL' function)
+            foreach (var model in parsedModels)
+            {
+                if (model.Value is DTInterfaceInfo dTInterfaceInfo && dTInterfaceInfo.Extends != null && dTInterfaceInfo.Extends.Count > 0)
+                {
+                    foreach (var extend in dTInterfaceInfo.Extends)
+                    {
+                        string extendsCypher = $@"MATCH (m:Model), (m2:Model)
+                        WHERE m['@id'] = '{dTInterfaceInfo.Id.AbsoluteUri}' AND m2['@id'] = '{extend.Id.AbsoluteUri}'
+                        CREATE (m)-[:_extends]->(m2)";
+                        await using var extendsCommand = _dataSource.CreateCypherCommand(_options.GraphName, extendsCypher);
+                        await extendsCommand.ExecuteNonQueryAsync(cancellationToken);
+                    }
+                }
+            }
 
             await using var command = _dataSource.CreateCypherCommand(_options.GraphName, cypher);
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);

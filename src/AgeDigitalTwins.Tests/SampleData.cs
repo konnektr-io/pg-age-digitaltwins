@@ -95,5 +95,14 @@ namespace AgeDigitalTwins.Tests
                     }
                 ]
             }";
+
+        public const string TwinCrater =
+            @"{
+                ""$dtId"": ""crater1"",
+                ""$metadata"": {
+                    ""$model"": ""dtmi:com:contoso:Crater;1""
+                },
+                ""diameter"": 100
+            }";
     }
 }
