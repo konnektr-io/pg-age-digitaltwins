@@ -4,7 +4,7 @@
     <PackageTags>postgres;postgresql;apache-age;graph;digitaltwins</PackageTags>
     <Description>Digital Twins SDK for Apache Age</Description>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
+    <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
     <Nullable>enable</Nullable>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
@@ -15,17 +15,19 @@
     <LangVersion>10.0</LangVersion>
   </PropertyGroup>
   <ItemGroup>
-    <None Include="..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="..\LICENSE.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\LICENSE.txt" Pack="true" PackagePath="\" />
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="DTDLParser" Version="1.0.52" />
     <PackageReference Include="Konnektr.Npgsql.Age" Version="0.1.8" />
     <PackageReference Include="Npgsql" Version="8.0.5" />
     <PackageReference Include="Npgsql.OpenTelemetry" Version="8.0.5" />
     <PackageReference Include="OpenTelemetry" Version="1.10.0" />
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
   </ItemGroup>
 
 </Project>

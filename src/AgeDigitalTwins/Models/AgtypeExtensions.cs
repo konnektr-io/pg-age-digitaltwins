@@ -15,7 +15,7 @@ namespace AgeDigitalTwins.Models
         /// <exception cref="FormatException">
         /// Thrown when the agtype cannot be converted to a vertex.
         /// </exception>
-        public static JsonObject? GetPropertiesJson(this Agtype agtype)
+        /* public static JsonObject? GetPropertiesJson(this Agtype agtype)
         {
             bool isValidEdge = _value.EndsWith(Edge.FOOTER);
             bool isValidVertex = _value.EndsWith(Vertex.FOOTER);
@@ -35,6 +35,6 @@ namespace AgeDigitalTwins.Models
             }
 
             throw new FormatException("The agtype does not contain a 'properties' object.");
-        }
+        } */
     }
 }
