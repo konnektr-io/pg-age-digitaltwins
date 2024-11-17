@@ -15,3 +15,10 @@ public class DigitalTwinNotFoundException : Exception
     {
     }
 }
+
+public class ValidationFailedException : Exception
+{
+    public ValidationFailedException(string message) : base(message)
+    {
+    }
+}

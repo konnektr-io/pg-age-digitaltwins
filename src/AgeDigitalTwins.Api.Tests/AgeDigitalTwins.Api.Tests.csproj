@@ -21,7 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\AgeDigitalTwins.Api\AgeDigitalTwins.Api.csproj" />
+    <ProjectReference Include="..\AgeDigitalTwins.Api\AgeDigitalTwins.Api.Old.csproj" />
   </ItemGroup>
 
 </Project>

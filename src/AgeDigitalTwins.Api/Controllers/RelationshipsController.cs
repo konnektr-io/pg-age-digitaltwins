@@ -1,8 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
-using ApacheAGE;
 using System.Text.Json;
 using AgeDigitalTwins.Api.Models;
-using ApacheAGE.Types;
 
 namespace AgeDigitalTwins.Api.Controllers;
 
@@ -11,7 +9,6 @@ namespace AgeDigitalTwins.Api.Controllers;
 public class RelationshipsController(IConfiguration configuration) : ControllerBase
 {
     private readonly string _connectionString = configuration.GetConnectionString("DefaultConnection") ?? throw new ArgumentNullException(nameof(configuration));
-    private AgeClientBuilder CreateAgeClientBuilder() => new(_connectionString);
     private AgeClient CreateAgeClient() => CreateAgeClientBuilder().Build();
     private const string _DEFAULT_GRAPH_NAME = "digitaltwins";
 

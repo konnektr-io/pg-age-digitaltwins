@@ -151,6 +151,8 @@ ON cypher_index.""Model"" USING gin (properties);"));
             var parsedModelEntities = await _modelParser.ParseAsync(modelJson, cancellationToken: cancellationToken);
             var dtInterfaceInfo = (DTInterfaceInfo)parsedModelEntities.FirstOrDefault(e => e.Value is DTInterfaceInfo).Value;
 
+            List<string> violations = new();
+
             foreach (var kv in digitalTwinDocument.RootElement.EnumerateObject())
             {
                 var property = kv.Name;
@@ -162,12 +164,12 @@ ON cypher_index.""Model"" USING gin (properties);"));
                 }
 
                 var propertyDef = (DTPropertyInfo)dtInterfaceInfo.Contents[property];
+                violations.AddRange(propertyDef.Schema.ValidateInstance(value));
+            }
 
-                Console.WriteLine(propertyDef);
-
-                string validationResult = SchemaValidator(propertyDef.Schema, value);
-
-                Console.WriteLine(validationResult);
+            if (violations.Count != 0)
+            {
+                throw new ValidationFailedException(string.Join(" AND ", violations));
             }
 
             string cypher = $@"
