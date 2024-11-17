@@ -16,7 +16,7 @@ public class TestBase : IAsyncDisposable, IDisposable
             ?? configuration.GetConnectionString("AgeConnectionString")
             ?? throw new ArgumentNullException("AgeConnectionString");
 
-        var graphName = "temp_graph" + DateTime.Now.ToString("yyyyMMddHHmmssffff");
+        var graphName = "temp_graph" + Guid.NewGuid().ToString("N");
         _client = new AgeDigitalTwinsClient(connectionString, new() { GraphName = graphName });
         _client.CreateGraphAsync().GetAwaiter().GetResult();
     }
@@ -25,6 +25,7 @@ public class TestBase : IAsyncDisposable, IDisposable
 
     public void Dispose()
     {
+        _client.DropGraphAsync().GetAwaiter().GetResult();
         _client.Dispose();
         GC.SuppressFinalize(this);
     }
@@ -32,6 +33,7 @@ public class TestBase : IAsyncDisposable, IDisposable
     public async ValueTask DisposeAsync()
     {
         await _client.DropGraphAsync();
+        _client.Dispose();
         GC.SuppressFinalize(this);
     }
 }

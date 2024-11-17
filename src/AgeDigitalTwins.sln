@@ -3,13 +3,11 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.5.002.0
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgeDigitalTwins.Api.Tests", "AgeDigitalTwins.Api.Tests\AgeDigitalTwins.Api.Tests.csproj", "{8368B21C-0926-4BC4-B498-C78F2276370A}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgeDigitalTwins", "AgeDigitalTwins\AgeDigitalTwins.csproj", "{E2F42664-994F-4099-A566-3075EB014888}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgeDigitalTwins.Tests", "AgeDigitalTwins.Tests\AgeDigitalTwins.Tests.csproj", "{BE27AB0A-B172-4A76-AD3A-376159770517}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgeDigitalTwins.ApiService", "AgeDigitalTwins.AspireApp.ApiService\AgeDigitalTwins.ApiService.csproj", "{6F2784DD-0807-417E-B718-DDDB4416B02B}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgeDigitalTwins.ApiService", "AgeDigitalTwins.ApiService\AgeDigitalTwins.ApiService.csproj", "{6F2784DD-0807-417E-B718-DDDB4416B02B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -17,10 +15,6 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{8368B21C-0926-4BC4-B498-C78F2276370A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{8368B21C-0926-4BC4-B498-C78F2276370A}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{8368B21C-0926-4BC4-B498-C78F2276370A}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{8368B21C-0926-4BC4-B498-C78F2276370A}.Release|Any CPU.Build.0 = Release|Any CPU
 		{E2F42664-994F-4099-A566-3075EB014888}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{E2F42664-994F-4099-A566-3075EB014888}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{E2F42664-994F-4099-A566-3075EB014888}.Release|Any CPU.ActiveCfg = Release|Any CPU

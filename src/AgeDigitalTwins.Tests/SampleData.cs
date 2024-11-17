@@ -14,6 +14,16 @@ namespace AgeDigitalTwins.Tests
                 ""displayName"": ""Room"",
                 ""contents"": [
                     {
+                        ""@type"": ""Property"",
+                        ""name"": ""name"",
+                        ""schema"": ""string""
+                    },
+                    {
+                        ""@type"": ""Property"",
+                        ""name"": ""temperature"",
+                        ""schema"": ""double""
+                    },
+                    {
                         ""@type"": [""Property"", ""Humidity""],
                         ""name"": ""humidity"",
                         ""schema"": ""double"",
@@ -24,6 +34,29 @@ namespace AgeDigitalTwins.Tests
                         ""@id"": ""dtmi:com:adt:dtsample:room:rel_has_sensors;1"",
                         ""name"": ""rel_has_sensors"",
                         ""displayName"": ""Room has sensors""
+                    }
+                ]
+            }";
+
+        public const string DtdlTemperatureSensor =
+            @"{
+                ""@id"": ""dtmi:com:adt:dtsample:tempsensor;1"",
+                ""@type"": ""Interface"",
+                ""@context"": [
+                    ""dtmi:dtdl:context;3"",
+                    ""dtmi:dtdl:extension:quantitativeTypes;1""
+                ],
+                ""displayName"": ""Temperature Sensor"",
+                ""contents"": [
+                    {
+                        ""@type"": ""Property"",
+                        ""name"": ""name"",
+                        ""schema"": ""string""
+                    },
+                    {
+                        ""@type"": ""Property"",
+                        ""name"": ""temperature"",
+                        ""schema"": ""double""
                     }
                 ]
             }";
