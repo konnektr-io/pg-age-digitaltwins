@@ -55,6 +55,20 @@ public class AgeDigitalTwinsClient : IDisposable
         _dataSource?.Dispose();
     }
 
+    public virtual async Task<bool?> GraphExistsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await using var command = _dataSource.GraphExistsCommand(_options.GraphName);
+            return (bool)await command.ExecuteScalarAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            throw;
+        }
+    }
+
     public virtual async Task CreateGraphAsync(
         CancellationToken cancellationToken = default)
     {
