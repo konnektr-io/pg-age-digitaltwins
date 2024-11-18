@@ -7,7 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\AgeDigitalTwins.AspireApp.ServiceDefaults\AgeDigitalTwins.AspireApp.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\AgeDigitalTwins\AgeDigitalTwins.csproj" />
   </ItemGroup>
 
   <ItemGroup>
