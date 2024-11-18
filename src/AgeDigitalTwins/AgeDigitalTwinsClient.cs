@@ -15,6 +15,9 @@ using System.Linq;
 using AgeDigitalTwins.Exceptions;
 using Json.Patch;
 using System.Runtime.Serialization;
+using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.RegularExpressions;
+using System.Runtime.CompilerServices;
 
 namespace AgeDigitalTwins;
 
@@ -508,5 +511,163 @@ public class AgeDigitalTwinsClient : IDisposable
             // scope.Failed(ex);
             throw;
         }
+    }
+
+    internal static string ConvertAdtQueryToCypher(string adtQuery)
+    {
+        if (adtQuery.ToUpperInvariant().Contains("FROM RELATIONSHIPS"))
+        {
+            if (adtQuery.ToUpperInvariant().Contains("WHERE"))
+            {
+                // Handle RELATIONSHIPS source
+                var match = Regex.Match(adtQuery, @"SELECT (\w+) FROM RELATIONSHIPS \1 WHERE \1\.\$(\w+) = '(\w+)'");
+                if (match.Success)
+                {
+                    var relationship = match.Groups[1].Value;
+                    var sourceId = match.Groups[2].Value;
+                    var value = match.Groups[3].Value;
+                    return $"MATCH (:Twin)-[{relationship}]->(:Twin) WHERE {relationship}['${sourceId}'] = '{value}' RETURN {relationship}";
+                }
+            }
+            else
+            {
+                // Handle case with no WHERE clause
+                var match = Regex.Match(adtQuery, @"SELECT (\w+) FROM RELATIONSHIPS \1");
+                if (match.Success)
+                {
+                    var relationship = match.Groups[1].Value;
+                    return $"MATCH (:Twin)-[{relationship}]->(:Twin) RETURN {relationship}";
+                }
+            }
+
+        }
+        else if (adtQuery.ToUpperInvariant().Contains("FROM DIGITALTWINS"))
+        {
+            // Handle DIGITALTWINS source
+            if (adtQuery.ToUpperInvariant().Contains("MATCH"))
+            {
+                // Handle MATCH clause
+                var match = Regex.Match(adtQuery, @"SELECT (.+) FROM DIGITALTWINS MATCH (.+) WHERE (.+)");
+                if (match.Success)
+                {
+                    var select = match.Groups[1].Value;
+                    var matchClause = match.Groups[2].Value;
+                    var whereClause = match.Groups[3].Value;
+
+                    // Add :Twin to all round brackets in the MATCH clause
+                    var modifiedMatchClause = Regex.Replace(matchClause, @"\((\w+)\)", "($1:Twin)");
+
+                    // Process WHERE clause
+                    var modifiedWhereClause = ProcessWhereClause(whereClause);
+
+                    return $"MATCH {modifiedMatchClause} WHERE {modifiedWhereClause} RETURN {select}";
+                }
+            }
+            else if (adtQuery.ToUpperInvariant().Contains("WHERE"))
+            {
+                // Handle WHERE clause
+                var match = Regex.Match(adtQuery, @"SELECT (\w+) FROM DIGITALTWINS \1 WHERE (.+)");
+                if (match.Success)
+                {
+                    var twin = match.Groups[1].Value;
+                    var whereClause = match.Groups[2].Value;
+
+                    // Process WHERE clause
+                    var modifiedWhereClause = ProcessWhereClause(whereClause);
+
+                    return $"MATCH ({twin}:Twin) WHERE {modifiedWhereClause} RETURN {twin}";
+                }
+            }
+            else
+            {
+                // Handle case with no WHERE clause
+                var match = Regex.Match(adtQuery, @"SELECT (\w+) FROM DIGITALTWINS \1");
+                if (match.Success)
+                {
+                    var twin = match.Groups[1].Value;
+                    return $"MATCH ({twin}:Twin) RETURN {twin}";
+                }
+            }
+        }
+
+        return "Invalid query format.";
+    }
+
+    private static string ProcessWhereClause(string whereClause)
+    {
+        // Replace property access with $ character
+        return Regex.Replace(whereClause, @"(\.\$[\w]+)", m => $"['{m.Value.Substring(2)}']");
+    }
+
+    public virtual async IAsyncEnumerable<T?> QueryAsync<T>(
+        string query,
+        [EnumeratorCancellation]
+        CancellationToken cancellationToken = default)
+    {
+
+        NpgsqlDataReader reader;
+        try
+        {
+            string cypher;
+            if (query.ToUpperInvariant().Contains("SELECT") && !query.ToUpperInvariant().Contains("RETURN"))
+            {
+                cypher = ConvertAdtQueryToCypher(query);
+            }
+            else
+            {
+                cypher = query;
+            }
+            await using var command = _dataSource.CreateCypherCommand(_options.GraphName, cypher);
+            reader = await command.ExecuteReaderAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            // scope.Failed(ex);
+            throw;
+        }
+
+        if (reader == null)
+        {
+            throw new InvalidOperationException("Reader is null");
+        }
+
+        var schema = await reader.GetColumnSchemaAsync();
+
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            Dictionary<string, object> row = new();
+            // iterate over columns
+            for (int i = 0; i < schema.Count; i++)
+            {
+                var column = schema[i];
+                var value = await reader.GetFieldValueAsync<Agtype?>(i);
+                if (value == null)
+                {
+                    continue;
+                }
+                if (((Agtype)value).IsVertex)
+                {
+                    row.Add(column.ColumnName, ((Vertex)value).Properties);
+                }
+                else if (((Agtype)value).IsEdge)
+                {
+                    row.Add(column.ColumnName, ((Edge)value).Properties);
+                }
+                else
+                {
+                    row.Add(column.ColumnName, value);
+                }
+            }
+            if (typeof(T) == typeof(string))
+            {
+                yield return (T)(object)JsonSerializer.Serialize(row);
+            }
+            else
+            {
+                yield return JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(row));
+            }
+        }
+
+
     }
 }
