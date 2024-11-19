@@ -12,11 +12,12 @@ AgeDigitalTwins is an SDK and API designed to support Digital Twins applications
 ## Roadmap
 
 - [ ] SDK:
-  - [ ] Digital Twins CRUD operations
-  - [ ] Models CRUD operations
-  - [ ] Relationships CRUD operations
-  - [ ] Model Validation with DTDLParser
-  - [ ] Twin Validation with DTDLParser
+  - [x] Digital Twins CRUD operations
+  - [x] Models CRUD operations
+  - [x] Relationships CRUD operations
+  - [x] Model Validation with DTDLParser
+  - [x] Twin Validation with DTDLParser
+  - [ ] Error handling
 - [ ] API:
   - [ ] Digital Twins CRUD operations
   - [ ] Models CRUD operations
