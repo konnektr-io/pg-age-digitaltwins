@@ -22,7 +22,7 @@ AgeDigitalTwins is an SDK and API designed to support Digital Twins applications
   - [ ] Digital Twins CRUD operations
   - [ ] Models CRUD operations
   - [ ] Relationships CRUD operations
-- [] Deployment:
+- [ ] Deployment:
   - [ ] Dockerize the API
   - [ ] Helm chart for deployment
 - [ ] Event routing: <https://event-driven.io/en/push_based_outbox_pattern_with_postgres_logical_replication/?utm_source=github_outbox_cdc>
