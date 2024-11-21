@@ -336,6 +336,34 @@ public class AgeDigitalTwinsClient : IDisposable
         }
     }
 
+    public virtual async IAsyncEnumerable<T?> GetRelationshipsAsync<T>(
+        string digitalTwinId,
+        string? relationshipName = default,
+        [EnumeratorCancellation]
+        CancellationToken cancellationToken = default)
+    {
+        string edgeLabel = !string.IsNullOrEmpty(relationshipName) ? "" : $":{relationshipName}";
+        string cypher = $@"MATCH (source:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel{edgeLabel}]->(target:Twin) RETURN rel";
+        await foreach (JsonElement json in QueryAsync<JsonElement>(cypher, cancellationToken))
+        {
+            yield return JsonSerializer.Deserialize<T>(json.GetProperty("rel").GetRawText());
+        }
+    }
+
+
+    public virtual async IAsyncEnumerable<T?> GetIncomingRelationshipsAsync<T>(
+        string digitalTwinId,
+        [EnumeratorCancellation]
+        CancellationToken cancellationToken = default)
+    {
+
+        string cypher = $@"MATCH (source:Twin)-[rel]->(target:Twin {{`$dtId`: '{digitalTwinId}'}}) RETURN rel";
+        await foreach (JsonElement json in QueryAsync<JsonElement>(cypher, cancellationToken))
+        {
+            yield return JsonSerializer.Deserialize<T>(json.GetProperty("rel").GetRawText());
+        }
+    }
+
     public virtual async Task<T?> CreateOrReplaceRelationshipAsync<T>(
         string digitalTwinId,
         string relationshipId,
