@@ -557,88 +557,90 @@ public class AgeDigitalTwinsClient : IDisposable
 
     internal static string ConvertAdtQueryToCypher(string adtQuery)
     {
-        if (adtQuery.ToUpperInvariant().Contains("FROM RELATIONSHIPS"))
-        {
-            if (adtQuery.ToUpperInvariant().Contains("WHERE"))
-            {
-                // Handle RELATIONSHIPS source
-                var match = Regex.Match(adtQuery, @"SELECT (\w+) FROM RELATIONSHIPS \1 WHERE \1\.\$(\w+) = '(\w+)'");
-                if (match.Success)
-                {
-                    var relationship = match.Groups[1].Value;
-                    var sourceId = match.Groups[2].Value;
-                    var value = match.Groups[3].Value;
-                    return $"MATCH (:Twin)-[{relationship}]->(:Twin) WHERE {relationship}['${sourceId}'] = '{value}' RETURN {relationship}";
-                }
-            }
-            else
-            {
-                // Handle case with no WHERE clause
-                var match = Regex.Match(adtQuery, @"SELECT (\w+) FROM RELATIONSHIPS \1");
-                if (match.Success)
-                {
-                    var relationship = match.Groups[1].Value;
-                    return $"MATCH (:Twin)-[{relationship}]->(:Twin) RETURN {relationship}";
-                }
-            }
 
-        }
-        else if (adtQuery.ToUpperInvariant().Contains("FROM DIGITALTWINS"))
+        // Prepare RETURN clause
+        string returnClause;
+        var selectMatch = Regex.Match(adtQuery, @"SELECT (.+) FROM");
+        if (selectMatch.Success)
         {
-            // Handle DIGITALTWINS source
-            if (adtQuery.ToUpperInvariant().Contains("MATCH"))
+            returnClause = ProcessPropertyAccessors(selectMatch.Groups[1].Value);
+        }
+        else throw new InvalidAdtQueryException("Invalid query format.");
+
+        // Prepare MATCH clause
+        string matchClause;
+        if (adtQuery.Contains("FROM RELATIONSHIPS", StringComparison.OrdinalIgnoreCase))
+        {
+            // Handle RELATIONSHIPS source
+            var match = Regex.Match(adtQuery, @"FROM RELATIONSHIPS (.+?)(?=\s+WHERE|\s*$)");
+            if (match.Success)
+            {
+                var relationshipAlias = match.Groups[1].Value;
+                matchClause = $"(:Twin)-[{relationshipAlias}]->(:Twin)";
+            }
+            else throw new InvalidAdtQueryException("Invalid query format.");
+        }
+        else if (adtQuery.Contains("FROM DIGITALTWINS", StringComparison.OrdinalIgnoreCase))
+        {
+            if (adtQuery.Contains("MATCH", StringComparison.OrdinalIgnoreCase))
             {
                 // Handle MATCH clause
-                var match = Regex.Match(adtQuery, @"SELECT (.+) FROM DIGITALTWINS MATCH (.+) WHERE (.+)");
+                var match = Regex.Match(adtQuery, @"FROM DIGITALTWINS MATCH (.+?)(?=\s+WHERE|\s*$)", RegexOptions.IgnoreCase);
                 if (match.Success)
                 {
-                    var select = match.Groups[1].Value;
-                    var matchClause = match.Groups[2].Value;
-                    var whereClause = match.Groups[3].Value;
+                    var adtMatchClause = match.Groups[1].Value;
 
                     // Add :Twin to all round brackets in the MATCH clause
-                    var modifiedMatchClause = Regex.Replace(matchClause, @"\((\w+)\)", "($1:Twin)");
-
-                    // Process WHERE clause
-                    var modifiedWhereClause = ProcessWhereClause(whereClause);
-
-                    return $"MATCH {modifiedMatchClause} WHERE {modifiedWhereClause} RETURN {select}";
+                    matchClause = Regex.Replace(adtMatchClause, @"\((\w+)\)", "($1:Twin)");
                 }
+                else throw new InvalidAdtQueryException("Invalid query format.");
             }
-            else if (adtQuery.ToUpperInvariant().Contains("WHERE"))
-            {
-                // Handle WHERE clause
-                var match = Regex.Match(adtQuery, @"SELECT (\w+) FROM DIGITALTWINS \1 WHERE (.+)");
-                if (match.Success)
-                {
-                    var twin = match.Groups[1].Value;
-                    var whereClause = match.Groups[2].Value;
-
-                    // Process WHERE clause
-                    var modifiedWhereClause = ProcessWhereClause(whereClause);
-
-                    return $"MATCH ({twin}:Twin) WHERE {modifiedWhereClause} RETURN {twin}";
-                }
-            }
+            // TODO: JOIN RELATED
             else
             {
-                // Handle case with no WHERE clause
-                var match = Regex.Match(adtQuery, @"SELECT (\w+) FROM DIGITALTWINS \1");
+                var match = Regex.Match(adtQuery, @"FROM DIGITALTWINS (.+?)(?=\s+WHERE|\s*$)", RegexOptions.IgnoreCase);
                 if (match.Success)
                 {
-                    var twin = match.Groups[1].Value;
-                    return $"MATCH ({twin}:Twin) RETURN {twin}";
+                    var twinAlias = match.Groups[1].Value;
+                    matchClause = $"({twinAlias}:Twin)";
                 }
+                else throw new InvalidAdtQueryException("Invalid query format.");
             }
+
+        }
+        else
+        {
+            throw new InvalidAdtQueryException("Invalid query format.");
         }
 
-        return "Invalid query format.";
+        // Prepare WHERE clause
+        string whereClause = string.Empty;
+        if (adtQuery.Contains("WHERE", StringComparison.OrdinalIgnoreCase))
+        {
+            var match = Regex.Match(adtQuery, @"WHERE (.+)");
+            if (match.Success)
+            {
+                var adtWhereClause = match.Groups[1].Value;
+
+                // Process WHERE clause
+                whereClause = ProcessPropertyAccessors(adtWhereClause);
+            }
+            else throw new InvalidAdtQueryException("Invalid query format.");
+        }
+
+        string cypher = "MATCH " + matchClause;
+        if (!string.IsNullOrEmpty(whereClause))
+        {
+            cypher += " WHERE " + whereClause;
+        }
+        cypher += " RETURN " + returnClause;
+        return cypher;
     }
 
-    private static string ProcessWhereClause(string whereClause)
+    private static string ProcessPropertyAccessors(string whereClause)
     {
         // Replace property access with $ character
-        return Regex.Replace(whereClause, @"(\.\$[\w]+)", m => $"['{m.Value.Substring(2)}']");
+        return Regex.Replace(whereClause, @"(\.\$[\w]+)", m => $"['{m.Value[1..]}']");
     }
 
     public virtual async IAsyncEnumerable<T?> QueryAsync<T>(
@@ -706,7 +708,8 @@ public class AgeDigitalTwinsClient : IDisposable
             }
             else
             {
-                yield return JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(row));
+                string json = JsonSerializer.Serialize(row);
+                yield return JsonSerializer.Deserialize<T>(json);
             }
         }
 

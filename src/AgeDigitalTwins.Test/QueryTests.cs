@@ -89,8 +89,7 @@ public class QueryTests : TestBase
         "))
         {
             Assert.NotNull(line);
-            Assert.True(twins.ContainsKey("$dtId"));
-            var id = line.RootElement.GetProperty("$dtId").GetString();
+            var id = line.RootElement.GetProperty("T").GetProperty("$dtId").GetString();
             count++;
         }
         Assert.Equal(2, count);

@@ -22,3 +22,10 @@ public class ValidationFailedException : Exception
     {
     }
 }
+
+public class InvalidAdtQueryException : Exception
+{
+    public InvalidAdtQueryException(string message) : base(message)
+    {
+    }
+}
