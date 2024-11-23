@@ -1,6 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
-  <Sdk Name="Aspire.AppHost.Sdk" Version="9.0.0" />
   
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
@@ -12,8 +10,10 @@
 
   <ItemGroup>
     <PackageReference Include="Aspire.Hosting.Testing" Version="9.0.0" />
+    <PackageReference Include="Azure.DigitalTwins.Core" Version="1.4.0" />
     <PackageReference Include="coverlet.collector" Version="6.0.2" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.10.0" />
+    <PackageReference Include="Moq" Version="4.20.72" />
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
   </ItemGroup>
@@ -27,6 +27,7 @@
     <Using Include="Microsoft.Extensions.DependencyInjection" />
     <Using Include="Aspire.Hosting.ApplicationModel" />
     <Using Include="Aspire.Hosting.Testing" />
+    <Using Include="Moq" />
     <Using Include="Xunit" />
   </ItemGroup>
 
