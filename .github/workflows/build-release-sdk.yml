@@ -1,4 +1,4 @@
-name: Build and Release to NuGet
+name: Build and Release SDK to NuGet
 
 on:
   release:

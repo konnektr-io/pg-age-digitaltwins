@@ -1,0 +1,37 @@
+name: Build and Publish API Service Image to GHCR
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout GitHub Action
+        uses: actions/checkout@master
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to the GitHub Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set VERSION variable from tag
+        run: |
+          TAG=${{github.event.release.tag_name}}
+          echo "VERSION=${TAG#v}" >> $GITHUB_ENV
+
+      - name: Build and load
+        uses: docker/build-push-action@v6
+        with:
+          context: ./src
+          file: ./src/AgeDigitalTwins.ApiService/Dockerfile
+          push: true
+          load: true
+          tags: ghcr.io/${{ github.repository }}/agedigitaltwins-api:${{github.event.release.tag_name && env.VERSION}}
