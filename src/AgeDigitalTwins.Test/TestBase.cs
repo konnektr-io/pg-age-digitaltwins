@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Configuration;
 
-namespace AgeDigitalTwins.Tests;
+namespace AgeDigitalTwins.Test;
 
 public class TestBase : IAsyncDisposable, IDisposable
 {

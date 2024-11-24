@@ -2,7 +2,7 @@ using System.Text.Json;
 using AgeDigitalTwins.Exceptions;
 using DTDLParser;
 
-namespace AgeDigitalTwins.Tests;
+namespace AgeDigitalTwins.Test;
 
 public class ModelsTests : TestBase
 {
@@ -17,7 +17,7 @@ public class ModelsTests : TestBase
 
         for (int i = 0; i < models.Length; i++)
         {
-            var resultJson = JsonDocument.Parse(results[i]);
+            var resultJson = JsonDocument.Parse(results[i].DtdlModel);
             var resultId = resultJson.RootElement.GetProperty("@id").GetString();
 
             Assert.Equal(sampleDataId, resultId);
@@ -25,7 +25,7 @@ public class ModelsTests : TestBase
 
         var result = await Client.GetModelAsync("dtmi:com:adt:dtsample:room;1");
         Assert.NotNull(result);
-        var parsedResult = JsonDocument.Parse(result);
+        var parsedResult = JsonDocument.Parse(result.DtdlModel);
         Assert.Equal(sampleDataId, parsedResult.RootElement.GetProperty("@id").GetString());
     }
 
@@ -37,7 +37,7 @@ public class ModelsTests : TestBase
 
         for (int i = 0; i < models.Length; i++)
         {
-            var resultJson = JsonDocument.Parse(results[i]);
+            var resultJson = JsonDocument.Parse(results[i].DtdlModel);
             var sampleDataJson = JsonDocument.Parse(models[i]);
 
             var resultId = resultJson.RootElement.GetProperty("@id").GetString();
@@ -58,7 +58,7 @@ public class ModelsTests : TestBase
 
         for (int i = 0; i < models.Length; i++)
         {
-            var resultJson = JsonDocument.Parse(results[i]);
+            var resultJson = JsonDocument.Parse(results[i].DtdlModel);
             var sampleDataJson = JsonDocument.Parse(models[i]);
 
             var resultId = resultJson.RootElement.GetProperty("@id").GetString();

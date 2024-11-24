@@ -18,6 +18,7 @@ using System.Runtime.Serialization;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Text.RegularExpressions;
 using System.Runtime.CompilerServices;
+using AgeDigitalTwins.Models;
 
 namespace AgeDigitalTwins;
 
@@ -61,7 +62,7 @@ public class AgeDigitalTwinsClient : IDisposable
         try
         {
             await using var command = _dataSource.GraphExistsCommand(_options.GraphName);
-            return (bool)await command.ExecuteScalarAsync(cancellationToken);
+            return (bool?)await command.ExecuteScalarAsync(cancellationToken);
         }
         catch (Exception ex)
         {
@@ -84,8 +85,9 @@ public class AgeDigitalTwinsClient : IDisposable
             batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE UNIQUE INDEX twin_id_idx ON {_options.GraphName}.""Twin"" (ag_catalog.agtype_access_operator(properties, '""$dtId""'::agtype));"));
             batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE INDEX twin_gin_idx ON {_options.GraphName}.""Twin"" USING gin (properties);"));
             batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"SELECT create_vlabel('{_options.GraphName}', 'Model');"));
-            batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE UNIQUE INDEX model_id_idx ON {_options.GraphName}.""Model"" (ag_catalog.agtype_access_operator(properties, '""@id""'::agtype));"));
+            batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE UNIQUE INDEX model_id_idx ON {_options.GraphName}.""Model"" (ag_catalog.agtype_access_operator(properties, '""id""'::agtype));"));
             batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE INDEX model_gin_idx ON {_options.GraphName}.""Model"" USING gin (properties);"));
+            // TODO: also prepare edge label '_extends' for models and set primary and foreign keys (maybe)
             await batch.ExecuteNonQueryAsync(cancellationToken);
         }
         catch (Exception ex)
@@ -162,8 +164,8 @@ public class AgeDigitalTwinsClient : IDisposable
             string modelId = modelElement.GetString() ?? throw new ArgumentException("Digital Twin's $model property cannot be null or empty");
 
             // Get the model and parse it
-            var modelJson = await GetModelAsync(modelId, cancellationToken);
-            var parsedModelEntities = await _modelParser.ParseAsync(modelJson, cancellationToken: cancellationToken);
+            var modelData = await GetModelAsync(modelId, cancellationToken);
+            var parsedModelEntities = await _modelParser.ParseAsync(modelData.DtdlModel, cancellationToken: cancellationToken);
             var dtInterfaceInfo = (DTInterfaceInfo)parsedModelEntities.FirstOrDefault(e => e.Value is DTInterfaceInfo).Value;
 
             if (dtInterfaceInfo == null)
@@ -453,13 +455,29 @@ public class AgeDigitalTwinsClient : IDisposable
         }
     }
 
-    public virtual async Task<string> GetModelAsync(
+    public virtual async IAsyncEnumerable<DigitalTwinsModelData> GetModelsAsync(
+        [EnumeratorCancellation]
+        CancellationToken cancellationToken = default)
+    {
+        string cypher = $@"MATCH (m:Model) RETURN m";
+        await using var command = _dataSource.CreateCypherCommand(_options.GraphName, cypher);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
+            var vertex = (Vertex)agResult;
+            yield return new DigitalTwinsModelData(vertex.Properties);
+        }
+    }
+
+    public virtual async Task<DigitalTwinsModelData> GetModelAsync(
         string modelId,
         CancellationToken cancellationToken = default)
     {
         try
         {
-            string cypher = $@"MATCH (m:Model) WHERE m['@id'] = '{modelId}' RETURN m";
+            string cypher = $@"MATCH (m:Model) WHERE m.id = '{modelId}' RETURN m";
             await using var command = _dataSource.CreateCypherCommand(_options.GraphName, cypher);
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
@@ -467,7 +485,7 @@ public class AgeDigitalTwinsClient : IDisposable
             {
                 var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
                 var vertex = (Vertex)agResult;
-                return JsonSerializer.Serialize(vertex.Properties);
+                return new DigitalTwinsModelData(vertex.Properties);
             }
             else
             {
@@ -481,21 +499,26 @@ public class AgeDigitalTwinsClient : IDisposable
         }
     }
 
-    public virtual async Task<string[]> CreateModelsAsync(
+    public virtual async Task<IReadOnlyList<DigitalTwinsModelData>> CreateModelsAsync(
         IEnumerable<string> dtdlModels,
         CancellationToken cancellationToken = default)
     {
         try
         {
-            var asyncModels = ConvertToAsyncEnumerable(dtdlModels);
-            var parsedModels = await _modelParser.ParseAsync(asyncModels, cancellationToken: cancellationToken);
-            var modelsJson = JsonSerializer.Serialize(dtdlModels);
+            var parsedModels = await _modelParser.ParseAsync(ConvertToAsyncEnumerable(dtdlModels), cancellationToken: cancellationToken);
+            IEnumerable<DigitalTwinsModelData> modelDatas = dtdlModels.Select(dtdlModel =>
+                new DigitalTwinsModelData(dtdlModel));
+            // This is needed as after unwinding
+            string modelsJson = JsonSerializer.Serialize(modelDatas.Select(m => JsonSerializer.Serialize(m)));
             string cypher = $@"
             UNWIND {modelsJson} as model
             WITH model::agtype as modelAgtype
             CREATE (m:Model)
             SET m = modelAgtype
             RETURN m";
+
+            await using var command = _dataSource.CreateCypherCommand(_options.GraphName, cypher);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
             // Add edges based on the 'extends' field (especially needed for the 'IS_OF_MODEL' function)
             foreach (var model in parsedModels)
@@ -505,7 +528,7 @@ public class AgeDigitalTwinsClient : IDisposable
                     foreach (var extend in dTInterfaceInfo.Extends)
                     {
                         string extendsCypher = $@"MATCH (m:Model), (m2:Model)
-                        WHERE m['@id'] = '{dTInterfaceInfo.Id.AbsoluteUri}' AND m2['@id'] = '{extend.Id.AbsoluteUri}'
+                        WHERE m.id = '{dTInterfaceInfo.Id.AbsoluteUri}' AND m2.id = '{extend.Id.AbsoluteUri}'
                         CREATE (m)-[:_extends]->(m2)";
                         await using var extendsCommand = _dataSource.CreateCypherCommand(_options.GraphName, extendsCypher);
                         await extendsCommand.ExecuteNonQueryAsync(cancellationToken);
@@ -513,16 +536,13 @@ public class AgeDigitalTwinsClient : IDisposable
                 }
             }
 
-            await using var command = _dataSource.CreateCypherCommand(_options.GraphName, cypher);
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-
-            string[] result = new string[dtdlModels.Count()];
+            List<DigitalTwinsModelData> result = new List<DigitalTwinsModelData>();
             int k = 0;
             while (await reader.ReadAsync(cancellationToken))
             {
                 var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
                 var vertex = (Vertex)agResult;
-                result[k] = JsonSerializer.Serialize(vertex.Properties);
+                result.Add(new DigitalTwinsModelData(vertex.Properties));
                 k++;
             }
             return result;
@@ -540,7 +560,7 @@ public class AgeDigitalTwinsClient : IDisposable
     {
         try
         {
-            string cypher = $@"MATCH (m:Model) WHERE m['@id'] = '{modelId}' DELETE m";
+            string cypher = $@"MATCH (m:Model) WHERE m.id = '{modelId}' DELETE m";
             await using var command = _dataSource.CreateCypherCommand(_options.GraphName, cypher);
             int rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken);
             if (rowsAffected == 0)

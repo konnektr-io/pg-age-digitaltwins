@@ -1,4 +1,4 @@
-namespace AgeDigitalTwins.Test
+namespace AgeDigitalTwins.ApiService.Test
 {
     public class SampleData
     {

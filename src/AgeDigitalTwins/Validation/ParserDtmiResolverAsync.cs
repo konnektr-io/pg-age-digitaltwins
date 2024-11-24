@@ -4,6 +4,7 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using AgeDigitalTwins.Models;
 using DTDLParser;
 using DTDLParser.Models;
 using Npgsql;
@@ -21,7 +22,7 @@ internal static class ModelsRepositoryClientExtensions
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         string dtmiList = string.Join(",", dtmis.Select(d => $"'{d}'"));
-        string cypher = $"MATCH (m:Model) WHERE m['@id'] IN [{dtmiList}] RETURN m";
+        string cypher = $"MATCH (m:Model) WHERE m.id IN [{dtmiList}] RETURN m";
         await using var command = dataSource.CreateCypherCommand(graphName, cypher);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
@@ -29,8 +30,8 @@ internal static class ModelsRepositoryClientExtensions
         {
             var agResult = await reader.GetFieldValueAsync<Agtype>(0).ConfigureAwait(false);
             var vertex = agResult.GetVertex();
-            string serializedProperties = JsonSerializer.Serialize(vertex.Properties);
-            yield return serializedProperties;
+            var modelData = new DigitalTwinsModelData(vertex.Properties);
+            yield return modelData.DtdlModel;
         }
     }
 }

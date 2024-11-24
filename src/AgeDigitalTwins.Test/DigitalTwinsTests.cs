@@ -5,7 +5,7 @@ using DTDLParser;
 using Json.Patch;
 using Json.Pointer;
 
-namespace AgeDigitalTwins.Tests;
+namespace AgeDigitalTwins.Test;
 
 public class DigitalTwinsTests : TestBase
 {
