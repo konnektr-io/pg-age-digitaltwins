@@ -47,7 +47,6 @@ public class ModelsTests : TestBase
         }
     }
 
-
     [Fact]
     public async Task CreateModels_MultipleDependentModelsResolveInDb_ValidatedAndCreated()
     {
@@ -106,11 +105,12 @@ public class ModelsTests : TestBase
         Assert.True(exceptionThrown);
     }
 
-    /* [Fact]
-    public async void Test2()
+    [Fact]
+    public async Task DeleteModels_DependentModels_DeletesEdges()
     {
-        var result = await _client.GetDigitalTwinAsync("unittest");
-        Console.WriteLine(result);
-    } */
+        await Client.CreateModelsAsync([SampleData.DtdlCelestialBody, SampleData.DtdlCrater, SampleData.DtdlPlanet]);
+
+        await Client.DeleteModelAsync("dtmi:com:contoso:CelestialBody;1");
+    }
 
 }

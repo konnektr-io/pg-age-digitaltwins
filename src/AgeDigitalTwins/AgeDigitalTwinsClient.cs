@@ -508,8 +508,10 @@ public class AgeDigitalTwinsClient : IDisposable
             var parsedModels = await _modelParser.ParseAsync(ConvertToAsyncEnumerable(dtdlModels), cancellationToken: cancellationToken);
             IEnumerable<DigitalTwinsModelData> modelDatas = dtdlModels.Select(dtdlModel =>
                 new DigitalTwinsModelData(dtdlModel));
-            // This is needed as after unwinding
+            // This is needed as after unwinding, it gets converted to agtype again
             string modelsJson = JsonSerializer.Serialize(modelDatas.Select(m => JsonSerializer.Serialize(m)));
+
+            // TODO: do a merge with the id, as we are now just creating new vertices, which isn't the goal
             string cypher = $@"
             UNWIND {modelsJson} as model
             WITH model::agtype as modelAgtype
@@ -560,7 +562,11 @@ public class AgeDigitalTwinsClient : IDisposable
     {
         try
         {
-            string cypher = $@"MATCH (m:Model) WHERE m.id = '{modelId}' DELETE m";
+            string cypher = $@"
+            MATCH (m:Model)
+            WHERE m.id = '{modelId}' 
+            OPTIONAL MATCH (m)-[r]-()
+            DELETE r, m";
             await using var command = _dataSource.CreateCypherCommand(_options.GraphName, cypher);
             int rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken);
             if (rowsAffected == 0)

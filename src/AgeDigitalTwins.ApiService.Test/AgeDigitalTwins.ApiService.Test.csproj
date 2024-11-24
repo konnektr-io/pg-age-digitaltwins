@@ -19,6 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../AgeDigitalTwins/AgeDigitalTwins.csproj" />
     <ProjectReference Include="../AgeDigitalTwins.AppHost/AgeDigitalTwins.AppHost.csproj" />
   </ItemGroup>
 

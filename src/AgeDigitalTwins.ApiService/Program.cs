@@ -140,11 +140,19 @@ app.MapPost("/query", (string query, AgeDigitalTwinsClient client, CancellationT
 })
 .WithName("Query");
 
-app.MapPost("/models", (IEnumerable<string> models, [FromServices] AgeDigitalTwinsClient client, CancellationToken cancellationToken) =>
+app.MapPost("/models", (JsonElement[] models, [FromServices] AgeDigitalTwinsClient client, CancellationToken cancellationToken) =>
 {
-    return client.CreateModelsAsync(models, cancellationToken);
+    Console.WriteLine($"Creating models... {JsonSerializer.Serialize(models)}");
+    Console.WriteLine($"Creating models... {models.Select(m => m.GetRawText())}");
+    return client.CreateModelsAsync(models.Select(m => m.GetRawText()), cancellationToken);
 })
 .WithName("CreateModels");
+
+app.MapDelete("/models/{id}", (string id, [FromServices] AgeDigitalTwinsClient client, CancellationToken cancellationToken) =>
+{
+    return client.DeleteModelAsync(id, cancellationToken);
+})
+.WithName("DeleteModel");
 
 app.MapDefaultEndpoints();
 //  app.UseHsts();
