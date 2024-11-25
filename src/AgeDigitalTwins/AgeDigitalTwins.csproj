@@ -1,6 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <PackageId>AgeDigitalTwins</PackageId>
+    <PackageId>Konnektr.AgeDigitalTwins</PackageId>
     <PackageTags>postgres;postgresql;apache-age;graph;digitaltwins</PackageTags>
     <Description>Digital Twins SDK for Apache Age</Description>
     <PackageReadmeFile>README.md</PackageReadmeFile>

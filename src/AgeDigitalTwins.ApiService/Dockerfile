@@ -3,6 +3,8 @@
 FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:9.0-alpine AS build
 ARG TARGETARCH
 
+RUN mkdir -p /source
+
 # Copy project file and restore as distinct layers
 COPY --link AgeDigitalTwins.ApiService/*.csproj /source/AgeDigitalTwins.ApiService
 COPY --link AgeDigitalTwins/*.csproj /source/AgeDigitalTwins
