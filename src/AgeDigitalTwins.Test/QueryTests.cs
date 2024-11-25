@@ -9,13 +9,16 @@ namespace AgeDigitalTwins.Test;
 
 public class QueryTests : TestBase
 {
-    [Fact]
-    public async Task QueryAsync_SimpleQuery_ReturnsTwinsAndRelationships()
+    public QueryTests()
     {
         // Load required models
         string[] models = [SampleData.DtdlRoom, SampleData.DtdlTemperatureSensor];
-        await Client.CreateModelsAsync(models);
+        Client.CreateModelsAsync(models).GetAwaiter().GetResult();
+    }
 
+    [Fact]
+    public async Task QueryAsync_SimpleQuery_ReturnsTwinsAndRelationships()
+    {
         var roomTwin = @"{""$dtId"": ""room1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""Room 1""}";
         await Client.CreateOrReplaceDigitalTwinAsync("room1", roomTwin);
         var sensorTwin = @"{""$dtId"": ""sensor1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:tempsensor;1""}, ""name"": ""Sensor 1"", ""temperature"": 25.0}";
@@ -40,10 +43,6 @@ public class QueryTests : TestBase
     [Fact]
     public async Task QueryAsync_RelationshipsQuery_ReturnsRelationship()
     {
-        // Load required models
-        string[] models = [SampleData.DtdlRoom, SampleData.DtdlTemperatureSensor];
-        await Client.CreateModelsAsync(models);
-
         var roomTwin = @"{""$dtId"": ""room1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""Room 1""}";
         await Client.CreateOrReplaceDigitalTwinAsync("room1", roomTwin);
         var sensorTwin = @"{""$dtId"": ""sensor1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:tempsensor;1""}, ""name"": ""Sensor 1"", ""temperature"": 25.0}";
@@ -68,10 +67,6 @@ public class QueryTests : TestBase
     [Fact]
     public async Task QueryAsync_SimpleAdtQuery_ReturnsTwins()
     {
-        // Load required models
-        string[] models = [SampleData.DtdlRoom, SampleData.DtdlTemperatureSensor];
-        await Client.CreateModelsAsync(models);
-
         Dictionary<string, string> twins = new()
         {
             {"room1", @"{""$dtId"": ""room1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""Room 1""}"},

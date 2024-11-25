@@ -1,5 +1,6 @@
 using System.Text.Json;
 using AgeDigitalTwins;
+using AgeDigitalTwins.ApiService;
 using Json.Patch;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
@@ -11,6 +12,7 @@ builder.AddServiceDefaults();
 
 // Add services to the container.
 builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<ExceptionHandler>();
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
@@ -40,50 +42,7 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-app.UseExceptionHandler(exceptionHandlerApp =>
-{
-    exceptionHandlerApp.Run(async httpContext =>
-    {
-        var exceptionHandlerPathFeature =
-            httpContext.Features.Get<IExceptionHandlerPathFeature>();
-        var exception = exceptionHandlerPathFeature?.Error;
-        if (exception != null)
-        {
-            switch (exception)
-            {
-                case AgeDigitalTwins.Exceptions.ModelNotFoundException:
-                    httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-                    await httpContext.Response.WriteAsync("Model not found.");
-                    break;
-                case AgeDigitalTwins.Exceptions.DigitalTwinNotFoundException:
-                    httpContext.Response.StatusCode = StatusCodes.Status404NotFound;
-                    await httpContext.Response.WriteAsync("Digital twin not found.");
-                    break;
-                case AgeDigitalTwins.Exceptions.ValidationFailedException:
-                    httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-                    await httpContext.Response.WriteAsync("Validation failed.");
-                    break;
-                case AgeDigitalTwins.Exceptions.InvalidAdtQueryException:
-                    httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-                    await httpContext.Response.WriteAsync("Invalid ADT query.");
-                    break;
-                // Add more cases for other custom exceptions as needed
-                default:
-                    httpContext.Response.StatusCode = StatusCodes.Status500InternalServerError;
-                    await httpContext.Response.WriteAsync($"An error occurred: {exception.Message}");
-                    break;
-            }
-            return;
-        }
-        var pds = httpContext.RequestServices.GetService<IProblemDetailsService>();
-        if (pds == null
-            || !await pds.TryWriteAsync(new() { HttpContext = httpContext }))
-        {
-            // Fallback behavior
-            await httpContext.Response.WriteAsync("Fallback: An error occurred.");
-        }
-    });
-});
+app.UseExceptionHandler();
 
 app.MapGet("/digitaltwins/{id}", (string id, [FromServices] AgeDigitalTwinsClient client, CancellationToken cancellationToken) =>
 {

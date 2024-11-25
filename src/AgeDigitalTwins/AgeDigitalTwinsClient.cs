@@ -166,13 +166,8 @@ public class AgeDigitalTwinsClient : IDisposable
             // Get the model and parse it
             var modelData = await GetModelAsync(modelId, cancellationToken);
             var parsedModelEntities = await _modelParser.ParseAsync(modelData.DtdlModel, cancellationToken: cancellationToken);
-            var dtInterfaceInfo = (DTInterfaceInfo)parsedModelEntities.FirstOrDefault(e => e.Value is DTInterfaceInfo).Value;
-
-            if (dtInterfaceInfo == null)
-            {
-                throw new ModelNotFoundException($"Model with ID {modelId} not found");
-            }
-
+            var dtInterfaceInfo = (DTInterfaceInfo)parsedModelEntities.FirstOrDefault(e => e.Value is DTInterfaceInfo).Value
+                ?? throw new ValidationFailedException($"{modelId} or one of its dependencies does not exist.");
             List<string> violations = new();
 
             foreach (var kv in digitalTwinDocument.RootElement.EnumerateObject())
@@ -229,6 +224,11 @@ public class AgeDigitalTwinsClient : IDisposable
                 }
             }
             else return default;
+        }
+        catch (ModelNotFoundException ex)
+        {
+            // When the model is not found, we should not return a 404, but a 400 as this is an issue with the twin itself
+            throw new ValidationFailedException(ex.Message);
         }
         catch (Exception ex)
         {
