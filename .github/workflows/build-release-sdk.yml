@@ -19,13 +19,6 @@ jobs:
             6.0.x
             8.0.x
 
-      - name: Setup NuGet
-        uses: NuGet/setup-nuget@v1.2.0
-
-      - name: Restore dependencies
-        run: nuget restore
-        working-directory: ./src
-
       - name: Set VERSION variable from tag
         run: |
           TAG=${{github.event.release.tag_name}}
