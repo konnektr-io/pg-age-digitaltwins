@@ -2,16 +2,20 @@
 # https://github.com/dotnet/dotnet-docker/blob/main/samples/README.md
 FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:9.0-alpine AS build
 ARG TARGETARCH
-WORKDIR /source
 
 # Copy project file and restore as distinct layers
-COPY --link AgeDigitalTwins.ApiService/*.csproj .
+COPY --link AgeDigitalTwins.ApiService/*.csproj /source/AgeDigitalTwins.ApiService
+COPY --link AgeDigitalTwins/*.csproj /source/AgeDigitalTwins
+COPY --link AgeDigitalTwins.ServiceDefaults/*.csproj /source/AgeDigitalTwins.ServiceDefaults
+WORKDIR /source/AgeDigitalTwins.ApiService
 RUN dotnet restore -a $TARGETARCH
 
 # Copy source code and publish app
-COPY --link AgeDigitalTwins.ApiService/. .
+COPY --link AgeDigitalTwins.ApiService/. /source/AgeDigitalTwins.ApiService
+COPY --link AgeDigitalTwins/. /source/AgeDigitalTwins
+COPY --link AgeDigitalTwins.ServiceDefaults/. /source/AgeDigitalTwins.ServiceDefaults
+WORKDIR /source/AgeDigitalTwins.ApiService
 RUN dotnet publish --no-restore -a $TARGETARCH -o /app
-
 
 # Enable globalization and time zones:
 # https://github.com/dotnet/dotnet-docker/blob/main/samples/enable-globalization.md
