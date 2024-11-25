@@ -3,19 +3,19 @@
 FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:9.0-alpine AS build
 ARG TARGETARCH
 
-RUN mkdir -p /source
-
 # Copy project file and restore as distinct layers
-COPY --link AgeDigitalTwins.ApiService/*.csproj /source/AgeDigitalTwins.ApiService
-COPY --link AgeDigitalTwins/*.csproj /source/AgeDigitalTwins
-COPY --link AgeDigitalTwins.ServiceDefaults/*.csproj /source/AgeDigitalTwins.ServiceDefaults
+WORKDIR /source
+COPY --link AgeDigitalTwins.ApiService/*.csproj ./AgeDigitalTwins.ApiService/.
+COPY --link AgeDigitalTwins/*.csproj ./AgeDigitalTwins/.
+COPY --link AgeDigitalTwins.ServiceDefaults/*.csproj ./AgeDigitalTwins.ServiceDefaults/.
 WORKDIR /source/AgeDigitalTwins.ApiService
 RUN dotnet restore -a $TARGETARCH
 
 # Copy source code and publish app
-COPY --link AgeDigitalTwins.ApiService/. /source/AgeDigitalTwins.ApiService
-COPY --link AgeDigitalTwins/. /source/AgeDigitalTwins
-COPY --link AgeDigitalTwins.ServiceDefaults/. /source/AgeDigitalTwins.ServiceDefaults
+WORKDIR /source
+COPY --link AgeDigitalTwins.ApiService/. ./AgeDigitalTwins.ApiService
+COPY --link AgeDigitalTwins/. ./AgeDigitalTwins
+COPY --link AgeDigitalTwins.ServiceDefaults/. ./AgeDigitalTwins.ServiceDefaults
 WORKDIR /source/AgeDigitalTwins.ApiService
 RUN dotnet publish --no-restore -a $TARGETARCH -o /app
 
