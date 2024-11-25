@@ -24,7 +24,7 @@ jobs:
 
       - name: Restore dependencies
         run: nuget restore
-        working-directory: ./src/AgeDigitalTwins
+        working-directory: ./src
 
       - name: Set VERSION variable from tag
         run: |
