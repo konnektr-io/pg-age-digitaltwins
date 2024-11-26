@@ -12,6 +12,7 @@ public class DigitalTwinsIntegrationTests : IAsyncLifetime
     public async Task InitializeAsync()
     {
         var appHost = await DistributedApplicationTestingBuilder.CreateAsync<Projects.AgeDigitalTwins_AppHost>();
+        appHost.Configuration["Parameters:AgeGraphName"] = "temp_graph" + Guid.NewGuid().ToString("N");
         appHost.Services.ConfigureHttpClientDefaults(clientBuilder =>
         {
             clientBuilder.AddStandardResilienceHandler();
@@ -37,6 +38,8 @@ public class DigitalTwinsIntegrationTests : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
+        var response = await _httpClient!.DeleteAsync(
+            "/graph/delete");
         if (_app != null)
         {
             await _app.DisposeAsync();

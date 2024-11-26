@@ -13,7 +13,7 @@ public class ModelsIntegrationTests : IAsyncLifetime
     public async Task InitializeAsync()
     {
         var appHost = await DistributedApplicationTestingBuilder.CreateAsync<Projects.AgeDigitalTwins_AppHost>();
-        appHost.Configuration["AgeGraphName"] = "temp_graph" + Guid.NewGuid().ToString("N");
+        appHost.Configuration["Parameters:AgeGraphName"] = "temp_graph" + Guid.NewGuid().ToString("N");
         appHost.Services.ConfigureHttpClientDefaults(clientBuilder =>
         {
             clientBuilder.AddStandardResilienceHandler();
@@ -55,6 +55,30 @@ public class ModelsIntegrationTests : IAsyncLifetime
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+
+    [Fact]
+    public async Task GetModels_SingleModel_ValidatedAndCreated()
+    {
+        // Arrange
+        string[] sModels = [SampleData.DtdlCrater];
+        List<JsonElement> jModels = sModels.Select(m => JsonDocument.Parse(m)).Select(j => j.RootElement).ToList();
+
+        // Act
+        var response = await _httpClient!.PostAsync(
+            "/models",
+            new StringContent(JsonSerializer.Serialize(jModels), Encoding.UTF8, "application/json"));
+
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var getResponse = await _httpClient!.GetAsync(
+            "/models");
+        getResponse.EnsureSuccessStatusCode();
+        string getResponseContent = await getResponse.Content.ReadAsStringAsync();
+        JsonDocument getResponseJson = JsonDocument.Parse(getResponseContent);
+        var results = getResponseJson.RootElement.GetProperty("value").EnumerateArray().ToList();
     }
 
     [Fact]
