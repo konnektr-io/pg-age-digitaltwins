@@ -93,22 +93,20 @@ app.MapPut("/digitaltwins/{id}/relationships/{relationshipId}", (string id, stri
 })
 .WithName("CreateOrReplaceRelationship");
 
-app.MapPost("/query", (string query, AgeDigitalTwinsClient client, CancellationToken cancellationToken) =>
+app.MapPost("/query", async (string query, AgeDigitalTwinsClient client, CancellationToken cancellationToken) =>
 {
-    return client.QueryAsync<JsonDocument>(query, cancellationToken);
+    return Results.Json(new { value = await client.QueryAsync<JsonDocument>(query, cancellationToken).ToListAsync(cancellationToken) });
 })
 .WithName("Query");
 
-app.MapGet("/models", ([FromServices] AgeDigitalTwinsClient client, CancellationToken cancellationToken) =>
+app.MapGet("/models", async ([FromServices] AgeDigitalTwinsClient client, CancellationToken cancellationToken) =>
 {
-    return client.GetModelsAsync(cancellationToken);
+    return Results.Json(new { value = await client.GetModelsAsync(cancellationToken).ToListAsync(cancellationToken) });
 })
 .WithName("ListModels");
 
 app.MapPost("/models", (JsonElement[] models, [FromServices] AgeDigitalTwinsClient client, CancellationToken cancellationToken) =>
 {
-    Console.WriteLine($"Creating models... {JsonSerializer.Serialize(models)}");
-    Console.WriteLine($"Creating models... {models.Select(m => m.GetRawText())}");
     return client.CreateModelsAsync(models.Select(m => m.GetRawText()), cancellationToken);
 })
 .WithName("CreateModels");
@@ -118,6 +116,17 @@ app.MapDelete("/models/{id}", (string id, [FromServices] AgeDigitalTwinsClient c
     return client.DeleteModelAsync(id, cancellationToken);
 })
 .WithName("DeleteModel");
+
+// This endpoint is only used for cleanup in tests
+// When the client is initiated, a new graph will automatically be created if the specified graph doesn't exist
+// Creating and dropping graphs should be done in the control plane
+if (app.Environment.IsDevelopment())
+{
+    app.MapDelete("graph/delete", ([FromServices] AgeDigitalTwinsClient client, CancellationToken cancellationToken) =>
+    {
+        return client.DropGraphAsync(cancellationToken);
+    });
+}
 
 app.MapDefaultEndpoints();
 //  app.UseHsts();

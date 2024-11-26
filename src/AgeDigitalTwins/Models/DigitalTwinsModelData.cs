@@ -19,7 +19,14 @@ namespace AgeDigitalTwins.Models
         /// <see href="https://docs.microsoft.com/en-us/azure/digital-twins/concepts-models">Understand twin models in Azure Digital Twins</see>.
         /// </remarks>
         [JsonPropertyName("model")]
-        public string DtdlModel { get; }
+        public JsonElement DtdlModelJson { get; set; }
+
+        [JsonIgnore]
+        public string DtdlModel
+        {
+            get => DtdlModelJson.GetRawText();
+            set => DtdlModelJson = JsonDocument.Parse(value).RootElement;
+        }
 
         /// <summary>
         /// The date and time the model was uploaded to the service.
@@ -40,10 +47,15 @@ namespace AgeDigitalTwins.Models
 
         [JsonConstructor]
         public DigitalTwinsModelData(
-            string id, string dtdlModel, DateTimeOffset? uploadedOn, IReadOnlyDictionary<string, string> languageDisplayNames, IReadOnlyDictionary<string, string> languageDescriptions, bool isDecommissioned)
+            string id,
+            JsonElement dtdlModelJson,
+            DateTimeOffset? uploadedOn,
+            IReadOnlyDictionary<string, string> languageDisplayNames,
+            IReadOnlyDictionary<string, string> languageDescriptions,
+            bool isDecommissioned)
         {
             Id = id;
-            DtdlModel = dtdlModel;
+            DtdlModelJson = dtdlModelJson;
             UploadedOn = uploadedOn;
             LanguageDisplayNames = languageDisplayNames;
             LanguageDescriptions = languageDescriptions;
@@ -62,11 +74,11 @@ namespace AgeDigitalTwins.Models
 
         public DigitalTwinsModelData(string dtdlModel)
         {
-            JsonDocument modelJson = JsonDocument.Parse(dtdlModel);
-            Id = modelJson.RootElement!.GetProperty("@id")!.GetString()!;
+            DtdlModel = dtdlModel;
+            Id = DtdlModelJson.GetProperty("@id")!.GetString()!;
             DtdlModel = dtdlModel;
             UploadedOn = DateTimeOffset.UtcNow;
-            if (modelJson.RootElement.TryGetProperty("displayName", out JsonElement displayName))
+            if (DtdlModelJson.TryGetProperty("displayName", out JsonElement displayName))
             {
                 if (displayName.ValueKind == JsonValueKind.Object)
                 {
@@ -83,8 +95,8 @@ namespace AgeDigitalTwins.Models
                     };
                 }
             }
-            if (LanguageDisplayNames == null) LanguageDisplayNames = new Dictionary<string, string>();
-            if (modelJson.RootElement.TryGetProperty("description", out JsonElement description))
+            LanguageDisplayNames ??= new Dictionary<string, string>();
+            if (DtdlModelJson.TryGetProperty("description", out JsonElement description))
             {
                 if (description.ValueKind == JsonValueKind.Object)
                 {
@@ -101,8 +113,24 @@ namespace AgeDigitalTwins.Models
                     };
                 }
             }
-            if (LanguageDescriptions == null) LanguageDescriptions = new Dictionary<string, string>();
+            LanguageDescriptions ??= new Dictionary<string, string>();
             IsDecommissioned = false;
+        }
+    }
+
+    public class JsonDocumentConverter : JsonConverter<JsonDocument>
+    {
+        public override JsonDocument Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            using (JsonDocument doc = JsonDocument.ParseValue(ref reader))
+            {
+                return JsonDocument.Parse(doc.RootElement.GetRawText());
+            }
+        }
+
+        public override void Write(Utf8JsonWriter writer, JsonDocument value, JsonSerializerOptions options)
+        {
+            value.WriteTo(writer);
         }
     }
 }

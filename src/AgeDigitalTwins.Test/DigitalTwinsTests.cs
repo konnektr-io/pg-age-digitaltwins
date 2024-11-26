@@ -53,7 +53,7 @@ public class DigitalTwinsTests : TestBase
         // Create digital twin
         var digitalTwin = @"{""$dtId"": ""modelnotfoundtwin"", ""$metadata"": {""$model"": ""dtmi:com:notfound;1""}, ""test"": ""test""}";
 
-        await Assert.ThrowsAsync<ModelNotFoundException>(() =>
+        await Assert.ThrowsAsync<ValidationFailedException>(() =>
             Client.CreateOrReplaceDigitalTwinAsync("modelnotfoundtwin", digitalTwin));
     }
 

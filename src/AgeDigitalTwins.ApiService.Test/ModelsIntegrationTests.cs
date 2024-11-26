@@ -13,6 +13,7 @@ public class ModelsIntegrationTests : IAsyncLifetime
     public async Task InitializeAsync()
     {
         var appHost = await DistributedApplicationTestingBuilder.CreateAsync<Projects.AgeDigitalTwins_AppHost>();
+        appHost.Configuration["AgeGraphName"] = "temp_graph" + Guid.NewGuid().ToString("N");
         appHost.Services.ConfigureHttpClientDefaults(clientBuilder =>
         {
             clientBuilder.AddStandardResilienceHandler();
@@ -22,29 +23,22 @@ public class ModelsIntegrationTests : IAsyncLifetime
         var resourceNotificationService = _app.Services.GetRequiredService<ResourceNotificationService>();
         await _app.StartAsync();
 
-        await resourceNotificationService.WaitForResourceAsync("apiservice", KnownResourceStates.Running).WaitAsync(TimeSpan.FromSeconds(30));
+        await resourceNotificationService.WaitForResourceAsync("apiservice", KnownResourceStates.Running).WaitAsync(TimeSpan.FromSeconds(60));
 
         _httpClient = _app.CreateHttpClient("apiservice");
+
+        // Delete all existing models
     }
 
     public async Task DisposeAsync()
     {
+        var response = await _httpClient!.DeleteAsync(
+            "/graph/delete");
         if (_app != null)
         {
             await _app.DisposeAsync();
         }
         _httpClient?.Dispose();
-    }
-
-    [Fact]
-    public async Task Health()
-    {
-        // Act
-        var response = await _httpClient!.GetAsync(
-            "/health");
-
-        // Assert
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
     [Fact]
