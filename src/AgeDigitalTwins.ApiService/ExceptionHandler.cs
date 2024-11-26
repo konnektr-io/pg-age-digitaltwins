@@ -7,21 +7,28 @@ public class ExceptionHandler : Microsoft.AspNetCore.Diagnostics.IExceptionHandl
 {
     public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
     {
-        httpContext.Response.StatusCode = (exception is DigitalTwinNotFoundException)
-            ? StatusCodes.Status404NotFound
-            : StatusCodes.Status400BadRequest;
+        if (exception is DigitalTwinNotFoundException || exception is ModelNotFoundException)
+        {
+            httpContext.Response.StatusCode = StatusCodes.Status404NotFound;
+        }
+        else if (exception is AgeDigitalTwinsException)
+        {
+            httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+        }
+        else
+        {
+            httpContext.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        }
         await httpContext.Response.WriteAsJsonAsync(new ProblemDetails
         {
             Title = "An error occurred",
-            Detail = $"{exception.Message}\n{exception.InnerException?.Message}",
+            Detail = $"{exception.Message}",
             Type = exception.GetType().Name,
             Status = httpContext.Response.StatusCode,
         }, cancellationToken: cancellationToken);
 
         return true;
     }
-
-
 }
 
 public class ExceptionResponses
