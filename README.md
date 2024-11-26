@@ -17,19 +17,21 @@ AgeDigitalTwins is an SDK and API designed to support Digital Twins applications
   - [x] Relationships CRUD operations
   - [x] Model Validation with DTDLParser
   - [x] Twin Validation with DTDLParser
-  - [ ] Pagination
   - [ ] Error handling
+  - [ ] ETags
+  - [ ] Pagination
   - [ ] Components
   - [ ] Telemetry
   - [ ] RBAC with user impersonation (same principle as in [Postgrest](https://docs.postgrest.org/en/v12/references/auth.html))
 - **API**:
-  - [ ] Digital Twins CRUD operations
-  - [ ] Models CRUD operations
-  - [ ] Relationships CRUD operations
+  - [x] Digital Twins CRUD operations
+  - [x] Models CRUD operations
+  - [x] Relationships CRUD operations
   - [ ] Error Handling
+  - [ ] ETags
   - [ ] Authentication
 - **Deployment**:
-  - [ ] Dockerize the API
+  - [x] Dockerize the API
   - [ ] Helm chart for deployment
 - **Event routing**: see [link](https://event-driven.io/en/push_based_outbox_pattern_with_postgres_logical_replication/?utm_source=github_outbox_cdc)
   - [ ] CDC connection with AgType parser (either in C# or leverage Debezium)
