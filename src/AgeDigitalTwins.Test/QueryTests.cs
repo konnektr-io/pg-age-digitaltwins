@@ -136,7 +136,7 @@ public class QueryTests : TestBase
         await foreach (var line in Client.QueryAsync<JsonDocument>(@"SELECT COUNT() FROM DIGITALTWINS T WHERE T.name = 'notveryunique'"))
         {
             Assert.NotNull(line);
-            Assert.Equal("3", line.RootElement.GetProperty("COUNT").GetString());
+            Assert.Equal(3, line.RootElement.GetProperty("COUNT").GetInt16());
             count++;
         }
         Assert.Equal(1, count);
