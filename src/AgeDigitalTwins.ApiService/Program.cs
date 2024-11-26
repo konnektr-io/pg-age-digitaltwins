@@ -99,6 +99,12 @@ app.MapPost("/query", (string query, AgeDigitalTwinsClient client, CancellationT
 })
 .WithName("Query");
 
+app.MapGet("/models", ([FromServices] AgeDigitalTwinsClient client, CancellationToken cancellationToken) =>
+{
+    return client.GetModelsAsync(cancellationToken);
+})
+.WithName("ListModels");
+
 app.MapPost("/models", (JsonElement[] models, [FromServices] AgeDigitalTwinsClient client, CancellationToken cancellationToken) =>
 {
     Console.WriteLine($"Creating models... {JsonSerializer.Serialize(models)}");
