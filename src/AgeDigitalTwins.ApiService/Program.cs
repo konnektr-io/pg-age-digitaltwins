@@ -93,8 +93,13 @@ app.MapPut("/digitaltwins/{id}/relationships/{relationshipId}", (string id, stri
 })
 .WithName("CreateOrReplaceRelationship");
 
-app.MapPost("/query", async (string query, AgeDigitalTwinsClient client, CancellationToken cancellationToken) =>
+app.MapPost("/query", async (JsonElement requestBody, AgeDigitalTwinsClient client, CancellationToken cancellationToken) =>
 {
+    if (!requestBody.TryGetProperty("query", out JsonElement queryElement) || queryElement.ValueKind != JsonValueKind.String)
+    {
+        return Results.BadRequest(new { error = "Invalid request body. Expected a JSON object with a 'query' property." });
+    }
+    string query = queryElement.GetString()!;
     return Results.Json(new { value = await client.QueryAsync<JsonDocument>(query, cancellationToken).ToListAsync(cancellationToken) });
 })
 .WithName("Query");
