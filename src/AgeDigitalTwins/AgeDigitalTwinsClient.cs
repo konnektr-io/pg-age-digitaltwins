@@ -639,7 +639,23 @@ public class AgeDigitalTwinsClient : IDisposable
                 }
                 else
                 {
-                    row.Add(column.ColumnName, value);
+                    string valueString = ((Agtype)value).GetString().Trim('\u0001');
+                    if (int.TryParse(valueString, out int intValue))
+                    {
+                        row.Add(column.ColumnName, intValue);
+                    }
+                    else if (double.TryParse(valueString, out double doubleValue))
+                    {
+                        row.Add(column.ColumnName, doubleValue);
+                    }
+                    else if (bool.TryParse(valueString, out bool boolValue))
+                    {
+                        row.Add(column.ColumnName, boolValue);
+                    }
+                    else
+                    {
+                        row.Add(column.ColumnName, valueString);
+                    }
                 }
             }
             if (typeof(T) == typeof(string))

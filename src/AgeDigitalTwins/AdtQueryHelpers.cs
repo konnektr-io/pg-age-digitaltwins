@@ -8,16 +8,19 @@ public static class AdtQueryHelpers
 {
     internal static string ConvertAdtQueryToCypher(string adtQuery)
     {
-        // Get LIMIT clause (ex. SELECT TOP(5) T FROM DIGITALTWINS T)
-        string limitClause = string.Empty;
 
-        // Prepare RETURN clause
+        // Prepare RETURN and LIMIT clauses
         string returnClause;
-        var selectMatch = Regex.Match(adtQuery, @"SELECT (?:TOP\((?<limit>\d+)\) )?(?<properties>.+) FROM", RegexOptions.IgnoreCase);
+        var selectMatch = Regex.Match(adtQuery, @"SELECT (?:TOP\((?<limit>\d+)\) )?(?<projections>.+) FROM", RegexOptions.IgnoreCase);
+        string limitClause;
         if (selectMatch.Success)
         {
             limitClause = selectMatch.Groups["limit"].Success ? "LIMIT " + selectMatch.Groups["limit"].Value : string.Empty;
-            returnClause = ProcessPropertyAccessors(selectMatch.Groups["properties"].Value);
+            returnClause = ProcessPropertyAccessors(selectMatch.Groups["projections"].Value);
+            if (returnClause.Contains("COUNT()", StringComparison.OrdinalIgnoreCase))
+            {
+                returnClause = "COUNT(*)";
+            }
         }
         else throw new InvalidAdtQueryException("Invalid query format.");
 
@@ -26,7 +29,7 @@ public static class AdtQueryHelpers
         if (adtQuery.Contains("FROM RELATIONSHIPS", StringComparison.OrdinalIgnoreCase))
         {
             // Handle RELATIONSHIPS source
-            var match = Regex.Match(adtQuery, @"FROM RELATIONSHIPS (.+?)(?=\s+WHERE|\s*$)");
+            var match = Regex.Match(adtQuery, @"FROM RELATIONSHIPS (.+?)(?=\s+WHERE|\s*$)", RegexOptions.IgnoreCase);
             if (match.Success)
             {
                 var relationshipAlias = match.Groups[1].Value;
@@ -58,6 +61,11 @@ public static class AdtQueryHelpers
                     var twinAlias = match.Groups[1].Value;
                     matchClause = $"({twinAlias}:Twin)";
                 }
+                // TODO: Support SELECT * FROM DIGITALTWINS queries
+                /* else if (string.Equals(returnClause, "*"))
+                {
+                    matchClause = "(return:Twin)";
+                } */
                 else throw new InvalidAdtQueryException("Invalid query format.");
             }
         }

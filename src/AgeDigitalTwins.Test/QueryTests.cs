@@ -63,7 +63,6 @@ public class QueryTests : TestBase
         }
     }
 
-
     [Fact]
     public async Task QueryAsync_SimpleAdtQuery_ReturnsTwins()
     {
@@ -90,4 +89,56 @@ public class QueryTests : TestBase
         Assert.Equal(2, count);
     }
 
+
+    [Fact]
+    public async Task QueryAsync_AdtQueryWithTop_ReturnsTwins()
+    {
+        Dictionary<string, string> twins = new()
+        {
+            {"room1", @"{""$dtId"": ""room1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""Room 1""}"},
+            {"room2", @"{""$dtId"": ""room2"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""Room 2""}"},
+            {"room3", @"{""$dtId"": ""room3"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""Room 3""}"}
+        };
+
+        foreach (var twin in twins)
+        {
+            await Client.CreateOrReplaceDigitalTwinAsync(twin.Key, twin.Value);
+        }
+
+        int count = 0;
+        await foreach (var line in Client.QueryAsync<JsonDocument>(@"
+        SELECT TOP(1) T FROM DIGITALTWINS T WHERE T.$metadata.$model = 'dtmi:com:adt:dtsample:room;1'
+        "))
+        {
+            Assert.NotNull(line);
+            var id = line.RootElement.GetProperty("T").GetProperty("$dtId").GetString();
+            count++;
+        }
+        Assert.Equal(1, count);
+    }
+
+    [Fact]
+    public async Task QueryAsync_AdtQueryWithCount_ReturnsCount()
+    {
+        Dictionary<string, string> twins = new()
+        {
+            {"room1", @"{""$dtId"": ""room1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""notveryunique""}"},
+            {"room2", @"{""$dtId"": ""room2"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""notveryunique""}"},
+            {"room3", @"{""$dtId"": ""room3"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""notveryunique""}"}
+        };
+
+        foreach (var twin in twins)
+        {
+            await Client.CreateOrReplaceDigitalTwinAsync(twin.Key, twin.Value);
+        }
+
+        int count = 0;
+        await foreach (var line in Client.QueryAsync<JsonDocument>(@"SELECT COUNT() FROM DIGITALTWINS T WHERE T.name = 'notveryunique'"))
+        {
+            Assert.NotNull(line);
+            Assert.Equal("3", line.RootElement.GetProperty("COUNT").GetString());
+            count++;
+        }
+        Assert.Equal(1, count);
+    }
 }
