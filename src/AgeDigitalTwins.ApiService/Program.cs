@@ -93,7 +93,7 @@ app.MapPut("/digitaltwins/{id}/relationships/{relationshipId}", (string id, stri
 })
 .WithName("CreateOrReplaceRelationship");
 
-app.MapPost("/query", async (JsonElement requestBody, AgeDigitalTwinsClient client, CancellationToken cancellationToken) =>
+app.MapPost("/query", async (JsonElement requestBody, [FromServices] AgeDigitalTwinsClient client, CancellationToken cancellationToken) =>
 {
     if (!requestBody.TryGetProperty("query", out JsonElement queryElement) || queryElement.ValueKind != JsonValueKind.String)
     {
