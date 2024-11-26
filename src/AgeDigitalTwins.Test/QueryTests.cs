@@ -89,6 +89,85 @@ public class QueryTests : TestBase
         Assert.Equal(2, count);
     }
 
+    [Fact]
+    public async Task QueryAsync_SimpleAdtQueryWithUnderscore_ReturnsTwins()
+    {
+        Dictionary<string, string> twins = new()
+        {
+            {"room1", @"{""$dtId"": ""room1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""Room 1""}"},
+            {"room2", @"{""$dtId"": ""room2"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""Room 2""}"}
+        };
+
+        foreach (var twin in twins)
+        {
+            await Client.CreateOrReplaceDigitalTwinAsync(twin.Key, twin.Value);
+        }
+
+        int count = 0;
+        await foreach (var line in Client.QueryAsync<JsonDocument>(@"
+        SELECT _ FROM DIGITALTWINS _ WHERE _.$metadata.$model = 'dtmi:com:adt:dtsample:room;1'
+        "))
+        {
+            Assert.NotNull(line);
+            var id = line.RootElement.GetProperty("_").GetProperty("$dtId").GetString();
+            count++;
+        }
+        Assert.Equal(2, count);
+    }
+
+    [Fact]
+    public async Task QueryAsync_SimpleAdtQuerySelectProperty_ReturnsPropertyValues()
+    {
+        Dictionary<string, string> twins = new()
+        {
+            {"room1", @"{""$dtId"": ""room1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""Room 1""}"},
+            {"room2", @"{""$dtId"": ""room2"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""Room 2""}"}
+        };
+
+        foreach (var twin in twins)
+        {
+            await Client.CreateOrReplaceDigitalTwinAsync(twin.Key, twin.Value);
+        }
+
+        int count = 0;
+        await foreach (var line in Client.QueryAsync<JsonDocument>(@"
+        SELECT T.name FROM DIGITALTWINS T WHERE T.$metadata.$model = 'dtmi:com:adt:dtsample:room;1'
+        "))
+        {
+            Assert.NotNull(line);
+            var name = line.RootElement.GetProperty("name").GetString();
+            Assert.StartsWith("Room", name);
+            count++;
+        }
+        Assert.Equal(2, count);
+    }
+
+    [Fact]
+    public async Task QueryAsync_SimpleAdtQuerySelectAlias_ReturnsPropertyValues()
+    {
+        Dictionary<string, string> twins = new()
+        {
+            {"room1", @"{""$dtId"": ""room1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""Room 1""}"},
+            {"room2", @"{""$dtId"": ""room2"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""Room 2""}"}
+        };
+
+        foreach (var twin in twins)
+        {
+            await Client.CreateOrReplaceDigitalTwinAsync(twin.Key, twin.Value);
+        }
+
+        int count = 0;
+        await foreach (var line in Client.QueryAsync<JsonDocument>(@"
+        SELECT T.name AS name FROM DIGITALTWINS T WHERE T.$metadata.$model = 'dtmi:com:adt:dtsample:room;1'
+        "))
+        {
+            Assert.NotNull(line);
+            var name = line.RootElement.GetProperty("name").GetString();
+            Assert.StartsWith("Room", name);
+            count++;
+        }
+        Assert.Equal(2, count);
+    }
 
     [Fact]
     public async Task QueryAsync_AdtQueryWithTop_ReturnsTwins()
