@@ -581,93 +581,6 @@ public class AgeDigitalTwinsClient : IDisposable
         }
     }
 
-    internal static string ConvertAdtQueryToCypher(string adtQuery)
-    {
-
-        // Prepare RETURN clause
-        string returnClause;
-        var selectMatch = Regex.Match(adtQuery, @"SELECT (.+) FROM");
-        if (selectMatch.Success)
-        {
-            returnClause = ProcessPropertyAccessors(selectMatch.Groups[1].Value);
-        }
-        else throw new InvalidAdtQueryException("Invalid query format.");
-
-        // Prepare MATCH clause
-        string matchClause;
-        if (adtQuery.Contains("FROM RELATIONSHIPS", StringComparison.OrdinalIgnoreCase))
-        {
-            // Handle RELATIONSHIPS source
-            var match = Regex.Match(adtQuery, @"FROM RELATIONSHIPS (.+?)(?=\s+WHERE|\s*$)");
-            if (match.Success)
-            {
-                var relationshipAlias = match.Groups[1].Value;
-                matchClause = $"(:Twin)-[{relationshipAlias}]->(:Twin)";
-            }
-            else throw new InvalidAdtQueryException("Invalid query format.");
-        }
-        else if (adtQuery.Contains("FROM DIGITALTWINS", StringComparison.OrdinalIgnoreCase))
-        {
-            if (adtQuery.Contains("MATCH", StringComparison.OrdinalIgnoreCase))
-            {
-                // Handle MATCH clause
-                var match = Regex.Match(adtQuery, @"FROM DIGITALTWINS MATCH (.+?)(?=\s+WHERE|\s*$)", RegexOptions.IgnoreCase);
-                if (match.Success)
-                {
-                    var adtMatchClause = match.Groups[1].Value;
-
-                    // Add :Twin to all round brackets in the MATCH clause
-                    matchClause = Regex.Replace(adtMatchClause, @"\((\w+)\)", "($1:Twin)");
-                }
-                else throw new InvalidAdtQueryException("Invalid query format.");
-            }
-            // TODO: JOIN RELATED
-            else
-            {
-                var match = Regex.Match(adtQuery, @"FROM DIGITALTWINS (.+?)(?=\s+WHERE|\s*$)", RegexOptions.IgnoreCase);
-                if (match.Success)
-                {
-                    var twinAlias = match.Groups[1].Value;
-                    matchClause = $"({twinAlias}:Twin)";
-                }
-                else throw new InvalidAdtQueryException("Invalid query format.");
-            }
-
-        }
-        else
-        {
-            throw new InvalidAdtQueryException("Invalid query format.");
-        }
-
-        // Prepare WHERE clause
-        string whereClause = string.Empty;
-        if (adtQuery.Contains("WHERE", StringComparison.OrdinalIgnoreCase))
-        {
-            var match = Regex.Match(adtQuery, @"WHERE (.+)");
-            if (match.Success)
-            {
-                var adtWhereClause = match.Groups[1].Value;
-
-                // Process WHERE clause
-                whereClause = ProcessPropertyAccessors(adtWhereClause);
-            }
-            else throw new InvalidAdtQueryException("Invalid query format.");
-        }
-
-        string cypher = "MATCH " + matchClause;
-        if (!string.IsNullOrEmpty(whereClause))
-        {
-            cypher += " WHERE " + whereClause;
-        }
-        cypher += " RETURN " + returnClause;
-        return cypher;
-    }
-
-    private static string ProcessPropertyAccessors(string whereClause)
-    {
-        // Replace property access with $ character
-        return Regex.Replace(whereClause, @"(\.\$[\w]+)", m => $"['{m.Value[1..]}']");
-    }
 
     public virtual async IAsyncEnumerable<T?> QueryAsync<T>(
         string query,
@@ -679,9 +592,10 @@ public class AgeDigitalTwinsClient : IDisposable
         try
         {
             string cypher;
-            if (query.ToUpperInvariant().Contains("SELECT") && !query.ToUpperInvariant().Contains("RETURN"))
+            if (query.Contains("SELECT", StringComparison.InvariantCultureIgnoreCase) &&
+                !query.Contains("RETURN", StringComparison.InvariantCultureIgnoreCase))
             {
-                cypher = ConvertAdtQueryToCypher(query);
+                cypher = AdtQueryHelpers.ConvertAdtQueryToCypher(query);
             }
             else
             {
