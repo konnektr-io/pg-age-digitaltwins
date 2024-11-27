@@ -19,6 +19,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 using System.Text.RegularExpressions;
 using System.Runtime.CompilerServices;
 using AgeDigitalTwins.Models;
+using System.Text.Json.Nodes;
 
 namespace AgeDigitalTwins;
 
@@ -374,25 +375,60 @@ public class AgeDigitalTwinsClient : IDisposable
     {
         try
         {
-            var relationshipJson = relationship is string ? (string)(object)relationship : JsonSerializer.Serialize(relationship);
+            string? relationshipJson = relationship is string ? (string)(object)relationship : JsonSerializer.Serialize(relationship);
 
-            using var relationshipDocument = JsonDocument.Parse(relationshipJson);
-            if (!relationshipDocument.RootElement.TryGetProperty("$relationshipName", out var relationshipNameElement) || relationshipNameElement.ValueKind != JsonValueKind.String)
+            // Parse the relationship JSON into a JsonObject
+            JsonObject relationshipObject = JsonNode.Parse(relationshipJson)?.AsObject() ?? throw new ArgumentException("Invalid relationship JSON");
+
+            // Check if $relationshipName is present and matches the arguments
+            string relationshipName;
+            if (relationshipObject.TryGetPropertyValue("$relationshipName", out var relationshipNameNode) && relationshipNameNode is JsonValue relationshipNameValue)
             {
-                throw new ArgumentException("Relationship must contain a $relationshipName property of type string");
+                relationshipName = relationshipNameValue.GetValue<string>() ?? throw new ArgumentException("Relationship's $relationshipName property cannot be null or empty");
             }
-            if (!relationshipDocument.RootElement.TryGetProperty("$targetId", out var targetIdElement) || targetIdElement.ValueKind != JsonValueKind.String)
+            else
             {
-                throw new ArgumentException("Relationship must contain a $targetId property of type string");
+                throw new ArgumentException("Relationship's $relationshipName property is missing");
+            }
+            // Check if $targetId is present and matches the arguments
+            string targetId;
+            if (relationshipObject.TryGetPropertyValue("$targetId", out var targetIdNode) && targetIdNode is JsonValue targetIdValue)
+            {
+                targetId = targetIdValue.GetValue<string>() ?? throw new ArgumentException("Relationship's $targetId property cannot be null or empty");
+            }
+            else
+            {
+                throw new ArgumentException("Relationship's $targetId property is missing");
+            }
+            // Check if $sourceId is present and matches the arguments
+            if (relationshipObject.TryGetPropertyValue("$sourceId", out var sourceIdNode) && sourceIdNode is JsonValue sourceIdValue)
+            {
+                string sourceId = sourceIdValue.GetValue<string>() ?? throw new ArgumentException("Relationship's $sourceId property cannot be null or empty");
+                if (sourceId != digitalTwinId)
+                {
+                    throw new ArgumentException("Provided $sourceId does not match the digitalTwinId argument");
+                }
+            }
+            // Check if $relationshipId is present and matches the arguments
+            if (relationshipObject.TryGetPropertyValue("$relationshipId", out var relationshipIdNode) && relationshipIdNode is JsonValue relationshipIdValue)
+            {
+                string relId = relationshipIdValue.GetValue<string>() ?? throw new ArgumentException("Relationship's $relationshipId property cannot be null or empty");
+                if (relId != relationshipId)
+                {
+                    throw new ArgumentException("Provided $relationshipId does not match the relationshipId argument");
+                }
             }
 
-            string relationshipName = relationshipNameElement.GetString() ?? throw new ArgumentException("Relationship's $relationshipName property cannot be null or empty");
+            // TODO: Get source and target models and check relationship validity with DTDL parser
 
-            // TODO: use merge to fix this
-            // Make sure there's only a single relationshipid for each source digital twin
+            // Ensure $sourceId and $relationshipId are present and correct
+            relationshipObject["$sourceId"] = digitalTwinId;
+            relationshipObject["$relationshipId"] = relationshipId;
 
-            string cypher = $@"WITH '{relationshipJson}'::agtype as relationship
-            MATCH (source:Twin {{`$dtId`: '{digitalTwinId}'}}),(target:Twin {{`$dtId`: '{targetIdElement.GetString()}'}})
+            string updatedRelationshipJson = JsonSerializer.Serialize(relationshipObject);
+
+            string cypher = $@"WITH '{updatedRelationshipJson}'::agtype as relationship
+            MATCH (source:Twin {{`$dtId`: '{digitalTwinId}'}}),(target:Twin {{`$dtId`: '{targetId}'}})
             MERGE (source)-[rel:{relationshipName} {{`$relationshipId`: '{relationshipId}'}}]->(target)
             SET rel = relationship
             RETURN rel";
