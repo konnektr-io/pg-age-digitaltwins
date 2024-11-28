@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text.RegularExpressions;
 using AgeDigitalTwins.Exceptions;
 
@@ -6,7 +8,7 @@ namespace AgeDigitalTwins;
 
 public static class AdtQueryHelpers
 {
-    internal static string ConvertAdtQueryToCypher(string adtQuery)
+    public static string ConvertAdtQueryToCypher(string adtQuery)
     {
 
         // Prepare RETURN and LIMIT clauses
@@ -35,6 +37,10 @@ public static class AdtQueryHelpers
                 var relationshipAlias = match.Groups[1].Value;
                 matchClause = $"(:Twin)-[{relationshipAlias}]->(:Twin)";
             }
+            else if (string.Equals(returnClause, "*") || string.Equals(returnClause, "COUNT(*)", StringComparison.OrdinalIgnoreCase))
+            {
+                matchClause = "(:Twin)-[R]->(:Twin)";
+            }
             else throw new InvalidAdtQueryException("Invalid query format.");
         }
         else if (adtQuery.Contains("FROM DIGITALTWINS", StringComparison.OrdinalIgnoreCase))
@@ -52,7 +58,32 @@ public static class AdtQueryHelpers
                 }
                 else throw new InvalidAdtQueryException("Invalid query format.");
             }
-            // TODO: JOIN RELATED
+            else if (adtQuery.Contains("JOIN", StringComparison.OrdinalIgnoreCase))
+            {
+                var joinMatches = Regex.Matches(adtQuery, @"JOIN (\w+) RELATED (\w+)\.(\w+)(?: (\w+))?(?=\s+JOIN|\s+WHERE|\s*$)", RegexOptions.IgnoreCase);
+                List<string> matchClauses = new();
+
+                foreach (Match joinMatch in joinMatches)
+                {
+                    var targetTwinAlias = joinMatch.Groups[1].Value;
+                    var twinAlias = joinMatch.Groups[2].Value;
+                    var relationshipName = joinMatch.Groups[3].Value;
+                    var relationshipAlias = joinMatch.Groups[4].Success ? joinMatch.Groups[4].Value : string.Empty;
+
+                    if (string.IsNullOrEmpty(relationshipAlias))
+                    {
+                        matchClauses.Add($"({twinAlias}:Twin)-[:{relationshipName}]->({targetTwinAlias}:Twin)");
+                    }
+                    else
+                    {
+                        matchClauses.Add($"({twinAlias}:Twin)-[{relationshipAlias}:{relationshipName}]->({targetTwinAlias}:Twin)");
+                    }
+                }
+
+                if (matchClauses.Count == 0) throw new InvalidAdtQueryException("Invalid query format.");
+
+                matchClause = string.Join(",", matchClauses);
+            }
             else
             {
                 var match = Regex.Match(adtQuery, @"FROM DIGITALTWINS (.+?)(?=\s+WHERE|\s*$)", RegexOptions.IgnoreCase);
@@ -61,11 +92,10 @@ public static class AdtQueryHelpers
                     var twinAlias = match.Groups[1].Value;
                     matchClause = $"({twinAlias}:Twin)";
                 }
-                // TODO: Support SELECT * FROM DIGITALTWINS queries
-                /* else if (string.Equals(returnClause, "*"))
+                else if (string.Equals(returnClause, "*") || string.Equals(returnClause, "COUNT(*)", StringComparison.OrdinalIgnoreCase))
                 {
-                    matchClause = "(return:Twin)";
-                } */
+                    matchClause = "(T:Twin)";
+                }
                 else throw new InvalidAdtQueryException("Invalid query format.");
             }
         }

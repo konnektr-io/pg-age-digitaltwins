@@ -89,6 +89,12 @@ public class AgeDigitalTwinsClient : IDisposable
             batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE UNIQUE INDEX model_id_idx ON {_options.GraphName}.""Model"" (ag_catalog.agtype_access_operator(properties, '""id""'::agtype));"));
             batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE INDEX model_gin_idx ON {_options.GraphName}.""Model"" USING gin (properties);"));
             // TODO: also prepare edge label '_extends' for models and set primary and foreign keys (maybe)
+            batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE FUNCTION startswith(text, text) RETURNS boolean AS $$
+            BEGIN
+                RETURN $1 LIKE $2 || '%';
+            END;
+            $$ LANGUAGE plpgsql;"));
+
             await batch.ExecuteNonQueryAsync(cancellationToken);
         }
         catch (Exception ex)
