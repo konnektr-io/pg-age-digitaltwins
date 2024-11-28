@@ -27,6 +27,9 @@ public class AdtQueryToCypherTests
     [InlineData(
         "SELECT LightBulb FROM DIGITALTWINS Building JOIN Floor RELATED Building.contains JOIN Room RELATED Floor.contains JOIN LightPanel RELATED Room.contains JOIN LightBulbRow RELATED LightPanel.contains JOIN LightBulb RELATED LightBulbRow.contains WHERE Building.$dtId = 'Building1'",
         "MATCH (Building:Twin)-[:contains]->(Floor:Twin),(Floor:Twin)-[:contains]->(Room:Twin),(Room:Twin)-[:contains]->(LightPanel:Twin),(LightPanel:Twin)-[:contains]->(LightBulbRow:Twin),(LightBulbRow:Twin)-[:contains]->(LightBulb:Twin) WHERE Building['$dtId'] = 'Building1' RETURN LightBulb")]
+    [InlineData(
+        "SELECT r, t FROM DIGITALTWINS\n      MATCH (s)<-[r]-(t)\n      WHERE s.$dtId = 'root3'",
+        "MATCH (s:Twin)<-[r]-(t:Twin) WHERE s['$dtId'] = 'root3' RETURN r, t")]
     public void ConvertAdtQueryToCypher_ReturnsExpectedCypher(string adtQuery, string expectedCypher)
     {
         var actualCypher = AdtQueryHelpers.ConvertAdtQueryToCypher(adtQuery);

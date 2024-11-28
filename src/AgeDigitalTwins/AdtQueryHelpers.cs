@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text.RegularExpressions;
 using AgeDigitalTwins.Exceptions;
 
@@ -10,6 +9,8 @@ public static class AdtQueryHelpers
 {
     public static string ConvertAdtQueryToCypher(string adtQuery)
     {
+        // Clean up the query from line breaks and extra spaces
+        adtQuery = Regex.Replace(adtQuery, @"\s+", " ").Trim();
 
         // Prepare RETURN and LIMIT clauses
         string returnClause;
