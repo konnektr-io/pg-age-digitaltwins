@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.RegularExpressions;
 using AgeDigitalTwins.Exceptions;
 
@@ -29,6 +30,8 @@ public static class AdtQueryHelpers
 
         // Prepare MATCH clause
         string matchClause;
+        // MultiLabel Edge WHERE clause
+        List<string> multiLabelEdgeWhereClauses = new();
         if (adtQuery.Contains("FROM RELATIONSHIPS", StringComparison.OrdinalIgnoreCase))
         {
             // Handle RELATIONSHIPS source
@@ -56,6 +59,30 @@ public static class AdtQueryHelpers
 
                     // Add :Twin to all round brackets in the MATCH clause
                     matchClause = Regex.Replace(adtMatchClause, @"\((\w+)\)", "($1:Twin)");
+
+                    // AGE currently doesn't support the pipe operator
+                    // See https://github.com/apache/age/issues/1714
+                    // There is an open PR to support this syntax https://github.com/apache/age/pull/2082
+                    // Until then we need to use a workaround and generate something like this
+                    if (matchClause.Contains('|'))
+                    {
+                        // In the MATCH clause every multi-label edge definition should be removed and converted to a WHERE clause
+                        // [R:hasBlob|hasModel] -> label(R) = 'hasBlob' OR label(R) = 'hasModel'
+                        // [R:hasBlob|hasModel|has] -> (label(R) = 'hasBlob' OR label(R) = 'hasModel' OR label(R) = 'has')
+                        // (n1:Twin)-[r1:hasBlob|hasModel|has]->(n2)-[r2:contains|includes]->(n3) -> clause1: (label(r1) = 'hasBlob' OR label(r1) = 'hasModel' OR label(r1) = 'has') , clause2: (label(r2) = 'contains' OR label(r2) = 'includes')
+                        // This also has to work for multiple matches in the same query
+                        var multiLabelEdgeMatches = Regex.Matches(matchClause, @"\[(\w+):([\w\|]+)\]");
+                        foreach (Match multiLabelEdgeMatch in multiLabelEdgeMatches)
+                        {
+                            var relationshipAlias = multiLabelEdgeMatch.Groups[1].Value;
+                            var labels = multiLabelEdgeMatch.Groups[2].Value.Split('|').ToList();
+                            var labelConditions = labels.Select(label => $"label({relationshipAlias}) = '{label}'");
+                            multiLabelEdgeWhereClauses.Add($"({string.Join(" OR ", labelConditions)})");
+
+                            // Remove the multi-label edge definition from the match clause
+                            matchClause = matchClause.Replace(multiLabelEdgeMatch.Value, $"[{relationshipAlias}]");
+                        }
+                    }
                 }
                 else throw new InvalidAdtQueryException("Invalid query format.");
             }
@@ -123,7 +150,18 @@ public static class AdtQueryHelpers
         string cypher = "MATCH " + matchClause;
         if (!string.IsNullOrEmpty(whereClause))
         {
-            cypher += " WHERE " + whereClause;
+            if (multiLabelEdgeWhereClauses.Count > 0)
+            {
+                cypher += " WHERE " + string.Join(" AND ", multiLabelEdgeWhereClauses) + " AND (" + whereClause + ")"; ;
+            }
+            else
+            {
+                cypher += " WHERE " + whereClause;
+            }
+        }
+        else if (multiLabelEdgeWhereClauses.Count > 0)
+        {
+            cypher += " WHERE " + string.Join(" AND ", multiLabelEdgeWhereClauses);
         }
         cypher += " RETURN " + returnClause;
         if (!string.IsNullOrEmpty(limitClause))

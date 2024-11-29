@@ -22,6 +22,20 @@ public class AdtQueryToCypherTests
         "SELECT B, R FROM DIGITALTWINS DT JOIN B RELATED DT.has R WHERE DT.$dtId = 'root2'",
         "MATCH (DT:Twin)-[R:has]->(B:Twin) WHERE DT['$dtId'] = 'root2' RETURN B, R")]
     [InlineData(
+        "SELECT B, R FROM DIGITALTWINS MATCH (T)-[R:hasBlob|hasModel]->(B) WHERE T.$dtId = 'root3'",
+        // AGE currently doesn't support the pipe operator
+        // See https://github.com/apache/age/issues/1714
+        // There is an open PR to support this syntax https://github.com/apache/age/pull/2082
+        // Until then we need to use a workaround and generate something like this
+        "MATCH (T:Twin)-[R]->(B:Twin) WHERE (label(R) = 'hasBlob' OR label(R) = 'hasModel') AND (T['$dtId'] = 'root3') RETURN B, R")]
+    [InlineData(
+        "SELECT B, R FROM DIGITALTWINS MATCH (T)-[R:hasBlob|hasModel]->(B)-[R2:has]->(T2) WHERE T.$dtId = 'root3'",
+        // AGE currently doesn't support the pipe operator
+        // See https://github.com/apache/age/issues/1714
+        // There is an open PR to support this syntax https://github.com/apache/age/pull/2082
+        // Until then we need to use a workaround and generate something like this
+        "MATCH (T:Twin)-[R]->(B:Twin)-[R2]->(T2:Twin) WHERE (label(R) = 'hasBlob' OR label(R) = 'hasModel') AND (label(R2) = 'has') AND (T['$dtId'] = 'root3') RETURN B, R")]
+    [InlineData(
         "SELECT LightBulb FROM DIGITALTWINS Room JOIN LightPanel RELATED Room.contains JOIN LightBulb RELATED LightPanel.contains WHERE Room.$dtId IN ['room1', 'room2']",
         "MATCH (Room:Twin)-[:contains]->(LightPanel:Twin),(LightPanel:Twin)-[:contains]->(LightBulb:Twin) WHERE Room['$dtId'] IN ['room1', 'room2'] RETURN LightBulb")]
     [InlineData(
