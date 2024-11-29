@@ -1,4 +1,5 @@
 using AgeDigitalTwins.Exceptions;
+using DTDLParser;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AgeDigitalTwins.ApiService;
@@ -11,7 +12,7 @@ public class ExceptionHandler : Microsoft.AspNetCore.Diagnostics.IExceptionHandl
         {
             httpContext.Response.StatusCode = StatusCodes.Status404NotFound;
         }
-        else if (exception is AgeDigitalTwinsException)
+        else if (exception is AgeDigitalTwinsException || exception is ResolutionException)
         {
             httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
         }

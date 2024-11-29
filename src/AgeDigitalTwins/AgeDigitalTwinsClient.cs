@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading;
@@ -86,14 +86,9 @@ public class AgeDigitalTwinsClient : IDisposable
             batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE UNIQUE INDEX twin_id_idx ON {_options.GraphName}.""Twin"" (ag_catalog.agtype_access_operator(properties, '""$dtId""'::agtype));"));
             batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE INDEX twin_gin_idx ON {_options.GraphName}.""Twin"" USING gin (properties);"));
             batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"SELECT create_vlabel('{_options.GraphName}', 'Model');"));
+            batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"SELECT create_elabel('{_options.GraphName}', '_extends');"));
             batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE UNIQUE INDEX model_id_idx ON {_options.GraphName}.""Model"" (ag_catalog.agtype_access_operator(properties, '""id""'::agtype));"));
             batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE INDEX model_gin_idx ON {_options.GraphName}.""Model"" USING gin (properties);"));
-            // TODO: also prepare edge label '_extends' for models and set primary and foreign keys (maybe)
-            batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE FUNCTION startswith(text, text) RETURNS boolean AS $$
-            BEGIN
-                RETURN $1 LIKE $2 || '%';
-            END;
-            $$ LANGUAGE plpgsql;"));
 
             await batch.ExecuteNonQueryAsync(cancellationToken);
         }
