@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Aspire.Hosting;
 using Azure;
 using Azure.Core;
@@ -40,6 +41,36 @@ public class AzureDigitalTwinsSdkIntegrationTests : IAsyncLifetime
             await _app.DisposeAsync();
         }
         _httpClient?.Dispose();
+    }
+
+    private class CustomTokenCredential : TokenCredential
+    {
+        public override AccessToken GetToken(TokenRequestContext requestContext, System.Threading.CancellationToken cancellationToken)
+        {
+            return new AccessToken("fake-token", DateTimeOffset.MaxValue);
+        }
+
+        public override ValueTask<AccessToken> GetTokenAsync(TokenRequestContext requestContext, System.Threading.CancellationToken cancellationToken)
+        {
+            return new ValueTask<AccessToken>(new AccessToken("fake-token", DateTimeOffset.MaxValue));
+        }
+    }
+
+
+    private class CustomHttpClientHandler : HttpClientHandler
+    {
+        private readonly Uri _baseAddress;
+
+        public CustomHttpClientHandler(Uri baseAddress)
+        {
+            _baseAddress = baseAddress;
+        }
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, System.Threading.CancellationToken cancellationToken)
+        {
+            request.RequestUri = new Uri(_baseAddress, request.RequestUri!.PathAndQuery);
+            return await base.SendAsync(request, cancellationToken);
+        }
     }
 
     [Fact]
@@ -98,33 +129,29 @@ public class AzureDigitalTwinsSdkIntegrationTests : IAsyncLifetime
         Assert.Equal(newTwin.Id, basicDigitalTwin.Id);
     }
 
-    public class CustomTokenCredential : TokenCredential
+
+    [Fact]
+    public async Task Query_WithSimpleQuery_ReturnsResult()
     {
-        public override AccessToken GetToken(TokenRequestContext requestContext, System.Threading.CancellationToken cancellationToken)
+        // Arrange
+        Assert.NotNull(_digitalTwinsClient);
+        await _digitalTwinsClient.CreateModelsAsync(new List<string> { SampleData.DtdlCrater });
+        var crater = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinCrater)!;
+        await _digitalTwinsClient.CreateOrReplaceDigitalTwinAsync(crater.Id, crater);
+        string query = "SELECT * FROM digitaltwins";
+
+        // Act
+        Assert.NotNull(_digitalTwinsClient);
+        bool found = false;
+        await foreach (BasicDigitalTwin twin in _digitalTwinsClient.QueryAsync<BasicDigitalTwin>(query))
         {
-            return new AccessToken("fake-token", DateTimeOffset.MaxValue);
+            // Assert
+            Assert.NotNull(twin);
+            if (twin.Id == crater.Id)
+            {
+                found = true;
+            }
         }
-
-        public override ValueTask<AccessToken> GetTokenAsync(TokenRequestContext requestContext, System.Threading.CancellationToken cancellationToken)
-        {
-            return new ValueTask<AccessToken>(new AccessToken("fake-token", DateTimeOffset.MaxValue));
-        }
-    }
-
-
-    public class CustomHttpClientHandler : HttpClientHandler
-    {
-        private readonly Uri _baseAddress;
-
-        public CustomHttpClientHandler(Uri baseAddress)
-        {
-            _baseAddress = baseAddress;
-        }
-
-        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, System.Threading.CancellationToken cancellationToken)
-        {
-            request.RequestUri = new Uri(_baseAddress, request.RequestUri!.PathAndQuery);
-            return await base.SendAsync(request, cancellationToken);
-        }
+        Assert.True(found);
     }
 }

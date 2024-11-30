@@ -5,12 +5,30 @@ namespace AgeDigitalTwins.Test;
 public class AdtQueryToCypherTests
 {
     [Theory]
-    [InlineData("SELECT * FROM DIGITALTWINS", "MATCH (T:Twin) RETURN *")]
     [InlineData("SELECT T FROM DIGITALTWINS T", "MATCH (T:Twin) RETURN T")]
+    [InlineData("SELECT * FROM DIGITALTWINS", "MATCH (T:Twin) RETURN *")]
     [InlineData("SELECT * FROM RELATIONSHIPS", "MATCH (:Twin)-[R]->(:Twin) RETURN *")]
     [InlineData(
         "SELECT T.name FROM DIGITALTWINS T WHERE T.$metadata.$model = 'dtmi:com:adt:dtsample:room;1'",
         "MATCH (T:Twin) WHERE T['$metadata']['$model'] = 'dtmi:com:adt:dtsample:room;1' RETURN T.name")]
+    [InlineData(
+        "SELECT * FROM DIGITALTWINS WHERE name = 'foo'",
+        "MATCH (T:Twin) WHERE T.name = 'foo' RETURN *")]
+    [InlineData(
+        "SELECT * FROM DIGITALTWINS WHERE diameter > 2.5",
+        "MATCH (T:Twin) WHERE T.diameter > 2.5 RETURN *")]
+    [InlineData(
+        "SELECT * FROM DIGITALTWINS WHERE $metadata.$model='dtmi:com:adt:dtsample:room;1'",
+        "MATCH (T:Twin) WHERE T['$metadata']['$model']='dtmi:com:adt:dtsample:room;1' RETURN *")]
+    [InlineData(
+        "SELECT * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:adt:dtsample:room;1')",
+        "MATCH (T:Twin) WHERE IS_OF_MODEL('dtmi:com:adt:dtsample:room;1') RETURN *")]
+    [InlineData(
+        "SELECT * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:adt:dtsample:room;1') AND name = 'foo'",
+        "MATCH (T:Twin) WHERE IS_OF_MODEL('dtmi:com:adt:dtsample:room;1') AND T.name = 'foo' RETURN *")]
+    [InlineData(
+        "SELECT * FROM RELATIONSHIPS WHERE $sourceId = 'root'",
+        "MATCH (:Twin)-[R]->(:Twin) WHERE R['$sourceId'] = 'root' RETURN *")]
     [InlineData(
         "SELECT TOP(1) T FROM DIGITALTWINS T WHERE T.$metadata.$model = 'dtmi:com:adt:dtsample:room;1'",
         "MATCH (T:Twin) WHERE T['$metadata']['$model'] = 'dtmi:com:adt:dtsample:room;1' RETURN T LIMIT 1")]

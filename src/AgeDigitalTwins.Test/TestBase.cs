@@ -33,7 +33,6 @@ public class TestBase : IAsyncLifetime
 
         var graphName = "temp_graph" + Guid.NewGuid().ToString("N");
         _client = new AgeDigitalTwinsClient(_dataSource, graphName);
-        await _client.CreateGraphAsync();
     }
 
     public AgeDigitalTwinsClient Client => _client!;

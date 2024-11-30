@@ -17,6 +17,7 @@ public static class AdtQueryHelpers
         string returnClause;
         var selectMatch = Regex.Match(adtQuery, @"SELECT (?:TOP\((?<limit>\d+)\) )?(?<projections>.+) FROM", RegexOptions.IgnoreCase);
         string limitClause;
+        bool usesWildcard = false;
         if (selectMatch.Success)
         {
             limitClause = selectMatch.Groups["limit"].Success ? "LIMIT " + selectMatch.Groups["limit"].Value : string.Empty;
@@ -24,6 +25,10 @@ public static class AdtQueryHelpers
             if (returnClause.Contains("COUNT()", StringComparison.OrdinalIgnoreCase))
             {
                 returnClause = "COUNT(*)";
+            }
+            if (returnClause == "*")
+            {
+                usesWildcard = true;
             }
         }
         else throw new InvalidAdtQueryException("Invalid query format.");
@@ -114,7 +119,7 @@ public static class AdtQueryHelpers
             }
             else
             {
-                var match = Regex.Match(adtQuery, @"FROM DIGITALTWINS (.+?)(?=\s+WHERE|\s*$)", RegexOptions.IgnoreCase);
+                var match = Regex.Match(adtQuery, @"FROM DIGITALTWINS (\w+)?(?=\s+WHERE|\s*$)", RegexOptions.IgnoreCase);
                 if (match.Success)
                 {
                     var twinAlias = match.Groups[1].Value;
@@ -142,11 +147,16 @@ public static class AdtQueryHelpers
                 var adtWhereClause = match.Groups[1].Value;
 
                 // Process WHERE clause
-                whereClause = ProcessPropertyAccessors(adtWhereClause);
+                whereClause = ProcessPropertyAccessors(
+                    adtWhereClause,
+                    usesWildcard && adtQuery.Contains("FROM RELATIONSHIPS", StringComparison.OrdinalIgnoreCase) ? "R" :
+                    usesWildcard ? "T" : null
+                );
             }
             else throw new InvalidAdtQueryException("Invalid query format.");
         }
 
+        // Join everything together to form the final Cypher query
         string cypher = "MATCH " + matchClause;
         if (!string.IsNullOrEmpty(whereClause))
         {
@@ -171,9 +181,25 @@ public static class AdtQueryHelpers
         return cypher;
     }
 
-    internal static string ProcessPropertyAccessors(string whereClause)
+    internal static string ProcessPropertyAccessors(string whereClause, string? prependAlias = null)
     {
+        if (!string.IsNullOrEmpty(prependAlias))
+        {
+
+            // Prepend alias to properties
+            whereClause = Regex.Replace(whereClause, @"(?!AND\b|OR\b)[^\[\]""\s]+", m =>
+            {
+                return $"{prependAlias}.{m.Value}";
+            }, RegexOptions.IgnoreCase);
+
+            // TODO: Process functions (IS_OF_MODEL to be processed separately)
+        }
+
         // Replace property access with $ character
-        return Regex.Replace(whereClause, @"(\.\$[\w]+)", m => $"['{m.Value[1..]}']");
+        whereClause = Regex.Replace(whereClause, @"(\.\$[\w]+)", m => $"['{m.Value[1..]}']");
+
+        // TODO: evaluate whether backticks would be better instead
+
+        return whereClause;
     }
 }
