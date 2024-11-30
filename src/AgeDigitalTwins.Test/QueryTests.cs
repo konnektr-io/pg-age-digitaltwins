@@ -9,16 +9,23 @@ namespace AgeDigitalTwins.Test;
 
 public class QueryTests : TestBase
 {
-    public QueryTests()
+    internal async Task IntializeAsync()
     {
-        // Load required models
-        string[] models = [SampleData.DtdlRoom, SampleData.DtdlTemperatureSensor];
-        Client.CreateModelsAsync(models).GetAwaiter().GetResult();
+        try
+        {
+            // Load required models
+            string[] models = [SampleData.DtdlRoom, SampleData.DtdlTemperatureSensor];
+            await Client.CreateModelsAsync(models);
+        }
+        catch
+        {
+        }
     }
 
     [Fact]
     public async Task QueryAsync_SimpleQuery_ReturnsTwinsAndRelationships()
     {
+        await IntializeAsync();
         var roomTwin = @"{""$dtId"": ""room1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""Room 1""}";
         await Client.CreateOrReplaceDigitalTwinAsync("room1", roomTwin);
         var sensorTwin = @"{""$dtId"": ""sensor1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:tempsensor;1""}, ""name"": ""Sensor 1"", ""temperature"": 25.0}";
@@ -43,6 +50,7 @@ public class QueryTests : TestBase
     [Fact]
     public async Task QueryAsync_RelationshipsQuery_ReturnsRelationship()
     {
+        await IntializeAsync();
         var roomTwin = @"{""$dtId"": ""room1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""Room 1""}";
         await Client.CreateOrReplaceDigitalTwinAsync("room1", roomTwin);
         var sensorTwin = @"{""$dtId"": ""sensor1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:tempsensor;1""}, ""name"": ""Sensor 1"", ""temperature"": 25.0}";
@@ -66,6 +74,7 @@ public class QueryTests : TestBase
     [Fact]
     public async Task QueryAsync_SimpleAdtQuery_ReturnsTwins()
     {
+        await IntializeAsync();
         Dictionary<string, string> twins = new()
         {
             {"room1", @"{""$dtId"": ""room1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""Room 1""}"},
@@ -92,6 +101,7 @@ public class QueryTests : TestBase
     [Fact]
     public async Task QueryAsync_SimpleAdtQueryWithUnderscore_ReturnsTwins()
     {
+        await IntializeAsync();
         Dictionary<string, string> twins = new()
         {
             {"room1", @"{""$dtId"": ""room1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""Room 1""}"},
@@ -118,6 +128,7 @@ public class QueryTests : TestBase
     [Fact]
     public async Task QueryAsync_SimpleAdtQuerySelectProperty_ReturnsPropertyValues()
     {
+        await IntializeAsync();
         Dictionary<string, string> twins = new()
         {
             {"room1", @"{""$dtId"": ""room1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""Room 1""}"},
@@ -145,6 +156,7 @@ public class QueryTests : TestBase
     [Fact]
     public async Task QueryAsync_SimpleAdtQuerySelectAlias_ReturnsPropertyValues()
     {
+        await IntializeAsync();
         Dictionary<string, string> twins = new()
         {
             {"room1", @"{""$dtId"": ""room1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""Room 1""}"},
@@ -172,6 +184,7 @@ public class QueryTests : TestBase
     [Fact]
     public async Task QueryAsync_AdtQueryWithTop_ReturnsTwins()
     {
+        await IntializeAsync();
         Dictionary<string, string> twins = new()
         {
             {"room1", @"{""$dtId"": ""room1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""Room 1""}"},
@@ -199,6 +212,7 @@ public class QueryTests : TestBase
     [Fact]
     public async Task QueryAsync_AdtQueryWithCount_ReturnsCount()
     {
+        await IntializeAsync();
         Dictionary<string, string> twins = new()
         {
             {"room1", @"{""$dtId"": ""room1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""notveryunique""}"},

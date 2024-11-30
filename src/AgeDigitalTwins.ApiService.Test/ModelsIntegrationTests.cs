@@ -7,27 +7,14 @@ namespace AgeDigitalTwins.ApiService.Test;
 
 public class ModelsIntegrationTests : IAsyncLifetime
 {
-    private DistributedApplication? _app;
+    private TestingAspireAppHost? _app;
     private HttpClient? _httpClient;
 
     public async Task InitializeAsync()
     {
-        var appHost = await DistributedApplicationTestingBuilder.CreateAsync<Projects.AgeDigitalTwins_AppHost>();
-        appHost.Configuration["Parameters:AgeGraphName"] = "temp_graph" + Guid.NewGuid().ToString("N");
-        appHost.Services.ConfigureHttpClientDefaults(clientBuilder =>
-        {
-            clientBuilder.AddStandardResilienceHandler();
-        });
-        _app = await appHost.BuildAsync();
-
-        var resourceNotificationService = _app.Services.GetRequiredService<ResourceNotificationService>();
+        _app = new TestingAspireAppHost();
         await _app.StartAsync();
-
-        await resourceNotificationService.WaitForResourceAsync("apiservice", KnownResourceStates.Running).WaitAsync(TimeSpan.FromSeconds(60));
-
         _httpClient = _app.CreateHttpClient("apiservice");
-
-        // Delete all existing models
     }
 
     public async Task DisposeAsync()

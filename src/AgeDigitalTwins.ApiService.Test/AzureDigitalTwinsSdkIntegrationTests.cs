@@ -9,26 +9,17 @@ namespace AgeDigitalTwins.ApiService.Test;
 public class AzureDigitalTwinsSdkIntegrationTests : IAsyncLifetime
 {
     private DigitalTwinsClient? _digitalTwinsClient;
-    private IDistributedApplicationTestingBuilder? _appHost;
-    private DistributedApplication? _app;
+    private TestingAspireAppHost? _app;
+    private HttpClient? _generatedhttpClient;
     private HttpClient? _httpClient;
 
     public async Task InitializeAsync()
     {
-        _appHost = await DistributedApplicationTestingBuilder.CreateAsync<Projects.AgeDigitalTwins_AppHost>();
-        _appHost.Configuration["Parameters:AgeGraphName"] = "temp_graph" + Guid.NewGuid().ToString("N");
-        _appHost.Services.ConfigureHttpClientDefaults(clientBuilder =>
-        {
-            clientBuilder.AddStandardResilienceHandler();
-        });
-        _app = await _appHost.BuildAsync();
-        var resourceNotificationService = _app.Services.GetRequiredService<ResourceNotificationService>();
+        _app = new TestingAspireAppHost();
         await _app.StartAsync();
 
-        await resourceNotificationService.WaitForResourceAsync("apiservice", KnownResourceStates.Running).WaitAsync(TimeSpan.FromSeconds(30));
-
-        var generatedHttpClient = _app.CreateHttpClient("apiservice");
-        _httpClient = new HttpClient(new CustomHttpClientHandler(generatedHttpClient.BaseAddress!));
+        _generatedhttpClient = _app.CreateHttpClient("apiservice");
+        _httpClient = new HttpClient(new CustomHttpClientHandler(_generatedhttpClient.BaseAddress!));
 
         DigitalTwinsClientOptions options = new()
         {
@@ -42,7 +33,7 @@ public class AzureDigitalTwinsSdkIntegrationTests : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
-        var response = await _httpClient!.DeleteAsync(
+        var response = await _generatedhttpClient!.DeleteAsync(
             "/graph/delete");
         if (_app != null)
         {

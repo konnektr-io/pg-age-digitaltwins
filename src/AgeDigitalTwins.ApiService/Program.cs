@@ -2,13 +2,47 @@ using System.Text.Json;
 using AgeDigitalTwins;
 using AgeDigitalTwins.ApiService;
 using Json.Patch;
-using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
+using Npgsql;
+using Npgsql.Age;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add service defaults & Aspire client integrations.
 builder.AddServiceDefaults();
+
+
+// Add Npgsql data source with custom settings.
+builder.AddNpgsqlDataSource(
+    "agedb",
+    configureSettings: settings =>
+    {
+        settings.DisableTracing = true;
+        NpgsqlConnectionStringBuilder connectionStringBuilder = new(settings.ConnectionString)
+        {
+            SearchPath = "ag_catalog, \"$user\", public",
+        };
+        settings.ConnectionString = connectionStringBuilder.ConnectionString;
+    },
+    configureDataSourceBuilder: dataSourceBuilder =>
+    {
+        dataSourceBuilder.UseAge(false);
+    }
+);
+// Enable OpenTelemetry tracing with Npgsql integration (does not work when having it enabled in Aspire.Npgsql)
+builder.Services.AddOpenTelemetry()
+    .WithTracing(tracerProviderBuilder =>
+    {
+        tracerProviderBuilder.AddNpgsql();
+    });
+
+// Add AgeDigitalTwinsClient
+builder.Services.AddSingleton(sp =>
+{
+    NpgsqlDataSource dataSource = sp.GetRequiredService<NpgsqlDataSource>();
+    string graphName = builder.Configuration.GetSection("Parameters")["AgeGraphName"] ?? "digitaltwins";
+    return new AgeDigitalTwinsClient(dataSource, graphName);
+});
 
 // Add services to the container.
 builder.Services.AddProblemDetails();
@@ -17,23 +51,6 @@ builder.Services.AddExceptionHandler<ExceptionHandler>();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
-// Configure and register AgeDigitalTwinsClient
-builder.Services.AddSingleton(serviceProvider =>
-{
-    string connectionString = Environment.GetEnvironmentVariable("AGE_CONNECTION_STRING")
-        ?? throw new Exception("Connection string not defined.");
-
-    var graphName = Environment.GetEnvironmentVariable("AGE_GRAPH_NAME")
-        ?? "digitaltwins";
-
-    var client = new AgeDigitalTwinsClient(connectionString, new() { GraphName = graphName });
-    bool? graphExists = client.GraphExistsAsync().GetAwaiter().GetResult();
-    if (graphExists == false)
-    {
-        client.CreateGraphAsync().GetAwaiter().GetResult();
-    }
-    return client;
-});
 
 var app = builder.Build();
 
@@ -127,6 +144,10 @@ app.MapDelete("/models/{id}", (string id, [FromServices] AgeDigitalTwinsClient c
 // Creating and dropping graphs should be done in the control plane
 if (app.Environment.IsDevelopment())
 {
+    app.MapPut("graph/create", ([FromServices] AgeDigitalTwinsClient client, CancellationToken cancellationToken) =>
+    {
+        return client.CreateGraphAsync(cancellationToken);
+    });
     app.MapDelete("graph/delete", ([FromServices] AgeDigitalTwinsClient client, CancellationToken cancellationToken) =>
     {
         return client.DropGraphAsync(cancellationToken);
