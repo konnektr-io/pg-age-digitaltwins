@@ -128,6 +128,7 @@ public class AgeDigitalTwinsClient : IAsyncDisposable
             batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"SELECT create_elabel('{_graphName}', '_extends');"));
             batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE UNIQUE INDEX model_id_idx ON {_graphName}.""Model"" (ag_catalog.agtype_access_operator(properties, '""id""'::agtype));"));
             batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE INDEX model_gin_idx ON {_graphName}.""Model"" USING gin (properties);"));
+            // TODO: figure out how to make this function work on multiple graphs
             batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE OR REPLACE FUNCTION public.is_of_model(twin agtype, model_id agtype, strict boolean default false)
 RETURNS boolean
 LANGUAGE plpgsql
@@ -144,7 +145,7 @@ BEGIN
       sql:= format('
         SELECT ''%s'' = ''%s'' OR
         EXISTS
-            (SELECT m FROM ag_catalog.cypher(''digitaltwins'', $$
+            (SELECT m FROM ag_catalog.cypher(''{_graphName}'', $$
               MATCH(m:Model) - [:_extends*0..]->(n:Model)
               WHERE m.id = %s AND n.id = %s
               RETURN m.id
