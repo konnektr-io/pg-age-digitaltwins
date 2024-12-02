@@ -40,7 +40,7 @@ public static class AdtQueryHelpers
         if (adtQuery.Contains("FROM RELATIONSHIPS", StringComparison.OrdinalIgnoreCase))
         {
             // Handle RELATIONSHIPS source
-            var match = Regex.Match(adtQuery, @"FROM RELATIONSHIPS (.+?)(?=\s+WHERE|\s*$)", RegexOptions.IgnoreCase);
+            var match = Regex.Match(adtQuery, @"FROM RELATIONSHIPS (\w+)?(?=\s+WHERE|\s*$)", RegexOptions.IgnoreCase);
             if (match.Success)
             {
                 var relationshipAlias = match.Groups[1].Value;
@@ -185,14 +185,32 @@ public static class AdtQueryHelpers
     {
         if (!string.IsNullOrEmpty(prependAlias))
         {
+            // Handle function calls without prepending the alias to the function name
+            whereClause = Regex.Replace(whereClause, @"(\w+)\(([^)]+)\)", m =>
+            {
+                var functionName = m.Groups[1].Value;
+                var functionArgs = m.Groups[2].Value;
 
-            // Prepend alias to properties
-            whereClause = Regex.Replace(whereClause, @"(?!AND\b|OR\b)[^\[\]""\s]+", m =>
+                // Prepend alias to properties within the function arguments
+                functionArgs = Regex.Replace(functionArgs, @"(?<=\s|\[|^)(?!\d+|'[^']*'|""[^""]*"")[^\[\]""\s=<>!]+(?=\s*=\s*'|\s|$|\])", n =>
+            {
+                return $"{prependAlias}.{n.Value}";
+            }, RegexOptions.IgnoreCase);
+
+                return $"{functionName}({functionArgs})";
+            }, RegexOptions.IgnoreCase);
+
+            // Prepend alias to properties outside of function calls
+            whereClause = Regex.Replace(whereClause, @"(?<=\s|\[|^)(?!AND\b|OR\b|\d+|'[^']*'|""[^""]*"")[^\[\]""\s=<>!()]+(?=\s*=\s*'|\s|$|\])", m =>
             {
                 return $"{prependAlias}.{m.Value}";
             }, RegexOptions.IgnoreCase);
 
-            // TODO: Process functions (IS_OF_MODEL to be processed separately)
+            // Process IS_OF_MODEL function
+            whereClause = Regex.Replace(whereClause, @"IS_OF_MODEL\(([^)]+)\)", m =>
+            {
+                return $"IS_OF_MODEL({prependAlias},{m.Groups[1].Value})";
+            }, RegexOptions.IgnoreCase);
         }
 
         // Replace property access with $ character

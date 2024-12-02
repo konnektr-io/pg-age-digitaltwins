@@ -19,7 +19,7 @@ using System.Text.Json.Nodes;
 
 namespace AgeDigitalTwins;
 
-public class AgeDigitalTwinsClient
+public class AgeDigitalTwinsClient : IAsyncDisposable
 {
     private readonly NpgsqlDataSource _dataSource;
 
@@ -36,6 +36,47 @@ public class AgeDigitalTwinsClient
             DtmiResolverAsync = (dtmis, ct) => _dataSource.ParserDtmiResolverAsync(_graphName, dtmis, ct)
         });
         InitializeGraphAsync().GetAwaiter().GetResult();
+    }
+
+    public AgeDigitalTwinsClient(NpgsqlConnectionStringBuilder connectionStringBuilder, string graphName = "digitaltwins")
+    {
+        connectionStringBuilder.SearchPath = "ag_catalog, \"$user\", public";
+        NpgsqlDataSourceBuilder dataSourceBuilder = new(connectionStringBuilder.ConnectionString);
+        _dataSource = dataSourceBuilder
+            .UseAge(false)
+            .Build();
+
+        _graphName = graphName;
+        _modelParser = new(new ParsingOptions()
+        {
+            DtmiResolverAsync = (dtmis, ct) => _dataSource.ParserDtmiResolverAsync(_graphName, dtmis, ct)
+        });
+        InitializeGraphAsync().GetAwaiter().GetResult();
+    }
+
+    public AgeDigitalTwinsClient(string connectionString, string graphName = "digitaltwins")
+    {
+        NpgsqlConnectionStringBuilder connectionStringBuilder = new(connectionString)
+        {
+            SearchPath = "ag_catalog, \"$user\", public"
+        };
+        NpgsqlDataSourceBuilder dataSourceBuilder = new(connectionStringBuilder.ConnectionString);
+        _dataSource = dataSourceBuilder
+            .UseAge(false)
+            .Build();
+
+        _graphName = graphName;
+        _modelParser = new(new ParsingOptions()
+        {
+            DtmiResolverAsync = (dtmis, ct) => _dataSource.ParserDtmiResolverAsync(_graphName, dtmis, ct)
+        });
+        InitializeGraphAsync().GetAwaiter().GetResult();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        GC.SuppressFinalize(this);
+        await _dataSource.DisposeAsync();
     }
 
     public virtual async Task InitializeGraphAsync(

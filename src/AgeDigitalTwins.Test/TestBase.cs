@@ -1,16 +1,12 @@
 using Microsoft.Extensions.Configuration;
-using Npgsql;
-using Npgsql.Age;
 
 namespace AgeDigitalTwins.Test;
 
-public class TestBase : IAsyncLifetime
+public class TestBase
 {
-    private AgeDigitalTwinsClient? _client;
+    private readonly AgeDigitalTwinsClient _client;
 
-    private NpgsqlDataSource? _dataSource;
-
-    public async Task InitializeAsync()
+    public TestBase()
     {
         var configuration = new ConfigurationBuilder()
             .SetBasePath(AppContext.BaseDirectory)
@@ -19,30 +15,15 @@ public class TestBase : IAsyncLifetime
         string connectionString = configuration.GetConnectionString("AgeConnectionString")
             ?? throw new ArgumentNullException("AgeConnectionString");
 
-
-        NpgsqlConnectionStringBuilder connectionStringBuilder = new(connectionString)
-        {
-            SearchPath = "ag_catalog, \"$user\", public"
-        };
-
-        var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionStringBuilder.ConnectionString);
-
-        _dataSource = dataSourceBuilder
-            .UseAge(false)
-            .Build();
-
         var graphName = "temp_graph" + Guid.NewGuid().ToString("N");
-        _client = new AgeDigitalTwinsClient(_dataSource, graphName);
+        _client = new AgeDigitalTwinsClient(connectionString, graphName);
     }
 
     public AgeDigitalTwinsClient Client => _client!;
 
     public async Task DisposeAsync()
     {
-        await _client!.DropGraphAsync();
-        if (_dataSource is not null)
-        {
-            await _dataSource.DisposeAsync();
-        }
+        await _client.DropGraphAsync();
+        await _client.DisposeAsync();
     }
 }
