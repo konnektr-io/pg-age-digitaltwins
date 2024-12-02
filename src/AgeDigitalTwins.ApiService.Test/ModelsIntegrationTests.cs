@@ -29,21 +29,23 @@ public class ModelsIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task CreateModels_SingleModel_ValidatedAndCreated()
+    public async Task CreateModelsDeleteModel_SingleModel_ValidatedCreatedDeleted()
     {
         // Arrange
         string[] sModels = [SampleData.DtdlCrater];
         List<JsonElement> jModels = sModels.Select(m => JsonDocument.Parse(m)).Select(j => j.RootElement).ToList();
 
         // Act
-        var response = await _httpClient!.PostAsync(
+        var createResponse = await _httpClient!.PostAsync(
             "/models",
             new StringContent(JsonSerializer.Serialize(jModels), Encoding.UTF8, "application/json"));
+        var deleteResponse = await _httpClient!.DeleteAsync(
+            "/models/dtmi:com:contoso:Crater;1");
 
         // Assert
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, createResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
     }
-
 
     [Fact]
     public async Task GetModels_SingleModel_ValidatedAndCreated()

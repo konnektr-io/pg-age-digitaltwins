@@ -502,12 +502,11 @@ public class AgeDigitalTwinsClient : IAsyncDisposable
     public virtual async Task DeleteRelationshipAsync(
         string digitalTwinId,
         string relationshipId,
-        string relationshipName,
         CancellationToken cancellationToken = default)
     {
         try
         {
-            string cypher = $@"MATCH (source:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel:{relationshipName} {{`$relationshipId`: '{relationshipId}'}}]->(target:Twin) DELETE rel";
+            string cypher = $@"MATCH (source:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel {{`$relationshipId`: '{relationshipId}'}}]->(target:Twin) DELETE rel";
             await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
             int rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken);
             if (rowsAffected == 0)

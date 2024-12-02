@@ -79,9 +79,10 @@ app.MapPatch("digitaltwins/{id}", (string id, JsonPatch patch, [FromServices] Ag
 })
 .WithName("UpdateDigitalTwin");
 
-app.MapDelete("/digitaltwins/{id}", (string id, [FromServices] AgeDigitalTwinsClient client, CancellationToken cancellationToken) =>
+app.MapDelete("/digitaltwins/{id}", async (string id, [FromServices] AgeDigitalTwinsClient client, CancellationToken cancellationToken) =>
 {
-    return client.DeleteDigitalTwinAsync(id, cancellationToken);
+    await client.DeleteDigitalTwinAsync(id, cancellationToken);
+    return Results.NoContent();
 })
 .WithName("DeleteDigitalTwin");
 
@@ -110,6 +111,13 @@ app.MapPut("/digitaltwins/{id}/relationships/{relationshipId}", (string id, stri
 })
 .WithName("CreateOrReplaceRelationship");
 
+app.MapDelete("/digitaltwins/{id}/relationships/{relationshipId}", async (string id, string relationshipId, [FromServices] AgeDigitalTwinsClient client, CancellationToken cancellationToken) =>
+{
+    await client.DeleteRelationshipAsync(id, relationshipId, cancellationToken);
+    return Results.NoContent();
+})
+.WithName("DeleteRelationship");
+
 app.MapPost("/query", async (JsonElement requestBody, [FromServices] AgeDigitalTwinsClient client, CancellationToken cancellationToken) =>
 {
     if (!requestBody.TryGetProperty("query", out JsonElement queryElement) || queryElement.ValueKind != JsonValueKind.String)
@@ -133,9 +141,10 @@ app.MapPost("/models", (JsonElement[] models, [FromServices] AgeDigitalTwinsClie
 })
 .WithName("CreateModels");
 
-app.MapDelete("/models/{id}", (string id, [FromServices] AgeDigitalTwinsClient client, CancellationToken cancellationToken) =>
+app.MapDelete("/models/{id}", async (string id, [FromServices] AgeDigitalTwinsClient client, CancellationToken cancellationToken) =>
 {
-    return client.DeleteModelAsync(id, cancellationToken);
+    await client.DeleteModelAsync(id, cancellationToken);
+    return Results.NoContent();
 })
 .WithName("DeleteModel");
 

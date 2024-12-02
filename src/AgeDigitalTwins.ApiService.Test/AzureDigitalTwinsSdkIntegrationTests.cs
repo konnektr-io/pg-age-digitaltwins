@@ -45,28 +45,23 @@ public class AzureDigitalTwinsSdkIntegrationTests : IAsyncLifetime
 
     private class CustomTokenCredential : TokenCredential
     {
-        public override AccessToken GetToken(TokenRequestContext requestContext, System.Threading.CancellationToken cancellationToken)
+        public override AccessToken GetToken(TokenRequestContext requestContext, CancellationToken cancellationToken)
         {
             return new AccessToken("fake-token", DateTimeOffset.MaxValue);
         }
 
-        public override ValueTask<AccessToken> GetTokenAsync(TokenRequestContext requestContext, System.Threading.CancellationToken cancellationToken)
+        public override ValueTask<AccessToken> GetTokenAsync(TokenRequestContext requestContext, CancellationToken cancellationToken)
         {
             return new ValueTask<AccessToken>(new AccessToken("fake-token", DateTimeOffset.MaxValue));
         }
     }
 
 
-    private class CustomHttpClientHandler : HttpClientHandler
+    private class CustomHttpClientHandler(Uri baseAddress) : HttpClientHandler
     {
-        private readonly Uri _baseAddress;
+        private readonly Uri _baseAddress = baseAddress;
 
-        public CustomHttpClientHandler(Uri baseAddress)
-        {
-            _baseAddress = baseAddress;
-        }
-
-        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, System.Threading.CancellationToken cancellationToken)
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             request.RequestUri = new Uri(_baseAddress, request.RequestUri!.PathAndQuery);
             return await base.SendAsync(request, cancellationToken);
