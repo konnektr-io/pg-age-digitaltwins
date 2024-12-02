@@ -128,7 +128,33 @@ public class AgeDigitalTwinsClient : IAsyncDisposable
             batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"SELECT create_elabel('{_graphName}', '_extends');"));
             batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE UNIQUE INDEX model_id_idx ON {_graphName}.""Model"" (ag_catalog.agtype_access_operator(properties, '""id""'::agtype));"));
             batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE INDEX model_gin_idx ON {_graphName}.""Model"" USING gin (properties);"));
-
+            batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE OR REPLACE FUNCTION public.is_of_model(twin agtype, model_id agtype, strict boolean default false)
+RETURNS boolean
+LANGUAGE plpgsql
+AS $function$
+DECLARE
+    sql VARCHAR;
+    twin_model_id text;
+    result boolean;
+BEGIN
+    SELECT ag_catalog.agtype_access_operator(twin,'""$metadata""'::agtype,'""$model""'::agtype) INTO twin_model_id;
+    IF strict THEN
+      sql:= format('SELECT ''%s'' = ''%s''', twin_model_id, model_id);
+    ELSE
+      sql:= format('
+        SELECT ''%s'' = ''%s'' OR
+        EXISTS
+            (SELECT m FROM ag_catalog.cypher(''digitaltwins'', $$
+              MATCH(m:Model) - [:_extends*0..]->(n:Model)
+              WHERE m.id = %s AND n.id = %s
+              RETURN m.id
+            $$) AS(m text))
+        ', twin_model_id, model_id, twin_model_id, model_id);
+    END IF;
+            EXECUTE sql INTO result;
+            RETURN result;
+            END;
+$function$; "));
             await batch.ExecuteNonQueryAsync(cancellationToken);
         }
         catch (Exception ex)
