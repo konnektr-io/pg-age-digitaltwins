@@ -1,21 +1,21 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Runtime.Serialization;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
+using AgeDigitalTwins.Exceptions;
+using AgeDigitalTwins.Models;
+using AgeDigitalTwins.Validation;
 using DTDLParser;
+using DTDLParser.Models;
+using Json.Patch;
 using Npgsql.Age;
 using Npgsql.Age.Types;
 using Npgsql;
-using DTDLParser.Models;
-using AgeDigitalTwins.Validation;
-using System.Linq;
-using AgeDigitalTwins.Exceptions;
-using Json.Patch;
-using System.Runtime.Serialization;
-using System.Runtime.CompilerServices;
-using AgeDigitalTwins.Models;
-using System.Text.Json.Nodes;
 
 namespace AgeDigitalTwins;
 
@@ -323,10 +323,20 @@ $function$; "));
                 {
                     violations.Add("Cannot update the $dtId property");
                 }
-                if (op.Op == OperationType.Add || op.Op == OperationType.Replace)
+                if (op.Value != null && (op.Op == OperationType.Add || op.Op == OperationType.Replace))
                 {
-                    cypherOperations.Add($"SET t.{path} = {op.Value}");
-
+                    if (op.Value.GetValueKind() == JsonValueKind.Object || op.Value.GetValueKind() == JsonValueKind.Array)
+                    {
+                        violations.Add($"TODO: Property '{path}' must be a primitive value");
+                    }
+                    else if (op.Value.GetValueKind() == JsonValueKind.String)
+                    {
+                        cypherOperations.Add($"SET t.{path} = '{op.Value}'");
+                    }
+                    else
+                    {
+                        cypherOperations.Add($"SET t.{path} = {op.Value}");
+                    }
                 }
                 else if (op.Op == OperationType.Remove)
                 {
@@ -334,12 +344,11 @@ $function$; "));
                 }
                 else
                 {
-                    throw new NotSupportedException($"Operation '{op.Op}' is not supported");
+                    throw new NotSupportedException($"Operation '{op.Op}' with value '{op.Value}' is not supported");
                 }
             }
 
-            string cypher = $@"
-            MATCH (t:Twin) WHERE t['$dtId'] = '{digitalTwinId}'
+            string cypher = $@"MATCH (t:Twin) WHERE t['$dtId'] = '{digitalTwinId}'
             {string.Join("\n", cypherOperations)}
             RETURN t";
             await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
@@ -518,6 +527,67 @@ $function$; "));
                 }
             }
             else return default;
+        }
+        catch (Exception ex)
+        {
+            // scope.Failed(ex);
+            throw;
+        }
+    }
+
+    public virtual async Task UpdateRelationshipAsync(
+        string digitalTwinId,
+        string relationshipId,
+        JsonPatch patch,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            List<string> violations = new();
+
+            var cypherOperations = new List<string>();
+            foreach (var op in patch.Operations)
+            {
+                var path = op.Path.ToString().TrimStart('/').Replace("/", ".");
+                if (path.StartsWith('$'))
+                {
+                    violations.Add($"Cannot update the {path} property");
+                }
+                if (op.Value != null && (op.Op == OperationType.Add || op.Op == OperationType.Replace))
+                {
+                    if (op.Value.GetValueKind() == JsonValueKind.Object || op.Value.GetValueKind() == JsonValueKind.Array)
+                    {
+                        violations.Add($"TODO: Property '{path}' must be a primitive value");
+                    }
+                    else if (op.Value.GetValueKind() == JsonValueKind.String)
+                    {
+                        cypherOperations.Add($"SET rel.{path} = '{op.Value}'");
+                    }
+                    else
+                    {
+                        cypherOperations.Add($"SET rel.{path} = {op.Value}");
+                    }
+                }
+                else if (op.Op == OperationType.Remove)
+                {
+                    cypherOperations.Add($"REMOVE t.{path}");
+                }
+                else
+                {
+                    throw new NotSupportedException($"Operation '{op.Op}' with value '{op.Value}' is not supported");
+                }
+            }
+
+            string cypher = $@"MATCH (source:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel {{`$relationshipId`: '{relationshipId}'}}]->(target:Twin)
+            {string.Join("\n", cypherOperations)}
+            RETURN rel";
+            await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+            if (!await reader.ReadAsync(cancellationToken))
+            {
+                throw new DigitalTwinNotFoundException($"Relationship with ID {relationshipId} on {digitalTwinId} not found");
+            }
         }
         catch (Exception ex)
         {

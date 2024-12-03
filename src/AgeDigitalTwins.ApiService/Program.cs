@@ -73,9 +73,10 @@ app.MapPut("/digitaltwins/{id}", (string id, JsonDocument digitalTwin, [FromServ
 })
 .WithName("CreateOrReplaceDigitalTwin");
 
-app.MapPatch("digitaltwins/{id}", (string id, JsonPatch patch, [FromServices] AgeDigitalTwinsClient client, CancellationToken cancellationToken) =>
+app.MapPatch("digitaltwins/{id}", async (string id, JsonPatch patch, [FromServices] AgeDigitalTwinsClient client, CancellationToken cancellationToken) =>
 {
-    return client.UpdateDigitalTwinAsync(id, patch, cancellationToken);
+    await client.UpdateDigitalTwinAsync(id, patch, cancellationToken);
+    return Results.NoContent();
 })
 .WithName("UpdateDigitalTwin");
 
@@ -110,6 +111,13 @@ app.MapPut("/digitaltwins/{id}/relationships/{relationshipId}", (string id, stri
     return client.CreateOrReplaceRelationshipAsync(id, relationshipId, relationship, cancellationToken);
 })
 .WithName("CreateOrReplaceRelationship");
+
+app.MapPatch("/digitaltwins/{id}/relationships/{relationshipId}", async (string id, string relationshipId, JsonPatch patch, [FromServices] AgeDigitalTwinsClient client, CancellationToken cancellationToken) =>
+{
+    await client.UpdateRelationshipAsync(id, relationshipId, patch, cancellationToken);
+    return Results.NoContent();
+})
+.WithName("UpdateRelationship");
 
 app.MapDelete("/digitaltwins/{id}/relationships/{relationshipId}", async (string id, string relationshipId, [FromServices] AgeDigitalTwinsClient client, CancellationToken cancellationToken) =>
 {

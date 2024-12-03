@@ -113,6 +113,24 @@ namespace AgeDigitalTwins.Test
                 ]
             }";
 
+        public const string DtdlMoon =
+            @"{
+                ""@context"": ""dtmi:dtdl:context;3"",
+                ""@id"": ""dtmi:com:contoso:Moon;1"",
+                ""@type"": ""Interface"",
+                ""displayName"": ""Moon"",
+                ""extends"": ""dtmi:com:contoso:CelestialBody;1""
+            }";
+
+        public const string TwinPlanetEarth =
+            @"{
+                ""$dtId"": ""earth"",
+                ""$metadata"": {
+                    ""$model"": ""dtmi:com:contoso:Planet;1""
+                },
+                ""name"": ""Earth""
+            }";
+
         public const string DtdlCrater =
             @"{
                 ""@context"": ""dtmi:dtdl:context;3"",

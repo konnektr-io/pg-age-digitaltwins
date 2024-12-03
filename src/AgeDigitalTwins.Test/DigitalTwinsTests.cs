@@ -1,7 +1,9 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using AgeDigitalTwins.Exceptions;
 using Azure.DigitalTwins.Core;
 using DTDLParser;
+using Json.More;
 using Json.Patch;
 using Json.Pointer;
 
@@ -122,6 +124,40 @@ public class DigitalTwinsTests : TestBase
         Assert.DoesNotContain("diameter", readTwin.Contents);
     }
 
+    [Fact]
+    public async Task UpdateDigitalTwinAsync_MultipleOperations_Updated()
+    {
+        // Load required models
+        string[] models = [SampleData.DtdlCelestialBody, SampleData.DtdlPlanet, SampleData.DtdlCrater];
+        await Client.CreateModelsAsync(models);
+
+        // Create digital twin
+        var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinPlanetEarth);
+        var createdTwin = await Client.CreateOrReplaceDigitalTwinAsync(digitalTwin!.Id, digitalTwin);
+
+        string sJsonPatch = @"[
+            {
+                ""op"": ""replace"",
+                ""path"": ""/name"",
+                ""value"": ""Earth 2""
+            },
+            {
+                ""op"": ""add"",
+                ""path"": ""/mass"",
+                ""value"": 5.972E24
+            }
+        ]";
+
+        JsonPatch jsonPatch = JsonSerializer.Deserialize<JsonPatch>(sJsonPatch)!;
+        await Client.UpdateDigitalTwinAsync(digitalTwin!.Id, jsonPatch);
+
+        // Read digital twin
+        var readTwin = await Client.GetDigitalTwinAsync<BasicDigitalTwin>(digitalTwin.Id);
+        Assert.NotNull(readTwin);
+        Assert.Equal(digitalTwin.Id, readTwin.Id);
+        Assert.Equal("Earth 2", readTwin.Contents["name"].ToString());
+        Assert.Equal(5.972E24, ((JsonElement)readTwin.Contents["mass"]).GetDouble());
+    }
 
     /* [Fact]
     public async Task UpdateDigitalTwinAsync_RemoveAlreadyRemovedProperty_ThrowsException()

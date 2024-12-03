@@ -74,4 +74,47 @@ public class DigitalTwinsIntegrationTests : IAsyncLifetime
         Assert.Equal(JsonValueKind.String, messageElement.ValueKind);
         Assert.Contains("badproperty", messageElement.GetString());
     }
+
+
+    [Fact]
+    public async Task UpdateDigitalTwin_ValidTwin_UpdatesTwin()
+    {
+        var twinResponse = await _httpClient!.PutAsync(
+            "/digitaltwins/earth",
+            new StringContent(SampleData.TwinPlanetEarth, Encoding.UTF8, "application/json"));
+        string twinResponseContent = await twinResponse.Content.ReadAsStringAsync();
+
+        string jsonPatch = @"[
+            {
+                ""op"": ""replace"",
+                ""path"": ""/name"",
+                ""value"": ""Earth 2""
+            },
+            {
+                ""op"": ""add"",
+                ""path"": ""/mass"",
+                ""value"": 5.972E24
+            }
+        ]";
+
+        var patchResponse = await _httpClient!.PatchAsync(
+            "/digitaltwins/earth",
+            new StringContent(jsonPatch, Encoding.UTF8, "application/json-patch+json"));
+
+        var modifiedTwinResponse = await _httpClient!.GetAsync("/digitaltwins/earth");
+
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, twinResponse.StatusCode);
+        JsonDocument twinJson = JsonDocument.Parse(twinResponseContent);
+        Assert.Equal("earth", twinJson.RootElement.GetProperty("$dtId").GetString());
+
+        Assert.Equal(HttpStatusCode.NoContent, patchResponse.StatusCode);
+
+        Assert.Equal(HttpStatusCode.OK, modifiedTwinResponse.StatusCode);
+        string modifiedTwinResponseContent = await modifiedTwinResponse.Content.ReadAsStringAsync();
+        JsonDocument modifiedTwinJson = JsonDocument.Parse(modifiedTwinResponseContent);
+        Assert.Equal("Earth 2", modifiedTwinJson.RootElement.GetProperty("name").GetString());
+        Assert.Equal(5.972E24, modifiedTwinJson.RootElement.GetProperty("mass").GetDouble());
+
+    }
 }
