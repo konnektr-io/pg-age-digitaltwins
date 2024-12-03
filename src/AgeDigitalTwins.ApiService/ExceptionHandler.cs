@@ -1,6 +1,7 @@
 using AgeDigitalTwins.Exceptions;
 using DTDLParser;
 using Microsoft.AspNetCore.Mvc;
+using Npgsql;
 
 namespace AgeDigitalTwins.ApiService;
 
@@ -8,11 +9,11 @@ public class ExceptionHandler : Microsoft.AspNetCore.Diagnostics.IExceptionHandl
 {
     public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
     {
-        if (exception is DigitalTwinNotFoundException || exception is ModelNotFoundException)
+        if (exception is AgeDigitalTwinsException ageException)
         {
-            httpContext.Response.StatusCode = StatusCodes.Status404NotFound;
+            httpContext.Response.StatusCode = (int)ageException.StatusCode;
         }
-        else if (exception is AgeDigitalTwinsException || exception is ResolutionException)
+        else if (exception is ResolutionException or PostgresException)
         {
             httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
         }

@@ -16,6 +16,7 @@ using Json.Patch;
 using Npgsql.Age;
 using Npgsql.Age.Types;
 using Npgsql;
+using Json.More;
 
 namespace AgeDigitalTwins;
 
@@ -138,7 +139,7 @@ BEGIN
             EXECUTE sql INTO result;
             RETURN result;
             END;
-$function$; "));
+$function$;"));
         await batch.ExecuteNonQueryAsync(cancellationToken);
     }
 
@@ -148,6 +149,27 @@ $function$; "));
         Console.WriteLine($"Dropping graph {_graphName}");
         await using var command = _dataSource.DropGraphCommand(_graphName);
         await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    public virtual async Task<bool> DigitalTwinExistsAsync(
+        string digitalTwinId,
+        CancellationToken cancellationToken = default)
+    {
+        string cypher = $"MATCH (t:Twin) WHERE t['$dtId'] = '{digitalTwinId}' RETURN t";
+        await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        return await reader.ReadAsync(cancellationToken);
+    }
+
+    public virtual async Task<bool> DigitalTwinEtagMatchesAsync(
+        string digitalTwinId,
+        string etag,
+        CancellationToken cancellationToken = default)
+    {
+        string cypher = $"MATCH (t:Twin) WHERE t['$dtId'] = '{digitalTwinId}' AND t['$etag'] = '{etag}' RETURN t";
+        await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        return await reader.ReadAsync(cancellationToken);
     }
 
     public virtual async Task<T> GetDigitalTwinAsync<T>(
@@ -175,24 +197,42 @@ $function$; "));
     public virtual async Task<T?> CreateOrReplaceDigitalTwinAsync<T>(
             string digitalTwinId,
             T digitalTwin,
-            // ETag? ifNoneMatch = null,
+            string? ifNoneMatch = null,
             CancellationToken cancellationToken = default)
     {
         try
         {
-            var digitalTwinJson = digitalTwin is string ? (string)(object)digitalTwin : JsonSerializer.Serialize(digitalTwin);
+            DateTimeOffset now = DateTimeOffset.UtcNow;
 
-            using var digitalTwinDocument = JsonDocument.Parse(digitalTwinJson);
-            if (!digitalTwinDocument.RootElement.TryGetProperty("$metadata", out var metadataElement) || metadataElement.ValueKind != JsonValueKind.Object)
+            string digitalTwinJson = digitalTwin is string ? (string)(object)digitalTwin : JsonSerializer.Serialize(digitalTwin);
+
+            JsonObject digitalTwinObject = JsonNode.Parse(digitalTwinJson)?.AsObject() ?? throw new ArgumentException("Invalid digital twin JSON");
+            if (!digitalTwinObject.TryGetPropertyValue("$metadata", out JsonNode? metadataNode) || metadataNode is not JsonObject metadataObject)
             {
                 throw new ArgumentException("Digital Twin must have a $metadata property of type object");
             }
-            if (!metadataElement.TryGetProperty("$model", out var modelElement) || modelElement.ValueKind != JsonValueKind.String)
+            if (!metadataObject.TryGetPropertyValue("$model", out JsonNode? modelNode) || modelNode is not JsonValue modelValue || modelValue.GetValueKind() != JsonValueKind.String)
             {
                 throw new ArgumentException("Digital Twin's $metadata must contain a $model property of type string");
             }
+            if (digitalTwinObject.TryGetPropertyValue("$dtId", out JsonNode? dtIdNode) && dtIdNode is JsonValue dtIdValue && digitalTwinId != dtIdValue.ToString())
+            {
+                throw new ArgumentException("Provided digitalTwinId does not match the $dtId property");
+            }
+            if (!string.IsNullOrEmpty(ifNoneMatch) && !ifNoneMatch.Equals("*"))
+            {
+                throw new ArgumentException("Invalid If-None-Match header value. Allowed value(s): If-None-Match: *");
+            }
 
-            string modelId = modelElement.GetString() ?? throw new ArgumentException("Digital Twin's $model property cannot be null or empty");
+            if (ifNoneMatch == "*")
+            {
+                if (await DigitalTwinExistsAsync(digitalTwinId, cancellationToken))
+                {
+                    throw new PreconditionFailedException($"If-None-Match: * header was specified but a twin with the id {digitalTwinId} was found. Please specify a different twin id.");
+                }
+            }
+
+            string modelId = modelValue.ToString() ?? throw new ArgumentException("Digital Twin's $model property cannot be null or empty");
 
             // Get the model and parse it
             DigitalTwinsModelData modelData = await GetModelAsync(modelId, cancellationToken);
@@ -201,10 +241,10 @@ $function$; "));
                 ?? throw new ValidationFailedException($"{modelId} or one of its dependencies does not exist.");
             List<string> violations = new();
 
-            foreach (var kv in digitalTwinDocument.RootElement.EnumerateObject())
+            foreach (KeyValuePair<string, JsonNode?> kv in digitalTwinObject)
             {
-                var property = kv.Name;
-                var value = kv.Value;
+                string property = kv.Key;
+                JsonElement value = kv.Value.ToJsonDocument().RootElement;
 
                 if (property == "$metadata" || property == "$dtId" || property == "$etag")
                 {
@@ -219,7 +259,26 @@ $function$; "));
 
                 if (contentInfo is DTPropertyInfo propertyDef)
                 {
-                    violations.AddRange(propertyDef.Schema.ValidateInstance(value).Select(v => $"Property '{property}': {v}"));
+                    IReadOnlyCollection<string> validationFailures = propertyDef.Schema.ValidateInstance(value);
+                    if (validationFailures.Count != 0)
+                    {
+                        violations.AddRange(validationFailures.Select(v => $"Property '{property}': {v}"));
+                    }
+                    else
+                    {
+                        // Set last update time
+                        if (metadataObject.TryGetPropertyValue(property, out JsonNode? metadataPropertyNode) && metadataPropertyNode is JsonObject metadataPropertyObject)
+                        {
+                            metadataPropertyObject["lastUpdateTime"] = now.ToString("o");
+                        }
+                        else
+                        {
+                            metadataObject[property] = new JsonObject
+                            {
+                                ["lastUpdateTime"] = now.ToString("o")
+                            };
+                        }
+                    }
                 }
                 else
                 {
@@ -232,8 +291,17 @@ $function$; "));
                 throw new ValidationFailedException(string.Join(" AND ", violations));
             }
 
+            // Set global last update time
+            metadataObject["lastUpdateTime"] = now.ToString("o");
+            // Set new etag
+            string newEtag = ETagGenerator.GenerateEtag(digitalTwinId, now);
+            digitalTwinObject["$etag"] = newEtag;
+
+            // Serialize the updated digital twin
+            string updatedDigitalTwinJson = JsonSerializer.Serialize(digitalTwinObject);
+
             string cypher = $@"
-            WITH '{digitalTwinJson}'::agtype as twin
+            WITH '{updatedDigitalTwinJson}'::agtype as twin
             MERGE (t: Twin {{`$dtId`: '{digitalTwinId}'}})
             SET t = twin
             RETURN t";
@@ -266,8 +334,20 @@ $function$; "));
     public virtual async Task UpdateDigitalTwinAsync(
         string digitalTwinId,
         JsonPatch patch,
+        string? ifMatch = null,
         CancellationToken cancellationToken = default)
     {
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+
+        // Check etag if defined
+        if (!string.IsNullOrEmpty(ifMatch) && !ifMatch.Equals("*"))
+        {
+            if (!await DigitalTwinEtagMatchesAsync(digitalTwinId, ifMatch, cancellationToken))
+            {
+                throw new PreconditionFailedException($"If-Match: {ifMatch} header value does not match the current ETag value of the digital twin with ID {digitalTwinId}");
+            }
+        }
+
         List<string> violations = new();
 
         var cypherOperations = new List<string>();
@@ -287,10 +367,12 @@ $function$; "));
                 else if (op.Value.GetValueKind() == JsonValueKind.String)
                 {
                     cypherOperations.Add($"SET t.{path} = '{op.Value}'");
+                    cypherOperations.Add($"SET t.`$metadata`.`{path}`.lastUpdateTime = '{now:o}'");
                 }
                 else
                 {
                     cypherOperations.Add($"SET t.{path} = {op.Value}");
+                    cypherOperations.Add($"SET t.`$metadata`.`{path}`.lastUpdateTime = '{now:o}'");
                 }
             }
             else if (op.Op == OperationType.Remove)
@@ -302,6 +384,10 @@ $function$; "));
                 throw new NotSupportedException($"Operation '{op.Op}' with value '{op.Value}' is not supported");
             }
         }
+
+        cypherOperations.Add($"SET t.`$metadata`.`$lastUpdateTime` = '{now:o}'");
+        string newEtag = ETagGenerator.GenerateEtag(digitalTwinId, now);
+        cypherOperations.Add($"SET t.`$etag` = '{newEtag}'");
 
         string cypher = $@"MATCH (t:Twin) WHERE t['$dtId'] = '{digitalTwinId}'
             {string.Join("\n", cypherOperations)}
@@ -383,89 +469,81 @@ $function$; "));
         T relationship,
         CancellationToken cancellationToken = default)
     {
-        try
+        string? relationshipJson = relationship is string ? (string)(object)relationship : JsonSerializer.Serialize(relationship);
+
+        // Parse the relationship JSON into a JsonObject
+        JsonObject relationshipObject = JsonNode.Parse(relationshipJson)?.AsObject() ?? throw new ArgumentException("Invalid relationship JSON");
+
+        // Check if $relationshipName is present and matches the arguments
+        string relationshipName;
+        if (relationshipObject.TryGetPropertyValue("$relationshipName", out var relationshipNameNode) && relationshipNameNode is JsonValue relationshipNameValue)
         {
-            string? relationshipJson = relationship is string ? (string)(object)relationship : JsonSerializer.Serialize(relationship);
-
-            // Parse the relationship JSON into a JsonObject
-            JsonObject relationshipObject = JsonNode.Parse(relationshipJson)?.AsObject() ?? throw new ArgumentException("Invalid relationship JSON");
-
-            // Check if $relationshipName is present and matches the arguments
-            string relationshipName;
-            if (relationshipObject.TryGetPropertyValue("$relationshipName", out var relationshipNameNode) && relationshipNameNode is JsonValue relationshipNameValue)
+            relationshipName = relationshipNameValue.GetValue<string>() ?? throw new ArgumentException("Relationship's $relationshipName property cannot be null or empty");
+        }
+        else
+        {
+            throw new ArgumentException("Relationship's $relationshipName property is missing");
+        }
+        // Check if $targetId is present and matches the arguments
+        string targetId;
+        if (relationshipObject.TryGetPropertyValue("$targetId", out var targetIdNode) && targetIdNode is JsonValue targetIdValue)
+        {
+            targetId = targetIdValue.GetValue<string>() ?? throw new ArgumentException("Relationship's $targetId property cannot be null or empty");
+        }
+        else
+        {
+            throw new ArgumentException("Relationship's $targetId property is missing");
+        }
+        // Check if $sourceId is present and matches the arguments
+        if (relationshipObject.TryGetPropertyValue("$sourceId", out var sourceIdNode) && sourceIdNode is JsonValue sourceIdValue)
+        {
+            string sourceId = sourceIdValue.GetValue<string>() ?? throw new ArgumentException("Relationship's $sourceId property cannot be null or empty");
+            if (sourceId != digitalTwinId)
             {
-                relationshipName = relationshipNameValue.GetValue<string>() ?? throw new ArgumentException("Relationship's $relationshipName property cannot be null or empty");
+                throw new ArgumentException("Provided $sourceId does not match the digitalTwinId argument");
             }
-            else
+        }
+        // Check if $relationshipId is present and matches the arguments
+        if (relationshipObject.TryGetPropertyValue("$relationshipId", out var relationshipIdNode) && relationshipIdNode is JsonValue relationshipIdValue)
+        {
+            string relId = relationshipIdValue.GetValue<string>() ?? throw new ArgumentException("Relationship's $relationshipId property cannot be null or empty");
+            if (relId != relationshipId)
             {
-                throw new ArgumentException("Relationship's $relationshipName property is missing");
+                throw new ArgumentException("Provided $relationshipId does not match the relationshipId argument");
             }
-            // Check if $targetId is present and matches the arguments
-            string targetId;
-            if (relationshipObject.TryGetPropertyValue("$targetId", out var targetIdNode) && targetIdNode is JsonValue targetIdValue)
-            {
-                targetId = targetIdValue.GetValue<string>() ?? throw new ArgumentException("Relationship's $targetId property cannot be null or empty");
-            }
-            else
-            {
-                throw new ArgumentException("Relationship's $targetId property is missing");
-            }
-            // Check if $sourceId is present and matches the arguments
-            if (relationshipObject.TryGetPropertyValue("$sourceId", out var sourceIdNode) && sourceIdNode is JsonValue sourceIdValue)
-            {
-                string sourceId = sourceIdValue.GetValue<string>() ?? throw new ArgumentException("Relationship's $sourceId property cannot be null or empty");
-                if (sourceId != digitalTwinId)
-                {
-                    throw new ArgumentException("Provided $sourceId does not match the digitalTwinId argument");
-                }
-            }
-            // Check if $relationshipId is present and matches the arguments
-            if (relationshipObject.TryGetPropertyValue("$relationshipId", out var relationshipIdNode) && relationshipIdNode is JsonValue relationshipIdValue)
-            {
-                string relId = relationshipIdValue.GetValue<string>() ?? throw new ArgumentException("Relationship's $relationshipId property cannot be null or empty");
-                if (relId != relationshipId)
-                {
-                    throw new ArgumentException("Provided $relationshipId does not match the relationshipId argument");
-                }
-            }
+        }
 
-            // TODO: Get source and target models and check relationship validity with DTDL parser
+        // TODO: Get source and target models and check relationship validity with DTDL parser
 
-            // Ensure $sourceId and $relationshipId are present and correct
-            relationshipObject["$sourceId"] = digitalTwinId;
-            relationshipObject["$relationshipId"] = relationshipId;
+        // Ensure $sourceId and $relationshipId are present and correct
+        relationshipObject["$sourceId"] = digitalTwinId;
+        relationshipObject["$relationshipId"] = relationshipId;
 
-            string updatedRelationshipJson = JsonSerializer.Serialize(relationshipObject);
+        string updatedRelationshipJson = JsonSerializer.Serialize(relationshipObject);
 
-            string cypher = $@"WITH '{updatedRelationshipJson}'::agtype as relationship
+        string cypher = $@"WITH '{updatedRelationshipJson}'::agtype as relationship
             MATCH (source:Twin {{`$dtId`: '{digitalTwinId}'}}),(target:Twin {{`$dtId`: '{targetId}'}})
             MERGE (source)-[rel:{relationshipName} {{`$relationshipId`: '{relationshipId}'}}]->(target)
             SET rel = relationship
             RETURN rel";
-            await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
-            if (await reader.ReadAsync(cancellationToken))
-            {
-                var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
-                var edge = (Edge)agResult;
-
-                if (typeof(T) == typeof(string))
-                {
-                    return (T)(object)JsonSerializer.Serialize(edge.Properties);
-                }
-                else
-                {
-                    return JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(edge.Properties));
-                }
-            }
-            else return default;
-        }
-        catch (Exception ex)
+        if (await reader.ReadAsync(cancellationToken))
         {
-            // scope.Failed(ex);
-            throw;
+            var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
+            var edge = (Edge)agResult;
+
+            if (typeof(T) == typeof(string))
+            {
+                return (T)(object)JsonSerializer.Serialize(edge.Properties);
+            }
+            else
+            {
+                return JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(edge.Properties));
+            }
         }
+        else return default;
     }
 
     public virtual async Task UpdateRelationshipAsync(

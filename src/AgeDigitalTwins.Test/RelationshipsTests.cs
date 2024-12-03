@@ -35,8 +35,14 @@ public class RelationshipTests : TestBase
     public async Task CreateOrReplaceRelationshipAsync_BasicRelationshipNoSourceOrId_CreatedAndReadable()
     {
         // Load required models
-        string[] models = [SampleData.DtdlRoom, SampleData.DtdlTemperatureSensor];
-        await Client.CreateModelsAsync(models);
+        try
+        {
+            string[] models = [SampleData.DtdlRoom, SampleData.DtdlTemperatureSensor];
+            await Client.CreateModelsAsync(models);
+        }
+        catch
+        {
+        }
 
         var roomTwin = @"{""$dtId"": ""room1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""Room 1""}";
         await Client.CreateOrReplaceDigitalTwinAsync("room1", roomTwin);

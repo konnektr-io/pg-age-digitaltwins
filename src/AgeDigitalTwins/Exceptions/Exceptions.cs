@@ -11,6 +11,14 @@ public class AgeDigitalTwinsException : Exception
     }
 }
 
+public class PreconditionFailedException : AgeDigitalTwinsException
+{
+    public PreconditionFailedException(string message) : base(message)
+    {
+        StatusCode = HttpStatusCode.PreconditionFailed;
+    }
+}
+
 public class ModelNotFoundException : AgeDigitalTwinsException
 {
     public ModelNotFoundException(string message) : base(message)

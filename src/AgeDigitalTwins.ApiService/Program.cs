@@ -3,6 +3,7 @@ using AgeDigitalTwins;
 using AgeDigitalTwins.ApiService;
 using Json.Patch;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Primitives;
 using Npgsql;
 using Npgsql.Age;
 
@@ -54,6 +55,8 @@ builder.Services.AddExceptionHandler<ExceptionHandler>();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
+// Add authentication
+// builder.Services.AddAuthentication().AddOpenIdConnect();
 
 var app = builder.Build();
 
@@ -70,15 +73,25 @@ app.MapGet("/digitaltwins/{id}", (string id, [FromServices] AgeDigitalTwinsClien
 })
 .WithName("GetDigitalTwin");
 
-app.MapPut("/digitaltwins/{id}", (string id, JsonDocument digitalTwin, [FromServices] AgeDigitalTwinsClient client, CancellationToken cancellationToken) =>
+app.MapPut("/digitaltwins/{id}", (string id, JsonDocument digitalTwin, HttpContext httpContext, [FromServices] AgeDigitalTwinsClient client, CancellationToken cancellationToken) =>
 {
-    return client.CreateOrReplaceDigitalTwinAsync(id, digitalTwin, cancellationToken);
+    string? etag = null;
+    if (httpContext.Request.Headers.TryGetValue("If-None-Match", out StringValues etagValues) && etagValues.Count > 0)
+    {
+        etag = etagValues[0];
+    }
+    return client.CreateOrReplaceDigitalTwinAsync(id, digitalTwin, etag, cancellationToken);
 })
 .WithName("CreateOrReplaceDigitalTwin");
 
-app.MapPatch("digitaltwins/{id}", async (string id, JsonPatch patch, [FromServices] AgeDigitalTwinsClient client, CancellationToken cancellationToken) =>
+app.MapPatch("digitaltwins/{id}", async (string id, JsonPatch patch, HttpContext httpContext, [FromServices] AgeDigitalTwinsClient client, CancellationToken cancellationToken) =>
 {
-    await client.UpdateDigitalTwinAsync(id, patch, cancellationToken);
+    string? etag = null;
+    if (httpContext.Request.Headers.TryGetValue("If-Match", out StringValues etagValues) && etagValues.Count > 0)
+    {
+        etag = etagValues[0];
+    }
+    await client.UpdateDigitalTwinAsync(id, patch, etag, cancellationToken);
     return Results.NoContent();
 })
 .WithName("UpdateDigitalTwin");

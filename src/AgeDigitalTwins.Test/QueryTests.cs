@@ -119,7 +119,7 @@ public class QueryTests : TestBase
         "))
         {
             Assert.NotNull(line);
-            var id = line.RootElement.GetProperty("_").GetProperty("$dtId").GetString();
+            var id = line.RootElement.GetProperty("$dtId").GetString();
             count++;
         }
         Assert.Equal(2, count);
