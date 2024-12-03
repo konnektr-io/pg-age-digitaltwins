@@ -235,11 +235,16 @@ public class QueryTests : TestBase
         Assert.Equal(1, count);
     }
 
-
     [Fact]
     public async Task QueryAsync_SimpleAdtQuerySelectStar_ReturnsTwins()
     {
         await IntializeAsync();
+
+        await foreach (var twin in Client.QueryAsync<JsonDocument>(@"SELECT * FROM DIGITALTWINS WHERE $metadata.$model = 'dtmi:com:adt:dtsample:room;1'"))
+        {
+            await Client.DeleteDigitalTwinAsync(twin!.RootElement.GetProperty("$dtId")!.GetString()!);
+        }
+
         Dictionary<string, string> twins = new()
         {
             {"room1", @"{""$dtId"": ""room1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""Room 1""}"},
@@ -252,11 +257,44 @@ public class QueryTests : TestBase
         }
 
         int count = 0;
-        await foreach (var line in Client.QueryAsync<JsonDocument>(@"SELECT * FROM DIGITALTWINS $metadata.$model = 'dtmi:com:adt:dtsample:room;1'"))
+        await foreach (var line in Client.QueryAsync<JsonDocument>(@"SELECT * FROM DIGITALTWINS WHERE $metadata.$model = 'dtmi:com:adt:dtsample:room;1'"))
         {
             Assert.NotNull(line);
             var id = line.RootElement.GetProperty("$dtId").GetString();
+            var name = line.RootElement.GetProperty("name").GetString();
+            Assert.StartsWith("Room", name);
             count++;
+        }
+        Assert.Equal(2, count);
+    }
+
+
+    [Fact]
+    public async Task QueryAsync_IsOfModel_ReturnsTwins()
+    {
+        await IntializeAsync();
+
+        await foreach (var twin in Client.QueryAsync<JsonDocument>(@"SELECT * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:adt:dtsample:room;1')"))
+        {
+            await Client.DeleteDigitalTwinAsync(twin!.RootElement.GetProperty("$dtId")!.GetString()!);
+        }
+
+        Dictionary<string, string> twins = new()
+        {
+            {"room1", @"{""$dtId"": ""room1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""Room 1""}"},
+            {"room2", @"{""$dtId"": ""room2"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""Room 2""}"}
+        };
+
+        foreach (var twin in twins)
+        {
+            await Client.CreateOrReplaceDigitalTwinAsync(twin.Key, twin.Value);
+        }
+
+        int count = 0;
+        await foreach (var line in Client.QueryAsync<JsonDocument>(@"SELECT * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:adt:dtsample:room;1')"))
+        {
+            Assert.NotNull(line);
+            var id = line.RootElement.GetProperty("$dtId").GetString();
             var name = line.RootElement.GetProperty("name").GetString();
             Assert.StartsWith("Room", name);
             count++;

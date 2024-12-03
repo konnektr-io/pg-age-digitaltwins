@@ -8,7 +8,7 @@ namespace AgeDigitalTwins;
 
 public static class AdtQueryHelpers
 {
-    public static string ConvertAdtQueryToCypher(string adtQuery)
+    public static string ConvertAdtQueryToCypher(string adtQuery, string graphName)
     {
         // Clean up the query from line breaks and extra spaces
         adtQuery = Regex.Replace(adtQuery, @"\s+", " ").Trim();
@@ -21,7 +21,7 @@ public static class AdtQueryHelpers
         if (selectMatch.Success)
         {
             limitClause = selectMatch.Groups["limit"].Success ? "LIMIT " + selectMatch.Groups["limit"].Value : string.Empty;
-            returnClause = ProcessPropertyAccessors(selectMatch.Groups["projections"].Value);
+            returnClause = ProcessPropertyAccessors(selectMatch.Groups["projections"].Value, graphName);
             if (returnClause.Contains("COUNT()", StringComparison.OrdinalIgnoreCase))
             {
                 returnClause = "COUNT(*)";
@@ -149,6 +149,7 @@ public static class AdtQueryHelpers
                 // Process WHERE clause
                 whereClause = ProcessPropertyAccessors(
                     adtWhereClause,
+                    graphName,
                     usesWildcard && adtQuery.Contains("FROM RELATIONSHIPS", StringComparison.OrdinalIgnoreCase) ? "R" :
                     usesWildcard ? "T" : null
                 );
@@ -181,7 +182,7 @@ public static class AdtQueryHelpers
         return cypher;
     }
 
-    internal static string ProcessPropertyAccessors(string whereClause, string? prependAlias = null)
+    internal static string ProcessPropertyAccessors(string whereClause, string graphName, string? prependAlias = null)
     {
         if (!string.IsNullOrEmpty(prependAlias))
         {
@@ -209,7 +210,7 @@ public static class AdtQueryHelpers
             // Process IS_OF_MODEL function
             whereClause = Regex.Replace(whereClause, @"IS_OF_MODEL\(([^)]+)\)", m =>
             {
-                return $"IS_OF_MODEL({prependAlias},{m.Groups[1].Value})";
+                return $"{graphName}.is_of_model({prependAlias},{m.Groups[1].Value})";
             }, RegexOptions.IgnoreCase);
         }
 

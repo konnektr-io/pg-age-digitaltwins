@@ -112,7 +112,7 @@ public class AgeDigitalTwinsClient : IAsyncDisposable
         batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE UNIQUE INDEX model_id_idx ON {_graphName}.""Model"" (ag_catalog.agtype_access_operator(properties, '""id""'::agtype));"));
         batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE INDEX model_gin_idx ON {_graphName}.""Model"" USING gin (properties);"));
         // TODO: figure out how to make this function work on multiple graphs
-        batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE OR REPLACE FUNCTION public.is_of_model(twin agtype, model_id agtype, strict boolean default false)
+        batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE OR REPLACE FUNCTION {_graphName}.is_of_model(twin agtype, model_id agtype, strict boolean default false)
 RETURNS boolean
 LANGUAGE plpgsql
 AS $function$
@@ -659,7 +659,7 @@ $function$; "));
         if (query.Contains("SELECT", StringComparison.InvariantCultureIgnoreCase) &&
             !query.Contains("RETURN", StringComparison.InvariantCultureIgnoreCase))
         {
-            cypher = AdtQueryHelpers.ConvertAdtQueryToCypher(query);
+            cypher = AdtQueryHelpers.ConvertAdtQueryToCypher(query, _graphName);
         }
         else
         {
@@ -738,11 +738,26 @@ $function$; "));
             }
             if (typeof(T) == typeof(string))
             {
-                yield return (T)(object)JsonSerializer.Serialize(row);
+                if (row.Count == 1 && row.TryGetValue("_", out object? value))
+                {
+                    yield return (T)(object)JsonSerializer.Serialize(value);
+                }
+                else
+                {
+                    yield return (T)(object)JsonSerializer.Serialize(row);
+                }
             }
             else
             {
-                string json = JsonSerializer.Serialize(row);
+                string json;
+                if (row.Count == 1 && row.TryGetValue("_", out object? value))
+                {
+                    json = JsonSerializer.Serialize(value);
+                }
+                else
+                {
+                    json = JsonSerializer.Serialize(row);
+                }
                 yield return JsonSerializer.Deserialize<T>(json);
             }
         }

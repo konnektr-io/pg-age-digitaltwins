@@ -22,13 +22,13 @@ public class AdtQueryToCypherTests
         "MATCH (T:Twin) WHERE T['$metadata']['$model']='dtmi:com:adt:dtsample:room;1' RETURN *")]
     [InlineData(
         "SELECT * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:adt:dtsample:room;1')",
-        "MATCH (T:Twin) WHERE IS_OF_MODEL(T,'dtmi:com:adt:dtsample:room;1') RETURN *")]
+        "MATCH (T:Twin) WHERE testgraph.is_of_model(T,'dtmi:com:adt:dtsample:room;1') RETURN *")]
     [InlineData(
         "SELECT * FROM DIGITALTWINS WHERE STARTS_WITH(name, 'foo')",
         "MATCH (T:Twin) WHERE STARTS_WITH(T.name, 'foo') RETURN *")]
     [InlineData(
         "SELECT * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:adt:dtsample:room;1') AND name = 'foo'",
-        "MATCH (T:Twin) WHERE IS_OF_MODEL(T,'dtmi:com:adt:dtsample:room;1') AND T.name = 'foo' RETURN *")]
+        "MATCH (T:Twin) WHERE testgraph.is_of_model(T,'dtmi:com:adt:dtsample:room;1') AND T.name = 'foo' RETURN *")]
     [InlineData(
         "SELECT * FROM RELATIONSHIPS WHERE $sourceId = 'root'",
         "MATCH (:Twin)-[R]->(:Twin) WHERE R['$sourceId'] = 'root' RETURN *")]
@@ -67,7 +67,7 @@ public class AdtQueryToCypherTests
         "MATCH (s:Twin)<-[r]-(t:Twin) WHERE s['$dtId'] = 'root3' RETURN r, t")]
     public void ConvertAdtQueryToCypher_ReturnsExpectedCypher(string adtQuery, string expectedCypher)
     {
-        var actualCypher = AdtQueryHelpers.ConvertAdtQueryToCypher(adtQuery);
+        var actualCypher = AdtQueryHelpers.ConvertAdtQueryToCypher(adtQuery, "testgraph");
         Assert.Equal(expectedCypher, actualCypher);
     }
 

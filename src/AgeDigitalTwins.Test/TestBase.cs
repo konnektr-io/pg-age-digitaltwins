@@ -15,7 +15,7 @@ public class TestBase : IAsyncDisposable
         string connectionString = configuration.GetConnectionString("AgeConnectionString")
             ?? throw new ArgumentNullException("AgeConnectionString");
 
-        var graphName = "temp_graph" + Guid.NewGuid().ToString("N");
+        var graphName = "temp_graph_" + Guid.NewGuid().ToString("N");
         _client = new AgeDigitalTwinsClient(connectionString, graphName);
     }
 
