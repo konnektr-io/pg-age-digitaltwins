@@ -122,15 +122,25 @@ app.MapGet("/digitaltwins/{id}/relationships/{relationshipId}", (string id, stri
 })
 .WithName("GetRelationship");
 
-app.MapPut("/digitaltwins/{id}/relationships/{relationshipId}", (string id, string relationshipId, JsonDocument relationship, [FromServices] AgeDigitalTwinsClient client, CancellationToken cancellationToken) =>
+app.MapPut("/digitaltwins/{id}/relationships/{relationshipId}", (string id, string relationshipId, JsonDocument relationship, HttpContext httpContext, [FromServices] AgeDigitalTwinsClient client, CancellationToken cancellationToken) =>
 {
-    return client.CreateOrReplaceRelationshipAsync(id, relationshipId, relationship, cancellationToken);
+    string? etag = null;
+    if (httpContext.Request.Headers.TryGetValue("If-None-Match", out StringValues etagValues) && etagValues.Count > 0)
+    {
+        etag = etagValues[0];
+    }
+    return client.CreateOrReplaceRelationshipAsync(id, relationshipId, relationship, etag, cancellationToken);
 })
 .WithName("CreateOrReplaceRelationship");
 
-app.MapPatch("/digitaltwins/{id}/relationships/{relationshipId}", async (string id, string relationshipId, JsonPatch patch, [FromServices] AgeDigitalTwinsClient client, CancellationToken cancellationToken) =>
+app.MapPatch("/digitaltwins/{id}/relationships/{relationshipId}", async (string id, string relationshipId, JsonPatch patch, HttpContext httpContext, [FromServices] AgeDigitalTwinsClient client, CancellationToken cancellationToken) =>
 {
-    await client.UpdateRelationshipAsync(id, relationshipId, patch, cancellationToken);
+    string? etag = null;
+    if (httpContext.Request.Headers.TryGetValue("If-Match", out StringValues etagValues) && etagValues.Count > 0)
+    {
+        etag = etagValues[0];
+    }
+    await client.UpdateRelationshipAsync(id, relationshipId, patch, etag, cancellationToken);
     return Results.NoContent();
 })
 .WithName("UpdateRelationship");

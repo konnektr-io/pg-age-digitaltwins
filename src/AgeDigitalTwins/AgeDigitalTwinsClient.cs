@@ -28,6 +28,11 @@ public class AgeDigitalTwinsClient : IAsyncDisposable
 
     private readonly ModelParser _modelParser;
 
+    private readonly JsonSerializerOptions serializerOptions = new()
+    {
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
+
     public AgeDigitalTwinsClient(NpgsqlDataSource dataSource, string graphName = "digitaltwins")
     {
         _graphName = graphName;
@@ -202,7 +207,7 @@ $function$;"));
     {
         try
         {
-            DateTimeOffset now = DateTimeOffset.UtcNow;
+            DateTime now = DateTime.UtcNow;
 
             string digitalTwinJson = digitalTwin is string ? (string)(object)digitalTwin : JsonSerializer.Serialize(digitalTwin);
 
@@ -292,16 +297,15 @@ $function$;"));
             }
 
             // Set global last update time
-            metadataObject["lastUpdateTime"] = now.ToString("o");
+            metadataObject["$lastUpdateTime"] = now.ToString("o");
             // Set new etag
             string newEtag = ETagGenerator.GenerateEtag(digitalTwinId, now);
             digitalTwinObject["$etag"] = newEtag;
 
             // Serialize the updated digital twin
-            string updatedDigitalTwinJson = JsonSerializer.Serialize(digitalTwinObject);
+            string updatedDigitalTwinJson = JsonSerializer.Serialize(digitalTwinObject, serializerOptions);
 
-            string cypher = $@"
-            WITH '{updatedDigitalTwinJson}'::agtype as twin
+            string cypher = $@"WITH '{updatedDigitalTwinJson}'::agtype as twin
             MERGE (t: Twin {{`$dtId`: '{digitalTwinId}'}})
             SET t = twin
             RETURN t";
@@ -337,14 +341,14 @@ $function$;"));
         string? ifMatch = null,
         CancellationToken cancellationToken = default)
     {
-        DateTimeOffset now = DateTimeOffset.UtcNow;
+        DateTime now = DateTime.UtcNow;
 
         // Check etag if defined
         if (!string.IsNullOrEmpty(ifMatch) && !ifMatch.Equals("*"))
         {
             if (!await DigitalTwinEtagMatchesAsync(digitalTwinId, ifMatch, cancellationToken))
             {
-                throw new PreconditionFailedException($"If-Match: {ifMatch} header value does not match the current ETag value of the digital twin with ID {digitalTwinId}");
+                throw new PreconditionFailedException($"If-Match: {ifMatch} header value does not match the current ETag value of the digital twin with id {digitalTwinId}");
             }
         }
 
@@ -414,6 +418,30 @@ $function$;"));
         }
     }
 
+
+    public virtual async Task<bool> RelationshipExistsAsync(
+        string digitalTwinId,
+        string relationshipId,
+        CancellationToken cancellationToken = default)
+    {
+        string cypher = $@"MATCH (source:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel {{`$relationshipId`: '{relationshipId}'}}]->(target:Twin) RETURN rel";
+        await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        return await reader.ReadAsync(cancellationToken);
+    }
+
+    public virtual async Task<bool> RelationshipEtagMatchesAsync(
+        string digitalTwinId,
+        string relationshipId,
+        string etag,
+        CancellationToken cancellationToken = default)
+    {
+        string cypher = $"MATCH (source:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel {{`$relationshipId`: '{relationshipId}'}}]->(target:Twin) WHERE rel['$etag'] = '{etag}' RETURN rel";
+        await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        return await reader.ReadAsync(cancellationToken);
+    }
+
     public virtual async Task<T?> GetRelationshipAsync<T>(
         string digitalTwinId,
         string relationshipId,
@@ -449,7 +477,6 @@ $function$;"));
         }
     }
 
-
     public virtual async IAsyncEnumerable<T?> GetIncomingRelationshipsAsync<T>(
         string digitalTwinId,
         [EnumeratorCancellation]
@@ -467,8 +494,11 @@ $function$;"));
         string digitalTwinId,
         string relationshipId,
         T relationship,
+        string? ifNoneMatch = null,
         CancellationToken cancellationToken = default)
     {
+        DateTime now = DateTime.UtcNow;
+
         string? relationshipJson = relationship is string ? (string)(object)relationship : JsonSerializer.Serialize(relationship);
 
         // Parse the relationship JSON into a JsonObject
@@ -512,14 +542,29 @@ $function$;"));
                 throw new ArgumentException("Provided $relationshipId does not match the relationshipId argument");
             }
         }
+        if (!string.IsNullOrEmpty(ifNoneMatch) && !ifNoneMatch.Equals("*"))
+        {
+            throw new ArgumentException("Invalid If-None-Match header value. Allowed value(s): If-None-Match: *");
+        }
+
+        if (ifNoneMatch == "*")
+        {
+            if (await RelationshipExistsAsync(digitalTwinId, relationshipId, cancellationToken))
+            {
+                throw new PreconditionFailedException($"If-None-Match: * header was specified but a relationship with the id {relationshipId} on twin with id {digitalTwinId} was found. Please specify a different twin and relationship id.");
+            }
+        }
 
         // TODO: Get source and target models and check relationship validity with DTDL parser
 
         // Ensure $sourceId and $relationshipId are present and correct
         relationshipObject["$sourceId"] = digitalTwinId;
         relationshipObject["$relationshipId"] = relationshipId;
+        // Set new etag
+        string newEtag = ETagGenerator.GenerateEtag($"{digitalTwinId}-{relationshipId}", now);
+        relationshipObject["$etag"] = newEtag;
 
-        string updatedRelationshipJson = JsonSerializer.Serialize(relationshipObject);
+        string updatedRelationshipJson = JsonSerializer.Serialize(relationshipObject, serializerOptions);
 
         string cypher = $@"WITH '{updatedRelationshipJson}'::agtype as relationship
             MATCH (source:Twin {{`$dtId`: '{digitalTwinId}'}}),(target:Twin {{`$dtId`: '{targetId}'}})
@@ -550,8 +595,20 @@ $function$;"));
         string digitalTwinId,
         string relationshipId,
         JsonPatch patch,
+        string? ifMatch = null,
         CancellationToken cancellationToken = default)
     {
+        DateTime now = DateTime.UtcNow;
+
+        // Check etag if defined
+        if (!string.IsNullOrEmpty(ifMatch) && !ifMatch.Equals("*"))
+        {
+            if (!await RelationshipEtagMatchesAsync(digitalTwinId, relationshipId, ifMatch, cancellationToken))
+            {
+                throw new PreconditionFailedException($"If-Match: {ifMatch} header value does not match the current ETag value of the relationship twin with id {relationshipId} on twin with id{digitalTwinId}");
+            }
+        }
+
         List<string> violations = new();
 
         var cypherOperations = new List<string>();
@@ -579,13 +636,15 @@ $function$;"));
             }
             else if (op.Op == OperationType.Remove)
             {
-                cypherOperations.Add($"REMOVE t.{path}");
+                cypherOperations.Add($"REMOVE rel.{path}");
             }
             else
             {
                 throw new NotSupportedException($"Operation '{op.Op}' with value '{op.Value}' is not supported");
             }
         }
+        string newEtag = ETagGenerator.GenerateEtag(digitalTwinId, now);
+        cypherOperations.Add($"SET rel.`$etag` = '{newEtag}'");
 
         string cypher = $@"MATCH (source:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel {{`$relationshipId`: '{relationshipId}'}}]->(target:Twin)
             {string.Join("\n", cypherOperations)}
@@ -595,7 +654,7 @@ $function$;"));
 
         if (!await reader.ReadAsync(cancellationToken))
         {
-            throw new DigitalTwinNotFoundException($"Relationship with ID {relationshipId} on {digitalTwinId} not found");
+            throw new RelationshipNotFoundException($"Relationship with ID {relationshipId} on {digitalTwinId} not found");
         }
     }
 
@@ -609,7 +668,7 @@ $function$;"));
         int rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken);
         if (rowsAffected == 0)
         {
-            throw new DigitalTwinNotFoundException($"Relationship with ID {relationshipId} not found");
+            throw new RelationshipNotFoundException($"Relationship with ID {relationshipId} not found");
         }
     }
 
@@ -619,7 +678,7 @@ $function$;"));
         foreach (var item in source)
         {
             yield return item;
-            await Task.Yield(); // This is to ensure the method is truly asynchronous
+            await Task.Yield();
         }
     }
 
@@ -667,11 +726,10 @@ $function$;"));
         IEnumerable<DigitalTwinsModelData> modelDatas = dtdlModels.Select(dtdlModel =>
             new DigitalTwinsModelData(dtdlModel));
         // This is needed as after unwinding, it gets converted to agtype again
-        string modelsJson = JsonSerializer.Serialize(modelDatas.Select(m => JsonSerializer.Serialize(m)));
+        string modelsString = $"['{string.Join("','", modelDatas.Select(m => JsonSerializer.Serialize(m)))}']";
 
         // TODO: do a merge with the id, as we are now just creating new vertices, which isn't the goal
-        string cypher = $@"
-            UNWIND {modelsJson} as model
+        string cypher = $@"UNWIND {modelsString} as model
             WITH model::agtype as modelAgtype
             CREATE (m:Model)
             SET m = modelAgtype
@@ -696,7 +754,7 @@ $function$;"));
             }
         }
 
-        List<DigitalTwinsModelData> result = new List<DigitalTwinsModelData>();
+        List<DigitalTwinsModelData> result = new();
         int k = 0;
         while (await reader.ReadAsync(cancellationToken))
         {
