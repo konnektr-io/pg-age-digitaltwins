@@ -82,54 +82,38 @@ public class AgeDigitalTwinsClient : IAsyncDisposable
     public virtual async Task InitializeGraphAsync(
         CancellationToken cancellationToken = default)
     {
-        try
+        if (await GraphExistsAsync(cancellationToken) == false)
         {
-            if (await GraphExistsAsync(cancellationToken) == false)
-            {
-                Console.WriteLine($"Graph {_graphName} does not exist, creating it now");
-                await CreateGraphAsync(cancellationToken);
-            }
-        }
-        catch (Exception ex)
-        {
-            throw;
+            Console.WriteLine($"Graph {_graphName} does not exist, creating it now");
+            await CreateGraphAsync(cancellationToken);
         }
     }
 
     public virtual async Task<bool?> GraphExistsAsync(
         CancellationToken cancellationToken = default)
     {
-        try
-        {
-            await using var command = _dataSource.GraphExistsCommand(_graphName);
-            return (bool?)await command.ExecuteScalarAsync(cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            throw;
-        }
+        await using var command = _dataSource.GraphExistsCommand(_graphName);
+        return (bool?)await command.ExecuteScalarAsync(cancellationToken);
     }
 
     public virtual async Task CreateGraphAsync(
         CancellationToken cancellationToken = default)
     {
-        try
-        {
-            await using var command = _dataSource.CreateGraphCommand(_graphName);
-            await command.ExecuteNonQueryAsync(cancellationToken);
+        await using var command = _dataSource.CreateGraphCommand(_graphName);
+        await command.ExecuteNonQueryAsync(cancellationToken);
 
-            // Create labels and indexes
-            using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
-            using var batch = new NpgsqlBatch(connection);
-            batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"SELECT create_vlabel('{_graphName}', 'Twin');"));
-            batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE UNIQUE INDEX twin_id_idx ON {_graphName}.""Twin"" (ag_catalog.agtype_access_operator(properties, '""$dtId""'::agtype));"));
-            batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE INDEX twin_gin_idx ON {_graphName}.""Twin"" USING gin (properties);"));
-            batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"SELECT create_vlabel('{_graphName}', 'Model');"));
-            batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"SELECT create_elabel('{_graphName}', '_extends');"));
-            batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE UNIQUE INDEX model_id_idx ON {_graphName}.""Model"" (ag_catalog.agtype_access_operator(properties, '""id""'::agtype));"));
-            batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE INDEX model_gin_idx ON {_graphName}.""Model"" USING gin (properties);"));
-            // TODO: figure out how to make this function work on multiple graphs
-            batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE OR REPLACE FUNCTION public.is_of_model(twin agtype, model_id agtype, strict boolean default false)
+        // Create labels and indexes
+        using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        using var batch = new NpgsqlBatch(connection);
+        batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"SELECT create_vlabel('{_graphName}', 'Twin');"));
+        batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE UNIQUE INDEX twin_id_idx ON {_graphName}.""Twin"" (ag_catalog.agtype_access_operator(properties, '""$dtId""'::agtype));"));
+        batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE INDEX twin_gin_idx ON {_graphName}.""Twin"" USING gin (properties);"));
+        batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"SELECT create_vlabel('{_graphName}', 'Model');"));
+        batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"SELECT create_elabel('{_graphName}', '_extends');"));
+        batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE UNIQUE INDEX model_id_idx ON {_graphName}.""Model"" (ag_catalog.agtype_access_operator(properties, '""id""'::agtype));"));
+        batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE INDEX model_gin_idx ON {_graphName}.""Model"" USING gin (properties);"));
+        // TODO: figure out how to make this function work on multiple graphs
+        batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE OR REPLACE FUNCTION public.is_of_model(twin agtype, model_id agtype, strict boolean default false)
 RETURNS boolean
 LANGUAGE plpgsql
 AS $function$
@@ -156,57 +140,36 @@ BEGIN
             RETURN result;
             END;
 $function$; "));
-            await batch.ExecuteNonQueryAsync(cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            throw;
-        }
+        await batch.ExecuteNonQueryAsync(cancellationToken);
     }
 
     public virtual async Task DropGraphAsync(
         CancellationToken cancellationToken = default)
     {
-        try
-        {
-            Console.WriteLine($"Dropping graph {_graphName}");
-            await using var command = _dataSource.DropGraphCommand(_graphName);
-            await command.ExecuteNonQueryAsync(cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            throw;
-        }
+        Console.WriteLine($"Dropping graph {_graphName}");
+        await using var command = _dataSource.DropGraphCommand(_graphName);
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     public virtual async Task<T> GetDigitalTwinAsync<T>(
         string digitalTwinId,
         CancellationToken cancellationToken = default)
     {
-        // using var span = _tracer.StartActiveSpan("GetDigitalTwinAsync");
-        try
-        {
-            string cypher = $"MATCH (t:Twin) WHERE t['$dtId'] = '{digitalTwinId}' RETURN t";
-            await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        string cypher = $"MATCH (t:Twin) WHERE t['$dtId'] = '{digitalTwinId}' RETURN t";
+        await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
-            if (await reader.ReadAsync(cancellationToken))
-            {
-                var agResult = await reader.GetFieldValueAsync<Agtype?>(0).ConfigureAwait(false);
-                var vertex = (Vertex)agResult;
-                var twin = JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(vertex.Properties))
-                    ?? throw new SerializationException($"Digital Twin with ID {digitalTwinId} could not be deserialized");
-                return twin;
-            }
-            else
-            {
-                throw new DigitalTwinNotFoundException($"Digital Twin with ID {digitalTwinId} not found");
-            }
-        }
-        catch (Exception ex)
-        // scope.Failed(ex);
+        if (await reader.ReadAsync(cancellationToken))
         {
-            throw;
+            var agResult = await reader.GetFieldValueAsync<Agtype?>(0).ConfigureAwait(false);
+            var vertex = (Vertex)agResult;
+            var twin = JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(vertex.Properties))
+                ?? throw new SerializationException($"Digital Twin with ID {digitalTwinId} could not be deserialized");
+            return twin;
+        }
+        else
+        {
+            throw new DigitalTwinNotFoundException($"Digital Twin with ID {digitalTwinId} not found");
         }
     }
 
@@ -233,9 +196,9 @@ $function$; "));
             string modelId = modelElement.GetString() ?? throw new ArgumentException("Digital Twin's $model property cannot be null or empty");
 
             // Get the model and parse it
-            var modelData = await GetModelAsync(modelId, cancellationToken);
-            var parsedModelEntities = await _modelParser.ParseAsync(modelData.DtdlModel, cancellationToken: cancellationToken);
-            var dtInterfaceInfo = (DTInterfaceInfo)parsedModelEntities.FirstOrDefault(e => e.Value is DTInterfaceInfo).Value
+            DigitalTwinsModelData modelData = await GetModelAsync(modelId, cancellationToken);
+            IReadOnlyDictionary<Dtmi, DTEntityInfo> parsedModelEntities = await _modelParser.ParseAsync(modelData.DtdlModel, cancellationToken: cancellationToken);
+            DTInterfaceInfo dtInterfaceInfo = (DTInterfaceInfo)parsedModelEntities.FirstOrDefault(e => e.Value is DTInterfaceInfo).Value
                 ?? throw new ValidationFailedException($"{modelId} or one of its dependencies does not exist.");
             List<string> violations = new();
 
@@ -299,11 +262,6 @@ $function$; "));
             // When the model is not found, we should not return a 404, but a 400 as this is an issue with the twin itself
             throw new ValidationFailedException(ex.Message);
         }
-        catch (Exception ex)
-        {
-            // scope.Failed(ex);
-            throw;
-        }
     }
 
     public virtual async Task UpdateDigitalTwinAsync(
@@ -311,58 +269,50 @@ $function$; "));
         JsonPatch patch,
         CancellationToken cancellationToken = default)
     {
-        try
-        {
-            List<string> violations = new();
+        List<string> violations = new();
 
-            var cypherOperations = new List<string>();
-            foreach (var op in patch.Operations)
+        var cypherOperations = new List<string>();
+        foreach (var op in patch.Operations)
+        {
+            var path = op.Path.ToString().TrimStart('/').Replace("/", ".");
+            if (path == "$dtId")
             {
-                var path = op.Path.ToString().TrimStart('/').Replace("/", ".");
-                if (path == "$dtId")
+                violations.Add("Cannot update the $dtId property");
+            }
+            if (op.Value != null && (op.Op == OperationType.Add || op.Op == OperationType.Replace))
+            {
+                if (op.Value.GetValueKind() == JsonValueKind.Object || op.Value.GetValueKind() == JsonValueKind.Array)
                 {
-                    violations.Add("Cannot update the $dtId property");
+                    violations.Add($"TODO: Property '{path}' must be a primitive value");
                 }
-                if (op.Value != null && (op.Op == OperationType.Add || op.Op == OperationType.Replace))
+                else if (op.Value.GetValueKind() == JsonValueKind.String)
                 {
-                    if (op.Value.GetValueKind() == JsonValueKind.Object || op.Value.GetValueKind() == JsonValueKind.Array)
-                    {
-                        violations.Add($"TODO: Property '{path}' must be a primitive value");
-                    }
-                    else if (op.Value.GetValueKind() == JsonValueKind.String)
-                    {
-                        cypherOperations.Add($"SET t.{path} = '{op.Value}'");
-                    }
-                    else
-                    {
-                        cypherOperations.Add($"SET t.{path} = {op.Value}");
-                    }
-                }
-                else if (op.Op == OperationType.Remove)
-                {
-                    cypherOperations.Add($"REMOVE t.{path}");
+                    cypherOperations.Add($"SET t.{path} = '{op.Value}'");
                 }
                 else
                 {
-                    throw new NotSupportedException($"Operation '{op.Op}' with value '{op.Value}' is not supported");
+                    cypherOperations.Add($"SET t.{path} = {op.Value}");
                 }
             }
-
-            string cypher = $@"MATCH (t:Twin) WHERE t['$dtId'] = '{digitalTwinId}'
-            {string.Join("\n", cypherOperations)}
-            RETURN t";
-            await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-
-            if (!await reader.ReadAsync(cancellationToken))
+            else if (op.Op == OperationType.Remove)
             {
-                throw new DigitalTwinNotFoundException($"Digital Twin with ID {digitalTwinId} not found");
+                cypherOperations.Add($"REMOVE t.{path}");
+            }
+            else
+            {
+                throw new NotSupportedException($"Operation '{op.Op}' with value '{op.Value}' is not supported");
             }
         }
-        catch (Exception ex)
+
+        string cypher = $@"MATCH (t:Twin) WHERE t['$dtId'] = '{digitalTwinId}'
+            {string.Join("\n", cypherOperations)}
+            RETURN t";
+        await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        if (!await reader.ReadAsync(cancellationToken))
         {
-            // scope.Failed(ex);
-            throw;
+            throw new DigitalTwinNotFoundException($"Digital Twin with ID {digitalTwinId} not found");
         }
     }
 
@@ -370,20 +320,12 @@ $function$; "));
         string digitalTwinId,
         CancellationToken cancellationToken = default)
     {
-        try
+        string cypher = $@"MATCH (t:Twin) WHERE t['$dtId'] = '{digitalTwinId}' DELETE t";
+        await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
+        int rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken);
+        if (rowsAffected == 0)
         {
-            string cypher = $@"MATCH (t:Twin) WHERE t['$dtId'] = '{digitalTwinId}' DELETE t";
-            await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
-            int rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken);
-            if (rowsAffected == 0)
-            {
-                throw new DigitalTwinNotFoundException($"Digital Twin with ID {digitalTwinId} not found");
-            }
-        }
-        catch (Exception ex)
-        {
-            // scope.Failed(ex);
-            throw;
+            throw new DigitalTwinNotFoundException($"Digital Twin with ID {digitalTwinId} not found");
         }
     }
 
@@ -392,27 +334,19 @@ $function$; "));
         string relationshipId,
         CancellationToken cancellationToken = default)
     {
-        try
-        {
-            string cypher = $@"MATCH (source:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel {{`$relationshipId`: '{relationshipId}'}}]->(target:Twin) RETURN rel";
-            await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        string cypher = $@"MATCH (source:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel {{`$relationshipId`: '{relationshipId}'}}]->(target:Twin) RETURN rel";
+        await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
-            if (await reader.ReadAsync(cancellationToken))
-            {
-                var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
-                var edge = (Edge)agResult;
-                return JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(edge.Properties));
-            }
-            else
-            {
-                throw new DigitalTwinNotFoundException($"Relationship with ID {relationshipId} not found");
-            }
-        }
-        catch (Exception ex)
+        if (await reader.ReadAsync(cancellationToken))
         {
-            // scope.Failed(ex);
-            throw;
+            var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
+            var edge = (Edge)agResult;
+            return JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(edge.Properties));
+        }
+        else
+        {
+            throw new DigitalTwinNotFoundException($"Relationship with ID {relationshipId} not found");
         }
     }
 
@@ -541,58 +475,50 @@ $function$; "));
         JsonPatch patch,
         CancellationToken cancellationToken = default)
     {
-        try
-        {
-            List<string> violations = new();
+        List<string> violations = new();
 
-            var cypherOperations = new List<string>();
-            foreach (var op in patch.Operations)
+        var cypherOperations = new List<string>();
+        foreach (var op in patch.Operations)
+        {
+            var path = op.Path.ToString().TrimStart('/').Replace("/", ".");
+            if (path.StartsWith('$'))
             {
-                var path = op.Path.ToString().TrimStart('/').Replace("/", ".");
-                if (path.StartsWith('$'))
+                violations.Add($"Cannot update the {path} property");
+            }
+            if (op.Value != null && (op.Op == OperationType.Add || op.Op == OperationType.Replace))
+            {
+                if (op.Value.GetValueKind() == JsonValueKind.Object || op.Value.GetValueKind() == JsonValueKind.Array)
                 {
-                    violations.Add($"Cannot update the {path} property");
+                    violations.Add($"TODO: Property '{path}' must be a primitive value");
                 }
-                if (op.Value != null && (op.Op == OperationType.Add || op.Op == OperationType.Replace))
+                else if (op.Value.GetValueKind() == JsonValueKind.String)
                 {
-                    if (op.Value.GetValueKind() == JsonValueKind.Object || op.Value.GetValueKind() == JsonValueKind.Array)
-                    {
-                        violations.Add($"TODO: Property '{path}' must be a primitive value");
-                    }
-                    else if (op.Value.GetValueKind() == JsonValueKind.String)
-                    {
-                        cypherOperations.Add($"SET rel.{path} = '{op.Value}'");
-                    }
-                    else
-                    {
-                        cypherOperations.Add($"SET rel.{path} = {op.Value}");
-                    }
-                }
-                else if (op.Op == OperationType.Remove)
-                {
-                    cypherOperations.Add($"REMOVE t.{path}");
+                    cypherOperations.Add($"SET rel.{path} = '{op.Value}'");
                 }
                 else
                 {
-                    throw new NotSupportedException($"Operation '{op.Op}' with value '{op.Value}' is not supported");
+                    cypherOperations.Add($"SET rel.{path} = {op.Value}");
                 }
             }
-
-            string cypher = $@"MATCH (source:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel {{`$relationshipId`: '{relationshipId}'}}]->(target:Twin)
-            {string.Join("\n", cypherOperations)}
-            RETURN rel";
-            await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-
-            if (!await reader.ReadAsync(cancellationToken))
+            else if (op.Op == OperationType.Remove)
             {
-                throw new DigitalTwinNotFoundException($"Relationship with ID {relationshipId} on {digitalTwinId} not found");
+                cypherOperations.Add($"REMOVE t.{path}");
+            }
+            else
+            {
+                throw new NotSupportedException($"Operation '{op.Op}' with value '{op.Value}' is not supported");
             }
         }
-        catch (Exception ex)
+
+        string cypher = $@"MATCH (source:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel {{`$relationshipId`: '{relationshipId}'}}]->(target:Twin)
+            {string.Join("\n", cypherOperations)}
+            RETURN rel";
+        await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        if (!await reader.ReadAsync(cancellationToken))
         {
-            // scope.Failed(ex);
-            throw;
+            throw new DigitalTwinNotFoundException($"Relationship with ID {relationshipId} on {digitalTwinId} not found");
         }
     }
 
@@ -601,20 +527,12 @@ $function$; "));
         string relationshipId,
         CancellationToken cancellationToken = default)
     {
-        try
+        string cypher = $@"MATCH (source:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel {{`$relationshipId`: '{relationshipId}'}}]->(target:Twin) DELETE rel";
+        await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
+        int rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken);
+        if (rowsAffected == 0)
         {
-            string cypher = $@"MATCH (source:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel {{`$relationshipId`: '{relationshipId}'}}]->(target:Twin) DELETE rel";
-            await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
-            int rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken);
-            if (rowsAffected == 0)
-            {
-                throw new DigitalTwinNotFoundException($"Relationship with ID {relationshipId} not found");
-            }
-        }
-        catch (Exception ex)
-        {
-            // scope.Failed(ex);
-            throw;
+            throw new DigitalTwinNotFoundException($"Relationship with ID {relationshipId} not found");
         }
     }
 
@@ -648,27 +566,19 @@ $function$; "));
         string modelId,
         CancellationToken cancellationToken = default)
     {
-        try
-        {
-            string cypher = $@"MATCH (m:Model) WHERE m.id = '{modelId}' RETURN m";
-            await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        string cypher = $@"MATCH (m:Model) WHERE m.id = '{modelId}' RETURN m";
+        await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
-            if (await reader.ReadAsync(cancellationToken))
-            {
-                var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
-                var vertex = (Vertex)agResult;
-                return new DigitalTwinsModelData(vertex.Properties);
-            }
-            else
-            {
-                throw new ModelNotFoundException($"Model with ID {modelId} not found");
-            }
-        }
-        catch (Exception ex)
+        if (await reader.ReadAsync(cancellationToken))
         {
-            // scope.Failed(ex);
-            throw;
+            var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
+            var vertex = (Vertex)agResult;
+            return new DigitalTwinsModelData(vertex.Properties);
+        }
+        else
+        {
+            throw new ModelNotFoundException($"Model with ID {modelId} not found");
         }
     }
 
@@ -676,81 +586,65 @@ $function$; "));
         IEnumerable<string> dtdlModels,
         CancellationToken cancellationToken = default)
     {
-        try
-        {
-            var parsedModels = await _modelParser.ParseAsync(ConvertToAsyncEnumerable(dtdlModels), cancellationToken: cancellationToken);
-            IEnumerable<DigitalTwinsModelData> modelDatas = dtdlModels.Select(dtdlModel =>
-                new DigitalTwinsModelData(dtdlModel));
-            // This is needed as after unwinding, it gets converted to agtype again
-            string modelsJson = JsonSerializer.Serialize(modelDatas.Select(m => JsonSerializer.Serialize(m)));
+        var parsedModels = await _modelParser.ParseAsync(ConvertToAsyncEnumerable(dtdlModels), cancellationToken: cancellationToken);
+        IEnumerable<DigitalTwinsModelData> modelDatas = dtdlModels.Select(dtdlModel =>
+            new DigitalTwinsModelData(dtdlModel));
+        // This is needed as after unwinding, it gets converted to agtype again
+        string modelsJson = JsonSerializer.Serialize(modelDatas.Select(m => JsonSerializer.Serialize(m)));
 
-            // TODO: do a merge with the id, as we are now just creating new vertices, which isn't the goal
-            string cypher = $@"
+        // TODO: do a merge with the id, as we are now just creating new vertices, which isn't the goal
+        string cypher = $@"
             UNWIND {modelsJson} as model
             WITH model::agtype as modelAgtype
             CREATE (m:Model)
             SET m = modelAgtype
             RETURN m";
 
-            await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
-            // Add edges based on the 'extends' field (especially needed for the 'IS_OF_MODEL' function)
-            foreach (var model in parsedModels)
+        // Add edges based on the 'extends' field (especially needed for the 'IS_OF_MODEL' function)
+        foreach (var model in parsedModels)
+        {
+            if (model.Value is DTInterfaceInfo dTInterfaceInfo && dTInterfaceInfo.Extends != null && dTInterfaceInfo.Extends.Count > 0)
             {
-                if (model.Value is DTInterfaceInfo dTInterfaceInfo && dTInterfaceInfo.Extends != null && dTInterfaceInfo.Extends.Count > 0)
+                foreach (var extend in dTInterfaceInfo.Extends)
                 {
-                    foreach (var extend in dTInterfaceInfo.Extends)
-                    {
-                        string extendsCypher = $@"MATCH (m:Model), (m2:Model)
+                    string extendsCypher = $@"MATCH (m:Model), (m2:Model)
                         WHERE m.id = '{dTInterfaceInfo.Id.AbsoluteUri}' AND m2.id = '{extend.Id.AbsoluteUri}'
                         CREATE (m)-[:_extends]->(m2)";
-                        await using var extendsCommand = _dataSource.CreateCypherCommand(_graphName, extendsCypher);
-                        await extendsCommand.ExecuteNonQueryAsync(cancellationToken);
-                    }
+                    await using var extendsCommand = _dataSource.CreateCypherCommand(_graphName, extendsCypher);
+                    await extendsCommand.ExecuteNonQueryAsync(cancellationToken);
                 }
             }
+        }
 
-            List<DigitalTwinsModelData> result = new List<DigitalTwinsModelData>();
-            int k = 0;
-            while (await reader.ReadAsync(cancellationToken))
-            {
-                var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
-                var vertex = (Vertex)agResult;
-                result.Add(new DigitalTwinsModelData(vertex.Properties));
-                k++;
-            }
-            return result;
-        }
-        catch (Exception ex)
+        List<DigitalTwinsModelData> result = new List<DigitalTwinsModelData>();
+        int k = 0;
+        while (await reader.ReadAsync(cancellationToken))
         {
-            // scope.Failed(ex);
-            throw;
+            var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
+            var vertex = (Vertex)agResult;
+            result.Add(new DigitalTwinsModelData(vertex.Properties));
+            k++;
         }
+        return result;
     }
 
     public virtual async Task DeleteModelAsync(
         string modelId,
         CancellationToken cancellationToken = default)
     {
-        try
-        {
-            string cypher = $@"
+        string cypher = $@"
             MATCH (m:Model)
             WHERE m.id = '{modelId}' 
             OPTIONAL MATCH (m)-[r]-()
             DELETE r, m";
-            await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
-            int rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken);
-            if (rowsAffected == 0)
-            {
-                throw new ModelNotFoundException($"Model with ID {modelId} not found");
-            }
-        }
-        catch (Exception ex)
+        await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
+        int rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken);
+        if (rowsAffected == 0)
         {
-            // scope.Failed(ex);
-            throw;
+            throw new ModelNotFoundException($"Model with ID {modelId} not found");
         }
     }
 
@@ -762,26 +656,18 @@ $function$; "));
     {
 
         NpgsqlDataReader reader;
-        try
+        string cypher;
+        if (query.Contains("SELECT", StringComparison.InvariantCultureIgnoreCase) &&
+            !query.Contains("RETURN", StringComparison.InvariantCultureIgnoreCase))
         {
-            string cypher;
-            if (query.Contains("SELECT", StringComparison.InvariantCultureIgnoreCase) &&
-                !query.Contains("RETURN", StringComparison.InvariantCultureIgnoreCase))
-            {
-                cypher = AdtQueryHelpers.ConvertAdtQueryToCypher(query);
-            }
-            else
-            {
-                cypher = query;
-            }
-            await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
-            reader = await command.ExecuteReaderAsync(cancellationToken);
+            cypher = AdtQueryHelpers.ConvertAdtQueryToCypher(query);
         }
-        catch (Exception ex)
+        else
         {
-            // scope.Failed(ex);
-            throw;
+            cypher = query;
         }
+        await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
+        reader = await command.ExecuteReaderAsync(cancellationToken);
 
         if (reader == null)
         {
@@ -861,7 +747,5 @@ $function$; "));
                 yield return JsonSerializer.Deserialize<T>(json);
             }
         }
-
-
     }
 }
