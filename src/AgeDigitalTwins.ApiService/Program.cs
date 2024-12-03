@@ -11,7 +11,6 @@ var builder = WebApplication.CreateBuilder(args);
 // Add service defaults & Aspire client integrations.
 builder.AddServiceDefaults();
 
-
 // Add Npgsql data source with custom settings.
 builder.AddNpgsqlDataSource(
     "agedb",
@@ -40,7 +39,11 @@ builder.Services.AddOpenTelemetry()
 builder.Services.AddSingleton(sp =>
 {
     NpgsqlDataSource dataSource = sp.GetRequiredService<NpgsqlDataSource>();
-    string graphName = builder.Configuration.GetSection("Parameters")["AgeGraphName"] ?? "digitaltwins";
+    string graphName = builder.Configuration.GetSection("Parameters")["AgeGraphName"]
+        ?? builder.Configuration["Parameters:AgeGraphName"]
+        ?? builder.Configuration["AgeGraphName"]
+        ?? "digitaltwins";
+    Console.WriteLine($"Using graph: {graphName}");
     return new AgeDigitalTwinsClient(dataSource, graphName);
 });
 

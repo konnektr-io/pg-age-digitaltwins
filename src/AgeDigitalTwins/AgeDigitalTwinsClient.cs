@@ -75,8 +75,8 @@ public class AgeDigitalTwinsClient : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        GC.SuppressFinalize(this);
         await _dataSource.DisposeAsync();
+        GC.SuppressFinalize(this);
     }
 
     public virtual async Task InitializeGraphAsync(
@@ -84,7 +84,6 @@ public class AgeDigitalTwinsClient : IAsyncDisposable
     {
         if (await GraphExistsAsync(cancellationToken) == false)
         {
-            Console.WriteLine($"Graph {_graphName} does not exist, creating it now");
             await CreateGraphAsync(cancellationToken);
         }
     }

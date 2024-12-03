@@ -1,11 +1,7 @@
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using AgeDigitalTwins.Exceptions;
 using Azure.DigitalTwins.Core;
-using DTDLParser;
-using Json.More;
 using Json.Patch;
-using Json.Pointer;
 
 namespace AgeDigitalTwins.Test;
 

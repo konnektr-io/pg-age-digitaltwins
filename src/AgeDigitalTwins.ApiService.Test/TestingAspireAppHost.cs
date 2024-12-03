@@ -1,26 +1,15 @@
-using AgeDigitalTwins.Models;
 using Aspire.Hosting;
-using System.Text.Json;
-using System.Text;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 
 namespace AgeDigitalTwins.ApiService.Test;
 
 public class TestingAspireAppHost : DistributedApplicationFactory
 {
-    public TestingAspireAppHost() : base(typeof(Projects.AgeDigitalTwins_AppHost))
+    public TestingAspireAppHost() : base(
+        typeof(Projects.AgeDigitalTwins_AppHost),
+        ["temp_graph_" + Guid.NewGuid().ToString("N")])
     {
-    }
-
-    /* protected override void OnBuilderCreating(DistributedApplicationOptions applicationOptions, HostApplicationBuilderSettings hostOptions)
-    {
-        hostOptions.Configuration!["Parameters:AgeGraphName"] = "temp_graph" + Guid.NewGuid().ToString("N");
-    } */
-
-    protected override void OnBuilding(DistributedApplicationBuilder applicationBuilder)
-    {
-        applicationBuilder.AddParameter("AgeGraphName", "temp_graph" + Guid.NewGuid().ToString("N"));
     }
 
     protected override void OnBuilderCreated(DistributedApplicationBuilder applicationBuilder)

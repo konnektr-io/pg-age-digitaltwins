@@ -2,7 +2,7 @@ using Microsoft.Extensions.Configuration;
 
 namespace AgeDigitalTwins.Test;
 
-public class TestBase
+public class TestBase : IAsyncDisposable
 {
     private readonly AgeDigitalTwinsClient _client;
 
@@ -21,9 +21,10 @@ public class TestBase
 
     public AgeDigitalTwinsClient Client => _client!;
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         await _client.DropGraphAsync();
         await _client.DisposeAsync();
+        GC.SuppressFinalize(this);
     }
 }
