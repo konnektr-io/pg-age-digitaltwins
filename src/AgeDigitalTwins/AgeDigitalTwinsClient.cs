@@ -726,7 +726,7 @@ $function$;"));
         IEnumerable<DigitalTwinsModelData> modelDatas = dtdlModels.Select(dtdlModel =>
             new DigitalTwinsModelData(dtdlModel));
         // This is needed as after unwinding, it gets converted to agtype again
-        string modelsString = $"['{string.Join("','", modelDatas.Select(m => JsonSerializer.Serialize(m)))}']";
+        string modelsString = $"['{string.Join("','", modelDatas.Select(m => JsonSerializer.Serialize(m, serializerOptions)))}']";
 
         // TODO: do a merge with the id, as we are now just creating new vertices, which isn't the goal
         string cypher = $@"UNWIND {modelsString} as model
