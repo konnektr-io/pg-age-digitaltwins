@@ -268,7 +268,6 @@ public class QueryTests : TestBase
         Assert.Equal(2, count);
     }
 
-
     [Fact]
     public async Task QueryAsync_IsOfModel_ReturnsTwins()
     {
@@ -291,7 +290,7 @@ public class QueryTests : TestBase
         }
 
         int count = 0;
-        await foreach (var line in Client.QueryAsync<JsonDocument>(@"SELECT * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:adt:dtsample:room;1')"))
+        await foreach (var line in Client.QueryAsync<JsonDocument>(@"SELECT * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:adt:dtsample:room;1') OR IS_OF_MODEL('dtmi:com:adt:dtsample:whatever;1')"))
         {
             Assert.NotNull(line);
             var id = line.RootElement.GetProperty("$dtId").GetString();

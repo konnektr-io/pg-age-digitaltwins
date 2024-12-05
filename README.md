@@ -22,8 +22,8 @@ AgeDigitalTwins is an SDK and API designed to support Digital Twins applications
     - [x] MATCH
     - [x] JOIN
     - [ ] Custom functions
-  - [ ] Error handling
-  - [ ] ETags
+  - [x] Error handling
+  - [x] ETags
   - [ ] Pagination
   - [ ] Components
   - [ ] Telemetry
@@ -32,13 +32,13 @@ AgeDigitalTwins is an SDK and API designed to support Digital Twins applications
   - [x] Digital Twins CRUD operations
   - [x] Models CRUD operations
   - [x] Relationships CRUD operations
-  - [ ] Error Handling
-  - [ ] ETags
+  - [x] Error Handling
+  - [x] ETags
   - [ ] Authentication
 - **Deployment**:
   - [x] Dockerize the API
   - [ ] Helm chart for deployment
-- **Event routing**: see [link](https://event-driven.io/en/push_based_outbox_pattern_with_postgres_logical_replication/?utm_source=github_outbox_cdc)
+- **Event routing**: see [link](https://event-driven.io/en/push_based_outbox_pattern_with_postgres_logical_replication/?utm_source=github_outbox_cdc) and [link](https://www.npgsql.org/doc/replication.html)
   - [ ] CDC connection with AgType parser (either in C# or leverage Debezium)
   - [ ] Data History output (same format as Azure Digital Twins)
   - [ ] CloudEvents output
