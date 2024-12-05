@@ -10,13 +10,15 @@ namespace AgeDigitalTwins.Events
     public class AgeDigitalTwinsSubscription : IAsyncDisposable
     {
         private readonly string _connectionString;
+        private readonly string _publication;
         private readonly string _replicationSlot;
         private LogicalReplicationConnection? _conn;
         private CancellationTokenSource? _cancellationTokenSource;
 
-        public AgeDigitalTwinsSubscription(string connectionString, string replicationSlot)
+        public AgeDigitalTwinsSubscription(string connectionString, string publication, string replicationSlot)
         {
             _connectionString = connectionString;
+            _publication = publication;
             _replicationSlot = replicationSlot;
         }
 
@@ -29,7 +31,7 @@ namespace AgeDigitalTwins.Events
             _cancellationTokenSource = new CancellationTokenSource();
 
             await foreach (var message in _conn.StartReplication(
-                slot, new PgOutputReplicationOptions("blog_pub", PgOutputProtocolVersion.V3), _cancellationTokenSource.Token))
+                slot, new PgOutputReplicationOptions(_publication, PgOutputProtocolVersion.V3), _cancellationTokenSource.Token))
             {
                 Console.WriteLine($"Received message type: {message.GetType().Name}");
 

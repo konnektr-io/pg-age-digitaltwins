@@ -7,7 +7,7 @@ builder.AddServiceDefaults();
 
 // Register Subscription as a singleton
 builder.Services.AddSingleton(sp =>
-    new AgeDigitalTwinsSubscription("your_connection_string", "your_replication_slot"));
+    new AgeDigitalTwinsSubscription("your_connection_string", "your_publication", "your_replication_slot"));
 
 var app = builder.Build();
 
