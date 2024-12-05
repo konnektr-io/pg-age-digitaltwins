@@ -674,7 +674,8 @@ $$ LANGUAGE plpgsql;"));
 
         List<string> violations = new();
 
-        var cypherOperations = new List<string>();
+        List<string> patchOperations = new();
+
         foreach (var op in patch.Operations)
         {
             var path = op.Path.ToString().TrimStart('/').Replace("/", ".");
@@ -686,31 +687,32 @@ $$ LANGUAGE plpgsql;"));
             {
                 if (op.Value.GetValueKind() == JsonValueKind.Object || op.Value.GetValueKind() == JsonValueKind.Array)
                 {
-                    violations.Add($"TODO: Property '{path}' must be a primitive value");
+                    patchOperations.Add($"SET rel = public.agtype_set(properties(t),['{string.Join("','", path.Split('.'))}'],'{JsonSerializer.Serialize(op.Value, serializerOptions)}')");
                 }
                 else if (op.Value.GetValueKind() == JsonValueKind.String)
                 {
-                    cypherOperations.Add($"SET rel.{path} = '{op.Value}'");
+                    patchOperations.Add($"SET rel = public.agtype_set(properties(t),['{string.Join("','", path.Split('.'))}'],'{op.Value}')");
                 }
                 else
                 {
-                    cypherOperations.Add($"SET rel.{path} = {op.Value}");
+                    patchOperations.Add($"SET rel = public.agtype_set(properties(t),['{string.Join("','", path.Split('.'))}'],{op.Value})");
                 }
             }
             else if (op.Op == OperationType.Remove)
             {
-                cypherOperations.Add($"REMOVE rel.{path}");
+                patchOperations.Add($"SET rel = public.agtype_delete_key(properties(t),['{string.Join("','", path.Split('.'))}'])");
             }
             else
             {
                 throw new NotSupportedException($"Operation '{op.Op}' with value '{op.Value}' is not supported");
             }
         }
+
         string newEtag = ETagGenerator.GenerateEtag(digitalTwinId, now);
-        cypherOperations.Add($"SET rel.`$etag` = '{newEtag}'");
+        patchOperations.Add($"SET rel.`$etag` = '{newEtag}'");
 
         string cypher = $@"MATCH (source:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel {{`$relationshipId`: '{relationshipId}'}}]->(target:Twin)
-            {string.Join("\n", cypherOperations)}
+            {string.Join("\n", patchOperations)}
             RETURN rel";
         await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
