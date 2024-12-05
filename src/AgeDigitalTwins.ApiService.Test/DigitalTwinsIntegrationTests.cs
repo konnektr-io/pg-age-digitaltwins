@@ -93,7 +93,7 @@ public class DigitalTwinsIntegrationTests : IAsyncLifetime
             {
                 ""op"": ""add"",
                 ""path"": ""/mass"",
-                ""value"": 5.972E24
+                ""value"": 5.972E18
             }
         ]";
 
@@ -114,7 +114,7 @@ public class DigitalTwinsIntegrationTests : IAsyncLifetime
         string modifiedTwinResponseContent = await modifiedTwinResponse.Content.ReadAsStringAsync();
         JsonDocument modifiedTwinJson = JsonDocument.Parse(modifiedTwinResponseContent);
         Assert.Equal("Earth 2", modifiedTwinJson.RootElement.GetProperty("name").GetString());
-        Assert.Equal(5.972E24, modifiedTwinJson.RootElement.GetProperty("mass").GetDouble());
+        Assert.Equal(5.972E18, modifiedTwinJson.RootElement.GetProperty("mass").GetDouble());
 
     }
 }

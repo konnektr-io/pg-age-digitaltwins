@@ -117,7 +117,6 @@ public class AgeDigitalTwinsClient : IAsyncDisposable
         batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"SELECT create_elabel('{_graphName}', '_extends');"));
         batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE UNIQUE INDEX model_id_idx ON {_graphName}.""Model"" (ag_catalog.agtype_access_operator(properties, '""id""'::agtype));"));
         batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE INDEX model_gin_idx ON {_graphName}.""Model"" USING gin (properties);"));
-        // TODO: figure out how to make this function work on multiple graphs
         batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE OR REPLACE FUNCTION {_graphName}.is_of_model(twin agtype, model_id agtype, strict boolean default false)
 RETURNS boolean
 LANGUAGE plpgsql
@@ -145,6 +144,63 @@ BEGIN
             RETURN result;
             END;
 $function$;"));
+        batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE OR REPLACE FUNCTION public.agtype_set(target agtype, path agtype, new_value agtype)
+RETURNS agtype AS $$
+DECLARE
+    json_target jsonb;
+    json_new_value jsonb;
+    text_path text[];
+BEGIN
+    -- Cast agtype to jsonb
+    json_target := target::json::jsonb;
+
+    -- Convert agtype path to text array
+    text_path := ARRAY(SELECT json_array_elements_text(path::json));
+
+    BEGIN
+        -- Attempt to cast new_value to jsonb directly
+        json_new_value := new_value::json::jsonb;
+    EXCEPTION
+        WHEN others THEN
+            -- Handle different types of new_value
+            IF new_value::text ~ '^[0-9]+$|^[0-9]*\.[0-9]+$|^[0-9]+(\.[0-9]+)?[eE][+-]?[0-9]+$' THEN
+                -- Convert all numeric values to float
+                json_new_value := to_jsonb(new_value::float);
+            ELSIF new_value::text = 'true' OR new_value::text = 'false' THEN
+                -- Boolean
+                json_new_value := to_jsonb(new_value::boolean);
+            ELSE
+                -- Default to text
+                json_new_value := to_jsonb(new_value);
+            END IF;
+    END;
+
+    -- Use jsonb_set to update the json value
+    json_target := jsonb_set(json_target::jsonb, text_path, json_new_value);
+
+    -- Cast the result back to agtype
+    RETURN json_target::text::agtype;
+END;
+$$ LANGUAGE plpgsql;"));
+        batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE OR REPLACE FUNCTION public.agtype_delete_key(target agtype, path agtype)
+RETURNS agtype AS $$
+DECLARE
+    json_target jsonb;
+    text_path text[];
+BEGIN
+    -- Cast agtype to jsonb
+    json_target := target::json::jsonb;
+
+    -- Convert agtype path to text array
+    text_path := ARRAY(SELECT json_array_elements_text(path::json));
+
+    -- Use jsonb delete key to update the json value
+    json_target := json_target  #- text_path;
+
+    -- Cast the result back to agtype
+    RETURN json_target::text::agtype;
+END;
+$$ LANGUAGE plpgsql;"));
         await batch.ExecuteNonQueryAsync(cancellationToken);
     }
 
@@ -354,7 +410,12 @@ $function$;"));
 
         List<string> violations = new();
 
-        var cypherOperations = new List<string>();
+        List<string> updateTimeSetOperations = new()
+        {
+            $"SET t = public.agtype_set(properties(t),['$metadata','$lastUpdateTime'],'{now:o}')"
+        };
+        List<string> patchOperations = new();
+
         foreach (var op in patch.Operations)
         {
             var path = op.Path.ToString().TrimStart('/').Replace("/", ".");
@@ -366,22 +427,24 @@ $function$;"));
             {
                 if (op.Value.GetValueKind() == JsonValueKind.Object || op.Value.GetValueKind() == JsonValueKind.Array)
                 {
-                    violations.Add($"TODO: Property '{path}' must be a primitive value");
+                    patchOperations.Add($"SET t = public.agtype_set(properties(t),['{string.Join("','", path.Split('.'))}'],'{JsonSerializer.Serialize(op.Value, serializerOptions)}')");
                 }
                 else if (op.Value.GetValueKind() == JsonValueKind.String)
                 {
-                    cypherOperations.Add($"SET t.{path} = '{op.Value}'");
-                    cypherOperations.Add($"SET t.`$metadata`.`{path}`.lastUpdateTime = '{now:o}'");
+                    patchOperations.Add($"SET t = public.agtype_set(properties(t),['{string.Join("','", path.Split('.'))}'],'{op.Value}')");
                 }
                 else
                 {
-                    cypherOperations.Add($"SET t.{path} = {op.Value}");
-                    cypherOperations.Add($"SET t.`$metadata`.`{path}`.lastUpdateTime = '{now:o}'");
+                    patchOperations.Add($"SET t = public.agtype_set(properties(t),['{string.Join("','", path.Split('.'))}'],{op.Value})");
                 }
+                // UpdateTime is set on the root of the property
+                updateTimeSetOperations.Add($"SET t = public.agtype_set(properties(t),['$metadata','{path.Split('.').First()}','lastUpdateTime'],'{now:o}')");
             }
             else if (op.Op == OperationType.Remove)
             {
-                cypherOperations.Add($"REMOVE t.{path}");
+                patchOperations.Add($"SET t = public.agtype_delete_key(properties(t),['{string.Join("','", path.Split('.'))}'])");
+                // This won't do anything for nested properties (which is fine as we need to keep the root property last update time)
+                updateTimeSetOperations.Add($"SET t = public.agtype_set(properties(t),['$metadata','{string.Join("','", path.Split('.'))}','lastUpdateTime'],'{now:o}')");
             }
             else
             {
@@ -389,12 +452,12 @@ $function$;"));
             }
         }
 
-        cypherOperations.Add($"SET t.`$metadata`.`$lastUpdateTime` = '{now:o}'");
         string newEtag = ETagGenerator.GenerateEtag(digitalTwinId, now);
-        cypherOperations.Add($"SET t.`$etag` = '{newEtag}'");
+        patchOperations.Add($"SET t.`$etag` = '{newEtag}'");
 
         string cypher = $@"MATCH (t:Twin) WHERE t['$dtId'] = '{digitalTwinId}'
-            {string.Join("\n", cypherOperations)}
+            {string.Join("\n", updateTimeSetOperations)}
+            {string.Join("\n", patchOperations)}
             RETURN t";
         await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
@@ -722,48 +785,59 @@ $function$;"));
         IEnumerable<string> dtdlModels,
         CancellationToken cancellationToken = default)
     {
-        var parsedModels = await _modelParser.ParseAsync(ConvertToAsyncEnumerable(dtdlModels), cancellationToken: cancellationToken);
-        IEnumerable<DigitalTwinsModelData> modelDatas = dtdlModels.Select(dtdlModel =>
-            new DigitalTwinsModelData(dtdlModel));
-        // This is needed as after unwinding, it gets converted to agtype again
-        string modelsString = $"['{string.Join("','", modelDatas.Select(m => JsonSerializer.Serialize(m, serializerOptions)))}']";
+        try
+        {
+            var parsedModels = await _modelParser.ParseAsync(ConvertToAsyncEnumerable(dtdlModels), cancellationToken: cancellationToken);
+            IEnumerable<DigitalTwinsModelData> modelDatas = dtdlModels.Select(dtdlModel =>
+                new DigitalTwinsModelData(dtdlModel));
+            // This is needed as after unwinding, it gets converted to agtype again
+            string modelsString = $"['{string.Join("','", modelDatas.Select(m => JsonSerializer.Serialize(m, serializerOptions)))}']";
 
-        // TODO: do a merge with the id, as we are now just creating new vertices, which isn't the goal
-        string cypher = $@"UNWIND {modelsString} as model
+            // TODO: do a merge with the id, as we are now just creating new vertices, which isn't the goal
+            string cypher = $@"UNWIND {modelsString} as model
             WITH model::agtype as modelAgtype
             CREATE (m:Model)
             SET m = modelAgtype
             RETURN m";
 
-        await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
-        // Add edges based on the 'extends' field (especially needed for the 'IS_OF_MODEL' function)
-        foreach (var model in parsedModels)
-        {
-            if (model.Value is DTInterfaceInfo dTInterfaceInfo && dTInterfaceInfo.Extends != null && dTInterfaceInfo.Extends.Count > 0)
+            // Add edges based on the 'extends' field (especially needed for the 'IS_OF_MODEL' function)
+            foreach (var model in parsedModels)
             {
-                foreach (var extend in dTInterfaceInfo.Extends)
+                if (model.Value is DTInterfaceInfo dTInterfaceInfo && dTInterfaceInfo.Extends != null && dTInterfaceInfo.Extends.Count > 0)
                 {
-                    string extendsCypher = $@"MATCH (m:Model), (m2:Model)
+                    foreach (var extend in dTInterfaceInfo.Extends)
+                    {
+                        string extendsCypher = $@"MATCH (m:Model), (m2:Model)
                         WHERE m.id = '{dTInterfaceInfo.Id.AbsoluteUri}' AND m2.id = '{extend.Id.AbsoluteUri}'
                         CREATE (m)-[:_extends]->(m2)";
-                    await using var extendsCommand = _dataSource.CreateCypherCommand(_graphName, extendsCypher);
-                    await extendsCommand.ExecuteNonQueryAsync(cancellationToken);
+                        await using var extendsCommand = _dataSource.CreateCypherCommand(_graphName, extendsCypher);
+                        await extendsCommand.ExecuteNonQueryAsync(cancellationToken);
+                    }
                 }
             }
-        }
 
-        List<DigitalTwinsModelData> result = new();
-        int k = 0;
-        while (await reader.ReadAsync(cancellationToken))
-        {
-            var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
-            var vertex = (Vertex)agResult;
-            result.Add(new DigitalTwinsModelData(vertex.Properties));
-            k++;
+            List<DigitalTwinsModelData> result = new();
+            int k = 0;
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
+                var vertex = (Vertex)agResult;
+                result.Add(new DigitalTwinsModelData(vertex.Properties));
+                k++;
+            }
+            return result;
         }
-        return result;
+        catch (PostgresException ex) when (ex.ConstraintName == "model_id_idx")
+        {
+            throw new ModelAlreadyExistsException(ex.Message);
+        }
+        catch (ParsingException ex)
+        {
+            throw new DTDLParserParsingException(ex);
+        }
     }
 
     public virtual async Task DeleteModelAsync(

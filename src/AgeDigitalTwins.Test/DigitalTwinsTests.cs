@@ -2,6 +2,7 @@ using System.Text.Json;
 using AgeDigitalTwins.Exceptions;
 using Azure.DigitalTwins.Core;
 using Json.Patch;
+using Json.Pointer;
 
 namespace AgeDigitalTwins.Test;
 
@@ -140,7 +141,7 @@ public class DigitalTwinsTests : TestBase
             {
                 ""op"": ""add"",
                 ""path"": ""/mass"",
-                ""value"": 5.972E24
+                ""value"": 5.972E18
             }
         ]";
 
@@ -152,7 +153,37 @@ public class DigitalTwinsTests : TestBase
         Assert.NotNull(readTwin);
         Assert.Equal(digitalTwin.Id, readTwin.Id);
         Assert.Equal("Earth 2", readTwin.Contents["name"].ToString());
-        Assert.Equal(5.972E24, ((JsonElement)readTwin.Contents["mass"]).GetDouble());
+        Assert.Equal(5.972E18, ((JsonElement)readTwin.Contents["mass"]).GetDouble());
+    }
+
+    [Fact]
+    public async Task UpdateDigitalTwinAsync_SourceTime_Updated()
+    {
+        // Load required models
+        string[] models = [SampleData.DtdlCelestialBody, SampleData.DtdlPlanet, SampleData.DtdlCrater];
+        await Client.CreateModelsAsync(models);
+
+        // Create digital twin
+        var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinPlanetEarth);
+        var createdTwin = await Client.CreateOrReplaceDigitalTwinAsync(digitalTwin!.Id, digitalTwin);
+
+        var now = DateTime.UtcNow;
+        var nowString = now.ToString("o");
+
+        JsonPatch jsonPatch = new(
+            PatchOperation.Add(JsonPointer.Parse("/name"), "Earth 3"),
+            PatchOperation.Add(JsonPointer.Parse("/$metadata/name/sourceTime"), nowString)
+        );
+
+        await Client.UpdateDigitalTwinAsync(digitalTwin!.Id, jsonPatch);
+
+        // Read digital twin
+        var readTwin = await Client.GetDigitalTwinAsync<BasicDigitalTwin>(digitalTwin.Id);
+        Assert.NotNull(readTwin);
+        Assert.Equal(digitalTwin.Id, readTwin.Id);
+        Assert.Equal("Earth 3", readTwin.Contents["name"].ToString());
+        Assert.True((now - readTwin.Metadata.PropertyMetadata["name"].SourceTime) < TimeSpan.FromSeconds(1));
+        Assert.Equal(now, readTwin.Metadata.PropertyMetadata["name"].SourceTime);
     }
 
     /* [Fact]

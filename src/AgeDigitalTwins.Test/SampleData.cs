@@ -15,6 +15,9 @@ namespace AgeDigitalTwins.Test
                     {
                         ""@type"": ""Property"",
                         ""name"": ""name"",
+                        ""description"": {
+                            ""en"": ""The name of the room\n\nThis is a multiline description.""
+                        },
                         ""schema"": ""string""
                     },
                     {

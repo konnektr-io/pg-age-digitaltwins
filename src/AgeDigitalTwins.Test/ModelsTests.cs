@@ -110,7 +110,36 @@ public class ModelsTests : TestBase
     {
         await Client.CreateModelsAsync([SampleData.DtdlCelestialBody, SampleData.DtdlCrater, SampleData.DtdlPlanet]);
 
-        await Client.DeleteModelAsync("dtmi:com:contoso:CelestialBody;1");
+        await Client.DeleteModelAsync("dtmi:com:contoso:Crater;1");
+
+        bool exceptionThrown = false;
+        try
+        {
+            var result = await Client.GetModelAsync("dtmi:com:contoso:Crater;1");
+        }
+        catch (ModelNotFoundException)
+        {
+            exceptionThrown = true;
+        }
+        Assert.True(exceptionThrown);
+    }
+
+    [Fact]
+    public async Task CreateModels_ExistingModel_ThrowsModelAlreadyExists()
+    {
+        await Client.CreateModelsAsync([SampleData.DtdlRoom]);
+
+        bool exceptionThrown = false;
+        try
+        {
+            await Client.CreateModelsAsync([SampleData.DtdlRoom]);
+        }
+        catch (Exception ex)
+        {
+            exceptionThrown = true;
+            Assert.IsType<ModelAlreadyExistsException>(ex);
+        }
+        Assert.True(exceptionThrown);
     }
 
 }

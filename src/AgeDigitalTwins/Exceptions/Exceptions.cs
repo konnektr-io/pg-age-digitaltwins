@@ -1,5 +1,6 @@
 using System;
 using System.Net;
+using OpenTelemetry.Trace;
 
 namespace AgeDigitalTwins.Exceptions;
 
@@ -19,11 +20,31 @@ public class PreconditionFailedException : AgeDigitalTwinsException
     }
 }
 
+public class ModelAlreadyExistsException : AgeDigitalTwinsException
+{
+    public ModelAlreadyExistsException() : base("The model provided already exists.")
+    {
+        StatusCode = HttpStatusCode.Conflict;
+    }
+    public ModelAlreadyExistsException(string message) : base(message)
+    {
+        StatusCode = HttpStatusCode.Conflict;
+    }
+}
+
 public class ModelNotFoundException : AgeDigitalTwinsException
 {
     public ModelNotFoundException(string message) : base(message)
     {
         StatusCode = HttpStatusCode.NotFound;
+    }
+}
+
+public class DTDLParserParsingException : AgeDigitalTwinsException
+{
+    public DTDLParserParsingException(DTDLParser.ParsingException exception) : base("The models provided are not valid DTDL.")
+    {
+        StatusCode = HttpStatusCode.BadRequest;
     }
 }
 
