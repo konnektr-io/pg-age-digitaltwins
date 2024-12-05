@@ -359,7 +359,7 @@ $$ LANGUAGE plpgsql;"));
             digitalTwinObject["$etag"] = newEtag;
 
             // Serialize the updated digital twin
-            string updatedDigitalTwinJson = JsonSerializer.Serialize(digitalTwinObject, serializerOptions);
+            string updatedDigitalTwinJson = JsonSerializer.Serialize(digitalTwinObject, serializerOptions).Replace("'", "\\'");
 
             string cypher = $@"WITH '{updatedDigitalTwinJson}'::agtype as twin
             MERGE (t: Twin {{`$dtId`: '{digitalTwinId}'}})

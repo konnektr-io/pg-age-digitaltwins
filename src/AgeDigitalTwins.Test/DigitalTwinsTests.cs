@@ -44,7 +44,7 @@ public class DigitalTwinsTests : TestBase
                     ""$model"": ""dtmi:com:adt:dtsample:room;1""
                 },
                 ""name"": ""Crater 1"",
-                ""description"": ""A 'description' \""with a\n\rfew weird 👽 '/\\characters."",
+                ""description"": ""A 'description' \""with a\n\rfew weird 👽 '/\\characters.""
             }";
 
         var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(digitalTwinString);
