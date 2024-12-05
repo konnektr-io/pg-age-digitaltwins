@@ -22,6 +22,14 @@ namespace AgeDigitalTwins.Test
                     },
                     {
                         ""@type"": ""Property"",
+                        ""name"": ""description"",
+                        ""description"": {
+                            ""en"": ""The description of description has a few weird 👽 '/\\characters.""
+                        },
+                        ""schema"": ""string""
+                    },
+                    {
+                        ""@type"": ""Property"",
                         ""name"": ""temperature"",
                         ""schema"": ""double""
                     },

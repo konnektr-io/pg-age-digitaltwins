@@ -28,6 +28,37 @@ public class DigitalTwinsTests : TestBase
         Assert.Equal(digitalTwin.Id, readTwin.Id);
     }
 
+
+    [Fact]
+    public async Task CreateOrReplaceDigitalTwinAsync_BasicDigitalTwinWithWeirdcharacters_CreatedAndReadable()
+    {
+        // Load required models
+        string[] models = [SampleData.DtdlRoom];
+        await Client.CreateModelsAsync(models);
+
+        // Create digital twin
+        string digitalTwinString =
+            @"{
+                ""$dtId"": ""room123456"",
+                ""$metadata"": {
+                    ""$model"": ""dtmi:com:adt:dtsample:room;1""
+                },
+                ""name"": ""Crater 1"",
+                ""description"": ""A 'description' \""with a\n\rfew weird 👽 '/\\characters."",
+            }";
+
+        var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(digitalTwinString);
+        var createdTwin = await Client.CreateOrReplaceDigitalTwinAsync(digitalTwin!.Id, digitalTwin);
+
+        Assert.NotNull(createdTwin);
+        Assert.Equal(digitalTwin.Id, createdTwin.Id);
+
+        // Read digital twin
+        var readTwin = await Client.GetDigitalTwinAsync<BasicDigitalTwin>(digitalTwin.Id);
+        Assert.NotNull(readTwin);
+        Assert.Equal(digitalTwin.Id, readTwin.Id);
+    }
+
     [Fact]
     public async Task CreateOrReplaceDigitalTwinAsync_NoModel_ThrowsArgumentException()
     {
