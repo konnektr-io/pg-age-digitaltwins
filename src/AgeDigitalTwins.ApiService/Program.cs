@@ -21,6 +21,7 @@ builder.AddNpgsqlDataSource(
         NpgsqlConnectionStringBuilder connectionStringBuilder = new(settings.ConnectionString)
         {
             SearchPath = "ag_catalog, \"$user\", public",
+            ConnectionIdleLifetime = 60,
             ConnectionLifetime = 300,
         };
         settings.ConnectionString = connectionStringBuilder.ConnectionString;
