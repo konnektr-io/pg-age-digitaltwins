@@ -18,6 +18,13 @@ builder.AddNpgsqlDataSource(
     configureSettings: settings =>
     {
         settings.DisableTracing = true;
+        if (settings.ConnectionString == null)
+        {
+            settings.ConnectionString = builder.Configuration.GetConnectionString("agedb")
+                ?? builder.Configuration["ConnectionStrings:agedb"]
+                ?? builder.Configuration["AgeConnectionString"]
+                ?? throw new InvalidOperationException("Connection string is required.");
+        }
         NpgsqlConnectionStringBuilder connectionStringBuilder = new(settings.ConnectionString)
         {
             SearchPath = "ag_catalog, \"$user\", public",

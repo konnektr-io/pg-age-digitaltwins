@@ -7,7 +7,24 @@ builder.AddServiceDefaults();
 
 // Register Subscription as a singleton
 builder.Services.AddSingleton(sp =>
-    new AgeDigitalTwinsSubscription("your_connection_string", "your_publication", "your_replication_slot"));
+{
+    string connectionString = builder.Configuration.GetConnectionString("agedb")
+        ?? builder.Configuration["ConnectionStrings:agedb"]
+        ?? builder.Configuration["AgeConnectionString"]
+        ?? throw new InvalidOperationException("Connection string is required.");
+
+    string publication = builder.Configuration.GetSection("Parameters")["AgePublication"]
+        ?? builder.Configuration["Parameters:AgePublication"]
+        ?? builder.Configuration["AgePublication"]
+        ?? "age_pub";
+
+    string replicationSlot = builder.Configuration.GetSection("Parameters")["AgeReplicationSlot"]
+        ?? builder.Configuration["Parameters:AgeReplicationSlot"]
+        ?? builder.Configuration["AgeReplicationSlot"]
+        ?? "age_slot";
+
+    return new AgeDigitalTwinsSubscription(connectionString, publication, replicationSlot);
+});
 
 var app = builder.Build();
 
