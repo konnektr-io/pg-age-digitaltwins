@@ -85,10 +85,12 @@ public class AgeDigitalTwinsClient : IAsyncDisposable
         GC.SuppressFinalize(this);
     }
 
+    #region Graph
+
     public virtual async Task InitializeGraphAsync(
         CancellationToken cancellationToken = default)
     {
-        if (await GraphExistsAsync(cancellationToken) == false)
+        if (await GraphExistsAsync(cancellationToken) != true)
         {
             await CreateGraphAsync(cancellationToken);
         }
@@ -97,127 +99,46 @@ public class AgeDigitalTwinsClient : IAsyncDisposable
     public virtual async Task<bool?> GraphExistsAsync(
         CancellationToken cancellationToken = default)
     {
-        await using var command = _dataSource.GraphExistsCommand(_graphName);
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var command = connection.GraphExistsCommand(_graphName);
         return (bool?)await command.ExecuteScalarAsync(cancellationToken);
     }
 
     public virtual async Task CreateGraphAsync(
         CancellationToken cancellationToken = default)
     {
-        await using var command = _dataSource.CreateGraphCommand(_graphName);
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var command = connection.CreateGraphCommand(_graphName);
         await command.ExecuteNonQueryAsync(cancellationToken);
 
-        // Create labels and indexes
-        using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        // Initialize the graph by creating labels, indexes, functions, ...
         using var batch = new NpgsqlBatch(connection);
-        batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"SELECT create_vlabel('{_graphName}', 'Twin');"));
-        batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE UNIQUE INDEX twin_id_idx ON {_graphName}.""Twin"" (ag_catalog.agtype_access_operator(properties, '""$dtId""'::agtype));"));
-        batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE INDEX twin_gin_idx ON {_graphName}.""Twin"" USING gin (properties);"));
-        batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"SELECT create_vlabel('{_graphName}', 'Model');"));
-        batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"SELECT create_elabel('{_graphName}', '_extends');"));
-        batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE UNIQUE INDEX model_id_idx ON {_graphName}.""Model"" (ag_catalog.agtype_access_operator(properties, '""id""'::agtype));"));
-        batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE INDEX model_gin_idx ON {_graphName}.""Model"" USING gin (properties);"));
-        batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE OR REPLACE FUNCTION {_graphName}.is_of_model(twin agtype, model_id agtype, strict boolean default false)
-RETURNS boolean
-LANGUAGE plpgsql
-AS $function$
-DECLARE
-    sql VARCHAR;
-    twin_model_id text;
-    result boolean;
-BEGIN
-    SELECT ag_catalog.agtype_access_operator(twin,'""$metadata""'::agtype,'""$model""'::agtype) INTO twin_model_id;
-    IF strict THEN
-      sql:= format('SELECT ''%s'' = ''%s''', twin_model_id, model_id);
-    ELSE
-      sql:= format('
-        SELECT ''%s'' = ''%s'' OR
-        EXISTS
-            (SELECT m FROM ag_catalog.cypher(''{_graphName}'', $$
-              MATCH(m:Model) - [:_extends*0..]->(n:Model)
-              WHERE m.id = %s AND n.id = %s
-              RETURN m.id
-            $$) AS(m text))
-        ', twin_model_id, model_id, twin_model_id, model_id);
-    END IF;
-            EXECUTE sql INTO result;
-            RETURN result;
-            END;
-$function$;"));
-        batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE OR REPLACE FUNCTION public.agtype_set(target agtype, path agtype, new_value agtype)
-RETURNS agtype AS $$
-DECLARE
-    json_target jsonb;
-    json_new_value jsonb;
-    text_path text[];
-BEGIN
-    -- Cast agtype to jsonb
-    json_target := target::json::jsonb;
-
-    -- Convert agtype path to text array
-    text_path := ARRAY(SELECT json_array_elements_text(path::json));
-
-    BEGIN
-        -- Attempt to cast new_value to jsonb directly
-        json_new_value := new_value::json::jsonb;
-    EXCEPTION
-        WHEN others THEN
-            -- Handle different types of new_value
-            IF new_value::text ~ '^[0-9]+$|^[0-9]*\.[0-9]+$|^[0-9]+(\.[0-9]+)?[eE][+-]?[0-9]+$' THEN
-                -- Convert all numeric values to float
-                json_new_value := to_jsonb(new_value::float);
-            ELSIF new_value::text = 'true' OR new_value::text = 'false' THEN
-                -- Boolean
-                json_new_value := to_jsonb(new_value::boolean);
-            ELSE
-                -- Default to text
-                json_new_value := to_jsonb(new_value);
-            END IF;
-    END;
-
-    -- Use jsonb_set to update the json value
-    json_target := jsonb_set(json_target::jsonb, text_path, json_new_value);
-
-    -- Cast the result back to agtype
-    RETURN json_target::text::agtype;
-END;
-$$ LANGUAGE plpgsql;"));
-        batch.BatchCommands.Add(new NpgsqlBatchCommand(@$"CREATE OR REPLACE FUNCTION public.agtype_delete_key(target agtype, path agtype)
-RETURNS agtype AS $$
-DECLARE
-    json_target jsonb;
-    text_path text[];
-BEGIN
-    -- Cast agtype to jsonb
-    json_target := target::json::jsonb;
-
-    -- Convert agtype path to text array
-    text_path := ARRAY(SELECT json_array_elements_text(path::json));
-
-    -- Use jsonb delete key to update the json value
-    json_target := json_target  #- text_path;
-
-    -- Cast the result back to agtype
-    RETURN json_target::text::agtype;
-END;
-$$ LANGUAGE plpgsql;"));
+        foreach (NpgsqlBatchCommand initBatchCommand in GraphInitialization.GetGraphInitCommands(_graphName))
+        {
+            batch.BatchCommands.Add(initBatchCommand);
+        }
         await batch.ExecuteNonQueryAsync(cancellationToken);
     }
 
     public virtual async Task DropGraphAsync(
         CancellationToken cancellationToken = default)
     {
-        Console.WriteLine($"Dropping graph {_graphName}");
-        await using var command = _dataSource.DropGraphCommand(_graphName);
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var command = connection.DropGraphCommand(_graphName);
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
+
+    #endregion
+
+    #region Digital Twins
 
     public virtual async Task<bool> DigitalTwinExistsAsync(
         string digitalTwinId,
         CancellationToken cancellationToken = default)
     {
         string cypher = $"MATCH (t:Twin) WHERE t['$dtId'] = '{digitalTwinId}' RETURN t";
-        await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var command = connection.CreateCypherCommand(_graphName, cypher);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         return await reader.ReadAsync(cancellationToken);
     }
@@ -228,7 +149,8 @@ $$ LANGUAGE plpgsql;"));
         CancellationToken cancellationToken = default)
     {
         string cypher = $"MATCH (t:Twin) WHERE t['$dtId'] = '{digitalTwinId}' AND t['$etag'] = '{etag}' RETURN t";
-        await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var command = connection.CreateCypherCommand(_graphName, cypher);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         return await reader.ReadAsync(cancellationToken);
     }
@@ -238,7 +160,8 @@ $$ LANGUAGE plpgsql;"));
         CancellationToken cancellationToken = default)
     {
         string cypher = $"MATCH (t:Twin) WHERE t['$dtId'] = '{digitalTwinId}' RETURN t";
-        await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var command = connection.CreateCypherCommand(_graphName, cypher);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
         if (await reader.ReadAsync(cancellationToken))
@@ -365,7 +288,8 @@ $$ LANGUAGE plpgsql;"));
             MERGE (t: Twin {{`$dtId`: '{digitalTwinId}'}})
             SET t = twin
             RETURN t";
-            await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
+            await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+            await using var command = connection.CreateCypherCommand(_graphName, cypher);
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
             if (await reader.ReadAsync(cancellationToken))
@@ -459,7 +383,8 @@ $$ LANGUAGE plpgsql;"));
             {string.Join("\n", updateTimeSetOperations)}
             {string.Join("\n", patchOperations)}
             RETURN t";
-        await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var command = connection.CreateCypherCommand(_graphName, cypher);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
         if (!await reader.ReadAsync(cancellationToken))
@@ -473,7 +398,8 @@ $$ LANGUAGE plpgsql;"));
         CancellationToken cancellationToken = default)
     {
         string cypher = $@"MATCH (t:Twin) WHERE t['$dtId'] = '{digitalTwinId}' DELETE t";
-        await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var command = connection.CreateCypherCommand(_graphName, cypher);
         int rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken);
         if (rowsAffected == 0)
         {
@@ -481,6 +407,9 @@ $$ LANGUAGE plpgsql;"));
         }
     }
 
+    #endregion
+
+    #region Relationships
 
     public virtual async Task<bool> RelationshipExistsAsync(
         string digitalTwinId,
@@ -488,7 +417,8 @@ $$ LANGUAGE plpgsql;"));
         CancellationToken cancellationToken = default)
     {
         string cypher = $@"MATCH (source:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel {{`$relationshipId`: '{relationshipId}'}}]->(target:Twin) RETURN rel";
-        await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var command = connection.CreateCypherCommand(_graphName, cypher);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         return await reader.ReadAsync(cancellationToken);
     }
@@ -500,7 +430,8 @@ $$ LANGUAGE plpgsql;"));
         CancellationToken cancellationToken = default)
     {
         string cypher = $"MATCH (source:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel {{`$relationshipId`: '{relationshipId}'}}]->(target:Twin) WHERE rel['$etag'] = '{etag}' RETURN rel";
-        await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var command = connection.CreateCypherCommand(_graphName, cypher);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         return await reader.ReadAsync(cancellationToken);
     }
@@ -511,7 +442,8 @@ $$ LANGUAGE plpgsql;"));
         CancellationToken cancellationToken = default)
     {
         string cypher = $@"MATCH (source:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel {{`$relationshipId`: '{relationshipId}'}}]->(target:Twin) RETURN rel";
-        await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var command = connection.CreateCypherCommand(_graphName, cypher);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
         if (await reader.ReadAsync(cancellationToken))
@@ -634,7 +566,8 @@ $$ LANGUAGE plpgsql;"));
             MERGE (source)-[rel:{relationshipName} {{`$relationshipId`: '{relationshipId}'}}]->(target)
             SET rel = relationship
             RETURN rel";
-        await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var command = connection.CreateCypherCommand(_graphName, cypher);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
         if (await reader.ReadAsync(cancellationToken))
@@ -714,7 +647,8 @@ $$ LANGUAGE plpgsql;"));
         string cypher = $@"MATCH (source:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel {{`$relationshipId`: '{relationshipId}'}}]->(target:Twin)
             {string.Join("\n", patchOperations)}
             RETURN rel";
-        await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var command = connection.CreateCypherCommand(_graphName, cypher);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
         if (!await reader.ReadAsync(cancellationToken))
@@ -729,7 +663,8 @@ $$ LANGUAGE plpgsql;"));
         CancellationToken cancellationToken = default)
     {
         string cypher = $@"MATCH (source:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel {{`$relationshipId`: '{relationshipId}'}}]->(target:Twin) DELETE rel";
-        await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var command = connection.CreateCypherCommand(_graphName, cypher);
         int rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken);
         if (rowsAffected == 0)
         {
@@ -737,6 +672,9 @@ $$ LANGUAGE plpgsql;"));
         }
     }
 
+    #endregion
+
+    #region Models
 
     public static async IAsyncEnumerable<string> ConvertToAsyncEnumerable(IEnumerable<string> source)
     {
@@ -752,7 +690,8 @@ $$ LANGUAGE plpgsql;"));
         CancellationToken cancellationToken = default)
     {
         string cypher = $@"MATCH (m:Model) RETURN m";
-        await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var command = connection.CreateCypherCommand(_graphName, cypher);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
         while (await reader.ReadAsync(cancellationToken))
@@ -768,7 +707,8 @@ $$ LANGUAGE plpgsql;"));
         CancellationToken cancellationToken = default)
     {
         string cypher = $@"MATCH (m:Model) WHERE m.id = '{modelId}' RETURN m";
-        await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var command = connection.CreateCypherCommand(_graphName, cypher);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
         if (await reader.ReadAsync(cancellationToken))
@@ -802,7 +742,8 @@ $$ LANGUAGE plpgsql;"));
             SET m = modelAgtype
             RETURN m";
 
-            await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
+            await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+            await using var command = connection.CreateCypherCommand(_graphName, cypher);
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
             // Add edges based on the 'extends' field (especially needed for the 'IS_OF_MODEL' function)
@@ -815,7 +756,7 @@ $$ LANGUAGE plpgsql;"));
                         string extendsCypher = $@"MATCH (m:Model), (m2:Model)
                         WHERE m.id = '{dTInterfaceInfo.Id.AbsoluteUri}' AND m2.id = '{extend.Id.AbsoluteUri}'
                         CREATE (m)-[:_extends]->(m2)";
-                        await using var extendsCommand = _dataSource.CreateCypherCommand(_graphName, extendsCypher);
+                        await using var extendsCommand = connection.CreateCypherCommand(_graphName, extendsCypher);
                         await extendsCommand.ExecuteNonQueryAsync(cancellationToken);
                     }
                 }
@@ -851,7 +792,8 @@ $$ LANGUAGE plpgsql;"));
             WHERE m.id = '{modelId}' 
             OPTIONAL MATCH (m)-[r]-()
             DELETE r, m";
-        await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var command = connection.CreateCypherCommand(_graphName, cypher);
         int rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken);
         if (rowsAffected == 0)
         {
@@ -859,14 +801,15 @@ $$ LANGUAGE plpgsql;"));
         }
     }
 
+    #endregion
+
+    #region Query
 
     public virtual async IAsyncEnumerable<T?> QueryAsync<T>(
         string query,
         [EnumeratorCancellation]
         CancellationToken cancellationToken = default)
     {
-
-        NpgsqlDataReader reader;
         string cypher;
         if (query.Contains("SELECT", StringComparison.InvariantCultureIgnoreCase) &&
             !query.Contains("RETURN", StringComparison.InvariantCultureIgnoreCase))
@@ -877,13 +820,10 @@ $$ LANGUAGE plpgsql;"));
         {
             cypher = query;
         }
-        await using var command = _dataSource.CreateCypherCommand(_graphName, cypher);
-        reader = await command.ExecuteReaderAsync(cancellationToken);
-
-        if (reader == null)
-        {
-            throw new InvalidOperationException("Reader is null");
-        }
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var command = connection.CreateCypherCommand(_graphName, cypher);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken)
+            ?? throw new InvalidOperationException("Reader is null");
 
         var schema = await reader.GetColumnSchemaAsync(cancellationToken);
 
@@ -974,4 +914,6 @@ $$ LANGUAGE plpgsql;"));
             }
         }
     }
+
+    #endregion
 }
