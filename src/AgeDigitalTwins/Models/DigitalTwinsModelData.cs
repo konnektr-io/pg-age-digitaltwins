@@ -52,7 +52,8 @@ namespace AgeDigitalTwins.Models
             DateTimeOffset? uploadedOn,
             IReadOnlyDictionary<string, string> languageDisplayNames,
             IReadOnlyDictionary<string, string> languageDescriptions,
-            bool isDecommissioned)
+            bool isDecommissioned
+        )
         {
             Id = id;
             DtdlModelJson = dtdlModelJson;
@@ -67,8 +68,12 @@ namespace AgeDigitalTwins.Models
             Id = modelData["id"]?.ToString()!;
             DtdlModel = modelData["model"]?.ToString()!;
             UploadedOn = DateTimeOffset.Parse(modelData["uploadTime"]?.ToString()!);
-            LanguageDisplayNames = JsonSerializer.Deserialize<Dictionary<string, string>>(modelData["displayName"]?.ToString()!)!;
-            LanguageDescriptions = JsonSerializer.Deserialize<Dictionary<string, string>>(modelData["description"]?.ToString()!)!;
+            LanguageDisplayNames = JsonSerializer.Deserialize<Dictionary<string, string>>(
+                modelData["displayName"]?.ToString()!
+            )!;
+            LanguageDescriptions = JsonSerializer.Deserialize<Dictionary<string, string>>(
+                modelData["description"]?.ToString()!
+            )!;
             IsDecommissioned = bool.Parse(modelData["decommissioned"]?.ToString()!);
         }
 
@@ -84,14 +89,17 @@ namespace AgeDigitalTwins.Models
                 {
                     LanguageDisplayNames = displayName
                         .EnumerateObject()
-                        .Select(property => new KeyValuePair<string, string>(property.Name, property.Value.GetString()!))
+                        .Select(property => new KeyValuePair<string, string>(
+                            property.Name,
+                            property.Value.GetString()!
+                        ))
                         .ToDictionary(x => x.Key, x => x.Value);
                 }
                 else if (displayName.ValueKind == JsonValueKind.String)
                 {
                     LanguageDisplayNames = new Dictionary<string, string>()
                     {
-                        { "en", displayName.GetString()! }
+                        { "en", displayName.GetString()! },
                     };
                 }
             }
@@ -102,14 +110,17 @@ namespace AgeDigitalTwins.Models
                 {
                     LanguageDescriptions = description
                         .EnumerateObject()
-                        .Select(property => new KeyValuePair<string, string>(property.Name, property.Value.GetString()!))
+                        .Select(property => new KeyValuePair<string, string>(
+                            property.Name,
+                            property.Value.GetString()!
+                        ))
                         .ToDictionary(x => x.Key, x => x.Value);
                 }
                 else if (description.ValueKind == JsonValueKind.String)
                 {
                     LanguageDescriptions = new Dictionary<string, string>()
                     {
-                        { "en", description.GetString()! }
+                        { "en", description.GetString()! },
                     };
                 }
             }
@@ -120,7 +131,11 @@ namespace AgeDigitalTwins.Models
 
     public class JsonDocumentConverter : JsonConverter<JsonDocument>
     {
-        public override JsonDocument Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        public override JsonDocument Read(
+            ref Utf8JsonReader reader,
+            Type typeToConvert,
+            JsonSerializerOptions options
+        )
         {
             using (JsonDocument doc = JsonDocument.ParseValue(ref reader))
             {
@@ -128,7 +143,11 @@ namespace AgeDigitalTwins.Models
             }
         }
 
-        public override void Write(Utf8JsonWriter writer, JsonDocument value, JsonSerializerOptions options)
+        public override void Write(
+            Utf8JsonWriter writer,
+            JsonDocument value,
+            JsonSerializerOptions options
+        )
         {
             value.WriteTo(writer);
         }

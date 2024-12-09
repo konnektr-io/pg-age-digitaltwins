@@ -16,7 +16,8 @@ internal static class ModelsRepositoryClientExtensions
         this NpgsqlDataSource dataSource,
         string graphName,
         IReadOnlyCollection<Dtmi> dtmis,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        [EnumeratorCancellation] CancellationToken cancellationToken = default
+    )
     {
         string dtmiList = string.Join(",", dtmis.Select(d => $"'{d}'"));
         string cypher = $"MATCH (m:Model) WHERE m.id IN [{dtmiList}] RETURN m";

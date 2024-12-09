@@ -7,14 +7,15 @@ namespace AgeDigitalTwins.Exceptions;
 public class AgeDigitalTwinsException : Exception
 {
     public HttpStatusCode StatusCode { get; set; } = HttpStatusCode.InternalServerError;
-    public AgeDigitalTwinsException(string message) : base(message)
-    {
-    }
+
+    public AgeDigitalTwinsException(string message)
+        : base(message) { }
 }
 
 public class PreconditionFailedException : AgeDigitalTwinsException
 {
-    public PreconditionFailedException(string message) : base(message)
+    public PreconditionFailedException(string message)
+        : base(message)
     {
         StatusCode = HttpStatusCode.PreconditionFailed;
     }
@@ -22,11 +23,14 @@ public class PreconditionFailedException : AgeDigitalTwinsException
 
 public class ModelAlreadyExistsException : AgeDigitalTwinsException
 {
-    public ModelAlreadyExistsException() : base("The model provided already exists.")
+    public ModelAlreadyExistsException()
+        : base("The model provided already exists.")
     {
         StatusCode = HttpStatusCode.Conflict;
     }
-    public ModelAlreadyExistsException(string message) : base(message)
+
+    public ModelAlreadyExistsException(string message)
+        : base(message)
     {
         StatusCode = HttpStatusCode.Conflict;
     }
@@ -34,7 +38,8 @@ public class ModelAlreadyExistsException : AgeDigitalTwinsException
 
 public class ModelNotFoundException : AgeDigitalTwinsException
 {
-    public ModelNotFoundException(string message) : base(message)
+    public ModelNotFoundException(string message)
+        : base(message)
     {
         StatusCode = HttpStatusCode.NotFound;
     }
@@ -42,7 +47,8 @@ public class ModelNotFoundException : AgeDigitalTwinsException
 
 public class DTDLParserParsingException : AgeDigitalTwinsException
 {
-    public DTDLParserParsingException(DTDLParser.ParsingException exception) : base("The models provided are not valid DTDL.")
+    public DTDLParserParsingException(DTDLParser.ParsingException exception)
+        : base("The models provided are not valid DTDL.")
     {
         StatusCode = HttpStatusCode.BadRequest;
     }
@@ -50,7 +56,8 @@ public class DTDLParserParsingException : AgeDigitalTwinsException
 
 public class DigitalTwinNotFoundException : AgeDigitalTwinsException
 {
-    public DigitalTwinNotFoundException(string message) : base(message)
+    public DigitalTwinNotFoundException(string message)
+        : base(message)
     {
         StatusCode = HttpStatusCode.NotFound;
     }
@@ -58,7 +65,8 @@ public class DigitalTwinNotFoundException : AgeDigitalTwinsException
 
 public class RelationshipNotFoundException : AgeDigitalTwinsException
 {
-    public RelationshipNotFoundException(string message) : base(message)
+    public RelationshipNotFoundException(string message)
+        : base(message)
     {
         StatusCode = HttpStatusCode.NotFound;
     }
@@ -66,7 +74,8 @@ public class RelationshipNotFoundException : AgeDigitalTwinsException
 
 public class ValidationFailedException : AgeDigitalTwinsException
 {
-    public ValidationFailedException(string message) : base(message)
+    public ValidationFailedException(string message)
+        : base(message)
     {
         StatusCode = HttpStatusCode.BadRequest;
     }
@@ -74,7 +83,8 @@ public class ValidationFailedException : AgeDigitalTwinsException
 
 public class InvalidAdtQueryException : AgeDigitalTwinsException
 {
-    public InvalidAdtQueryException(string message) : base(message)
+    public InvalidAdtQueryException(string message)
+        : base(message)
     {
         StatusCode = HttpStatusCode.BadRequest;
     }
