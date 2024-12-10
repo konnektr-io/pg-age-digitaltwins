@@ -10,5 +10,9 @@
     <ProjectReference Include="..\AgeDigitalTwins\AgeDigitalTwins.csproj" />
     <ProjectReference Include="..\AgeDigitalTwins.ServiceDefaults\AgeDigitalTwins.ServiceDefaults.csproj" />
   </ItemGroup>
+  
+  <ItemGroup>
+    <PackageReference Include="CloudNative.CloudEvents" Version="2.8.0" />
+  </ItemGroup>
 
 </Project>

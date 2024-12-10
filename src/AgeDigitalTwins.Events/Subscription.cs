@@ -1,13 +1,18 @@
-using Npgsql.Replication;
-using Npgsql.Replication.PgOutput;
-using Npgsql.Replication.PgOutput.Messages;
 using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using CloudNative.CloudEvents;
+using Npgsql.Replication;
+using Npgsql.Replication.PgOutput;
+using Npgsql.Replication.PgOutput.Messages;
 
 namespace AgeDigitalTwins.Events;
 
-public class AgeDigitalTwinsSubscription(string connectionString, string publication, string replicationSlot) : IAsyncDisposable
+public class AgeDigitalTwinsSubscription(
+    string connectionString,
+    string publication,
+    string replicationSlot
+) : IAsyncDisposable
 {
     private readonly string _connectionString = connectionString;
     private readonly string _publication = publication;
@@ -42,7 +47,10 @@ public class AgeDigitalTwinsSubscription(string connectionString, string publica
         _cancellationTokenSource = new CancellationTokenSource();
 
         IAsyncEnumerable<PgOutputReplicationMessage> messages = _conn.StartReplication(
-            slot, new PgOutputReplicationOptions(_publication, PgOutputProtocolVersion.V4), _cancellationTokenSource.Token);
+            slot,
+            new PgOutputReplicationOptions(_publication, PgOutputProtocolVersion.V4),
+            _cancellationTokenSource.Token
+        );
 
         EventData? currentEvent = null;
 
@@ -65,10 +73,34 @@ public class AgeDigitalTwinsSubscription(string connectionString, string publica
                         Console.WriteLine("Skipping insert message without a transaction");
                         continue;
                     }
-                    currentEvent.EventType = "Create";
                     currentEvent.GraphName = insertMessage.Relation.Namespace;
                     currentEvent.TableName = insertMessage.Relation.RelationName;
                     currentEvent.NewValue = await ConvertRowToJsonAsync(insertMessage.NewRow);
+                    if (
+                        currentEvent.NewValue != null
+                        && currentEvent.NewValue.ContainsKey("properties")
+                        && currentEvent.NewValue["properties"] is JsonObject properties
+                    )
+                    {
+                        if (properties.ContainsKey("$dtId"))
+                        {
+                            currentEvent.EventType = EventType.TwinCreate;
+                        }
+                        else if (properties.ContainsKey("$relationshipId"))
+                        {
+                            currentEvent.EventType = EventType.RelationshipCreate;
+                        }
+                        else
+                        {
+                            Console.WriteLine("Skipping insert message without a valid JSON value");
+                            continue;
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("Skipping insert message without a JSON value");
+                        continue;
+                    }
                     // Console.WriteLine($"Inserted row: {currentEvent.NewValue}");
                 }
                 else if (message is FullUpdateMessage updateMessage)
@@ -78,11 +110,28 @@ public class AgeDigitalTwinsSubscription(string connectionString, string publica
                         Console.WriteLine("Skipping update message without a transaction");
                         continue;
                     }
-                    currentEvent.EventType ??= "Update";
                     currentEvent.GraphName = updateMessage.Relation.Namespace;
                     currentEvent.TableName = updateMessage.Relation.RelationName;
                     currentEvent.OldValue ??= await ConvertRowToJsonAsync(updateMessage.OldRow);
                     currentEvent.NewValue = await ConvertRowToJsonAsync(updateMessage.NewRow);
+                    if (currentEvent.EventType == null)
+                    {
+                        if (
+                            currentEvent.NewValue != null
+                            && currentEvent.NewValue.ContainsKey("properties")
+                            && currentEvent.NewValue["properties"] is JsonObject properties
+                        )
+                        {
+                            if (properties.ContainsKey("$dtId"))
+                            {
+                                currentEvent.EventType = EventType.TwinUpdate;
+                            }
+                            else if (properties.ContainsKey("$relationshipId"))
+                            {
+                                currentEvent.EventType = EventType.RelationshipUpdate;
+                            }
+                        }
+                    }
                     // Console.WriteLine($"Updated row: {currentEvent.OldValue} -> {currentEvent.NewValue}");
                 }
                 else if (message is FullDeleteMessage deleteMessage)
@@ -92,10 +141,24 @@ public class AgeDigitalTwinsSubscription(string connectionString, string publica
                         Console.WriteLine("Skipping delete message without a transaction");
                         continue;
                     }
-                    currentEvent.EventType = "Delete";
                     currentEvent.GraphName = deleteMessage.Relation.Namespace;
                     currentEvent.TableName = deleteMessage.Relation.RelationName;
                     currentEvent.OldValue = await ConvertRowToJsonAsync(deleteMessage.OldRow);
+                    if (
+                        currentEvent.OldValue != null
+                        && currentEvent.OldValue.ContainsKey("properties")
+                        && currentEvent.OldValue["properties"] is JsonObject oldProperties
+                    )
+                    {
+                        if (oldProperties.ContainsKey("$dtId"))
+                        {
+                            currentEvent.EventType = EventType.TwinDelete;
+                        }
+                        else if (oldProperties.ContainsKey("$relationshipId"))
+                        {
+                            currentEvent.EventType = EventType.RelationshipDelete;
+                        }
+                    }
                     // Console.WriteLine($"Deleted row: {currentEvent.OldValue}");
                 }
                 else if (message is CommitMessage)
@@ -125,18 +188,42 @@ public class AgeDigitalTwinsSubscription(string connectionString, string publica
         }
     }
 
+    public static CloudEvent CreateCloudEvent(object eventData, string eventType)
+    {
+        var cloudEvent = new CloudEvent
+        {
+            Id = Guid.NewGuid().ToString(),
+            Source = new Uri("urn:source"),
+            Type = eventType,
+            DataContentType = "application/json",
+            Data = eventData,
+        };
+
+        return cloudEvent;
+    }
+
     private async Task ConsumeQueueAsync()
     {
+        var eventSinks = EventSinkFactory.CreateEventSinks();
+
         while (true)
         {
-            if (_eventQueue.TryDequeue(out var eventData))
+            if (_eventQueue.TryDequeue(out var eventData) && eventData.EventType != null)
             {
-                // Log the event data
-                Console.WriteLine($"Event Type: {eventData.EventType}");
-                Console.WriteLine($"Graph Name: {eventData.GraphName}");
-                Console.WriteLine($"Table Name: {eventData.TableName}");
-                Console.WriteLine($"Old Value: {eventData.OldValue}");
-                Console.WriteLine($"New Value: {eventData.NewValue}");
+                string? eventType = Enum.GetName(typeof(EventType), eventData.EventType);
+                if (eventType == null)
+                {
+                    Console.WriteLine("Skipping event with unknown type");
+                    continue;
+                }
+                // Create CloudEvent
+                var cloudEvent = CreateCloudEvent(eventData, eventType);
+
+                // Send to all configured sinks
+                foreach (var sink in eventSinks)
+                {
+                    await sink.SendEventAsync(cloudEvent);
+                }
             }
             else
             {
@@ -165,7 +252,10 @@ public class AgeDigitalTwinsSubscription(string connectionString, string publica
     {
         await foreach (var value in row)
         {
-            if (value.GetFieldName() != "properties" || value.GetDataTypeName() != "ag_catalog.agtype")
+            if (
+                value.GetFieldName() != "properties"
+                || value.GetDataTypeName() != "ag_catalog.agtype"
+            )
             {
                 continue;
             }
@@ -178,12 +268,21 @@ public class AgeDigitalTwinsSubscription(string connectionString, string publica
         return null;
     }
 
+    public enum EventType
+    {
+        TwinCreate,
+        TwinUpdate,
+        TwinDelete,
+        RelationshipCreate,
+        RelationshipUpdate,
+        RelationshipDelete,
+    }
 
     public class EventData()
     {
         public string? GraphName { get; set; }
         public string? TableName { get; set; }
-        public string? EventType { get; set; }
+        public EventType? EventType { get; set; }
         public JsonObject? OldValue { get; set; }
         public JsonObject? NewValue { get; set; }
     }
