@@ -17,7 +17,10 @@ public class DigitalTwinsTests : TestBase
 
         // Create digital twin
         var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinCrater);
-        var createdTwin = await Client.CreateOrReplaceDigitalTwinAsync(digitalTwin!.Id, digitalTwin);
+        var createdTwin = await Client.CreateOrReplaceDigitalTwinAsync(
+            digitalTwin!.Id,
+            digitalTwin
+        );
 
         Assert.NotNull(createdTwin);
         Assert.Equal(digitalTwin.Id, createdTwin.Id);
@@ -27,7 +30,6 @@ public class DigitalTwinsTests : TestBase
         Assert.NotNull(readTwin);
         Assert.Equal(digitalTwin.Id, readTwin.Id);
     }
-
 
     [Fact]
     public async Task CreateOrReplaceDigitalTwinAsync_BasicDigitalTwinWithWeirdcharacters_CreatedAndReadable()
@@ -48,7 +50,10 @@ public class DigitalTwinsTests : TestBase
             }";
 
         var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(digitalTwinString);
-        var createdTwin = await Client.CreateOrReplaceDigitalTwinAsync(digitalTwin!.Id, digitalTwin);
+        var createdTwin = await Client.CreateOrReplaceDigitalTwinAsync(
+            digitalTwin!.Id,
+            digitalTwin
+        );
 
         Assert.NotNull(createdTwin);
         Assert.Equal(digitalTwin.Id, createdTwin.Id);
@@ -69,8 +74,9 @@ public class DigitalTwinsTests : TestBase
         // Create digital twin
         var digitalTwin = @"{""$dtId"": ""nomodeltwin"", ""test"": ""test""}";
 
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            Client.CreateOrReplaceDigitalTwinAsync("nomodeltwin", digitalTwin));
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => Client.CreateOrReplaceDigitalTwinAsync("nomodeltwin", digitalTwin)
+        );
     }
 
     [Fact]
@@ -81,10 +87,12 @@ public class DigitalTwinsTests : TestBase
         await Client.CreateModelsAsync(models);
 
         // Create digital twin
-        var digitalTwin = @"{""$dtId"": ""modelnotfoundtwin"", ""$metadata"": {""$model"": ""dtmi:com:notfound;1""}, ""test"": ""test""}";
+        var digitalTwin =
+            @"{""$dtId"": ""modelnotfoundtwin"", ""$metadata"": {""$model"": ""dtmi:com:notfound;1""}, ""test"": ""test""}";
 
-        await Assert.ThrowsAsync<ValidationFailedException>(() =>
-            Client.CreateOrReplaceDigitalTwinAsync("modelnotfoundtwin", digitalTwin));
+        await Assert.ThrowsAsync<ValidationFailedException>(
+            () => Client.CreateOrReplaceDigitalTwinAsync("modelnotfoundtwin", digitalTwin)
+        );
     }
 
     [Fact]
@@ -95,15 +103,17 @@ public class DigitalTwinsTests : TestBase
         await Client.CreateModelsAsync(models);
 
         // Create digital twin
-        var digitalTwin = @"{
+        var digitalTwin =
+            @"{
             ""$dtId"": ""invalidtwin"", 
             ""$metadata"": {""$model"": ""dtmi:com:contoso:Crater;1""}, 
             ""test"": ""test"", 
             ""diameter"": ""foo""
         }";
 
-        var exception = await Assert.ThrowsAsync<ValidationFailedException>(() =>
-            Client.CreateOrReplaceDigitalTwinAsync("invalidtwin", digitalTwin));
+        var exception = await Assert.ThrowsAsync<ValidationFailedException>(
+            () => Client.CreateOrReplaceDigitalTwinAsync("invalidtwin", digitalTwin)
+        );
 
         Assert.Contains("test", exception.Message);
         Assert.Contains("diameter", exception.Message);
@@ -118,18 +128,27 @@ public class DigitalTwinsTests : TestBase
 
         // Create digital twin
         var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinCrater);
-        var createdTwin = await Client.CreateOrReplaceDigitalTwinAsync(digitalTwin!.Id, digitalTwin);
+        var createdTwin = await Client.CreateOrReplaceDigitalTwinAsync(
+            digitalTwin!.Id,
+            digitalTwin
+        );
 
-        JsonPatch jsonPatch = JsonSerializer.Deserialize<JsonPatch>(@"[{""op"": ""add"", ""path"": ""/diameter"", ""value"": 200}]")!;
+        JsonPatch jsonPatch = JsonSerializer.Deserialize<JsonPatch>(
+            @"[{""op"": ""add"", ""path"": ""/diameter"", ""value"": 200}]"
+        )!;
         await Client.UpdateDigitalTwinAsync(digitalTwin!.Id, jsonPatch);
 
         // Read digital twin
         var readTwin = await Client.GetDigitalTwinAsync<BasicDigitalTwin>(digitalTwin.Id);
         Assert.NotNull(readTwin);
         Assert.Equal(digitalTwin.Id, readTwin.Id);
-        Assert.Equal((double)200, ((JsonElement)readTwin.Contents["diameter"]).TryGetDouble(out double diameter) ? diameter : 0);
+        Assert.Equal(
+            (double)200,
+            ((JsonElement)readTwin.Contents["diameter"]).TryGetDouble(out double diameter)
+                ? diameter
+                : 0
+        );
     }
-
 
     [Fact]
     public async Task UpdateDigitalTwinAsync_RemoveOperationPrimitive_Updated()
@@ -140,9 +159,14 @@ public class DigitalTwinsTests : TestBase
 
         // Create digital twin
         var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinCrater);
-        var createdTwin = await Client.CreateOrReplaceDigitalTwinAsync(digitalTwin!.Id, digitalTwin);
+        var createdTwin = await Client.CreateOrReplaceDigitalTwinAsync(
+            digitalTwin!.Id,
+            digitalTwin
+        );
 
-        JsonPatch jsonPatch = JsonSerializer.Deserialize<JsonPatch>(@"[{""op"": ""remove"", ""path"": ""/diameter""}]")!;
+        JsonPatch jsonPatch = JsonSerializer.Deserialize<JsonPatch>(
+            @"[{""op"": ""remove"", ""path"": ""/diameter""}]"
+        )!;
         await Client.UpdateDigitalTwinAsync(digitalTwin!.Id, jsonPatch);
 
         // Read digital twin
@@ -156,14 +180,23 @@ public class DigitalTwinsTests : TestBase
     public async Task UpdateDigitalTwinAsync_MultipleOperations_Updated()
     {
         // Load required models
-        string[] models = [SampleData.DtdlCelestialBody, SampleData.DtdlPlanet, SampleData.DtdlCrater];
+        string[] models =
+        [
+            SampleData.DtdlCelestialBody,
+            SampleData.DtdlPlanet,
+            SampleData.DtdlCrater,
+        ];
         await Client.CreateModelsAsync(models);
 
         // Create digital twin
         var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinPlanetEarth);
-        var createdTwin = await Client.CreateOrReplaceDigitalTwinAsync(digitalTwin!.Id, digitalTwin);
+        var createdTwin = await Client.CreateOrReplaceDigitalTwinAsync(
+            digitalTwin!.Id,
+            digitalTwin
+        );
 
-        string sJsonPatch = @"[
+        string sJsonPatch =
+            @"[
             {
                 ""op"": ""replace"",
                 ""path"": ""/name"",
@@ -191,20 +224,29 @@ public class DigitalTwinsTests : TestBase
     public async Task UpdateDigitalTwinAsync_SourceTime_Updated()
     {
         // Load required models
-        string[] models = [SampleData.DtdlCelestialBody, SampleData.DtdlPlanet, SampleData.DtdlCrater];
+        string[] models =
+        [
+            SampleData.DtdlCelestialBody,
+            SampleData.DtdlPlanet,
+            SampleData.DtdlCrater,
+        ];
         await Client.CreateModelsAsync(models);
 
         // Create digital twin
         var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinPlanetEarth);
-        var createdTwin = await Client.CreateOrReplaceDigitalTwinAsync(digitalTwin!.Id, digitalTwin);
+        var createdTwin = await Client.CreateOrReplaceDigitalTwinAsync(
+            digitalTwin!.Id,
+            digitalTwin
+        );
 
         var now = DateTime.UtcNow;
         var nowString = now.ToString("o");
 
-        JsonPatch jsonPatch = new(
-            PatchOperation.Add(JsonPointer.Parse("/name"), "Earth 3"),
-            PatchOperation.Add(JsonPointer.Parse("/$metadata/name/sourceTime"), nowString)
-        );
+        JsonPatch jsonPatch =
+            new(
+                PatchOperation.Add(JsonPointer.Parse("/name"), "Earth 3"),
+                PatchOperation.Add(JsonPointer.Parse("/$metadata/name/sourceTime"), nowString)
+            );
 
         await Client.UpdateDigitalTwinAsync(digitalTwin!.Id, jsonPatch);
 
@@ -213,7 +255,9 @@ public class DigitalTwinsTests : TestBase
         Assert.NotNull(readTwin);
         Assert.Equal(digitalTwin.Id, readTwin.Id);
         Assert.Equal("Earth 3", readTwin.Contents["name"].ToString());
-        Assert.True((now - readTwin.Metadata.PropertyMetadata["name"].SourceTime) < TimeSpan.FromSeconds(1));
+        Assert.True(
+            (now - readTwin.Metadata.PropertyMetadata["name"].SourceTime) < TimeSpan.FromSeconds(1)
+        );
         Assert.Equal(now, readTwin.Metadata.PropertyMetadata["name"].SourceTime);
     }
 

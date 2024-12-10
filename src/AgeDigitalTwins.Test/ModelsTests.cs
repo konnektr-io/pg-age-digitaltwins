@@ -32,7 +32,12 @@ public class ModelsTests : TestBase
     [Fact]
     public async Task CreateModels_MultipleDependentModels_ValidatedAndCreated()
     {
-        string[] models = [SampleData.DtdlPlanet, SampleData.DtdlCelestialBody, SampleData.DtdlCrater];
+        string[] models =
+        [
+            SampleData.DtdlPlanet,
+            SampleData.DtdlCelestialBody,
+            SampleData.DtdlCrater,
+        ];
         var results = await Client.CreateModelsAsync(models);
 
         for (int i = 0; i < models.Length; i++)
@@ -108,7 +113,9 @@ public class ModelsTests : TestBase
     [Fact]
     public async Task DeleteModels_DependentModels_DeletesEdges()
     {
-        await Client.CreateModelsAsync([SampleData.DtdlCelestialBody, SampleData.DtdlCrater, SampleData.DtdlPlanet]);
+        await Client.CreateModelsAsync(
+            [SampleData.DtdlCelestialBody, SampleData.DtdlCrater, SampleData.DtdlPlanet]
+        );
 
         await Client.DeleteModelAsync("dtmi:com:contoso:Crater;1");
 
@@ -141,5 +148,4 @@ public class ModelsTests : TestBase
         }
         Assert.True(exceptionThrown);
     }
-
 }
