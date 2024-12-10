@@ -10,9 +10,11 @@ public class TestBase : IAsyncDisposable
     {
         var configuration = new ConfigurationBuilder()
             .SetBasePath(AppContext.BaseDirectory)
-            .AddJsonFile("appsettings.Development.json").Build();
+            .AddJsonFile("appsettings.Development.json")
+            .Build();
 
-        string connectionString = configuration.GetConnectionString("AgeConnectionString")
+        string connectionString =
+            configuration.GetConnectionString("AgeConnectionString")
             ?? throw new ArgumentNullException("AgeConnectionString");
 
         var graphName = "temp_graph_" + Guid.NewGuid().ToString("N");
