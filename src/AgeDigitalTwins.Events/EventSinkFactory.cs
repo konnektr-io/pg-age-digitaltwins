@@ -1,26 +1,43 @@
 namespace AgeDigitalTwins.Events;
 
-public class EventSinkFactory
+public class EventSinkFactory(IConfiguration configuration)
 {
-    public static List<IEventSink> CreateEventSinks()
+    private readonly IConfiguration _configuration = configuration;
+
+    public List<IEventSink> CreateEventSinks()
     {
         var sinks = new List<IEventSink>();
 
-        if (Environment.GetEnvironmentVariable("USE_KAFKA") == "true")
+        var kafkaSinks = _configuration
+            .GetSection("EventSinks:Kafka")
+            .Get<List<KafkaSinkOptions>>();
+        if (kafkaSinks != null)
         {
-            sinks.Add(new KafkaEventSink());
+            foreach (var kafkaSink in kafkaSinks)
+            {
+                sinks.Add(new KafkaEventSink(kafkaSink));
+            }
         }
 
-        if (Environment.GetEnvironmentVariable("USE_KUSTO") == "true")
+        /* var kustoSinks = _configuration
+            .GetSection("EventSinks:Kusto")
+            .Get<List<KustoSinkOptions>>();
+        foreach (var kustoSink in kustoSinks)
         {
-            sinks.Add(new KustoEventSink());
-        }
+            sinks.Add(new KustoEventSink(kustoSink));
+        } */
 
-        if (Environment.GetEnvironmentVariable("USE_MQTT") == "true")
+        /* var mqttSinks = _configuration.GetSection("EventSinks:MQTT").Get<List<MqttSinkOptions>>();
+        foreach (var mqttSink in mqttSinks)
         {
-            sinks.Add(new MqttEventSink());
-        }
+            sinks.Add(new MqttEventSink(mqttSink));
+        } */
 
         return sinks;
+    }
+
+    public List<EventRoute> GetEventRoutes()
+    {
+        return _configuration.GetSection("EventRoutes").Get<List<EventRoute>>();
     }
 }

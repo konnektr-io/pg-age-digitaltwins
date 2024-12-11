@@ -26,7 +26,14 @@ builder.Services.AddSingleton(sp =>
         ?? builder.Configuration["AgeReplicationSlot"]
         ?? "age_slot";
 
-    return new AgeDigitalTwinsSubscription(connectionString, publication, replicationSlot);
+    EventSinkFactory eventSinkFactory = new(builder.Configuration);
+
+    return new AgeDigitalTwinsSubscription(
+        connectionString,
+        publication,
+        replicationSlot,
+        eventSinkFactory
+    );
 });
 
 var app = builder.Build();

@@ -11,12 +11,14 @@ namespace AgeDigitalTwins.Events;
 public class AgeDigitalTwinsSubscription(
     string connectionString,
     string publication,
-    string replicationSlot
+    string replicationSlot,
+    EventSinkFactory eventSinkFactory
 ) : IAsyncDisposable
 {
     private readonly string _connectionString = connectionString;
     private readonly string _publication = publication;
     private readonly string _replicationSlot = replicationSlot;
+    private readonly EventSinkFactory _eventSinkFactory = eventSinkFactory;
     private LogicalReplicationConnection? _conn;
     private CancellationTokenSource? _cancellationTokenSource;
     private readonly ConcurrentQueue<EventData> _eventQueue = new();
@@ -188,41 +190,27 @@ public class AgeDigitalTwinsSubscription(
         }
     }
 
-    public static CloudEvent CreateCloudEvent(object eventData, string eventType)
-    {
-        var cloudEvent = new CloudEvent
-        {
-            Id = Guid.NewGuid().ToString(),
-            Source = new Uri("urn:source"),
-            Type = eventType,
-            DataContentType = "application/json",
-            Data = eventData,
-        };
-
-        return cloudEvent;
-    }
-
     private async Task ConsumeQueueAsync()
     {
-        var eventSinks = EventSinkFactory.CreateEventSinks();
+        var eventSinks = _eventSinkFactory.CreateEventSinks();
+        var eventRoutes = _eventSinkFactory.GetEventRoutes();
 
         while (true)
         {
             if (_eventQueue.TryDequeue(out var eventData) && eventData.EventType != null)
             {
-                string? eventType = Enum.GetName(typeof(EventType), eventData.EventType);
-                if (eventType == null)
+                foreach (var route in eventRoutes)
                 {
-                    Console.WriteLine("Skipping event with unknown type");
-                    continue;
-                }
-                // Create CloudEvent
-                var cloudEvent = CreateCloudEvent(eventData, eventType);
-
-                // Send to all configured sinks
-                foreach (var sink in eventSinks)
-                {
-                    await sink.SendEventAsync(cloudEvent);
+                    string? eventType = Enum.GetName(typeof(EventType), eventData.EventType);
+                    if (eventType != null && route.EventTypes.Contains(eventType))
+                    {
+                        var sink = eventSinks.FirstOrDefault(s => s.Name == route.SinkName);
+                        if (sink != null)
+                        {
+                            var cloudEvent = CreateCloudEvent(eventData, route.EventFormat);
+                            await sink.SendEventAsync(cloudEvent);
+                        }
+                    }
                 }
             }
             else
@@ -285,5 +273,19 @@ public class AgeDigitalTwinsSubscription(
         public EventType? EventType { get; set; }
         public JsonObject? OldValue { get; set; }
         public JsonObject? NewValue { get; set; }
+    }
+
+    public static CloudEvent CreateCloudEvent(object eventData, string eventType)
+    {
+        var cloudEvent = new CloudEvent
+        {
+            Id = Guid.NewGuid().ToString(),
+            Source = new Uri("urn:source"),
+            Type = eventType,
+            DataContentType = "application/json",
+            Data = eventData,
+        };
+
+        return cloudEvent;
     }
 }
