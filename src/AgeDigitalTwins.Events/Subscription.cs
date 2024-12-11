@@ -78,17 +78,13 @@ public class AgeDigitalTwinsSubscription(
                     currentEvent.GraphName = insertMessage.Relation.Namespace;
                     currentEvent.TableName = insertMessage.Relation.RelationName;
                     currentEvent.NewValue = await ConvertRowToJsonAsync(insertMessage.NewRow);
-                    if (
-                        currentEvent.NewValue != null
-                        && currentEvent.NewValue.ContainsKey("properties")
-                        && currentEvent.NewValue["properties"] is JsonObject properties
-                    )
+                    if (currentEvent.NewValue != null)
                     {
-                        if (properties.ContainsKey("$dtId"))
+                        if (currentEvent.NewValue.ContainsKey("$dtId"))
                         {
                             currentEvent.EventType = EventType.TwinCreate;
                         }
-                        else if (properties.ContainsKey("$relationshipId"))
+                        else if (currentEvent.NewValue.ContainsKey("$relationshipId"))
                         {
                             currentEvent.EventType = EventType.RelationshipCreate;
                         }
@@ -116,22 +112,15 @@ public class AgeDigitalTwinsSubscription(
                     currentEvent.TableName = updateMessage.Relation.RelationName;
                     currentEvent.OldValue ??= await ConvertRowToJsonAsync(updateMessage.OldRow);
                     currentEvent.NewValue = await ConvertRowToJsonAsync(updateMessage.NewRow);
-                    if (currentEvent.EventType == null)
+                    if (currentEvent.EventType == null && currentEvent.NewValue != null)
                     {
-                        if (
-                            currentEvent.NewValue != null
-                            && currentEvent.NewValue.ContainsKey("properties")
-                            && currentEvent.NewValue["properties"] is JsonObject properties
-                        )
+                        if (currentEvent.NewValue.ContainsKey("$dtId"))
                         {
-                            if (properties.ContainsKey("$dtId"))
-                            {
-                                currentEvent.EventType = EventType.TwinUpdate;
-                            }
-                            else if (properties.ContainsKey("$relationshipId"))
-                            {
-                                currentEvent.EventType = EventType.RelationshipUpdate;
-                            }
+                            currentEvent.EventType = EventType.TwinUpdate;
+                        }
+                        else if (currentEvent.NewValue.ContainsKey("$relationshipId"))
+                        {
+                            currentEvent.EventType = EventType.RelationshipUpdate;
                         }
                     }
                     // Console.WriteLine($"Updated row: {currentEvent.OldValue} -> {currentEvent.NewValue}");
@@ -146,22 +135,17 @@ public class AgeDigitalTwinsSubscription(
                     currentEvent.GraphName = deleteMessage.Relation.Namespace;
                     currentEvent.TableName = deleteMessage.Relation.RelationName;
                     currentEvent.OldValue = await ConvertRowToJsonAsync(deleteMessage.OldRow);
-                    if (
-                        currentEvent.OldValue != null
-                        && currentEvent.OldValue.ContainsKey("properties")
-                        && currentEvent.OldValue["properties"] is JsonObject oldProperties
-                    )
+                    if (currentEvent.OldValue != null)
                     {
-                        if (oldProperties.ContainsKey("$dtId"))
+                        if (currentEvent.OldValue.ContainsKey("$dtId"))
                         {
                             currentEvent.EventType = EventType.TwinDelete;
                         }
-                        else if (oldProperties.ContainsKey("$relationshipId"))
+                        else if (currentEvent.OldValue.ContainsKey("$relationshipId"))
                         {
                             currentEvent.EventType = EventType.RelationshipDelete;
                         }
                     }
-                    // Console.WriteLine($"Deleted row: {currentEvent.OldValue}");
                 }
                 else if (message is CommitMessage)
                 {
@@ -202,7 +186,10 @@ public class AgeDigitalTwinsSubscription(
                 foreach (var route in eventRoutes)
                 {
                     string? eventType = Enum.GetName(typeof(EventType), eventData.EventType);
-                    if (eventType != null && route.EventTypes.Contains(eventType))
+                    if (
+                        eventType != null
+                        && (route.EventTypes.Contains(eventType) || route.EventTypes.Contains("*"))
+                    )
                     {
                         var sink = eventSinks.FirstOrDefault(s => s.Name == route.SinkName);
                         if (sink != null)
