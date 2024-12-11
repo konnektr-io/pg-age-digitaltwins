@@ -22,6 +22,8 @@ public class AgeDigitalTwinsSubscription(
     private LogicalReplicationConnection? _conn;
     private CancellationTokenSource? _cancellationTokenSource;
     private readonly ConcurrentQueue<EventData> _eventQueue = new();
+    private Uri _serverUri =>
+        new(new Npgsql.NpgsqlConnectionStringBuilder(_connectionString).Host!);
 
     public async Task StartAsync()
     {
@@ -194,8 +196,11 @@ public class AgeDigitalTwinsSubscription(
                         var sink = eventSinks.FirstOrDefault(s => s.Name == route.SinkName);
                         if (sink != null)
                         {
-                            var cloudEvent = CreateCloudEvent(eventData, route.EventFormat);
-                            await sink.SendEventAsync(cloudEvent);
+                            var cloudEvents = CreateEventNotificationEvents(
+                                eventData,
+                                route.EventFormat
+                            );
+                            await sink.SendEventAsync(cloudEvents);
                         }
                     }
                 }
@@ -262,17 +267,31 @@ public class AgeDigitalTwinsSubscription(
         public JsonObject? NewValue { get; set; }
     }
 
-    public static CloudEvent CreateCloudEvent(object eventData, string eventType)
+    public List<CloudEvent> CreateEventNotificationEvents(EventData eventData, string eventType)
     {
         var cloudEvent = new CloudEvent
         {
             Id = Guid.NewGuid().ToString(),
-            Source = new Uri("urn:source"),
+            Source = _serverUri,
             Type = eventType,
             DataContentType = "application/json",
             Data = eventData,
         };
 
-        return cloudEvent;
+        return [cloudEvent];
+    }
+
+    public List<CloudEvent> CreateDataHistoryEvents(EventData eventData, string eventType)
+    {
+        var cloudEvent = new CloudEvent
+        {
+            Id = Guid.NewGuid().ToString(),
+            Source = _serverUri,
+            Type = eventType,
+            DataContentType = "application/json",
+            Data = eventData,
+        };
+
+        return [cloudEvent];
     }
 }
