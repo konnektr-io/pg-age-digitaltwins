@@ -8,7 +8,7 @@ public class MqttEventSink(MqttSinkOptions options) : IEventSink
 
     public string Name => _options.Name;
 
-    public async Task SendEventAsync(CloudEvent cloudEvent)
+    public async Task SendEventsAsync(IEnumerable<CloudEvent> cloudEvents)
     {
         await Task.CompletedTask;
         // Implement MQTT sending logic here

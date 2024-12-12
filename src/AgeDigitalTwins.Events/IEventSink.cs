@@ -1,16 +1,25 @@
+using System.Text.Json.Serialization;
 using CloudNative.CloudEvents;
+using Json.More;
 
 namespace AgeDigitalTwins.Events;
 
 public interface IEventSink
 {
     string Name { get; }
-    Task SendEventAsync(CloudEvent cloudEvent);
+    Task SendEventsAsync(IEnumerable<CloudEvent> cloudEvents);
+}
+
+[JsonConverter(typeof(EnumStringConverter<EventType>))]
+public enum EventFormat
+{
+    EventNotification,
+    DataHistory,
 }
 
 public class EventRoute
 {
-    public string SinkName { get; set; }
-    public string EventFormat { get; set; }
-    public List<string> EventTypes { get; set; }
+    public required string SinkName { get; set; }
+    public EventFormat? EventFormat { get; set; }
+    public List<EventType>? EventTypes { get; set; }
 }

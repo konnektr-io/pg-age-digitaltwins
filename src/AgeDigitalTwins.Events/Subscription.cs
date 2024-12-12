@@ -22,8 +22,7 @@ public class AgeDigitalTwinsSubscription(
     private LogicalReplicationConnection? _conn;
     private CancellationTokenSource? _cancellationTokenSource;
     private readonly ConcurrentQueue<EventData> _eventQueue = new();
-    private Uri _serverUri =>
-        new(new Npgsql.NpgsqlConnectionStringBuilder(_connectionString).Host!);
+    private Uri ServerUri => new(new Npgsql.NpgsqlConnectionStringBuilder(_connectionString).Host!);
 
     public async Task StartAsync()
     {
@@ -149,13 +148,14 @@ public class AgeDigitalTwinsSubscription(
                         }
                     }
                 }
-                else if (message is CommitMessage)
+                else if (message is CommitMessage commitMessage)
                 {
                     if (currentEvent == null)
                     {
                         Console.WriteLine("Skipping commit message without a transaction");
                         continue;
                     }
+                    currentEvent.Timestamp = commitMessage.TransactionCommitTimestamp;
                     // Console.WriteLine("Commit transaction");
                     _eventQueue.Enqueue(currentEvent);
                     currentEvent = null;
@@ -185,22 +185,41 @@ public class AgeDigitalTwinsSubscription(
         {
             if (_eventQueue.TryDequeue(out var eventData) && eventData.EventType != null)
             {
-                foreach (var route in eventRoutes)
+                foreach (EventRoute route in eventRoutes)
                 {
-                    string? eventType = Enum.GetName(typeof(EventType), eventData.EventType);
                     if (
-                        eventType != null
-                        && (route.EventTypes.Contains(eventType) || route.EventTypes.Contains("*"))
+                        route.EventTypes == null
+                        || route.EventTypes.Contains((EventType)eventData.EventType)
                     )
                     {
                         var sink = eventSinks.FirstOrDefault(s => s.Name == route.SinkName);
                         if (sink != null)
                         {
-                            var cloudEvents = CreateEventNotificationEvents(
-                                eventData,
-                                route.EventFormat
-                            );
-                            await sink.SendEventAsync(cloudEvents);
+                            List<CloudEvent> cloudEvents;
+                            if (route.EventFormat == EventFormat.EventNotification)
+                            {
+                                cloudEvents = CloudEventFactory.CreateEventNotificationEvents(
+                                    eventData,
+                                    ServerUri
+                                );
+                            }
+                            else if (route.EventFormat == EventFormat.DataHistory)
+                            {
+                                // TODO: Implement DataHistory event format
+                                continue;
+                                /* cloudEvents = CloudEventFactory.CreateDataHistoryEvents(
+                                    eventData,
+                                    _serverUri
+                                ); */
+                            }
+                            else
+                            {
+                                Console.WriteLine(
+                                    "Skipping event route without a valid event format"
+                                );
+                                continue;
+                            }
+                            await sink.SendEventsAsync(cloudEvents);
                         }
                     }
                 }
@@ -246,52 +265,5 @@ public class AgeDigitalTwinsSubscription(
             return JsonSerializer.Deserialize<JsonObject>(sValue);
         }
         return null;
-    }
-
-    public enum EventType
-    {
-        TwinCreate,
-        TwinUpdate,
-        TwinDelete,
-        RelationshipCreate,
-        RelationshipUpdate,
-        RelationshipDelete,
-    }
-
-    public class EventData()
-    {
-        public string? GraphName { get; set; }
-        public string? TableName { get; set; }
-        public EventType? EventType { get; set; }
-        public JsonObject? OldValue { get; set; }
-        public JsonObject? NewValue { get; set; }
-    }
-
-    public List<CloudEvent> CreateEventNotificationEvents(EventData eventData, string eventType)
-    {
-        var cloudEvent = new CloudEvent
-        {
-            Id = Guid.NewGuid().ToString(),
-            Source = _serverUri,
-            Type = eventType,
-            DataContentType = "application/json",
-            Data = eventData,
-        };
-
-        return [cloudEvent];
-    }
-
-    public List<CloudEvent> CreateDataHistoryEvents(EventData eventData, string eventType)
-    {
-        var cloudEvent = new CloudEvent
-        {
-            Id = Guid.NewGuid().ToString(),
-            Source = _serverUri,
-            Type = eventType,
-            DataContentType = "application/json",
-            Data = eventData,
-        };
-
-        return [cloudEvent];
     }
 }

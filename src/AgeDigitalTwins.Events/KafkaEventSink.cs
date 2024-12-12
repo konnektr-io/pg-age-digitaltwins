@@ -5,38 +5,61 @@ using Confluent.Kafka;
 
 namespace AgeDigitalTwins.Events;
 
-public class KafkaEventSink(KafkaSinkOptions options) : IEventSink
+public class KafkaEventSink : IEventSink, IDisposable
 {
-    private readonly KafkaSinkOptions _options = options;
+    public KafkaEventSink(KafkaSinkOptions options)
+    {
+        Name = options.Name;
+        _topic = options.Topic;
+        ProducerConfig config =
+            new()
+            {
+                BootstrapServers = options.BrokerList,
+                SecurityProtocol = SecurityProtocol.SaslSsl,
+                SaslMechanism = SaslMechanism.Plain,
+                SaslUsername = options.SaslUsername,
+                SaslPassword = options.SaslPassword,
+            };
+        _producer = new ProducerBuilder<string?, byte[]>(config).Build();
+    }
+
+    public string Name { get; }
 
     private readonly CloudEventFormatter _formatter = new JsonEventFormatter();
 
-    public string Name => _options.Name;
+    private readonly IProducer<string?, byte[]> _producer;
 
-    public async Task SendEventAsync(CloudEvent cloudEvent)
+    private readonly string _topic;
+
+    public async Task SendEventsAsync(IEnumerable<CloudEvent> cloudEvents)
     {
-        var config = new ProducerConfig
+        foreach (var cloudEvent in cloudEvents)
         {
-            BootstrapServers = _options.BrokerList,
-            SecurityProtocol = SecurityProtocol.SaslSsl,
-            SaslMechanism = SaslMechanism.Plain,
-            SaslUsername = _options.SaslUsername,
-            SaslPassword = _options.SaslPassword,
-        };
+            try
+            {
+                Message<string?, byte[]> message = cloudEvent.ToKafkaMessage(
+                    ContentMode.Binary,
+                    _formatter
+                );
 
-        using var producer = new ProducerBuilder<string?, byte[]>(config).Build();
-
-        try
-        {
-            var message = cloudEvent.ToKafkaMessage(ContentMode.Binary, _formatter);
-
-            var result = await producer.ProduceAsync(_options.Topic, message);
-            Console.WriteLine($"Delivered '{result.Value}' to '{result.TopicPartitionOffset}'");
+                DeliveryResult<string?, byte[]> result = await _producer.ProduceAsync(
+                    _topic,
+                    message
+                );
+                Console.WriteLine($"Delivered '{result.Value}' to '{result.TopicPartitionOffset}'");
+            }
+            catch (ProduceException<Null, string> e)
+            {
+                Console.WriteLine($"Delivery failed: {e.Error.Reason}");
+            }
         }
-        catch (ProduceException<Null, string> e)
-        {
-            Console.WriteLine($"Delivery failed: {e.Error.Reason}");
-        }
+    }
+
+    public void Dispose()
+    {
+        // Dispose the producer
+        _producer.Dispose();
+        GC.SuppressFinalize(this);
     }
 }
 
