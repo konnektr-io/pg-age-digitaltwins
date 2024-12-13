@@ -205,8 +205,9 @@ public class AgeDigitalTwinsSubscription : IAsyncDisposable
                     try
                     {
                         _logger.LogDebug(
-                            "Processing {EventType} for event route: {Route}\n{EventData}",
+                            "Processing {EventType} from {_serverUri} for event route: {Route}\n{EventData}",
                             Enum.GetName(typeof(EventType), eventData.EventType),
+                            _serverUri,
                             JsonSerializer.Serialize(route),
                             JsonSerializer.Serialize(eventData)
                         );
