@@ -75,7 +75,7 @@ public class AgeDigitalTwinsSubscription : IAsyncDisposable
         {
             try
             {
-                _logger.LogInformation(
+                _logger.LogDebug(
                     "Received message type: {ReplicationMessageType}",
                     message.GetType().Name
                 );
@@ -89,7 +89,7 @@ public class AgeDigitalTwinsSubscription : IAsyncDisposable
                 {
                     if (currentEvent == null)
                     {
-                        _logger.LogInformation("Skipping insert message without a transaction");
+                        _logger.LogDebug("Skipping insert message without a transaction");
                         continue;
                     }
                     currentEvent.GraphName = insertMessage.Relation.Namespace;
@@ -107,15 +107,13 @@ public class AgeDigitalTwinsSubscription : IAsyncDisposable
                         }
                         else
                         {
-                            _logger.LogInformation(
-                                "Skipping insert message without a valid JSON value"
-                            );
+                            _logger.LogDebug("Skipping insert message without a valid JSON value");
                             continue;
                         }
                     }
                     else
                     {
-                        _logger.LogInformation("Skipping insert message without a JSON value");
+                        _logger.LogDebug("Skipping insert message without a JSON value");
                         continue;
                     }
                     // Console.WriteLine($"Inserted row: {currentEvent.NewValue}");
@@ -124,7 +122,7 @@ public class AgeDigitalTwinsSubscription : IAsyncDisposable
                 {
                     if (currentEvent == null)
                     {
-                        _logger.LogInformation("Skipping update message without a transaction");
+                        _logger.LogDebug("Skipping update message without a transaction");
                         continue;
                     }
                     currentEvent.GraphName = updateMessage.Relation.Namespace;
@@ -148,7 +146,7 @@ public class AgeDigitalTwinsSubscription : IAsyncDisposable
                 {
                     if (currentEvent == null)
                     {
-                        _logger.LogInformation("Skipping delete message without a transaction");
+                        _logger.LogDebug("Skipping delete message without a transaction");
                         continue;
                     }
                     currentEvent.GraphName = deleteMessage.Relation.Namespace;
@@ -170,11 +168,10 @@ public class AgeDigitalTwinsSubscription : IAsyncDisposable
                 {
                     if (currentEvent == null)
                     {
-                        _logger.LogInformation("Skipping commit message without a transaction");
+                        _logger.LogDebug("Skipping commit message without a transaction");
                         continue;
                     }
                     currentEvent.Timestamp = commitMessage.TransactionCommitTimestamp;
-                    // Console.WriteLine("Commit transaction");
                     _eventQueue.Enqueue(currentEvent);
                     currentEvent = null;
                 }
@@ -207,7 +204,7 @@ public class AgeDigitalTwinsSubscription : IAsyncDisposable
                 {
                     try
                     {
-                        _logger.LogInformation(
+                        _logger.LogDebug(
                             "Processing {EventType} event route: {Route}",
                             Enum.GetName(typeof(EventType), eventData.EventType),
                             JsonSerializer.Serialize(route)
@@ -237,9 +234,14 @@ public class AgeDigitalTwinsSubscription : IAsyncDisposable
                                 }
                                 else
                                 {
-                                    _logger.LogInformation(
+                                    _logger.LogDebug(
                                         "Skipping event route without a valid event format"
                                     );
+                                    continue;
+                                }
+                                if (cloudEvents.Count == 0)
+                                {
+                                    _logger.LogDebug("Skipping event route without any events");
                                     continue;
                                 }
                                 await sink.SendEventsAsync(cloudEvents);

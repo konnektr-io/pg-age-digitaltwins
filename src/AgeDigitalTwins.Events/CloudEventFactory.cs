@@ -63,7 +63,7 @@ public static class CloudEventFactory
         JsonObject body =
             new()
             {
-                ["modelId"] = eventData.NewValue["modelId"]?.DeepClone(),
+                ["modelId"] = eventData.NewValue["$metadata"]?["$model"]?.DeepClone(),
                 ["patch"] = JsonSerializer.Deserialize<JsonArray>(jsonPatch.ToString() ?? "[]"),
             };
         CloudEvent cloudEvent =
@@ -189,7 +189,7 @@ public static class CloudEventFactory
         JsonObject body =
             new()
             {
-                ["modelId"] = eventData.NewValue["modelId"]?.DeepClone(),
+                ["modelId"] = eventData.NewValue["$metadata"]?["$model"]?.DeepClone(),
                 ["patch"] = JsonSerializer.Deserialize<JsonArray>(jsonPatch.ToString() ?? "[]"),
             };
         CloudEvent cloudEvent =
@@ -260,6 +260,14 @@ public static class CloudEventFactory
             );
         }
 
+        if (!body.TryGetPropertyValue("$sourceId", out JsonNode? twinIdNode) || twinIdNode == null)
+        {
+            throw new ArgumentException(
+                "NewValue must contain a $sourceId property",
+                nameof(eventData)
+            );
+        }
+
         CloudEvent cloudEvent =
             new()
             {
@@ -268,7 +276,7 @@ public static class CloudEventFactory
                 Data = body,
                 Type = type,
                 DataContentType = "application/json",
-                Subject = relationshipIdNode.ToString(),
+                Subject = $"{twinIdNode}/relationships/{relationshipIdNode}",
                 Time = eventData.Timestamp,
                 // TraceParent = null,
             };
@@ -311,8 +319,13 @@ public static class CloudEventFactory
                 ["twinId"] =
                     eventData.NewValue?["$dtId"]?.ToString()
                     ?? eventData.OldValue?["$dtId"]?.ToString(),
-                ["action"] = eventData.EventType.ToString(),
-                ["timestamp"] = eventData.Timestamp,
+                ["action"] = eventData.EventType switch
+                {
+                    EventType.TwinCreate => "Create",
+                    EventType.TwinDelete => "Delete",
+                    _ => "unknown",
+                },
+                ["timeStamp"] = eventData.Timestamp,
                 ["serviceId"] = source.ToString(),
                 ["modelId"] =
                     eventData.NewValue?["modelId"]?.ToString()
@@ -348,8 +361,13 @@ public static class CloudEventFactory
                 ["relationshipId"] =
                     eventData.NewValue?["$relationshipId"]?.ToString()
                     ?? eventData.OldValue?["$relationshipId"]?.ToString(),
-                ["action"] = eventData.EventType.ToString(),
-                ["timestamp"] = eventData.Timestamp,
+                ["action"] = eventData.EventType switch
+                {
+                    EventType.RelationshipCreate => "Create",
+                    EventType.RelationshipDelete => "Delete",
+                    _ => "unknown",
+                },
+                ["timeStamp"] = eventData.Timestamp,
                 ["serviceId"] = source.Host.ToString(),
                 ["name"] =
                     eventData.NewValue?["name"]?.ToString()
@@ -383,6 +401,41 @@ public static class CloudEventFactory
         ArgumentNullException.ThrowIfNull(eventData);
 
         List<CloudEvent> cloudEvents = [];
+
+        // Check for model changes
+        // Create a lifecycle update event if the model has changed
+        if (
+            eventData.NewValue?["$metadata"]?["$model"]?.ToString()
+            != eventData.OldValue?["$metadata"]?["$model"]?.ToString()
+        )
+        {
+            JsonObject body =
+                new()
+                {
+                    ["twinId"] = eventData.NewValue?["$dtId"]?.ToString(),
+                    ["action"] = "Update",
+                    ["timeStamp"] = eventData.Timestamp,
+                    ["serviceId"] = source.ToString(),
+                    ["modelId"] = eventData.NewValue?["modelId"]?.ToString(),
+                };
+
+            CloudEvent cloudEvent =
+                new()
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    Source = source,
+                    Data = body,
+                    Type = "Konnektr.DigitalTwins.Twin.Lifecycle",
+                    DataContentType = "application/json",
+                    Subject = body["twinId"]?.ToString(),
+                    Time = eventData.Timestamp,
+                    // TraceParent = null,
+                };
+
+            cloudEvents.Add(cloudEvent);
+        }
+
+        // Generate a patch from the old and new values
         JsonPatch jsonPatch = eventData.OldValue.CreatePatch(eventData.NewValue);
 
         foreach (PatchOperation op in jsonPatch.Operations)
@@ -395,30 +448,31 @@ public static class CloudEventFactory
             JsonObject body =
                 new()
                 {
-                    ["timestamp"] = eventData.Timestamp,
+                    ["timeStamp"] = eventData.Timestamp,
                     ["serviceId"] = source.Host.ToString(),
                     ["id"] =
                         eventData.NewValue?["$dtId"]?.ToString()
-                        ?? eventData.OldValue?["$dtId"]?.ToString(),
-                    ["modelId"] =
-                        eventData.NewValue?["modelId"]?.ToString()
-                        ?? eventData.OldValue?["modelId"]?.ToString(),
+                        ?? eventData.NewValue?["$sourceId"]?.ToString(),
+                    ["modelId"] = eventData.NewValue?["$metadata"]?["$model"]?.ToString(),
                     ["key"] = key,
                     ["value"] = op.Value,
-                    ["relationshipTarget"] =
-                        eventData.NewValue?["target"]?.ToString()
-                        ?? eventData.OldValue?["target"]?.ToString(),
-                    ["relationshipId"] =
-                        eventData.NewValue?["$relationshipId"]?.ToString()
-                        ?? eventData.OldValue?["$relationshipId"]?.ToString(),
-                    ["action"] = eventData.EventType.ToString(),
+                    ["relationshipTarget"] = eventData.NewValue?["$targetId"]?.ToString(),
+                    ["relationshipId"] = eventData.NewValue?["$relationshipId"]?.ToString(),
+                    ["action"] = op.Op switch
+                    {
+                        OperationType.Add => "Create",
+                        OperationType.Remove => "Delete",
+                        OperationType.Replace => "Update",
+                        _ => "unknown",
+                    },
                 };
+            // Add source time
             PatchOperation? sourceTimeOperation = jsonPatch.Operations.FirstOrDefault(o =>
                 o.Path.ToString() == $"/$metadata/{key}/sourceTime"
             );
             if (sourceTimeOperation != null)
             {
-                body["sourceTimestamp"] = sourceTimeOperation.Value;
+                body["sourceTimeStamp"] = sourceTimeOperation.Value;
             }
 
             CloudEvent cloudEvent =
