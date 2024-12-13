@@ -1,4 +1,4 @@
-name: Build and Publish API Service Image to GHCR
+name: Build and Publish Events Image to GHCR
 
 on:
   release:
