@@ -7,9 +7,10 @@ namespace AgeDigitalTwins.Events;
 
 public class KafkaEventSink : IEventSink, IDisposable
 {
-    public KafkaEventSink(KafkaSinkOptions options)
+    public KafkaEventSink(KafkaSinkOptions options, ILogger logger)
     {
         Name = options.Name;
+        _logger = logger;
         _topic = options.Topic;
         ProducerConfig config =
             new()
@@ -25,11 +26,13 @@ public class KafkaEventSink : IEventSink, IDisposable
 
     public string Name { get; }
 
-    private readonly CloudEventFormatter _formatter = new JsonEventFormatter();
+    private readonly ILogger _logger;
 
     private readonly IProducer<string?, byte[]> _producer;
 
     private readonly string _topic;
+
+    private readonly CloudEventFormatter _formatter = new JsonEventFormatter();
 
     public async Task SendEventsAsync(IEnumerable<CloudEvent> cloudEvents)
     {
@@ -46,7 +49,11 @@ public class KafkaEventSink : IEventSink, IDisposable
                     _topic,
                     message
                 );
-                Console.WriteLine($"Delivered '{result.Value}' to '{result.TopicPartitionOffset}'");
+
+                _logger.LogDebug(
+                    "Delivered message to '{TopicPartitionOffset}'",
+                    result.TopicPartitionOffset
+                );
             }
             catch (ProduceException<Null, string> e)
             {

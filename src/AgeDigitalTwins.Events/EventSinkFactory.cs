@@ -1,8 +1,9 @@
 namespace AgeDigitalTwins.Events;
 
-public class EventSinkFactory(IConfiguration configuration)
+public class EventSinkFactory(IConfiguration configuration, ILogger<EventSinkFactory> logger)
 {
     private readonly IConfiguration _configuration = configuration;
+    private readonly ILogger<EventSinkFactory> _logger = logger;
 
     public List<IEventSink> CreateEventSinks()
     {
@@ -15,7 +16,7 @@ public class EventSinkFactory(IConfiguration configuration)
         {
             foreach (var kafkaSink in kafkaSinks)
             {
-                sinks.Add(new KafkaEventSink(kafkaSink));
+                sinks.Add(new KafkaEventSink(kafkaSink, _logger));
             }
         }
 
@@ -38,6 +39,6 @@ public class EventSinkFactory(IConfiguration configuration)
 
     public List<EventRoute> GetEventRoutes()
     {
-        return _configuration.GetSection("EventRoutes").Get<List<EventRoute>>();
+        return _configuration.GetSection("EventRoutes").Get<List<EventRoute>>() ?? [];
     }
 }

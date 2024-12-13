@@ -10,3 +10,4 @@ Dockerfile
 **/bin
 **/*.*proj.user
 **/.env
+appsettings.*
