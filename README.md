@@ -38,11 +38,11 @@ AgeDigitalTwins is an SDK and API designed to support Digital Twins applications
 - **Deployment**:
   - [x] Dockerize the API
   - [ ] Helm chart for deployment
-- **Event routing**: see [link](https://event-driven.io/en/push_based_outbox_pattern_with_postgres_logical_replication/?utm_source=github_outbox_cdc) and [link](https://www.npgsql.org/doc/replication.html)
-  - [ ] CDC connection with AgType parser (either in C# or leverage Debezium)
-  - [ ] Data History output (same format as Azure Digital Twins)
-  - [ ] CloudEvents output
-  - [ ] Kafka route
+- **Event routing**:
+  - [x] Logical replication connection with AgType parser
+  - [x] Data History output (same format as Azure Digital Twins)
+  - [x] Event Notification output
+  - [x] Kafka route
   - [ ] ADX/Fabric Real-time route
   - [ ] MQTT route (IoT Operations)
 
