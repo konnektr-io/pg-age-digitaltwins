@@ -44,7 +44,16 @@ var app = builder.Build();
 
 // Resolve the singleton instance and start the subscription
 var subscription = app.Services.GetRequiredService<AgeDigitalTwinsSubscription>();
-await subscription.StartAsync();
+try
+{
+    await subscription.StartAsync();
+}
+catch (Exception ex)
+{
+    // Log the exception and exit
+    Console.WriteLine($"Failed to start subscription: {ex.Message}");
+    return;
+}
 
 app.MapDefaultEndpoints();
 

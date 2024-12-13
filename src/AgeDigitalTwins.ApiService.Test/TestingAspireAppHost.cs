@@ -6,11 +6,12 @@ namespace AgeDigitalTwins.ApiService.Test;
 
 public class TestingAspireAppHost : DistributedApplicationFactory
 {
-    public TestingAspireAppHost() : base(
-        typeof(Projects.AgeDigitalTwins_AppHost),
-        ["temp_graph_" + Guid.NewGuid().ToString("N")])
-    {
-    }
+    public TestingAspireAppHost()
+        : base(
+            typeof(Projects.AgeDigitalTwins_AppHost),
+            ["temp_graph_" + Guid.NewGuid().ToString("N")]
+        )
+    { }
 
     protected override void OnBuilderCreated(DistributedApplicationBuilder applicationBuilder)
     {

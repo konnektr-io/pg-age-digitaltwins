@@ -20,12 +20,10 @@ public class HostAndClientTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         // Act
-        var response2 = await httpClient!.DeleteAsync(
-            "/graph/delete");
+        var response2 = await httpClient!.DeleteAsync("/graph/delete");
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response2.StatusCode);
-
     }
 
     /* [Fact]
