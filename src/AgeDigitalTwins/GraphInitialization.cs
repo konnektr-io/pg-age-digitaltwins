@@ -14,12 +14,15 @@ public static class GraphInitialization
                 @$"CREATE UNIQUE INDEX twin_id_idx ON {graphName}.""Twin"" (ag_catalog.agtype_access_operator(properties, '""$dtId""'::agtype));"
             ),
             new(@$"CREATE INDEX twin_gin_idx ON {graphName}.""Twin"" USING gin (properties);"),
+            // new(@$"ALTER TABLE {graphName}.""Twin"" REPLICA IDENTITY FULL;"),
             new(@$"SELECT create_vlabel('{graphName}', 'Model');"),
-            new(@$"SELECT create_elabel('{graphName}', '_extends');"),
             new(
                 @$"CREATE UNIQUE INDEX model_id_idx ON {graphName}.""Model"" (ag_catalog.agtype_access_operator(properties, '""id""'::agtype));"
             ),
             new(@$"CREATE INDEX model_gin_idx ON {graphName}.""Model"" USING gin (properties);"),
+            // new(@$"ALTER TABLE {graphName}.""Model"" REPLICA IDENTITY FULL;"),
+            new(@$"SELECT create_elabel('{graphName}', '_extends');"),
+            // new(@$"ALTER TABLE {graphName}.""_extends"" REPLICA IDENTITY FULL;"),
             new(
                 @$"CREATE OR REPLACE FUNCTION {graphName}.is_of_model(twin agtype, model_id agtype, strict boolean default false)
         RETURNS boolean
