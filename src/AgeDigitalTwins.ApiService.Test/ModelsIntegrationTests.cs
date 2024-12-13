@@ -1,7 +1,7 @@
+using System.Text;
+using System.Text.Json;
 using AgeDigitalTwins.Models;
 using Aspire.Hosting;
-using System.Text.Json;
-using System.Text;
 
 namespace AgeDigitalTwins.ApiService.Test;
 
@@ -19,8 +19,7 @@ public class ModelsIntegrationTests : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
-        var response = await _httpClient!.DeleteAsync(
-            "/graph/delete");
+        var response = await _httpClient!.DeleteAsync("/graph/delete");
         if (_app != null)
         {
             await _app.DisposeAsync();
@@ -33,14 +32,17 @@ public class ModelsIntegrationTests : IAsyncLifetime
     {
         // Arrange
         string[] sModels = [SampleData.DtdlCrater];
-        List<JsonElement> jModels = sModels.Select(m => JsonDocument.Parse(m)).Select(j => j.RootElement).ToList();
+        List<JsonElement> jModels = sModels
+            .Select(m => JsonDocument.Parse(m))
+            .Select(j => j.RootElement)
+            .ToList();
 
         // Act
         var createResponse = await _httpClient!.PostAsync(
             "/models",
-            new StringContent(JsonSerializer.Serialize(jModels), Encoding.UTF8, "application/json"));
-        var deleteResponse = await _httpClient!.DeleteAsync(
-            "/models/dtmi:com:contoso:Crater;1");
+            new StringContent(JsonSerializer.Serialize(jModels), Encoding.UTF8, "application/json")
+        );
+        var deleteResponse = await _httpClient!.DeleteAsync("/models/dtmi:com:contoso:Crater;1");
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, createResponse.StatusCode);
@@ -52,18 +54,21 @@ public class ModelsIntegrationTests : IAsyncLifetime
     {
         // Arrange
         string[] sModels = [SampleData.DtdlCrater];
-        List<JsonElement> jModels = sModels.Select(m => JsonDocument.Parse(m)).Select(j => j.RootElement).ToList();
+        List<JsonElement> jModels = sModels
+            .Select(m => JsonDocument.Parse(m))
+            .Select(j => j.RootElement)
+            .ToList();
 
         // Act
         var response = await _httpClient!.PostAsync(
             "/models",
-            new StringContent(JsonSerializer.Serialize(jModels), Encoding.UTF8, "application/json"));
+            new StringContent(JsonSerializer.Serialize(jModels), Encoding.UTF8, "application/json")
+        );
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var getResponse = await _httpClient!.GetAsync(
-            "/models");
+        var getResponse = await _httpClient!.GetAsync("/models");
         getResponse.EnsureSuccessStatusCode();
         string getResponseContent = await getResponse.Content.ReadAsStringAsync();
         JsonDocument getResponseJson = JsonDocument.Parse(getResponseContent);
@@ -74,28 +79,41 @@ public class ModelsIntegrationTests : IAsyncLifetime
     public async Task CreateModels_MultipleDependentModelsResolveInDb_ValidatedAndCreated()
     {
         var delres1 = await _httpClient!.DeleteAsync("/models/dtmi:com:contoso:CelestialBody;1");
+        delres1.EnsureSuccessStatusCode();
         var delres2 = await _httpClient!.DeleteAsync("/models/dtmi:com:contoso:Planet;1");
+        delres2.EnsureSuccessStatusCode();
         var delres3 = await _httpClient!.DeleteAsync("/models/dtmi:com:contoso:Crater;1");
+        delres3.EnsureSuccessStatusCode();
 
         // Arrange
         string[] sModels = [SampleData.DtdlCelestialBody, SampleData.DtdlCrater];
-        List<JsonElement> jModels = sModels.Select(m => JsonDocument.Parse(m)).Select(j => j.RootElement).ToList();
+        List<JsonElement> jModels = sModels
+            .Select(m => JsonDocument.Parse(m))
+            .Select(j => j.RootElement)
+            .ToList();
 
         string[] sModels2 = [SampleData.DtdlPlanet];
-        List<JsonElement> jModels2 = sModels2.Select(m => JsonDocument.Parse(m)).Select(j => j.RootElement).ToList();
+        List<JsonElement> jModels2 = sModels2
+            .Select(m => JsonDocument.Parse(m))
+            .Select(j => j.RootElement)
+            .ToList();
 
         // Act
         var response = await _httpClient!.PostAsync(
             "/models",
-            new StringContent(JsonSerializer.Serialize(jModels), Encoding.UTF8, "application/json"));
+            new StringContent(JsonSerializer.Serialize(jModels), Encoding.UTF8, "application/json")
+        );
         response.EnsureSuccessStatusCode();
         string responseContent = await response.Content.ReadAsStringAsync();
         var response2 = await _httpClient!.PostAsync(
             "/models",
-            new StringContent(JsonSerializer.Serialize(jModels2), Encoding.UTF8, "application/json"));
+            new StringContent(JsonSerializer.Serialize(jModels2), Encoding.UTF8, "application/json")
+        );
         response2.EnsureSuccessStatusCode();
         string response2Content = await response2.Content.ReadAsStringAsync();
-        List<DigitalTwinsModelData> results = JsonSerializer.Deserialize<List<DigitalTwinsModelData>>(response2Content)!;
+        List<DigitalTwinsModelData> results = JsonSerializer.Deserialize<
+            List<DigitalTwinsModelData>
+        >(response2Content)!;
 
         for (int i = 0; i < jModels2.Count; i++)
         {

@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\AgeDigitalTwins.ApiService\AgeDigitalTwins.ApiService.csproj" />
+    <ProjectReference Include="..\AgeDigitalTwins.Events\AgeDigitalTwins.Events.csproj" />
   </ItemGroup>
   
   <ItemGroup>

@@ -928,7 +928,8 @@ public class AgeDigitalTwinsClient : IAsyncDisposable
             string modelsString =
                 $"['{string.Join("','", modelDatas.Select(m => JsonSerializer.Serialize(m, serializerOptions).Replace("'", "\\'")))}']";
 
-            // TODO: do a merge with the id, as we are now just creating new vertices, which isn't the goal
+            // It is not possible to update or overwrite an existing model
+            // Trying so will raise a unique constraint violation
             string cypher =
                 $@"UNWIND {modelsString} as model
             WITH model::agtype as modelAgtype
