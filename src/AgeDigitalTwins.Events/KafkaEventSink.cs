@@ -68,8 +68,8 @@ public class KafkaSinkOptions
     public required string Name { get; set; }
     public required string BrokerList { get; set; }
     public required string Topic { get; set; }
-    public string SecurityProtocol { get; set; }
-    public string SaslMechanism { get; set; } // Can be PLAIN or OAUTHBEARER for entra id
-    public string SaslUsername { get; set; }
-    public string SaslPassword { get; set; }
+    public string? SecurityProtocol { get; set; }
+    public string? SaslMechanism { get; set; } // Can be PLAIN or OAUTHBEARER for entra id
+    public string? SaslUsername { get; set; }
+    public string? SaslPassword { get; set; }
 }

@@ -7,6 +7,8 @@ namespace AgeDigitalTwins.Events;
 
 public static class CloudEventFactory
 {
+    #region EventNotification
+
     public static List<CloudEvent> CreateEventNotificationEvents(EventData eventData, Uri source)
     {
         return eventData.EventType switch
@@ -73,7 +75,7 @@ public static class CloudEventFactory
                 Type = "Konnektr.DigitalTwins.Twin.Update", // "Microsoft.DigitalTwins.Twin.Update",
                 DataContentType = "application/json",
                 Subject = twinIdNode.ToString(),
-                // Time = DateTime.UtcNow,
+                Time = eventData.Timestamp,
                 // TraceParent = null,
             };
 
@@ -138,7 +140,7 @@ public static class CloudEventFactory
                 Type = type,
                 DataContentType = "application/json",
                 Subject = twinIdNode.ToString(),
-                // Time = DateTime.UtcNow,
+                Time = eventData.Timestamp,
                 // TraceParent = null,
             };
 
@@ -172,6 +174,17 @@ public static class CloudEventFactory
                 nameof(eventData)
             );
         }
+
+        if (
+            !eventData.NewValue.TryGetPropertyValue("$sourceId", out JsonNode? twinIdNode)
+            || twinIdNode == null
+        )
+        {
+            throw new ArgumentException(
+                "NewValue must contain a $sourceId property",
+                nameof(eventData)
+            );
+        }
         JsonPatch jsonPatch = eventData.OldValue.CreatePatch(eventData.NewValue);
         JsonObject body =
             new()
@@ -187,7 +200,7 @@ public static class CloudEventFactory
                 Data = body,
                 Type = "Konnektr.DigitalTwins.Relationship.Update", // "Microsoft.DigitalTwins.Relationship.Update",
                 DataContentType = "application/json",
-                Subject = relationshipIdNode.ToString(),
+                Subject = $"{twinIdNode}/relationships/{relationshipIdNode}",
                 Time = eventData.Timestamp,
                 // TraceParent = null,
             };
@@ -262,6 +275,10 @@ public static class CloudEventFactory
 
         return [cloudEvent];
     }
+
+    #endregion
+
+    #region DataHistory
 
     public static List<CloudEvent> CreateDataHistoryEvents(EventData eventData, Uri source)
     {
@@ -422,4 +439,6 @@ public static class CloudEventFactory
 
         return cloudEvents;
     }
+
+    #endregion
 }

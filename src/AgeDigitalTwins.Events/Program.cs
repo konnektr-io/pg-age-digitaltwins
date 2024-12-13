@@ -28,11 +28,15 @@ builder.Services.AddSingleton(sp =>
 
     EventSinkFactory eventSinkFactory = new(builder.Configuration);
 
+    ILogger<AgeDigitalTwinsSubscription> logger = sp.GetRequiredService<
+        ILogger<AgeDigitalTwinsSubscription>
+    >();
     return new AgeDigitalTwinsSubscription(
         connectionString,
         publication,
         replicationSlot,
-        eventSinkFactory
+        eventSinkFactory,
+        logger
     );
 });
 

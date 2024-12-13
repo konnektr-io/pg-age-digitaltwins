@@ -2,27 +2,41 @@ using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using CloudNative.CloudEvents;
+using Npgsql;
 using Npgsql.Replication;
 using Npgsql.Replication.PgOutput;
 using Npgsql.Replication.PgOutput.Messages;
 
 namespace AgeDigitalTwins.Events;
 
-public class AgeDigitalTwinsSubscription(
-    string connectionString,
-    string publication,
-    string replicationSlot,
-    EventSinkFactory eventSinkFactory
-) : IAsyncDisposable
+public class AgeDigitalTwinsSubscription : IAsyncDisposable
 {
-    private readonly string _connectionString = connectionString;
-    private readonly string _publication = publication;
-    private readonly string _replicationSlot = replicationSlot;
-    private readonly EventSinkFactory _eventSinkFactory = eventSinkFactory;
+    public AgeDigitalTwinsSubscription(
+        string connectionString,
+        string publication,
+        string replicationSlot,
+        EventSinkFactory eventSinkFactory,
+        ILogger<AgeDigitalTwinsSubscription> logger
+    )
+    {
+        _connectionString = connectionString;
+        _publication = publication;
+        _replicationSlot = replicationSlot;
+        _eventSinkFactory = eventSinkFactory;
+        _logger = logger;
+        NpgsqlConnectionStringBuilder csb = new(connectionString);
+        _serverUri = new Uri($"{csb.Host}:{csb.Port}", UriKind.Absolute);
+    }
+
+    private readonly string _connectionString;
+    private readonly string _publication;
+    private readonly string _replicationSlot;
+    private readonly Uri _serverUri;
+    private readonly EventSinkFactory _eventSinkFactory;
+    private readonly ILogger<AgeDigitalTwinsSubscription> _logger;
     private LogicalReplicationConnection? _conn;
     private CancellationTokenSource? _cancellationTokenSource;
     private readonly ConcurrentQueue<EventData> _eventQueue = new();
-    private Uri ServerUri => new(new Npgsql.NpgsqlConnectionStringBuilder(_connectionString).Host!);
 
     public async Task StartAsync()
     {
@@ -35,7 +49,7 @@ public class AgeDigitalTwinsSubscription(
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error during replication: {ex.Message}");
+                _logger.LogInformation(ex, "Error during replication: {Message}", ex.Message);
                 await Task.Delay(TimeSpan.FromSeconds(5)); // Wait before retrying
             }
         }
@@ -61,11 +75,13 @@ public class AgeDigitalTwinsSubscription(
         {
             try
             {
-                Console.WriteLine($"Received message type: {message.GetType().Name}");
+                _logger.LogInformation(
+                    "Received message type: {ReplicationMessageType}",
+                    message.GetType().Name
+                );
 
                 if (message is BeginMessage beginMessage)
                 {
-                    // Console.WriteLine("Begin transaction");
                     currentEvent = new EventData();
                     continue;
                 }
@@ -73,7 +89,7 @@ public class AgeDigitalTwinsSubscription(
                 {
                     if (currentEvent == null)
                     {
-                        Console.WriteLine("Skipping insert message without a transaction");
+                        _logger.LogInformation("Skipping insert message without a transaction");
                         continue;
                     }
                     currentEvent.GraphName = insertMessage.Relation.Namespace;
@@ -91,13 +107,15 @@ public class AgeDigitalTwinsSubscription(
                         }
                         else
                         {
-                            Console.WriteLine("Skipping insert message without a valid JSON value");
+                            _logger.LogInformation(
+                                "Skipping insert message without a valid JSON value"
+                            );
                             continue;
                         }
                     }
                     else
                     {
-                        Console.WriteLine("Skipping insert message without a JSON value");
+                        _logger.LogInformation("Skipping insert message without a JSON value");
                         continue;
                     }
                     // Console.WriteLine($"Inserted row: {currentEvent.NewValue}");
@@ -106,7 +124,7 @@ public class AgeDigitalTwinsSubscription(
                 {
                     if (currentEvent == null)
                     {
-                        Console.WriteLine("Skipping update message without a transaction");
+                        _logger.LogInformation("Skipping update message without a transaction");
                         continue;
                     }
                     currentEvent.GraphName = updateMessage.Relation.Namespace;
@@ -130,7 +148,7 @@ public class AgeDigitalTwinsSubscription(
                 {
                     if (currentEvent == null)
                     {
-                        Console.WriteLine("Skipping delete message without a transaction");
+                        _logger.LogInformation("Skipping delete message without a transaction");
                         continue;
                     }
                     currentEvent.GraphName = deleteMessage.Relation.Namespace;
@@ -152,7 +170,7 @@ public class AgeDigitalTwinsSubscription(
                 {
                     if (currentEvent == null)
                     {
-                        Console.WriteLine("Skipping commit message without a transaction");
+                        _logger.LogInformation("Skipping commit message without a transaction");
                         continue;
                     }
                     currentEvent.Timestamp = commitMessage.TransactionCommitTimestamp;
@@ -162,7 +180,7 @@ public class AgeDigitalTwinsSubscription(
                 }
                 else
                 {
-                    // Console.WriteLine($"Skipping message type: {message.GetType().Name}");
+                    // _logger.LogInformation($"Skipping message type: {message.GetType().Name}");
                 }
 
                 // Always call SetReplicationStatus() or assign LastAppliedLsn and LastFlushedLsn individually
@@ -171,15 +189,15 @@ public class AgeDigitalTwinsSubscription(
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error processing message: {ex.Message}");
+                _logger.LogError(ex, "Error processing message: {Message}", ex.Message);
             }
         }
     }
 
     private async Task ConsumeQueueAsync()
     {
-        var eventSinks = _eventSinkFactory.CreateEventSinks();
-        var eventRoutes = _eventSinkFactory.GetEventRoutes();
+        List<IEventSink> eventSinks = _eventSinkFactory.CreateEventSinks();
+        List<EventRoute> eventRoutes = _eventSinkFactory.GetEventRoutes();
 
         while (true)
         {
@@ -187,40 +205,55 @@ public class AgeDigitalTwinsSubscription(
             {
                 foreach (EventRoute route in eventRoutes)
                 {
-                    if (
-                        route.EventTypes == null
-                        || route.EventTypes.Contains((EventType)eventData.EventType)
-                    )
+                    try
                     {
-                        var sink = eventSinks.FirstOrDefault(s => s.Name == route.SinkName);
-                        if (sink != null)
+                        _logger.LogInformation(
+                            "Processing {EventType} event route: {Route}",
+                            Enum.GetName(typeof(EventType), eventData.EventType),
+                            JsonSerializer.Serialize(route)
+                        );
+                        if (
+                            route.EventTypes == null
+                            || route.EventTypes.Contains((EventType)eventData.EventType)
+                        )
                         {
-                            List<CloudEvent> cloudEvents;
-                            if (route.EventFormat == EventFormat.EventNotification)
+                            var sink = eventSinks.FirstOrDefault(s => s.Name == route.SinkName);
+                            if (sink != null)
                             {
-                                cloudEvents = CloudEventFactory.CreateEventNotificationEvents(
-                                    eventData,
-                                    ServerUri
-                                );
+                                List<CloudEvent> cloudEvents;
+                                if (route.EventFormat == EventFormat.EventNotification)
+                                {
+                                    cloudEvents = CloudEventFactory.CreateEventNotificationEvents(
+                                        eventData,
+                                        _serverUri
+                                    );
+                                }
+                                else if (route.EventFormat == EventFormat.DataHistory)
+                                {
+                                    cloudEvents = CloudEventFactory.CreateDataHistoryEvents(
+                                        eventData,
+                                        _serverUri
+                                    );
+                                }
+                                else
+                                {
+                                    _logger.LogInformation(
+                                        "Skipping event route without a valid event format"
+                                    );
+                                    continue;
+                                }
+                                await sink.SendEventsAsync(cloudEvents);
                             }
-                            else if (route.EventFormat == EventFormat.DataHistory)
-                            {
-                                // TODO: Implement DataHistory event format
-                                continue;
-                                /* cloudEvents = CloudEventFactory.CreateDataHistoryEvents(
-                                    eventData,
-                                    _serverUri
-                                ); */
-                            }
-                            else
-                            {
-                                Console.WriteLine(
-                                    "Skipping event route without a valid event format"
-                                );
-                                continue;
-                            }
-                            await sink.SendEventsAsync(cloudEvents);
                         }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(
+                            ex,
+                            "Error while processing event route {Route}: {Message}",
+                            route,
+                            ex.Message
+                        );
                     }
                 }
             }
