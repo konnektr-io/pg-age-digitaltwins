@@ -1,6 +1,4 @@
 using Aspire.Hosting;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Hosting;
 
 namespace AgeDigitalTwins.ApiService.Test;
 
@@ -10,8 +8,7 @@ public class TestingAspireAppHost : DistributedApplicationFactory
         : base(
             typeof(Projects.AgeDigitalTwins_AppHost),
             ["temp_graph_" + Guid.NewGuid().ToString("N")]
-        )
-    { }
+        ) { }
 
     protected override void OnBuilderCreated(DistributedApplicationBuilder applicationBuilder)
     {

@@ -175,6 +175,9 @@ public class AgeDigitalTwinsSubscription : IAsyncDisposable
                     _eventQueue.Enqueue(currentEvent);
                     currentEvent = null;
                 }
+                // Implement fallbacks in case replica identity is not set to full
+                // This means we might need to fetch the value from the database
+                // This also won't work for updates, because we need the old value
                 else
                 {
                     // _logger.LogInformation($"Skipping message type: {message.GetType().Name}");
