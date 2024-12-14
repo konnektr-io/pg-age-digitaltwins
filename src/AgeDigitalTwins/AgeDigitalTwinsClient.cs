@@ -941,15 +941,30 @@ public class AgeDigitalTwinsClient : IAsyncDisposable
             await using var command = connection.CreateCypherCommand(_graphName, cypher);
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
-            // Add edges based on the 'extends' field (especially needed for the 'IS_OF_MODEL' function)
+            List<DigitalTwinsModelData> result = [];
+            int k = 0;
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
+                var vertex = (Vertex)agResult;
+                result.Add(new DigitalTwinsModelData(vertex.Properties));
+                k++;
+            }
+
+            reader.Close();
+
+            List<string> relationshipNames = [];
+
             foreach (var model in parsedModels)
             {
+                // Add edges based on the 'extends' field (especially needed for the 'IS_OF_MODEL' function)
                 if (
                     model.Value is DTInterfaceInfo dTInterfaceInfo
                     && dTInterfaceInfo.Extends != null
                     && dTInterfaceInfo.Extends.Count > 0
                 )
                 {
+                    // Get extends and create relationships
                     foreach (var extend in dTInterfaceInfo.Extends)
                     {
                         string extendsCypher =
@@ -961,20 +976,50 @@ public class AgeDigitalTwinsClient : IAsyncDisposable
                             _graphName,
                             extendsCypher
                         );
+                        // TODO: run these as batch commands
                         await extendsCommand.ExecuteNonQueryAsync(cancellationToken);
                     }
                 }
+
+                // Collect all relationship names so we can prepare the edge labels with replication full
+                if (model.Value is DTRelationshipInfo dTRelationshipInfo)
+                {
+                    if (relationshipNames.Contains(dTRelationshipInfo.Name))
+                    {
+                        continue;
+                    }
+                    relationshipNames.Add(dTRelationshipInfo.Name);
+                }
             }
 
-            List<DigitalTwinsModelData> result = new();
-            int k = 0;
-            while (await reader.ReadAsync(cancellationToken))
+            // Run create elabels and then set replication on the new table for each relationship name to ensure replication full
+            // Make sure it doesn't fail if the elabel already exists
+            foreach (var relationshipName in relationshipNames)
             {
-                var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
-                var vertex = (Vertex)agResult;
-                result.Add(new DigitalTwinsModelData(vertex.Properties));
-                k++;
+                // Check if label already exists
+                await using var labelExistsCommand = new NpgsqlCommand(
+                    $@"SELECT EXISTS (SELECT 1 FROM ag_catalog.ag_label WHERE relation = '{_graphName}.""{relationshipName}""'::regclass);",
+                    connection
+                );
+                if ((bool?)await command.ExecuteScalarAsync(cancellationToken) == true)
+                {
+                    continue;
+                }
+
+                // Create new label
+                await using var createElabelCommand = new NpgsqlCommand(
+                    $@"SELECT create_elabel('{_graphName}', '{relationshipName}');",
+                    connection
+                );
+                await createElabelCommand.ExecuteNonQueryAsync(cancellationToken);
+
+                await using var setReplicationCommand = new NpgsqlCommand(
+                    $@"ALTER TABLE {_graphName}.""{relationshipName}"" REPLICA IDENTITY FULL",
+                    connection
+                );
+                await setReplicationCommand.ExecuteNonQueryAsync(cancellationToken);
             }
+
             return result;
         }
         catch (PostgresException ex) when (ex.ConstraintName == "model_id_idx")
@@ -992,11 +1037,12 @@ public class AgeDigitalTwinsClient : IAsyncDisposable
         CancellationToken cancellationToken = default
     )
     {
+        // TODO: should not be able to delete a model where other models extend from.
         string cypher =
             $@"
             MATCH (m:Model)
             WHERE m.id = '{modelId}' 
-            OPTIONAL MATCH (m)-[r]-()
+            OPTIONAL MATCH (m)-[r:_extends]-()
             DELETE r, m";
         await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
         await using var command = connection.CreateCypherCommand(_graphName, cypher);
