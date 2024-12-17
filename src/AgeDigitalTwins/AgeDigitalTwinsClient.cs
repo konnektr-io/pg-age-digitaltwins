@@ -933,7 +933,7 @@ public class AgeDigitalTwinsClient : IAsyncDisposable
             string cypher =
                 $@"UNWIND {modelsString} as model
             WITH model::agtype as modelAgtype
-            CREATE (m:Model)
+            CREATE (m:Model {{id: modelAgtype['id']}})
             SET m = modelAgtype
             RETURN m";
 
@@ -1000,10 +1000,10 @@ public class AgeDigitalTwinsClient : IAsyncDisposable
             {
                 // Check if label already exists
                 await using var labelExistsCommand = new NpgsqlCommand(
-                    $@"SELECT EXISTS (SELECT 1 FROM ag_catalog.ag_label WHERE relation = '{_graphName}.""{relationshipName}""'::regclass);",
+                    $@"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = '{_graphName}' AND table_name = '{relationshipName}');",
                     connection
                 );
-                if ((bool?)await command.ExecuteScalarAsync(cancellationToken) == true)
+                if ((bool?)await labelExistsCommand.ExecuteScalarAsync(cancellationToken) == true)
                 {
                     continue;
                 }

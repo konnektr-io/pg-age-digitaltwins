@@ -1,5 +1,3 @@
-using System.Runtime.InteropServices;
-
 namespace AgeDigitalTwins.Test;
 
 public class AdtQueryToCypherTests

@@ -134,6 +134,15 @@ public class ModelsTests : TestBase
     [Fact]
     public async Task CreateModels_ExistingModel_ThrowsModelAlreadyExists()
     {
+        try
+        {
+            await Client.DeleteModelAsync("dtmi:com:adt:dtsample:room;1");
+        }
+        catch (ModelNotFoundException)
+        {
+            // Ignore exception if model does not exist
+        }
+
         await Client.CreateModelsAsync([SampleData.DtdlRoom]);
 
         bool exceptionThrown = false;
@@ -147,5 +156,23 @@ public class ModelsTests : TestBase
             Assert.IsType<ModelAlreadyExistsException>(ex);
         }
         Assert.True(exceptionThrown);
+    }
+
+    [Fact]
+    public async Task CreateModels_CanDeleteAndCreateAgain()
+    {
+        try
+        {
+            await Client.DeleteModelAsync("dtmi:com:adt:dtsample:room;1");
+        }
+        catch (ModelNotFoundException)
+        {
+            // Ignore exception if model does not exist
+        }
+        var m1 = await Client.CreateModelsAsync([SampleData.DtdlRoom]);
+        Assert.Equal("dtmi:com:adt:dtsample:room;1", m1[0].Id);
+        await Client.DeleteModelAsync("dtmi:com:adt:dtsample:room;1");
+        var m2 = await Client.CreateModelsAsync([SampleData.DtdlRoom]);
+        Assert.Equal("dtmi:com:adt:dtsample:room;1", m2[0].Id);
     }
 }
