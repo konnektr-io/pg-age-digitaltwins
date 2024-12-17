@@ -939,19 +939,21 @@ public class AgeDigitalTwinsClient : IAsyncDisposable
 
             await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
             await using var command = connection.CreateCypherCommand(_graphName, cypher);
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
             List<DigitalTwinsModelData> result = [];
-            int k = 0;
-            while (await reader.ReadAsync(cancellationToken))
+            await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
             {
-                var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
-                var vertex = (Vertex)agResult;
-                result.Add(new DigitalTwinsModelData(vertex.Properties));
-                k++;
-            }
+                int k = 0;
+                while (await reader.ReadAsync(cancellationToken))
+                {
+                    var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
+                    var vertex = (Vertex)agResult;
+                    result.Add(new DigitalTwinsModelData(vertex.Properties));
+                    k++;
+                }
 
-            reader.Close();
+                reader.Close();
+            }
 
             List<string> relationshipNames = [];
 

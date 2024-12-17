@@ -282,6 +282,7 @@ public class AgeDigitalTwinsSubscription : IAsyncDisposable
         if (_conn != null)
         {
             await _conn.DisposeAsync();
+            _conn = null;
         }
         _cancellationTokenSource?.Dispose();
         GC.SuppressFinalize(this);
