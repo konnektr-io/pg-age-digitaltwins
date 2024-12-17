@@ -26,6 +26,11 @@ builder.Services.AddSingleton(sp =>
         ?? builder.Configuration["AgeReplicationSlot"]
         ?? "age_slot";
 
+    string? source =
+        builder.Configuration.GetSection("Parameters")["CustomEventSource"]
+        ?? builder.Configuration["Parameters:CustomEventSource"]
+        ?? builder.Configuration["CustomEventSource"];
+
     ILogger<AgeDigitalTwinsSubscription> subscriptionLogger = sp.GetRequiredService<
         ILogger<AgeDigitalTwinsSubscription>
     >();
@@ -37,6 +42,7 @@ builder.Services.AddSingleton(sp =>
         connectionString,
         publication,
         replicationSlot,
+        source,
         eventSinkFactory,
         subscriptionLogger
     );

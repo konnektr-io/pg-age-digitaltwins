@@ -15,6 +15,7 @@ public class AgeDigitalTwinsSubscription : IAsyncDisposable
         string connectionString,
         string publication,
         string replicationSlot,
+        string? source,
         EventSinkFactory eventSinkFactory,
         ILogger<AgeDigitalTwinsSubscription> logger
     )
@@ -24,14 +25,22 @@ public class AgeDigitalTwinsSubscription : IAsyncDisposable
         _replicationSlot = replicationSlot;
         _eventSinkFactory = eventSinkFactory;
         _logger = logger;
-        NpgsqlConnectionStringBuilder csb = new(connectionString);
-        _serverUri = new Uri($"{csb.Host}:{csb.Port}", UriKind.Absolute);
+
+        if (!string.IsNullOrEmpty(source))
+        {
+            _sourceUri = new Uri(source, UriKind.Absolute);
+        }
+        else
+        {
+            NpgsqlConnectionStringBuilder csb = new(connectionString);
+            _sourceUri = new Uri($"{csb.Host}:{csb.Port}", UriKind.Absolute);
+        }
     }
 
     private readonly string _connectionString;
     private readonly string _publication;
     private readonly string _replicationSlot;
-    private readonly Uri _serverUri;
+    private readonly Uri _sourceUri;
     private readonly EventSinkFactory _eventSinkFactory;
     private readonly ILogger<AgeDigitalTwinsSubscription> _logger;
     private LogicalReplicationConnection? _conn;
@@ -210,7 +219,7 @@ public class AgeDigitalTwinsSubscription : IAsyncDisposable
                         _logger.LogDebug(
                             "Processing {EventType} from {_serverUri} for event route: {Route}\n{EventData}",
                             Enum.GetName(typeof(EventType), eventData.EventType),
-                            _serverUri,
+                            _sourceUri,
                             JsonSerializer.Serialize(route),
                             JsonSerializer.Serialize(eventData)
                         );
@@ -227,14 +236,14 @@ public class AgeDigitalTwinsSubscription : IAsyncDisposable
                                 {
                                     cloudEvents = CloudEventFactory.CreateEventNotificationEvents(
                                         eventData,
-                                        _serverUri
+                                        _sourceUri
                                     );
                                 }
                                 else if (route.EventFormat == EventFormat.DataHistory)
                                 {
                                     cloudEvents = CloudEventFactory.CreateDataHistoryEvents(
                                         eventData,
-                                        _serverUri
+                                        _sourceUri
                                     );
                                 }
                                 else
