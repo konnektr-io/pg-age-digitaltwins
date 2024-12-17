@@ -7,8 +7,8 @@ public static class GraphInitialization
 {
     public static List<NpgsqlBatchCommand> GetGraphInitCommands(string graphName)
     {
-        return new List<NpgsqlBatchCommand>
-        {
+        return
+        [
             new(@$"SELECT create_vlabel('{graphName}', 'Twin');"),
             new(
                 @$"CREATE UNIQUE INDEX twin_id_idx ON {graphName}.""Twin"" (ag_catalog.agtype_access_operator(properties, '""$dtId""'::agtype));"
@@ -113,6 +113,6 @@ public static class GraphInitialization
         END;
         $$ LANGUAGE plpgsql;"
             ),
-        };
+        ];
     }
 }

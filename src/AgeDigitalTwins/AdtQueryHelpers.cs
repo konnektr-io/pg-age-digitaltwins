@@ -301,62 +301,75 @@ public static class AdtQueryHelpers
                 },
                 RegexOptions.IgnoreCase
             );
-
-            // Process string function STARTSWITH
+        }
+        else
+        {
+            // Process IS_OF_MODEL function without prepend alias
             whereClause = Regex.Replace(
                 whereClause,
-                @"STARTSWITH\(([^,]+),\s*'([^']+)'\)",
+                @"IS_OF_MODEL\(([^)]+)\)",
                 m =>
                 {
-                    return $"{m.Groups[1].Value} STARTS WITH '{m.Groups[2].Value}'";
-                },
-                RegexOptions.IgnoreCase
-            );
-
-            // Process string function ENDSWITH
-            whereClause = Regex.Replace(
-                whereClause,
-                @"ENDSWITH\(([^,]+),\s*'([^']+)'\)",
-                m =>
-                {
-                    return $"{m.Groups[1].Value} ENDS WITH '{m.Groups[2].Value}'";
-                },
-                RegexOptions.IgnoreCase
-            );
-
-            // Process string function CONTAINS
-            whereClause = Regex.Replace(
-                whereClause,
-                @"CONTAINS\(([^,]+),\s*'([^']+)'\)",
-                m =>
-                {
-                    return $"{m.Groups[1].Value} CONTAINS '{m.Groups[2].Value}'";
-                },
-                RegexOptions.IgnoreCase
-            );
-
-            // Process IS_NULL function
-            whereClause = Regex.Replace(
-                whereClause,
-                @"IS_NULL\(([^)]+)\)",
-                m =>
-                {
-                    return $"{m.Groups[1].Value} IS NULL";
-                },
-                RegexOptions.IgnoreCase
-            );
-
-            // Process IS_DEFINED function
-            whereClause = Regex.Replace(
-                whereClause,
-                @"IS_DEFINED\(([^)]+)\)",
-                m =>
-                {
-                    return $"{m.Groups[1].Value} IS NOT NULL";
+                    return $"{graphName}.is_of_model({m.Groups[1].Value})";
                 },
                 RegexOptions.IgnoreCase
             );
         }
+
+        // Process string function STARTSWITH
+        whereClause = Regex.Replace(
+            whereClause,
+            @"STARTSWITH\(([^,]+),\s*'([^']+)'\)",
+            m =>
+            {
+                return $"{m.Groups[1].Value} STARTS WITH '{m.Groups[2].Value}'";
+            },
+            RegexOptions.IgnoreCase
+        );
+
+        // Process string function ENDSWITH
+        whereClause = Regex.Replace(
+            whereClause,
+            @"ENDSWITH\(([^,]+),\s*'([^']+)'\)",
+            m =>
+            {
+                return $"{m.Groups[1].Value} ENDS WITH '{m.Groups[2].Value}'";
+            },
+            RegexOptions.IgnoreCase
+        );
+
+        // Process string function CONTAINS
+        whereClause = Regex.Replace(
+            whereClause,
+            @"CONTAINS\(([^,]+),\s*'([^']+)'\)",
+            m =>
+            {
+                return $"{m.Groups[1].Value} CONTAINS '{m.Groups[2].Value}'";
+            },
+            RegexOptions.IgnoreCase
+        );
+
+        // Process IS_NULL function
+        whereClause = Regex.Replace(
+            whereClause,
+            @"IS_NULL\(([^)]+)\)",
+            m =>
+            {
+                return $"{m.Groups[1].Value} IS NULL";
+            },
+            RegexOptions.IgnoreCase
+        );
+
+        // Process IS_DEFINED function
+        whereClause = Regex.Replace(
+            whereClause,
+            @"IS_DEFINED\(([^)]+)\)",
+            m =>
+            {
+                return $"{m.Groups[1].Value} IS NOT NULL";
+            },
+            RegexOptions.IgnoreCase
+        );
 
         // Replace property access with $ character
         whereClause = Regex.Replace(whereClause, @"(\.\$[\w]+)", m => $"['{m.Value[1..]}']");
