@@ -57,7 +57,7 @@ public class KafkaEventSink : IEventSink, IDisposable
             }
             catch (ProduceException<Null, string> e)
             {
-                Console.WriteLine($"Delivery failed: {e.Error.Reason}");
+                _logger.LogError(e, "Delivery failed: {Reason}", e.Error.Reason);
             }
         }
     }
