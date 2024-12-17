@@ -28,12 +28,17 @@ public class AgeDigitalTwinsSubscription : IAsyncDisposable
 
         if (!string.IsNullOrEmpty(source))
         {
-            _sourceUri = new Uri(source, UriKind.Absolute);
+            if (!Uri.TryCreate(source, UriKind.Absolute, out _sourceUri!))
+            {
+                UriBuilder uriBuilder = new() { Host = source };
+                _sourceUri = uriBuilder.Uri;
+            }
         }
         else
         {
             NpgsqlConnectionStringBuilder csb = new(connectionString);
-            _sourceUri = new Uri($"{csb.Host}:{csb.Port}", UriKind.Absolute);
+            UriBuilder uriBuilder = new() { Host = csb.Host };
+            _sourceUri = uriBuilder.Uri;
         }
     }
 
