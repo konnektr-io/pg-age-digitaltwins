@@ -15,7 +15,7 @@ public class KustoEventSink : IEventSink, IDisposable
     private readonly KustoSinkOptions _options;
     private readonly IKustoQueuedIngestClient _ingestClient;
     private readonly ILogger _logger;
-    private readonly Dictionary<string, KustoIngestionProperties> _ingestionProperties;
+    private readonly Dictionary<string, KustoQueuedIngestionProperties> _ingestionProperties;
 
     public KustoEventSink(KustoSinkOptions options, TokenCredential credential, ILogger logger)
     {
@@ -27,15 +27,17 @@ public class KustoEventSink : IEventSink, IDisposable
         ).WithAadAzureTokenCredentialsAuthentication(credential);
         _ingestClient = KustoIngestFactory.CreateQueuedIngestClient(kustoConnectionStringBuilder);
 
-        _ingestionProperties = new Dictionary<string, KustoIngestionProperties>
+        _ingestionProperties = new Dictionary<string, KustoQueuedIngestionProperties>
         {
             {
                 "DigitalTwin.Property.Event",
-                new KustoIngestionProperties(
+                new KustoQueuedIngestionProperties(
                     _options.Database,
                     _options.PropertyEventsTable ?? "AdtPropertyEvents"
                 )
                 {
+                    ReportLevel = IngestionReportLevel.FailuresAndSuccesses,
+                    ReportMethod = IngestionReportMethod.Table,
                     Format = DataSourceFormat.json,
                     IngestionMapping = new IngestionMapping
                     {
@@ -81,11 +83,13 @@ public class KustoEventSink : IEventSink, IDisposable
             },
             {
                 "DigitalTwin.Twin.Lifecycle",
-                new KustoIngestionProperties(
+                new KustoQueuedIngestionProperties(
                     _options.Database,
                     _options.TwinLifecycleEventsTable ?? "AdtTwinLifecycleEvents"
                 )
                 {
+                    ReportLevel = IngestionReportLevel.FailuresAndSuccesses,
+                    ReportMethod = IngestionReportMethod.Table,
                     Format = DataSourceFormat.json,
                     IngestionMapping = new IngestionMapping
                     {
@@ -114,11 +118,13 @@ public class KustoEventSink : IEventSink, IDisposable
             },
             {
                 "DigitalTwin.Relationship.Lifecycle",
-                new KustoIngestionProperties(
+                new KustoQueuedIngestionProperties(
                     _options.Database,
                     _options.RelationshipLifecycleEventsTable ?? "AdtRelationshipLifecycleEvents"
                 )
                 {
+                    ReportLevel = IngestionReportLevel.FailuresAndSuccesses,
+                    ReportMethod = IngestionReportMethod.Table,
                     Format = DataSourceFormat.json,
                     IngestionMapping = new IngestionMapping
                     {
