@@ -222,7 +222,7 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                     try
                     {
                         _logger.LogDebug(
-                            "Processing {EventType} from {_serverUri} for event route: {Route}\n{EventData}",
+                            "Processing {EventType} from {Source} for event route: {Route}\n{EventData}",
                             Enum.GetName(typeof(EventType), eventData.EventType),
                             _sourceUri,
                             JsonSerializer.Serialize(route),
@@ -271,8 +271,8 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                     {
                         _logger.LogError(
                             ex,
-                            "Error while processing event route {Route}: {Message}",
-                            route,
+                            "Error while processing event route to {Route}: {Message}",
+                            JsonSerializer.Serialize(route),
                             ex.Message
                         );
                     }

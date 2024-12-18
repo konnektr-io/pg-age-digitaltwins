@@ -369,7 +369,7 @@ public static class CloudEventFactory
                     _ => "unknown",
                 },
                 ["timeStamp"] = eventData.Timestamp,
-                ["serviceId"] = source.Host.ToString(),
+                ["serviceId"] = source.ToString(),
                 ["name"] =
                     eventData.NewValue?["name"]?.ToString()
                     ?? eventData.OldValue?["name"]?.ToString(),
@@ -450,7 +450,7 @@ public static class CloudEventFactory
                 new()
                 {
                     ["timeStamp"] = eventData.Timestamp,
-                    ["serviceId"] = source.Host.ToString(),
+                    ["serviceId"] = source.ToString(),
                     ["id"] =
                         eventData.NewValue?["$dtId"]?.ToString()
                         ?? eventData.NewValue?["$sourceId"]?.ToString(),
