@@ -189,7 +189,23 @@ public class KustoEventSink : IEventSink, IDisposable
             }
 
             stream.Position = 0;
-            await _ingestClient.IngestFromStreamAsync(stream, ingestionProperties);
+            IKustoIngestionResult ingestionResult = await _ingestClient.IngestFromStreamAsync(
+                stream,
+                ingestionProperties
+            );
+            ingestionResult
+                .GetIngestionStatusCollection()
+                .ToList()
+                .ForEach(status =>
+                {
+                    if (status.Status != Status.Pending && status.Status != Status.Succeeded)
+                    {
+                        _logger.LogError(
+                            "Ingestion to Kusto failed: {Status}",
+                            JsonSerializer.Serialize(status)
+                        );
+                    }
+                });
             _logger.LogDebug(
                 "Ingested {EventCount} events of type {EventType} to Kusto",
                 eventGroup.Count(),
