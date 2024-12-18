@@ -141,7 +141,6 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                     }
                     currentEvent.GraphName = updateMessage.Relation.Namespace;
                     currentEvent.TableName = updateMessage.Relation.RelationName;
-                    currentEvent.OldValue ??= await ConvertRowToJsonAsync(updateMessage.OldRow);
                     currentEvent.NewValue = await ConvertRowToJsonAsync(updateMessage.NewRow);
                     if (currentEvent.EventType == null && currentEvent.NewValue != null)
                     {
@@ -154,7 +153,14 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                             currentEvent.EventType = EventType.RelationshipUpdate;
                         }
                     }
-                    // Console.WriteLine($"Updated row: {currentEvent.OldValue} -> {currentEvent.NewValue}");
+                    if (
+                        currentEvent.EventType == EventType.TwinUpdate
+                        || currentEvent.EventType == EventType.RelationshipUpdate
+                    )
+                    {
+                        // OldValue only has to be set for update events
+                        currentEvent.OldValue ??= await ConvertRowToJsonAsync(updateMessage.OldRow);
+                    }
                 }
                 else if (message is FullDeleteMessage deleteMessage)
                 {
@@ -189,12 +195,13 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                     _eventQueue.Enqueue(currentEvent);
                     currentEvent = null;
                 }
-                // Implement fallbacks in case replica identity is not set to full
-                // This means we might need to fetch the value from the database
-                // This also won't work for updates, because we need the old value
                 else
                 {
-                    // _logger.LogInformation($"Skipping message type: {message.GetType().Name}");
+                    // In case replica identity is not correctly set, or when messages from user defined tables are received
+                    _logger.LogDebug(
+                        "Skipping message type: {MessageType}",
+                        message.GetType().Name
+                    );
                 }
 
                 // Always call SetReplicationStatus() or assign LastAppliedLsn and LastFlushedLsn individually
