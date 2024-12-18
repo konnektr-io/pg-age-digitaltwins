@@ -141,6 +141,7 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                     }
                     currentEvent.GraphName = updateMessage.Relation.Namespace;
                     currentEvent.TableName = updateMessage.Relation.RelationName;
+                    currentEvent.OldValue ??= await ConvertRowToJsonAsync(updateMessage.OldRow);
                     currentEvent.NewValue = await ConvertRowToJsonAsync(updateMessage.NewRow);
                     if (currentEvent.EventType == null && currentEvent.NewValue != null)
                     {
@@ -152,14 +153,6 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                         {
                             currentEvent.EventType = EventType.RelationshipUpdate;
                         }
-                    }
-                    if (
-                        currentEvent.EventType == EventType.TwinUpdate
-                        || currentEvent.EventType == EventType.RelationshipUpdate
-                    )
-                    {
-                        // OldValue only has to be set for update events
-                        currentEvent.OldValue ??= await ConvertRowToJsonAsync(updateMessage.OldRow);
                     }
                 }
                 else if (message is FullDeleteMessage deleteMessage)
@@ -270,7 +263,7 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                                     _logger.LogDebug("Skipping event route without any events");
                                     continue;
                                 }
-                                await sink.SendEventsAsync(cloudEvents);
+                                await sink.SendEventsAsync(cloudEvents).ConfigureAwait(false);
                             }
                         }
                     }
