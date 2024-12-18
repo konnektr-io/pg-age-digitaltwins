@@ -172,20 +172,22 @@ public class KustoEventSink : IEventSink, IDisposable
             }
 
             using var stream = new MemoryStream();
-            using var writer = new StreamWriter(stream);
-            foreach (var cloudEvent in eventGroup)
+            using (var writer = new StreamWriter(stream))
             {
-                if (cloudEvent.Data is not JsonObject data)
+                foreach (var cloudEvent in eventGroup)
                 {
-                    _logger.LogError("Data must be a JSON object");
-                    continue;
+                    if (cloudEvent.Data is not JsonObject data)
+                    {
+                        _logger.LogError("Data must be a JSON object");
+                        continue;
+                    }
+
+                    var jsonData = JsonSerializer.Serialize(data);
+                    await writer.WriteLineAsync(jsonData);
                 }
-
-                var jsonData = JsonSerializer.Serialize(data);
-                await writer.WriteLineAsync(jsonData);
             }
+            stream.Seek(0, SeekOrigin.Begin);
 
-            stream.Position = 0;
             IKustoIngestionResult ingestionResult = await _ingestClient.IngestFromStreamAsync(
                 stream,
                 ingestionProperties
