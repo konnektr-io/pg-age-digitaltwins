@@ -30,7 +30,7 @@ public class KustoEventSink : IEventSink, IDisposable
         _ingestionProperties = new Dictionary<string, KustoIngestionProperties>
         {
             {
-                "DigitalTwins.Property.Event",
+                "DigitalTwin.Property.Event",
                 new KustoIngestionProperties(
                     _options.Database,
                     _options.PropertyEventsTable ?? "AdtPropertyEvents"
@@ -80,7 +80,7 @@ public class KustoEventSink : IEventSink, IDisposable
                 }
             },
             {
-                "DigitalTwins.Twin.Lifecycle",
+                "DigitalTwin.Twin.Lifecycle",
                 new KustoIngestionProperties(
                     _options.Database,
                     _options.TwinLifecycleEventsTable ?? "AdtTwinLifecycleEvents"
@@ -113,7 +113,7 @@ public class KustoEventSink : IEventSink, IDisposable
                 }
             },
             {
-                "DigitalTwins.Relationship.Lifecycle",
+                "DigitalTwin.Relationship.Lifecycle",
                 new KustoIngestionProperties(
                     _options.Database,
                     _options.RelationshipLifecycleEventsTable ?? "AdtRelationshipLifecycleEvents"

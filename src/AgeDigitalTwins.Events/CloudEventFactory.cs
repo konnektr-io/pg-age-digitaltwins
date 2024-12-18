@@ -73,7 +73,7 @@ public static class CloudEventFactory
                 Id = Guid.NewGuid().ToString(),
                 Source = source,
                 Data = body,
-                Type = "DigitalTwins.Twin.Update", // "Microsoft.DigitalTwins.Twin.Update",
+                Type = "DigitalTwin.Twin.Update", // "Microsoft.DigitalTwin.Twin.Update",
                 DataContentType = "application/json",
                 Subject = twinIdNode.ToString(),
                 Time = eventData.Timestamp,
@@ -102,7 +102,7 @@ public static class CloudEventFactory
                 );
             }
             body = eventData.NewValue;
-            type = "DigitalTwins.Twin.Create"; // "Microsoft.DigitalTwins.Twin.Create";
+            type = "DigitalTwin.Twin.Create"; // "Microsoft.DigitalTwin.Twin.Create";
         }
         else if (eventData.EventType == EventType.TwinDelete)
         {
@@ -114,7 +114,7 @@ public static class CloudEventFactory
                 );
             }
             body = eventData.OldValue;
-            type = "DigitalTwins.Twin.Delete"; // "Microsoft.DigitalTwins.Twin.Delete";
+            type = "DigitalTwin.Twin.Delete"; // "Microsoft.DigitalTwin.Twin.Delete";
         }
         else
         {
@@ -199,7 +199,7 @@ public static class CloudEventFactory
                 Id = Guid.NewGuid().ToString(),
                 Source = source,
                 Data = body,
-                Type = "DigitalTwins.Relationship.Update", // "Microsoft.DigitalTwins.Relationship.Update",
+                Type = "DigitalTwin.Relationship.Update", // "Microsoft.DigitalTwin.Relationship.Update",
                 DataContentType = "application/json",
                 Subject = $"{twinIdNode}/relationships/{relationshipIdNode}",
                 Time = eventData.Timestamp,
@@ -228,7 +228,7 @@ public static class CloudEventFactory
                 );
             }
             body = eventData.NewValue;
-            type = "DigitalTwins.Relationship.Create"; // "Microsoft.DigitalTwins.Relationship.Create";
+            type = "DigitalTwin.Relationship.Create"; // "Microsoft.DigitalTwin.Relationship.Create";
         }
         else if (eventData.EventType == EventType.RelationshipDelete)
         {
@@ -240,7 +240,7 @@ public static class CloudEventFactory
                 );
             }
             body = eventData.OldValue;
-            type = "DigitalTwins.Relationship.Delete"; // "Microsoft.DigitalTwins.Relationship.Delete";
+            type = "DigitalTwin.Relationship.Delete"; // "Microsoft.DigitalTwin.Relationship.Delete";
         }
         else
         {
@@ -339,7 +339,7 @@ public static class CloudEventFactory
                 Id = Guid.NewGuid().ToString(),
                 Source = source,
                 Data = body,
-                Type = "DigitalTwins.Twin.Lifecycle",
+                Type = "DigitalTwin.Twin.Lifecycle",
                 DataContentType = "application/json",
                 Subject = body["twinId"]?.ToString(),
                 Time = eventData.Timestamp,
@@ -387,7 +387,7 @@ public static class CloudEventFactory
                 Id = Guid.NewGuid().ToString(),
                 Source = source,
                 Data = body,
-                Type = "DigitalTwins.Relationship.Lifecycle",
+                Type = "DigitalTwin.Relationship.Lifecycle",
                 DataContentType = "application/json",
                 Subject = body["relationshipId"]?.ToString(),
                 Time = eventData.Timestamp,
@@ -426,7 +426,7 @@ public static class CloudEventFactory
                     Id = Guid.NewGuid().ToString(),
                     Source = source,
                     Data = body,
-                    Type = "DigitalTwins.Twin.Lifecycle",
+                    Type = "DigitalTwin.Twin.Lifecycle",
                     DataContentType = "application/json",
                     Subject = body["twinId"]?.ToString(),
                     Time = eventData.Timestamp,
@@ -482,7 +482,7 @@ public static class CloudEventFactory
                     Id = Guid.NewGuid().ToString(),
                     Source = source,
                     Data = body,
-                    Type = "DigitalTwins.Property.Event",
+                    Type = "DigitalTwin.Property.Event",
                     DataContentType = "application/json",
                     Subject = body["id"]?.ToString(),
                     Time = eventData.Timestamp,
