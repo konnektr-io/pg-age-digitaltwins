@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Azure.Core;
@@ -172,7 +173,7 @@ public class KustoEventSink : IEventSink, IDisposable
             }
 
             using var stream = new MemoryStream();
-            using (var writer = new StreamWriter(stream))
+            using (var writer = new StreamWriter(stream, Encoding.UTF8, 4096, true))
             {
                 foreach (var cloudEvent in eventGroup)
                 {
@@ -186,7 +187,7 @@ public class KustoEventSink : IEventSink, IDisposable
                     await writer.WriteLineAsync(jsonData);
                 }
             }
-            stream.Seek(0, SeekOrigin.Begin);
+            stream.Position = 0;
 
             IKustoIngestionResult ingestionResult = await _ingestClient.IngestFromStreamAsync(
                 stream,
