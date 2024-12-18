@@ -21,6 +21,16 @@ public class EventSinkFactory(IConfiguration configuration, ILoggerFactory logge
             }
         }
 
+        var mqttSinks = _configuration.GetSection("EventSinks:MQTT").Get<List<MqttSinkOptions>>();
+        if (mqttSinks != null)
+        {
+            foreach (var mqttSink in mqttSinks)
+            {
+                var logger = _loggerFactory.CreateLogger<MqttEventSink>();
+                sinks.Add(new MqttEventSink(mqttSink, logger));
+            }
+        }
+
         /* var kustoSinks = _configuration
             .GetSection("EventSinks:Kusto")
             .Get<List<KustoSinkOptions>>();
@@ -29,11 +39,6 @@ public class EventSinkFactory(IConfiguration configuration, ILoggerFactory logge
             sinks.Add(new KustoEventSink(kustoSink));
         } */
 
-        /* var mqttSinks = _configuration.GetSection("EventSinks:MQTT").Get<List<MqttSinkOptions>>();
-        foreach (var mqttSink in mqttSinks)
-        {
-            sinks.Add(new MqttEventSink(mqttSink));
-        } */
 
         return sinks;
     }
