@@ -164,13 +164,13 @@ public class KustoEventSink : IEventSink, IDisposable
             var eventType = eventGroup.Key;
             if (eventType is null)
             {
-                _logger.LogError("Event type must be specified");
+                _logger.LogWarning("Event type must be specified");
                 continue;
             }
 
             if (!_ingestionProperties.TryGetValue(eventType, out var ingestionProperties))
             {
-                _logger.LogError("Unsupported event type: {EventType}", eventType);
+                _logger.LogWarning("Unsupported event type: {EventType}", eventType);
                 continue;
             }
 
