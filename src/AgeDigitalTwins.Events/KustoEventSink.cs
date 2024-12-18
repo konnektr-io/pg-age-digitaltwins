@@ -83,7 +83,7 @@ public class KustoEventSink : IEventSink, IDisposable
                 "DigitalTwin.Twin.Lifecycle",
                 new KustoQueuedIngestionProperties(
                     _options.Database,
-                    _options.TwinLifecycleEventsTable ?? "AdtTwinLifecycleEvents"
+                    _options.TwinLifeCycleEventsTable ?? "AdtTwinLifeCycleEvents"
                 )
                 {
                     ReportLevel = IngestionReportLevel.FailuresAndSuccesses,
@@ -115,7 +115,7 @@ public class KustoEventSink : IEventSink, IDisposable
                 "DigitalTwin.Relationship.Lifecycle",
                 new KustoQueuedIngestionProperties(
                     _options.Database,
-                    _options.RelationshipLifecycleEventsTable ?? "AdtRelationshipLifecycleEvents"
+                    _options.RelationshipLifeCycleEventsTable ?? "AdtRelationshipLifeCycleEvents"
                 )
                 {
                     ReportLevel = IngestionReportLevel.FailuresAndSuccesses,
@@ -227,6 +227,6 @@ public class KustoSinkOptions
     public required string IngestionUri { get; set; }
     public required string Database { get; set; }
     public string? PropertyEventsTable { get; set; }
-    public string? TwinLifecycleEventsTable { get; set; }
-    public string? RelationshipLifecycleEventsTable { get; set; }
+    public string? TwinLifeCycleEventsTable { get; set; }
+    public string? RelationshipLifeCycleEventsTable { get; set; }
 }
