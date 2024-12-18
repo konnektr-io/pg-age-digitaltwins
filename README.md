@@ -42,9 +42,9 @@ AgeDigitalTwins is an SDK and API designed to support Digital Twins applications
   - [x] Logical replication connection with AgType parser
   - [x] Data History output (same format as Azure Digital Twins)
   - [x] Event Notification output
-  - [x] Kafka route
-  - [ ] ADX/Fabric Real-time route
-  - [ ] MQTT route (IoT Operations)
+  - [x] Kafka sink
+  - [ ] Kusto sink (Azure Data Explorer / Fabric Real-Time)
+  - [x] MQTT sink
 
 ## Contributing
 
