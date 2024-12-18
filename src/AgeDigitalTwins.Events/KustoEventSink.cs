@@ -1,30 +1,216 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using Azure.Core;
+using Azure.Messaging;
 using CloudNative.CloudEvents;
+using Kusto.Data;
+using Kusto.Data.Common;
+using Kusto.Data.Ingestion;
+using Kusto.Ingest;
 
 namespace AgeDigitalTwins.Events;
 
-public class KustoEventSink(KustoSinkOptions options) : IEventSink
+public class KustoEventSink : IEventSink, IDisposable
 {
-    private readonly KustoSinkOptions _options = options;
+    private readonly KustoSinkOptions _options;
+    private readonly IKustoQueuedIngestClient _ingestClient;
+    private readonly ILogger _logger;
+    private readonly Dictionary<string, KustoIngestionProperties> _ingestionProperties;
+
+    public KustoEventSink(KustoSinkOptions options, TokenCredential credential, ILogger logger)
+    {
+        _options = options;
+        _logger = logger;
+
+        var kustoConnectionStringBuilder = new KustoConnectionStringBuilder(
+            _options.IngestionUri
+        ).WithAadAzureTokenCredentialsAuthentication(credential);
+        _ingestClient = KustoIngestFactory.CreateQueuedIngestClient(kustoConnectionStringBuilder);
+
+        _ingestionProperties = new Dictionary<string, KustoIngestionProperties>
+        {
+            {
+                "DigitalTwins.Property.Event",
+                new KustoIngestionProperties(
+                    _options.Database,
+                    _options.PropertyEventsTable ?? "AdtPropertyEvents"
+                )
+                {
+                    Format = DataSourceFormat.json,
+                    IngestionMapping = new IngestionMapping
+                    {
+                        IngestionMappingKind = IngestionMappingKind.Json,
+                        IngestionMappings =
+                        [
+                            new(
+                                "TimeStamp",
+                                "datetime",
+                                new()
+                                {
+                                    { MappingConsts.ConstValue, DateTime.UtcNow.ToString("o") },
+                                }
+                            ),
+                            new(
+                                "SourceTimeStamp",
+                                "datetime",
+                                new() { { MappingConsts.Path, "$.sourceTimeStamp" } }
+                            ),
+                            new(
+                                "ServiceId",
+                                "string",
+                                new() { { MappingConsts.Path, "$.serviceId" } }
+                            ),
+                            new("Id", "string", new() { { MappingConsts.Path, "$.id" } }),
+                            new("ModelId", "string", new() { { MappingConsts.Path, "$.modelId" } }),
+                            new("Key", "string", new() { { MappingConsts.Path, "$.key" } }),
+                            new("Value", "dynamic", new() { { MappingConsts.Path, "$.value" } }),
+                            new(
+                                "RelationshipTarget",
+                                "string",
+                                new() { { MappingConsts.ConstValue, "" } }
+                            ),
+                            new(
+                                "RelationshipId",
+                                "string",
+                                new() { { MappingConsts.ConstValue, "" } }
+                            ),
+                            new("Action", "string", new() { { MappingConsts.Path, "$.action" } }),
+                        ],
+                    },
+                }
+            },
+            {
+                "DigitalTwins.Twin.Lifecycle",
+                new KustoIngestionProperties(
+                    _options.Database,
+                    _options.TwinLifecycleEventsTable ?? "AdtTwinLifecycleEvents"
+                )
+                {
+                    Format = DataSourceFormat.json,
+                    IngestionMapping = new IngestionMapping
+                    {
+                        IngestionMappingKind = IngestionMappingKind.Json,
+                        IngestionMappings =
+                        [
+                            new(
+                                "TimeStamp",
+                                "datetime",
+                                new()
+                                {
+                                    { MappingConsts.ConstValue, DateTime.UtcNow.ToString("o") },
+                                }
+                            ),
+                            new(
+                                "ServiceId",
+                                "string",
+                                new() { { MappingConsts.Path, "$.serviceId" } }
+                            ),
+                            new("TwinId", "string", new() { { MappingConsts.Path, "$.twinId" } }),
+                            new("Action", "string", new() { { MappingConsts.Path, "$.action" } }),
+                            new("ModelId", "string", new() { { MappingConsts.Path, "$.modelId" } }),
+                        ],
+                    },
+                }
+            },
+            {
+                "DigitalTwins.Relationship.Lifecycle",
+                new KustoIngestionProperties(
+                    _options.Database,
+                    _options.RelationshipLifecycleEventsTable ?? "AdtRelationshipLifecycleEvents"
+                )
+                {
+                    Format = DataSourceFormat.json,
+                    IngestionMapping = new IngestionMapping
+                    {
+                        IngestionMappingKind = IngestionMappingKind.Json,
+                        IngestionMappings =
+                        [
+                            new(
+                                "TimeStamp",
+                                "datetime",
+                                new()
+                                {
+                                    { MappingConsts.ConstValue, DateTime.UtcNow.ToString("o") },
+                                }
+                            ),
+                            new(
+                                "ServiceId",
+                                "string",
+                                new() { { MappingConsts.Path, "$.serviceId" } }
+                            ),
+                            new(
+                                "RelationshipId",
+                                "string",
+                                new() { { MappingConsts.Path, "$.relationshipId" } }
+                            ),
+                            new("Action", "string", new() { { MappingConsts.Path, "$.action" } }),
+                            new("Source", "string", new() { { MappingConsts.Path, "$.source" } }),
+                            new("Target", "string", new() { { MappingConsts.Path, "$.target" } }),
+                        ],
+                    },
+                }
+            },
+        };
+    }
 
     public string Name => _options.Name;
 
-    public async Task SendEventsAsync(IEnumerable<CloudEvent> cloudEvents)
+    public async Task SendEventsAsync(IEnumerable<CloudNative.CloudEvents.CloudEvent> cloudEvents)
     {
-        await Task.CompletedTask;
-        // Implement Kusto sending logic here
+        var eventsByType = cloudEvents.GroupBy(e => e.Type);
+
+        foreach (var eventGroup in eventsByType)
+        {
+            var eventType = eventGroup.Key;
+            if (eventType is null)
+            {
+                _logger.LogError("Event type must be specified");
+                continue;
+            }
+
+            if (!_ingestionProperties.TryGetValue(eventType, out var ingestionProperties))
+            {
+                _logger.LogError("Unsupported event type: {EventType}", eventType);
+                continue;
+            }
+
+            using var stream = new MemoryStream();
+            using var writer = new StreamWriter(stream);
+            foreach (var cloudEvent in eventGroup)
+            {
+                if (cloudEvent.Data is not JsonObject data)
+                {
+                    _logger.LogError("Data must be a JSON object");
+                    continue;
+                }
+
+                var jsonData = JsonSerializer.Serialize(data);
+                await writer.WriteLineAsync(jsonData);
+            }
+
+            stream.Position = 0;
+            await _ingestClient.IngestFromStreamAsync(stream, ingestionProperties);
+            _logger.LogDebug(
+                "Ingested {EventCount} events of type {EventType} to Kusto",
+                eventGroup.Count(),
+                eventType
+            );
+        }
+    }
+
+    public void Dispose()
+    {
+        _ingestClient.Dispose();
+        GC.SuppressFinalize(this);
     }
 }
 
 public class KustoSinkOptions
 {
     public required string Name { get; set; }
-    public required string ClusterUrl { get; set; }
+    public required string IngestionUri { get; set; }
     public required string Database { get; set; }
-    public required KustoIngestionType IngestionType { get; set; } = KustoIngestionType.Queued;
-}
-
-public enum KustoIngestionType
-{
-    Queued,
-    Streaming,
+    public string? PropertyEventsTable { get; set; }
+    public string? TwinLifecycleEventsTable { get; set; }
+    public string? RelationshipLifecycleEventsTable { get; set; }
 }

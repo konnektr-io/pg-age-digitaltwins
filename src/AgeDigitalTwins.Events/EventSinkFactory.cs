@@ -1,3 +1,5 @@
+using Azure.Identity;
+
 namespace AgeDigitalTwins.Events;
 
 public class EventSinkFactory(IConfiguration configuration, ILoggerFactory loggerFactory)
@@ -31,14 +33,17 @@ public class EventSinkFactory(IConfiguration configuration, ILoggerFactory logge
             }
         }
 
-        /* var kustoSinks = _configuration
+        var kustoSinks = _configuration
             .GetSection("EventSinks:Kusto")
             .Get<List<KustoSinkOptions>>();
-        foreach (var kustoSink in kustoSinks)
+        if (kustoSinks != null)
         {
-            sinks.Add(new KustoEventSink(kustoSink));
-        } */
-
+            foreach (var kustoSink in kustoSinks)
+            {
+                var logger = _loggerFactory.CreateLogger<KustoEventSink>();
+                sinks.Add(new KustoEventSink(kustoSink, new DefaultAzureCredential(), logger));
+            }
+        }
 
         return sinks;
     }
