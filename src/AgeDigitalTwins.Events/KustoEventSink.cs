@@ -47,10 +47,7 @@ public class KustoEventSink : IEventSink, IDisposable
                             new(
                                 "TimeStamp",
                                 "datetime",
-                                new()
-                                {
-                                    { MappingConsts.ConstValue, DateTime.UtcNow.ToString("o") },
-                                }
+                                new() { { MappingConsts.Path, "$.timeStamp" } }
                             ),
                             new(
                                 "SourceTimeStamp",
@@ -69,12 +66,12 @@ public class KustoEventSink : IEventSink, IDisposable
                             new(
                                 "RelationshipTarget",
                                 "string",
-                                new() { { MappingConsts.ConstValue, "" } }
+                                new() { { MappingConsts.Path, "$.relationshipTarget" } }
                             ),
                             new(
                                 "RelationshipId",
                                 "string",
-                                new() { { MappingConsts.ConstValue, "" } }
+                                new() { { MappingConsts.Path, "$.relationshipId" } }
                             ),
                             new("Action", "string", new() { { MappingConsts.Path, "$.action" } }),
                         ],
@@ -99,10 +96,7 @@ public class KustoEventSink : IEventSink, IDisposable
                             new(
                                 "TimeStamp",
                                 "datetime",
-                                new()
-                                {
-                                    { MappingConsts.ConstValue, DateTime.UtcNow.ToString("o") },
-                                }
+                                new() { { MappingConsts.Path, "$.timeStamp" } }
                             ),
                             new(
                                 "ServiceId",
@@ -134,10 +128,7 @@ public class KustoEventSink : IEventSink, IDisposable
                             new(
                                 "TimeStamp",
                                 "datetime",
-                                new()
-                                {
-                                    { MappingConsts.ConstValue, DateTime.UtcNow.ToString("o") },
-                                }
+                                new() { { MappingConsts.Path, "$.timeStamp" } }
                             ),
                             new(
                                 "ServiceId",
