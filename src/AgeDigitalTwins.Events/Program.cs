@@ -31,14 +31,14 @@ builder.Services.AddSingleton(sp =>
         ?? builder.Configuration["Parameters:CustomEventSource"]
         ?? builder.Configuration["CustomEventSource"];
 
-    ILogger<AgeDigitalTwinsSubscription> subscriptionLogger = sp.GetRequiredService<
-        ILogger<AgeDigitalTwinsSubscription>
+    ILogger<AgeDigitalTwinsReplication> subscriptionLogger = sp.GetRequiredService<
+        ILogger<AgeDigitalTwinsReplication>
     >();
     ILoggerFactory loggerFactory = sp.GetRequiredService<ILoggerFactory>();
 
     EventSinkFactory eventSinkFactory = new(builder.Configuration, loggerFactory);
 
-    return new AgeDigitalTwinsSubscription(
+    return new AgeDigitalTwinsReplication(
         connectionString,
         publication,
         replicationSlot,
@@ -51,7 +51,7 @@ builder.Services.AddSingleton(sp =>
 var app = builder.Build();
 
 // Resolve the singleton instance and start the subscription
-var subscription = app.Services.GetRequiredService<AgeDigitalTwinsSubscription>();
+var subscription = app.Services.GetRequiredService<AgeDigitalTwinsReplication>();
 var logger = app.Services.GetRequiredService<ILogger<Program>>();
 
 try

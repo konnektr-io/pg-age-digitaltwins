@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using CloudNative.CloudEvents;
+using Json.More;
 using Json.Patch;
 
 namespace AgeDigitalTwins.Events;
@@ -64,7 +65,7 @@ public static class CloudEventFactory
             new()
             {
                 ["modelId"] = eventData.NewValue["$metadata"]?["$model"]?.DeepClone(),
-                ["patch"] = JsonSerializer.Deserialize<JsonArray>(jsonPatch.ToString() ?? "[]"),
+                ["patch"] = JsonNode.Parse(jsonPatch.ToJsonDocument().RootElement.GetRawText()),
             };
         CloudEvent cloudEvent =
             new()
@@ -190,7 +191,7 @@ public static class CloudEventFactory
             new()
             {
                 ["modelId"] = eventData.NewValue["$metadata"]?["$model"]?.DeepClone(),
-                ["patch"] = JsonSerializer.Deserialize<JsonArray>(jsonPatch.ToString() ?? "[]"),
+                ["patch"] = JsonNode.Parse(jsonPatch.ToJsonDocument().RootElement.GetRawText()),
             };
         CloudEvent cloudEvent =
             new()

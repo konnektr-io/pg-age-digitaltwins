@@ -9,15 +9,15 @@ using Npgsql.Replication.PgOutput.Messages;
 
 namespace AgeDigitalTwins.Events;
 
-public class AgeDigitalTwinsSubscription : IAsyncDisposable
+public class AgeDigitalTwinsReplication : IAsyncDisposable
 {
-    public AgeDigitalTwinsSubscription(
+    public AgeDigitalTwinsReplication(
         string connectionString,
         string publication,
         string replicationSlot,
         string? source,
         EventSinkFactory eventSinkFactory,
-        ILogger<AgeDigitalTwinsSubscription> logger
+        ILogger<AgeDigitalTwinsReplication> logger
     )
     {
         _connectionString = connectionString;
@@ -28,16 +28,16 @@ public class AgeDigitalTwinsSubscription : IAsyncDisposable
 
         if (!string.IsNullOrEmpty(source))
         {
-            if (!Uri.TryCreate(source, UriKind.Absolute, out _sourceUri!))
+            if (!Uri.TryCreate(source, UriKind.RelativeOrAbsolute, out _sourceUri!))
             {
-                UriBuilder uriBuilder = new() { Host = source };
+                UriBuilder uriBuilder = new(source);
                 _sourceUri = uriBuilder.Uri;
             }
         }
         else
         {
             NpgsqlConnectionStringBuilder csb = new(connectionString);
-            UriBuilder uriBuilder = new() { Host = csb.Host };
+            UriBuilder uriBuilder = new() { Scheme = "postgresql", Host = csb.Host };
             _sourceUri = uriBuilder.Uri;
         }
     }
@@ -47,7 +47,7 @@ public class AgeDigitalTwinsSubscription : IAsyncDisposable
     private readonly string _replicationSlot;
     private readonly Uri _sourceUri;
     private readonly EventSinkFactory _eventSinkFactory;
-    private readonly ILogger<AgeDigitalTwinsSubscription> _logger;
+    private readonly ILogger<AgeDigitalTwinsReplication> _logger;
     private LogicalReplicationConnection? _conn;
     private CancellationTokenSource? _cancellationTokenSource;
     private readonly ConcurrentQueue<EventData> _eventQueue = new();
