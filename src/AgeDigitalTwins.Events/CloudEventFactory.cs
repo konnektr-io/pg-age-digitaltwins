@@ -384,11 +384,11 @@ public static class CloudEventFactory
                     eventData.NewValue?["name"]?.ToString()
                     ?? eventData.OldValue?["name"]?.ToString(),
                 ["source"] =
-                    eventData.NewValue?["source"]?.ToString()
-                    ?? eventData.OldValue?["source"]?.ToString(),
+                    eventData.NewValue?["$sourceId"]?.ToString()
+                    ?? eventData.OldValue?["$sourceId"]?.ToString(),
                 ["target"] =
-                    eventData.NewValue?["target"]?.ToString()
-                    ?? eventData.OldValue?["target"]?.ToString(),
+                    eventData.NewValue?["$targetId"]?.ToString()
+                    ?? eventData.OldValue?["$targetId"]?.ToString(),
                 // TODO: Figure out a way to retrieve the model id of the source twin
                 // ["modelId"] =
                 //     eventData.NewValue?["$metadata"]?["$model"]?.ToString()
@@ -403,7 +403,7 @@ public static class CloudEventFactory
                 Data = body,
                 Type = "DigitalTwin.Relationship.Lifecycle",
                 DataContentType = "application/json",
-                Subject = body["relationshipId"]?.ToString(),
+                Subject = $"{body["source"]}/relationships/{body["relationshipId"]}",
                 Time = eventData.Timestamp,
                 // TraceParent = null,
             };
@@ -510,7 +510,11 @@ public static class CloudEventFactory
                     Data = body,
                     Type = "DigitalTwin.Property.Event",
                     DataContentType = "application/json",
-                    Subject = body["id"]?.ToString(),
+                    Subject = string.IsNullOrEmpty(body["relationshipId"]?.ToString())
+                        // Twin property update
+                        ? $"{body["id"]}"
+                        // Relationship property update
+                        : $"{body["id"]}/relationships/{body["relationshipId"]}",
                     Time = eventData.Timestamp,
                     // TraceParent = null,
                 };
