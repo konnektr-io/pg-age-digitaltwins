@@ -190,6 +190,7 @@ public static class CloudEventFactory
         JsonObject body =
             new()
             {
+                // TODO: Figure out a way to retrieve the model id of the source twin, because this will be empty
                 ["modelId"] = eventData.NewValue["$metadata"]?["$model"]?.DeepClone(),
                 ["patch"] = JsonNode.Parse(jsonPatch.ToJsonDocument().RootElement.GetRawText()),
             };
@@ -331,8 +332,8 @@ public static class CloudEventFactory
                 ["timeStamp"] = eventData.Timestamp,
                 ["serviceId"] = source.ToString(),
                 ["modelId"] =
-                    eventData.NewValue?["modelId"]?.ToString()
-                    ?? eventData.OldValue?["modelId"]?.ToString(),
+                    eventData.NewValue?["$metadata"]?["$model"]?.ToString()
+                    ?? eventData.OldValue?["$metadata"]?["$model"]?.ToString(),
             };
 
         CloudEvent cloudEvent =
@@ -388,6 +389,10 @@ public static class CloudEventFactory
                 ["target"] =
                     eventData.NewValue?["target"]?.ToString()
                     ?? eventData.OldValue?["target"]?.ToString(),
+                // TODO: Figure out a way to retrieve the model id of the source twin
+                // ["modelId"] =
+                //     eventData.NewValue?["$metadata"]?["$model"]?.ToString()
+                //     ?? eventData.OldValue?["$metadata"]?["$model"]?.ToString(),
             };
 
         CloudEvent cloudEvent =
