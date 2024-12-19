@@ -314,6 +314,8 @@ public static class CloudEventFactory
     {
         ArgumentNullException.ThrowIfNull(eventData);
 
+        List<CloudEvent> cloudEvents = [];
+
         JsonObject body =
             new()
             {
@@ -346,7 +348,12 @@ public static class CloudEventFactory
                 // TraceParent = null,
             };
 
-        return [cloudEvent];
+        cloudEvents.Add(cloudEvent);
+
+        // Generate property events from the empty old valeu and new values
+        cloudEvents.AddRange(CreateCloudEventsFromPatch(eventData, source));
+
+        return cloudEvents;
     }
 
     public static List<CloudEvent> CreateRelationshipLifeCycleEvents(
@@ -355,6 +362,8 @@ public static class CloudEventFactory
     )
     {
         ArgumentNullException.ThrowIfNull(eventData);
+
+        List<CloudEvent> cloudEvents = [];
 
         JsonObject body =
             new()
@@ -394,7 +403,12 @@ public static class CloudEventFactory
                 // TraceParent = null,
             };
 
-        return [cloudEvent];
+        cloudEvents.Add(cloudEvent);
+
+        // Generate property events from the empty old valeu and new values
+        cloudEvents.AddRange(CreateCloudEventsFromPatch(eventData, source));
+
+        return cloudEvents;
     }
 
     public static List<CloudEvent> CreatePropertyEvents(EventData eventData, Uri source)
@@ -436,9 +450,16 @@ public static class CloudEventFactory
             cloudEvents.Add(cloudEvent);
         }
 
-        // Generate a patch from the old and new values
-        JsonPatch jsonPatch = eventData.OldValue.CreatePatch(eventData.NewValue);
+        // Generate property events from the old and new values
+        cloudEvents.AddRange(CreateCloudEventsFromPatch(eventData, source));
 
+        return cloudEvents;
+    }
+
+    private static List<CloudEvent> CreateCloudEventsFromPatch(EventData eventData, Uri source)
+    {
+        JsonPatch jsonPatch = eventData.OldValue.CreatePatch(eventData.NewValue);
+        List<CloudEvent> cloudEvents = [];
         foreach (PatchOperation op in jsonPatch.Operations)
         {
             if (op.Path.ToString().StartsWith("/$"))
@@ -491,7 +512,6 @@ public static class CloudEventFactory
 
             cloudEvents.Add(cloudEvent);
         }
-
         return cloudEvents;
     }
 

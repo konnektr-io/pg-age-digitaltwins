@@ -108,6 +108,7 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                     }
                     currentEvent.GraphName = insertMessage.Relation.Namespace;
                     currentEvent.TableName = insertMessage.Relation.RelationName;
+                    currentEvent.OldValue = [];
                     currentEvent.NewValue = await ConvertRowToJsonAsync(insertMessage.NewRow);
                     if (currentEvent.NewValue != null)
                     {
