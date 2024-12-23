@@ -69,6 +69,9 @@ builder.Services.AddOpenApi();
 // Add authentication
 // builder.Services.AddAuthentication().AddOpenIdConnect();
 
+builder.Services.AddRequestTimeouts();
+builder.Services.AddOutputCache();
+
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
@@ -377,6 +380,9 @@ if (app.Environment.IsDevelopment())
         }
     );
 }
+
+app.UseRequestTimeouts();
+app.UseOutputCache();
 
 app.MapDefaultEndpoints();
 

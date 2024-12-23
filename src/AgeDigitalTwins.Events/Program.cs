@@ -48,6 +48,9 @@ builder.Services.AddSingleton(sp =>
     );
 });
 
+builder.Services.AddRequestTimeouts();
+builder.Services.AddOutputCache();
+
 var app = builder.Build();
 
 // Resolve the singleton instance and start the subscription
@@ -64,6 +67,9 @@ catch (Exception ex)
     logger.LogError(ex, "Failed to start subscription");
     return;
 }
+
+app.UseRequestTimeouts();
+app.UseOutputCache();
 
 app.MapDefaultEndpoints();
 
