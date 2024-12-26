@@ -57,16 +57,27 @@ var app = builder.Build();
 var subscription = app.Services.GetRequiredService<AgeDigitalTwinsReplication>();
 var logger = app.Services.GetRequiredService<ILogger<Program>>();
 
-try
+var cts = new CancellationTokenSource();
+
+app.Lifetime.ApplicationStarted.Register(async () =>
 {
-    await subscription.StartAsync();
-}
-catch (Exception ex)
+    try
+    {
+        await subscription.StartAsync(cts.Token);
+    }
+    catch (Exception ex)
+    {
+        // Log the exception and exit
+        logger.LogError(ex, "Failed to start subscription");
+        app.Lifetime.StopApplication();
+    }
+});
+
+app.Lifetime.ApplicationStopping.Register(() =>
 {
-    // Log the exception and exit
-    logger.LogError(ex, "Failed to start subscription");
-    return;
-}
+    cts.Cancel();
+    subscription.Stop(); // Assuming Stop method exists to stop the subscription gracefully
+});
 
 app.UseRequestTimeouts();
 app.UseOutputCache();

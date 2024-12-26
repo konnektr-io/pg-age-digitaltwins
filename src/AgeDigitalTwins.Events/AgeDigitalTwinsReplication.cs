@@ -52,35 +52,37 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
     private CancellationTokenSource? _cancellationTokenSource;
     private readonly ConcurrentQueue<EventData> _eventQueue = new();
 
-    public async Task StartAsync()
+    public async Task StartAsync(CancellationToken cancellationToken = default)
     {
-        var consumerTask = Task.Run(ConsumeQueueAsync);
+        var consumerTask = Task.Run(
+            async () => await ConsumeQueueAsync(cancellationToken),
+            cancellationToken
+        );
         while (true)
         {
             try
             {
-                await StartReplicationAsync();
+                await StartReplicationAsync(cancellationToken);
             }
             catch (Exception ex)
             {
                 _logger.LogInformation(ex, "Error during replication: {Message}", ex.Message);
-                await Task.Delay(TimeSpan.FromSeconds(5)); // Wait before retrying
+                await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken); // Wait before retrying
             }
         }
     }
 
-    private async Task StartReplicationAsync()
+    private async Task StartReplicationAsync(CancellationToken cancellationToken = default)
     {
         _conn = new LogicalReplicationConnection(_connectionString);
-        await _conn.Open();
+        await _conn.Open(cancellationToken);
 
         PgOutputReplicationSlot slot = new(_replicationSlot);
-        _cancellationTokenSource = new CancellationTokenSource();
 
         IAsyncEnumerable<PgOutputReplicationMessage> messages = _conn.StartReplication(
             slot,
             new PgOutputReplicationOptions(_publication, PgOutputProtocolVersion.V4),
-            _cancellationTokenSource.Token
+            cancellationToken
         );
 
         EventData? currentEvent = null;
@@ -209,7 +211,7 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
         }
     }
 
-    private async Task ConsumeQueueAsync()
+    private async Task ConsumeQueueAsync(CancellationToken cancellationToken = default)
     {
         List<IEventSink> eventSinks = _eventSinkFactory.CreateEventSinks();
         List<EventRoute> eventRoutes = _eventSinkFactory.GetEventRoutes();
@@ -281,7 +283,7 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
             }
             else
             {
-                await Task.Delay(100); // Wait before checking the queue again
+                await Task.Delay(100, cancellationToken); // Wait before checking the queue again
             }
         }
     }
