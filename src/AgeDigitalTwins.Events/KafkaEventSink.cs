@@ -1,3 +1,5 @@
+using Azure.Core;
+using Azure.Identity;
 using CloudNative.CloudEvents;
 using CloudNative.CloudEvents.Kafka;
 using CloudNative.CloudEvents.SystemTextJson;
@@ -15,21 +17,55 @@ public class KafkaEventSink : IEventSink, IDisposable
 
     private readonly CloudEventFormatter _formatter = new JsonEventFormatter();
 
-    public KafkaEventSink(KafkaSinkOptions options, ILogger logger)
+    private readonly TokenCredential? _credential;
+
+    public KafkaEventSink(KafkaSinkOptions options, TokenCredential? credential, ILogger logger)
     {
         Name = options.Name;
+        _credential = credential;
         _logger = logger;
         _topic = options.Topic;
+        string bootstrapServers = options.BrokerList.EndsWith(":9093")
+            ? options.BrokerList
+            : options.BrokerList + ":9093";
+        SaslMechanism saslMechanism = Enum.TryParse<SaslMechanism>(
+            options.SaslMechanism,
+            true,
+            out var mechanism
+        )
+            ? mechanism
+            : SaslMechanism.Plain;
+
         ProducerConfig config =
             new()
             {
-                BootstrapServers = options.BrokerList,
+                BootstrapServers = bootstrapServers,
                 SecurityProtocol = SecurityProtocol.SaslSsl,
-                SaslMechanism = SaslMechanism.Plain,
-                SaslUsername = options.SaslUsername,
-                SaslPassword = options.SaslPassword,
+                SaslMechanism = saslMechanism,
             };
-        _producer = new ProducerBuilder<string?, byte[]>(config).Build();
+
+        if (saslMechanism == SaslMechanism.Plain)
+        {
+            config.SaslUsername = options.SaslUsername;
+            config.SaslPassword = options.SaslPassword;
+            _producer = new ProducerBuilder<string?, byte[]>(config).Build();
+        }
+        // OAuth currently only supported for Azure Event Hubs
+        else if (
+            saslMechanism == SaslMechanism.OAuthBearer
+            && bootstrapServers.Contains("servicebus")
+        )
+        {
+            config.SaslOauthbearerConfig =
+                $"https://{options.BrokerList.Replace(":9093", "")}/.default";
+            _producer = new ProducerBuilder<string?, byte[]>(config)
+                .SetOAuthBearerTokenRefreshHandler(TokenRefreshHandler)
+                .Build();
+        }
+        else
+        {
+            throw new InvalidOperationException("Invalid SaslMechanism");
+        }
     }
 
     public string Name { get; }
@@ -62,6 +98,31 @@ public class KafkaEventSink : IEventSink, IDisposable
         }
     }
 
+    private void TokenRefreshHandler(IProducer<string?, byte[]> producer, string config)
+    {
+        if (_credential == null)
+        {
+            producer.OAuthBearerSetTokenFailure("No credential provided");
+            return;
+        }
+
+        TokenRequestContext request = new([config]);
+
+        try
+        {
+            var token = _credential.GetToken(request, default);
+            producer.OAuthBearerSetToken(
+                token.Token,
+                token.ExpiresOn.ToUnixTimeMilliseconds(),
+                "AzureCredential"
+            );
+        }
+        catch (Exception e)
+        {
+            producer.OAuthBearerSetTokenFailure(e.Message);
+        }
+    }
+
     public void Dispose()
     {
         // Dispose the producer
@@ -75,7 +136,6 @@ public class KafkaSinkOptions
     public required string Name { get; set; }
     public required string BrokerList { get; set; }
     public required string Topic { get; set; }
-    public string? SecurityProtocol { get; set; }
     public string? SaslMechanism { get; set; } // Can be PLAIN or OAUTHBEARER for entra id
     public string? SaslUsername { get; set; }
     public string? SaslPassword { get; set; }

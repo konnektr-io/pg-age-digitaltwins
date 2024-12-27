@@ -19,7 +19,7 @@ public class EventSinkFactory(IConfiguration configuration, ILoggerFactory logge
             foreach (var kafkaSink in kafkaSinks)
             {
                 var logger = _loggerFactory.CreateLogger<KafkaEventSink>();
-                sinks.Add(new KafkaEventSink(kafkaSink, logger));
+                sinks.Add(new KafkaEventSink(kafkaSink, new DefaultAzureCredential(), logger));
             }
         }
 
