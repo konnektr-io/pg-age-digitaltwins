@@ -23,10 +23,10 @@
 
   <ItemGroup>
     <PackageReference Include="DTDLParser" Version="1.0.52" />
-    <PackageReference Include="JsonPatch.Net" Version="3.2.3" />
-    <PackageReference Include="Konnektr.Npgsql.Age" Version="0.4.0" />
-    <PackageReference Include="Npgsql" Version="9.0.1" />
-    <PackageReference Include="Npgsql.OpenTelemetry" Version="9.0.1" />
+    <PackageReference Include="JsonPatch.Net" Version="3.3.0" />
+    <PackageReference Include="Konnektr.Npgsql.Age" Version="1.0.2" />
+    <PackageReference Include="Npgsql" Version="9.0.2" />
+    <PackageReference Include="Npgsql.OpenTelemetry" Version="9.0.2" />
     <PackageReference Include="OpenTelemetry" Version="1.10.0" />
     <PackageReference Include="System.Text.Json" Version="9.0.0" />
   </ItemGroup>

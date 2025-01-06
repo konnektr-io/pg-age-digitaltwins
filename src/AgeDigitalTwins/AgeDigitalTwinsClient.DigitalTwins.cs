@@ -233,9 +233,9 @@ public partial class AgeDigitalTwinsClient
 
             string cypher =
                 $@"WITH '{updatedDigitalTwinJson}'::agtype as twin
-            MERGE (t: Twin {{`$dtId`: '{digitalTwinId}'}})
-            SET t = twin
-            RETURN t";
+                MERGE (t: Twin {{`$dtId`: '{digitalTwinId}'}})
+                SET t = twin
+                RETURN t";
             await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
             await using var command = connection.CreateCypherCommand(_graphName, cypher);
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);

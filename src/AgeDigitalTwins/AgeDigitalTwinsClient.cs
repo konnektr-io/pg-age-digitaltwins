@@ -40,7 +40,7 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
     {
         connectionStringBuilder.SearchPath = "ag_catalog, \"$user\", public";
         NpgsqlDataSourceBuilder dataSourceBuilder = new(connectionStringBuilder.ConnectionString);
-        _dataSource = dataSourceBuilder.UseAge(false).Build();
+        _dataSource = dataSourceBuilder.UseAge(true).Build();
 
         _graphName = graphName;
         _modelParser = new(
@@ -58,7 +58,7 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
         NpgsqlConnectionStringBuilder connectionStringBuilder =
             new(connectionString) { SearchPath = "ag_catalog, \"$user\", public" };
         NpgsqlDataSourceBuilder dataSourceBuilder = new(connectionStringBuilder.ConnectionString);
-        _dataSource = dataSourceBuilder.UseAge(false).Build();
+        _dataSource = dataSourceBuilder.UseAge(true).Build();
 
         _graphName = graphName;
         _modelParser = new(
