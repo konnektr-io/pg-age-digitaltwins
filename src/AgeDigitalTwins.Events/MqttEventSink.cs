@@ -2,7 +2,7 @@ using CloudNative.CloudEvents;
 using CloudNative.CloudEvents.Mqtt;
 using CloudNative.CloudEvents.SystemTextJson;
 using MQTTnet;
-using MQTTnet.Client;
+using MQTTnet.Formatter;
 
 namespace AgeDigitalTwins.Events;
 
@@ -20,13 +20,14 @@ public class MqttEventSink : IEventSink, IDisposable
         _topic = options.Topic;
 
         var mqttOptions = new MqttClientOptionsBuilder()
+            .WithProtocolVersion(options.GetProtocolVersion())
             .WithClientId(options.ClientId)
             .WithTcpServer(options.Broker, options.Port)
             .WithCredentials(options.Username, options.Password)
             .WithCleanSession()
             .Build();
 
-        var factory = new MqttFactory();
+        var factory = new MqttClientFactory();
         _mqttClient = factory.CreateMqttClient();
 
         _mqttClient.ConnectAsync(mqttOptions).Wait();
@@ -76,4 +77,16 @@ public class MqttSinkOptions
     public required string ClientId { get; set; }
     public required string Username { get; set; }
     public required string Password { get; set; }
+    public string ProtocolVersion { get; set; } = "5.0.0";
+
+    public MqttProtocolVersion GetProtocolVersion()
+    {
+        return ProtocolVersion switch
+        {
+            "3.1.0" => MqttProtocolVersion.V310,
+            "3.1.1" => MqttProtocolVersion.V311,
+            "5.0.0" => MqttProtocolVersion.V500,
+            _ => MqttProtocolVersion.Unknown,
+        };
+    }
 }
