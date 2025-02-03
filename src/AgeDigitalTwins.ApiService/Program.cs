@@ -34,7 +34,7 @@ builder.AddNpgsqlDataSource(
     },
     configureDataSourceBuilder: dataSourceBuilder =>
     {
-        dataSourceBuilder.UseAge(false);
+        dataSourceBuilder.UseAge(true);
     }
 );
 
