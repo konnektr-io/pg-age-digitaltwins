@@ -13,7 +13,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
 
 // Add Npgsql data source with custom settings.
-builder.AddNpgsqlDataSource(
+builder.AddKeyedNpgsqlDataSource(
     "agedb",
     configureSettings: settings =>
     {
@@ -38,6 +38,33 @@ builder.AddNpgsqlDataSource(
     }
 );
 
+// Read-only data source
+builder.AddKeyedNpgsqlDataSource(
+    "agedb_ro",
+    configureSettings: settings =>
+    {
+        settings.DisableTracing = true;
+        settings.ConnectionString ??=
+            builder.Configuration.GetConnectionString("agedb_ro")
+            ?? builder.Configuration["ConnectionStrings:agedb_ro"];
+        if (settings.ConnectionString != null)
+        {
+            NpgsqlConnectionStringBuilder connectionStringBuilder =
+                new(settings.ConnectionString)
+                {
+                    SearchPath = "ag_catalog, \"$user\", public",
+                    ConnectionIdleLifetime = 60,
+                    ConnectionLifetime = 300,
+                };
+            settings.ConnectionString = connectionStringBuilder.ConnectionString;
+        }
+    },
+    configureDataSourceBuilder: dataSourceBuilder =>
+    {
+        dataSourceBuilder.UseAge(true);
+    }
+);
+
 // Enable OpenTelemetry tracing with Npgsql integration (does not work when having it enabled in Aspire.Npgsql)
 builder
     .Services.AddOpenTelemetry()
@@ -49,14 +76,15 @@ builder
 // Add AgeDigitalTwinsClient
 builder.Services.AddSingleton(sp =>
 {
-    NpgsqlDataSource dataSource = sp.GetRequiredService<NpgsqlDataSource>();
+    NpgsqlDataSource dataSourceRw = sp.GetRequiredKeyedService<NpgsqlDataSource>("agedb");
+    NpgsqlDataSource? dataSourceRo = sp.GetKeyedService<NpgsqlDataSource>("agedb_ro");
     string graphName =
         builder.Configuration.GetSection("Parameters")["AgeGraphName"]
         ?? builder.Configuration["Parameters:AgeGraphName"]
         ?? builder.Configuration["AgeGraphName"]
         ?? "digitaltwins";
     Console.WriteLine($"Using graph: {graphName}");
-    return new AgeDigitalTwinsClient(dataSource, graphName);
+    return new AgeDigitalTwinsClient(dataSourceRw, dataSourceRo, graphName);
 });
 
 // Add services to the container.

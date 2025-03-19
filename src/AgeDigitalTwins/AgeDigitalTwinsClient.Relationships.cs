@@ -22,7 +22,8 @@ public partial class AgeDigitalTwinsClient
     {
         string cypher =
             $@"MATCH (source:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel {{`$relationshipId`: '{relationshipId}'}}]->(target:Twin) RETURN rel";
-        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var connection = await GetDataSource(true)
+            .OpenConnectionAsync(cancellationToken);
         await using var command = connection.CreateCypherCommand(_graphName, cypher);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         return await reader.ReadAsync(cancellationToken);
@@ -37,7 +38,8 @@ public partial class AgeDigitalTwinsClient
     {
         string cypher =
             $"MATCH (source:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel {{`$relationshipId`: '{relationshipId}'}}]->(target:Twin) WHERE rel['$etag'] = '{etag}' RETURN rel";
-        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var connection = await GetDataSource(true)
+            .OpenConnectionAsync(cancellationToken);
         await using var command = connection.CreateCypherCommand(_graphName, cypher);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         return await reader.ReadAsync(cancellationToken);
@@ -51,7 +53,8 @@ public partial class AgeDigitalTwinsClient
     {
         string cypher =
             $@"MATCH (source:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel {{`$relationshipId`: '{relationshipId}'}}]->(target:Twin) RETURN rel";
-        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var connection = await GetDataSource(true)
+            .OpenConnectionAsync(cancellationToken);
         await using var command = connection.CreateCypherCommand(_graphName, cypher);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
@@ -226,7 +229,8 @@ public partial class AgeDigitalTwinsClient
             MERGE (source)-[rel:{relationshipName} {{`$relationshipId`: '{relationshipId}'}}]->(target)
             SET rel = relationship
             RETURN rel";
-        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var connection = await GetDataSource(false)
+            .OpenConnectionAsync(cancellationToken);
         await using var command = connection.CreateCypherCommand(_graphName, cypher);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
@@ -332,7 +336,8 @@ public partial class AgeDigitalTwinsClient
             $@"MATCH (source:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel {{`$relationshipId`: '{relationshipId}'}}]->(target:Twin)
             {string.Join("\n", patchOperations)}
             RETURN rel";
-        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var connection = await GetDataSource(false)
+            .OpenConnectionAsync(cancellationToken);
         await using var command = connection.CreateCypherCommand(_graphName, cypher);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
@@ -352,7 +357,8 @@ public partial class AgeDigitalTwinsClient
     {
         string cypher =
             $@"MATCH (source:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel {{`$relationshipId`: '{relationshipId}'}}]->(target:Twin) DELETE rel";
-        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var connection = await GetDataSource(false)
+            .OpenConnectionAsync(cancellationToken);
         await using var command = connection.CreateCypherCommand(_graphName, cypher);
         int rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken);
         if (rowsAffected == 0)

@@ -27,7 +27,8 @@ public partial class AgeDigitalTwinsClient
         {
             cypher = query;
         }
-        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var connection = await GetDataSource(true)
+            .OpenConnectionAsync(cancellationToken);
         await using var command = connection.CreateCypherCommand(_graphName, cypher);
         await using var reader =
             await command.ExecuteReaderAsync(cancellationToken)
