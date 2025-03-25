@@ -54,6 +54,15 @@ public class DTDLParserParsingException : AgeDigitalTwinsException
     }
 }
 
+public class NotSupportedException : AgeDigitalTwinsException
+{
+    public NotSupportedException(string message)
+        : base(message)
+    {
+        StatusCode = HttpStatusCode.BadRequest;
+    }
+}
+
 public class DigitalTwinNotFoundException : AgeDigitalTwinsException
 {
     public DigitalTwinNotFoundException(string message)
