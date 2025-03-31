@@ -2,8 +2,11 @@ using System.Text.Json;
 using AgeDigitalTwins;
 using AgeDigitalTwins.ApiService;
 using Json.Patch;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Primitives;
+using Microsoft.IdentityModel.Tokens;
 using Npgsql;
 using Npgsql.Age;
 
@@ -95,7 +98,37 @@ builder.Services.AddExceptionHandler<ExceptionHandler>();
 builder.Services.AddOpenApi();
 
 // Add authentication
-// builder.Services.AddAuthentication().AddOpenIdConnect();
+builder
+    .Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(jwtOptions =>
+    {
+        string? metadataAddress = builder.Configuration["Authentication:MetadataAddress"];
+        if (!string.IsNullOrEmpty(metadataAddress))
+        {
+            jwtOptions.MetadataAddress = metadataAddress;
+        }
+        jwtOptions.Authority = builder.Configuration["Authentication:Authority"];
+        // Optional if the MetadataAddress is specified
+        jwtOptions.Audience = builder.Configuration["Authentication:Audience"];
+        jwtOptions.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateIssuerSigningKey = true,
+            ValidAudiences = builder
+                .Configuration.GetSection("Authentication:ValidAudiences")
+                .Get<string[]>(),
+            ValidIssuers = builder
+                .Configuration.GetSection("Authentication:ValidIssuers")
+                .Get<string[]>(),
+        };
+
+        jwtOptions.MapInboundClaims = false;
+    });
+
+builder
+    .Services.AddAuthorizationBuilder()
+    .SetDefaultPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
 
 builder.Services.AddRequestTimeouts();
 builder.Services.AddOutputCache();
@@ -109,8 +142,11 @@ if (app.Environment.IsDevelopment())
 
 app.UseExceptionHandler();
 
+app.UseAuthentication();
+
 app.MapGet(
         "/digitaltwins/{id}",
+        [Authorize]
         (
             string id,
             [FromServices] AgeDigitalTwinsClient client,
@@ -124,6 +160,7 @@ app.MapGet(
 
 app.MapPut(
         "/digitaltwins/{id}",
+        [Authorize]
         (
             string id,
             JsonDocument digitalTwin,
@@ -150,6 +187,7 @@ app.MapPut(
 
 app.MapPatch(
         "digitaltwins/{id}",
+        [Authorize]
         async (
             string id,
             JsonPatch patch,
@@ -174,6 +212,7 @@ app.MapPatch(
 
 app.MapDelete(
         "/digitaltwins/{id}",
+        [Authorize]
         async (
             string id,
             [FromServices] AgeDigitalTwinsClient client,
@@ -188,6 +227,7 @@ app.MapDelete(
 
 app.MapGet(
         "/digitaltwins/{id}/incomingrelationships",
+        [Authorize]
         (
             string id,
             [FromServices] AgeDigitalTwinsClient client,
@@ -201,6 +241,7 @@ app.MapGet(
 
 app.MapGet(
         "/digitaltwins/{id}/relationships",
+        [Authorize]
         (
             string id,
             HttpContext httpContext,
@@ -220,6 +261,7 @@ app.MapGet(
 
 app.MapGet(
         "/digitaltwins/{id}/relationships/{relationshipId}",
+        [Authorize]
         (
             string id,
             string relationshipId,
@@ -234,6 +276,7 @@ app.MapGet(
 
 app.MapPut(
         "/digitaltwins/{id}/relationships/{relationshipId}",
+        [Authorize]
         (
             string id,
             string relationshipId,
@@ -267,6 +310,7 @@ app.MapPut(
 
 app.MapPatch(
         "/digitaltwins/{id}/relationships/{relationshipId}",
+        [Authorize]
         async (
             string id,
             string relationshipId,
@@ -298,6 +342,7 @@ app.MapPatch(
 
 app.MapDelete(
         "/digitaltwins/{id}/relationships/{relationshipId}",
+        [Authorize]
         async (
             string id,
             string relationshipId,
@@ -313,6 +358,7 @@ app.MapDelete(
 
 app.MapPost(
         "/query",
+        [Authorize]
         async (
             JsonElement requestBody,
             [FromServices] AgeDigitalTwinsClient client,
@@ -346,6 +392,7 @@ app.MapPost(
 
 app.MapGet(
         "/models",
+        [Authorize]
         async ([FromServices] AgeDigitalTwinsClient client, CancellationToken cancellationToken) =>
         {
             // TODO: Implement dependenciesFor parameter
@@ -363,6 +410,7 @@ app.MapGet(
 
 app.MapPost(
         "/models",
+        [Authorize]
         (
             JsonElement[] models,
             [FromServices] AgeDigitalTwinsClient client,
@@ -376,6 +424,7 @@ app.MapPost(
 
 app.MapDelete(
         "/models/{id}",
+        [Authorize]
         async (
             string id,
             [FromServices] AgeDigitalTwinsClient client,
