@@ -19,6 +19,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgeDigitalTwins.Events", "A
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgeDigitalTwins.Events.Test", "AgeDigitalTwins.Events.Test\AgeDigitalTwins.Events.Test.csproj", "{096D0FED-02C5-41CB-B579-2CC7996841C5}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgeDigitalTwins.MCPServerSSE", "AgeDigitalTwins.MCPServerSSE\AgeDigitalTwins.MCPServerSSE.csproj", "{A2A18737-2BA8-4C55-B7DE-1F88469CD253}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -57,6 +59,10 @@ Global
 		{096D0FED-02C5-41CB-B579-2CC7996841C5}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{096D0FED-02C5-41CB-B579-2CC7996841C5}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{096D0FED-02C5-41CB-B579-2CC7996841C5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A2A18737-2BA8-4C55-B7DE-1F88469CD253}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A2A18737-2BA8-4C55-B7DE-1F88469CD253}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A2A18737-2BA8-4C55-B7DE-1F88469CD253}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A2A18737-2BA8-4C55-B7DE-1F88469CD253}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
