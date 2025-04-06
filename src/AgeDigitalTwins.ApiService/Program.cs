@@ -153,7 +153,7 @@ if (app.Environment.IsDevelopment())
 app.UseExceptionHandler();
 
 app.UseAuthentication();
-
+app.UseAuthorization();
 app.MapGet(
         "/digitaltwins/{id}",
         [Authorize]
