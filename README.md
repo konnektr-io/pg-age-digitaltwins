@@ -7,7 +7,8 @@ AgeDigitalTwins is an SDK and API designed to support Digital Twins applications
 - **DTDL Support**: Full support for DTDL data models.
 - **Graph Database**: Utilizes PostgreSQL with the Apache AGE extension for graph database capabilities.
 - **Validation**: Validate instances loaded in the graph database.
-- **Easy Transition**: Designed to make the transition from Azure Digital Twins seamless.
+- **Easy Transition**: Designed to make the transition from Azure Digital Twins seamless (compatible with Azure Digital Twins APIs).
+- **MCP Protocol**: Implements the Model Context Protocol (MCP) to provide context to LLMs.
 
 ## Roadmap
 
