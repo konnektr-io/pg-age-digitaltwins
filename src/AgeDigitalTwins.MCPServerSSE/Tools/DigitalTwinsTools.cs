@@ -175,9 +175,21 @@ public static class DigitalTwinsTools
             await client.DeleteRelationshipAsync(twinId, relationshipId, cancellationToken);
             return $"Relationship with ID '{relationshipId}' for twin ID '{twinId}' deleted successfully.";
         }
-        catch
+        catch (ArgumentNullException ex)
         {
-            return $"Failed to delete relationship with ID '{relationshipId}' for twin ID '{twinId}'. It may not exist.";
+            return $"Failed to delete relationship: {ex.Message}. One or more required arguments were null.";
+        }
+        catch (ArgumentException ex)
+        {
+            return $"Failed to delete relationship: {ex.Message}. Invalid argument provided.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            return $"Failed to delete relationship: {ex.Message}. The operation is not valid in the current state.";
+        }
+        catch (Exception ex)
+        {
+            return $"Failed to delete relationship: {ex.Message}. An unexpected error occurred.";
         }
     }
 }
