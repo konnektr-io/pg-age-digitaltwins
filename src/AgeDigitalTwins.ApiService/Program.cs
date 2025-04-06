@@ -97,38 +97,48 @@ builder.Services.AddExceptionHandler<ExceptionHandler>();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
-// Add authentication
-builder
-    .Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(jwtOptions =>
-    {
-        string? metadataAddress = builder.Configuration["Authentication:MetadataAddress"];
-        if (!string.IsNullOrEmpty(metadataAddress))
-        {
-            jwtOptions.MetadataAddress = metadataAddress;
-        }
-        jwtOptions.Authority = builder.Configuration["Authentication:Authority"];
-        // Optional if the MetadataAddress is specified
-        jwtOptions.Audience = builder.Configuration["Authentication:Audience"];
-        jwtOptions.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateIssuerSigningKey = true,
-            ValidAudiences = builder
-                .Configuration.GetSection("Authentication:ValidAudiences")
-                .Get<string[]>(),
-            ValidIssuers = builder
-                .Configuration.GetSection("Authentication:ValidIssuers")
-                .Get<string[]>(),
-        };
+// Add authentication only if the environment variable is set
+var enableAuthentication = builder.Configuration.GetValue<bool>("Authentication:Enabled");
 
-        jwtOptions.MapInboundClaims = false;
-    });
+if (enableAuthentication)
+{
+    builder
+        .Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+        .AddJwtBearer(jwtOptions =>
+        {
+            string? metadataAddress = builder.Configuration["Authentication:MetadataAddress"];
+            if (!string.IsNullOrEmpty(metadataAddress))
+            {
+                jwtOptions.MetadataAddress = metadataAddress;
+            }
+            jwtOptions.Authority = builder.Configuration["Authentication:Authority"];
+            jwtOptions.Audience = builder.Configuration["Authentication:Audience"];
+            jwtOptions.TokenValidationParameters = new TokenValidationParameters
+            {
+                ValidateIssuer = true,
+                ValidateAudience = true,
+                ValidateIssuerSigningKey = true,
+                ValidAudiences = builder
+                    .Configuration.GetSection("Authentication:ValidAudiences")
+                    .Get<string[]>(),
+                ValidIssuers = builder
+                    .Configuration.GetSection("Authentication:ValidIssuers")
+                    .Get<string[]>(),
+            };
 
-builder
-    .Services.AddAuthorizationBuilder()
-    .SetDefaultPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
+            jwtOptions.MapInboundClaims = false;
+        });
+
+    builder
+        .Services.AddAuthorizationBuilder()
+        .SetDefaultPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
+}
+else
+{
+    builder
+        .Services.AddAuthorizationBuilder()
+        .SetDefaultPolicy(new AuthorizationPolicyBuilder().RequireAssertion(_ => true).Build());
+}
 
 builder.Services.AddRequestTimeouts();
 builder.Services.AddOutputCache();
