@@ -38,7 +38,7 @@ AgeDigitalTwins is an SDK and API designed to support Digital Twins applications
   - [x] Relationships CRUD operations
   - [x] Error Handling
   - [x] ETags
-  - [ ] Authentication
+  - [x] Authentication
 - **MCP Server**
   - [ ] Models CRUD operations
   - [ ] Digital Twins CRUD operations
@@ -46,7 +46,7 @@ AgeDigitalTwins is an SDK and API designed to support Digital Twins applications
   - [ ] Authentication
 - **Deployment**:
   - [x] Dockerize the API
-  - [ ] Helm chart for deployment
+  - [x] Helm chart for deployment
 - **Event routing**:
   - [x] Logical replication connection with AgType parser
   - [x] Data History output (same format as Azure Digital Twins)
