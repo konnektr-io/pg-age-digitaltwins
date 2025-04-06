@@ -6,20 +6,16 @@ using AgeDigitalTwins.Exceptions;
 
 namespace AgeDigitalTwins;
 
-public static class AdtQueryHelpers
+public static partial class AdtQueryHelpers
 {
     public static string ConvertAdtQueryToCypher(string adtQuery, string graphName)
     {
         // Clean up the query from line breaks and extra spaces
-        adtQuery = Regex.Replace(adtQuery, @"\s+", " ").Trim();
+        adtQuery = WhitespaceTrimmerRegex().Replace(adtQuery, " ").Trim();
 
         // Prepare RETURN and LIMIT clauses
         string returnClause;
-        var selectMatch = Regex.Match(
-            adtQuery,
-            @"SELECT (?:TOP\((?<limit>\d+)\) )?(?<projections>.+) FROM",
-            RegexOptions.IgnoreCase
-        );
+        var selectMatch = SelectRegex().Match(adtQuery);
         string limitClause;
         bool usesWildcard = false;
         if (selectMatch.Success)
@@ -50,11 +46,7 @@ public static class AdtQueryHelpers
         if (adtQuery.Contains("FROM RELATIONSHIPS", StringComparison.OrdinalIgnoreCase))
         {
             // Handle RELATIONSHIPS source
-            var match = Regex.Match(
-                adtQuery,
-                @"FROM RELATIONSHIPS (\w+)?(?=\s+WHERE|\s*$)",
-                RegexOptions.IgnoreCase
-            );
+            var match = GetRelationshipPattern().Match(adtQuery);
             if (match.Success)
             {
                 var relationshipAlias = match.Groups[1].Value;
@@ -75,11 +67,7 @@ public static class AdtQueryHelpers
             if (adtQuery.Contains("MATCH", StringComparison.OrdinalIgnoreCase))
             {
                 // Handle MATCH clause
-                var match = Regex.Match(
-                    adtQuery,
-                    @"FROM DIGITALTWINS MATCH (.+?)(?=\s+WHERE|\s*$)",
-                    RegexOptions.IgnoreCase
-                );
+                var match = GetDigitalTwinsMatchRegex().Match(adtQuery);
                 if (match.Success)
                 {
                     var adtMatchClause = match.Groups[1].Value;
@@ -98,10 +86,7 @@ public static class AdtQueryHelpers
                         // [R:hasBlob|hasModel|has] -> (label(R) = 'hasBlob' OR label(R) = 'hasModel' OR label(R) = 'has')
                         // (n1:Twin)-[r1:hasBlob|hasModel|has]->(n2)-[r2:contains|includes]->(n3) -> clause1: (label(r1) = 'hasBlob' OR label(r1) = 'hasModel' OR label(r1) = 'has') , clause2: (label(r2) = 'contains' OR label(r2) = 'includes')
                         // This also has to work for multiple matches in the same query
-                        var multiLabelEdgeMatches = Regex.Matches(
-                            matchClause,
-                            @"\[(\w+):([\w\|]+)\]"
-                        );
+                        var multiLabelEdgeMatches = MultiLabelRegex().Matches(matchClause);
                         foreach (Match multiLabelEdgeMatch in multiLabelEdgeMatches)
                         {
                             var relationshipAlias = multiLabelEdgeMatch.Groups[1].Value;
@@ -126,11 +111,7 @@ public static class AdtQueryHelpers
             }
             else if (adtQuery.Contains("JOIN", StringComparison.OrdinalIgnoreCase))
             {
-                var joinMatches = Regex.Matches(
-                    adtQuery,
-                    @"JOIN (\w+) RELATED (\w+)\.(\w+)(?: (\w+))?(?=\s+JOIN|\s+WHERE|\s*$)",
-                    RegexOptions.IgnoreCase
-                );
+                var joinMatches = GetJoinRelatedRegex().Matches(adtQuery);
                 List<string> matchClauses = new();
 
                 foreach (Match joinMatch in joinMatches)
@@ -163,11 +144,7 @@ public static class AdtQueryHelpers
             }
             else
             {
-                var match = Regex.Match(
-                    adtQuery,
-                    @"FROM DIGITALTWINS (\w+)?(?=\s+WHERE|\s*$)",
-                    RegexOptions.IgnoreCase
-                );
+                var match = ExtractDigitalTwinNameRegex().Match(adtQuery);
                 if (match.Success)
                 {
                     var twinAlias = match.Groups[1].Value;
@@ -193,7 +170,7 @@ public static class AdtQueryHelpers
         string whereClause = string.Empty;
         if (adtQuery.Contains("WHERE", StringComparison.OrdinalIgnoreCase))
         {
-            var match = Regex.Match(adtQuery, @"WHERE (.+)");
+            var match = CreateWhereClauseRegex().Match(adtQuery);
             if (match.Success)
             {
                 var adtWhereClause = match.Groups[1].Value;
@@ -256,126 +233,212 @@ public static class AdtQueryHelpers
         if (!string.IsNullOrEmpty(prependAlias))
         {
             // Handle function calls without prepending the alias to the function name
-            whereClause = Regex.Replace(
-                whereClause,
-                @"(\w+)\(([^)]+)\)",
-                m =>
-                {
-                    var functionName = m.Groups[1].Value;
-                    var functionArgs = m.Groups[2].Value;
+            whereClause = PropertyAccessRegex()
+                .Replace(
+                    whereClause,
+                    m =>
+                    {
+                        var functionName = m.Groups[1].Value;
+                        var functionArgs = m.Groups[2].Value;
 
-                    // Prepend alias to properties within the function arguments
-                    functionArgs = Regex.Replace(
-                        functionArgs,
-                        @"(?<=\s|\[|^)(?!\d+|'[^']*'|""[^""]*"")[^\[\]""\s=<>!]+(?=\s*=\s*'|\s|$|\])",
-                        n =>
-                        {
-                            return $"{prependAlias}.{n.Value}";
-                        },
-                        RegexOptions.IgnoreCase
-                    );
+                        // Prepend alias to properties within the function arguments
+                        functionArgs = FunctionArgsRegex()
+                            .Replace(
+                                functionArgs,
+                                n =>
+                                {
+                                    return $"{prependAlias}.{n.Value}";
+                                }
+                            );
 
-                    return $"{functionName}({functionArgs})";
-                },
-                RegexOptions.IgnoreCase
-            );
+                        return $"{functionName}({functionArgs})";
+                    }
+                );
 
             // Prepend alias to properties outside of function calls
-            whereClause = Regex.Replace(
-                whereClause,
-                @"(?<=\s|\[|^)(?!AND\b|OR\b|\d+|'[^']*'|""[^""]*"")[^\[\]""\s=<>!()]+(?=\s*=\s*'|\s|$|\])",
-                m =>
-                {
-                    return $"{prependAlias}.{m.Value}";
-                },
-                RegexOptions.IgnoreCase
-            );
+            whereClause = PropertyAccessWhereClauseRegex()
+                .Replace(
+                    whereClause,
+                    m =>
+                    {
+                        return $"{prependAlias}.{m.Value}";
+                    }
+                );
 
             // Process IS_OF_MODEL function
-            whereClause = Regex.Replace(
-                whereClause,
-                @"IS_OF_MODEL\(([^)]+)\)",
-                m =>
-                {
-                    return $"{graphName}.is_of_model({prependAlias},{m.Groups[1].Value})";
-                },
-                RegexOptions.IgnoreCase
-            );
+            whereClause = IsOfModelRegex()
+                .Replace(
+                    whereClause,
+                    m =>
+                    {
+                        return $"{graphName}.is_of_model({prependAlias},{m.Groups[1].Value})";
+                    }
+                );
         }
         else
         {
             // Process IS_OF_MODEL function without prepend alias
-            whereClause = Regex.Replace(
-                whereClause,
-                @"IS_OF_MODEL\(([^)]+)\)",
-                m =>
-                {
-                    return $"{graphName}.is_of_model({m.Groups[1].Value})";
-                },
-                RegexOptions.IgnoreCase
-            );
+            whereClause = IsOfModelRegex2()
+                .Replace(
+                    whereClause,
+                    m =>
+                    {
+                        return $"{graphName}.is_of_model({m.Groups[1].Value})";
+                    }
+                );
         }
 
         // Process string function STARTSWITH
-        whereClause = Regex.Replace(
-            whereClause,
-            @"STARTSWITH\(([^,]+),\s*'([^']+)'\)",
-            m =>
-            {
-                return $"{m.Groups[1].Value} STARTS WITH '{m.Groups[2].Value}'";
-            },
-            RegexOptions.IgnoreCase
-        );
+        whereClause = StartsWithFunctionRegex()
+            .Replace(
+                whereClause,
+                m =>
+                {
+                    return $"{m.Groups[1].Value} STARTS WITH '{m.Groups[2].Value}'";
+                }
+            );
 
         // Process string function ENDSWITH
-        whereClause = Regex.Replace(
-            whereClause,
-            @"ENDSWITH\(([^,]+),\s*'([^']+)'\)",
-            m =>
-            {
-                return $"{m.Groups[1].Value} ENDS WITH '{m.Groups[2].Value}'";
-            },
-            RegexOptions.IgnoreCase
-        );
+        whereClause = EndsWithFunctionRegex()
+            .Replace(
+                whereClause,
+                m =>
+                {
+                    return $"{m.Groups[1].Value} ENDS WITH '{m.Groups[2].Value}'";
+                }
+            );
 
         // Process string function CONTAINS
-        whereClause = Regex.Replace(
-            whereClause,
-            @"CONTAINS\(([^,]+),\s*'([^']+)'\)",
-            m =>
-            {
-                return $"{m.Groups[1].Value} CONTAINS '{m.Groups[2].Value}'";
-            },
-            RegexOptions.IgnoreCase
-        );
+        whereClause = ContainsFunctionRegex()
+            .Replace(
+                whereClause,
+                m =>
+                {
+                    return $"{m.Groups[1].Value} CONTAINS '{m.Groups[2].Value}'";
+                }
+            );
 
         // Process IS_NULL function
-        whereClause = Regex.Replace(
-            whereClause,
-            @"IS_NULL\(([^)]+)\)",
-            m =>
-            {
-                return $"{m.Groups[1].Value} IS NULL";
-            },
-            RegexOptions.IgnoreCase
-        );
+        whereClause = IsNullFunctionRegex()
+            .Replace(
+                whereClause,
+                m =>
+                {
+                    return $"{m.Groups[1].Value} IS NULL";
+                }
+            );
 
         // Process IS_DEFINED function
-        whereClause = Regex.Replace(
-            whereClause,
-            @"IS_DEFINED\(([^)]+)\)",
-            m =>
-            {
-                return $"{m.Groups[1].Value} IS NOT NULL";
-            },
-            RegexOptions.IgnoreCase
-        );
+        whereClause = IsNotNullRegex()
+            .Replace(
+                whereClause,
+                m =>
+                {
+                    return $"{m.Groups[1].Value} IS NOT NULL";
+                }
+            );
+
+        // TODO: Other type checks
 
         // Replace property access with $ character
-        whereClause = Regex.Replace(whereClause, @"(\.\$[\w]+)", m => $"['{m.Value[1..]}']");
-
-        // TODO: evaluate whether backticks would be better instead
+        whereClause = DollarSignPropertyRegex().Replace(whereClause, m => $"['{m.Value[1..]}']");
 
         return whereClause;
     }
+
+    [GeneratedRegex(
+        @"SELECT (?:TOP\((?<limit>\d+)\) )?(?<projections>.+) FROM",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+    )]
+    private static partial Regex SelectRegex();
+
+    [GeneratedRegex(@"\s+")]
+    private static partial Regex WhitespaceTrimmerRegex();
+
+    [GeneratedRegex(
+        @"FROM RELATIONSHIPS (\w+)?(?=\s+WHERE|\s*$)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+    )]
+    private static partial Regex GetRelationshipPattern();
+
+    [GeneratedRegex(
+        @"FROM DIGITALTWINS MATCH (.+?)(?=\s+WHERE|\s*$)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+    )]
+    private static partial Regex GetDigitalTwinsMatchRegex();
+
+    [GeneratedRegex(@"\[(\w+):([\w\|]+)\]")]
+    private static partial Regex MultiLabelRegex();
+
+    [GeneratedRegex(
+        @"JOIN (\w+) RELATED (\w+)\.(\w+)(?: (\w+))?(?=\s+JOIN|\s+WHERE|\s*$)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+    )]
+    private static partial Regex GetJoinRelatedRegex();
+
+    [GeneratedRegex(
+        @"FROM DIGITALTWINS (\w+)?(?=\s+WHERE|\s*$)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+    )]
+    private static partial Regex ExtractDigitalTwinNameRegex();
+
+    [GeneratedRegex(@"WHERE (.+)")]
+    private static partial Regex CreateWhereClauseRegex();
+
+    [GeneratedRegex(@"(\w+)\(([^)]+)\)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex PropertyAccessRegex();
+
+    [GeneratedRegex(
+        @"(?<=\s|\[|^)(?!\d+|'[^']*'|""[^""]*"")[^\[\]""\s=<>!]+(?=\s*=\s*'|\s|$|\])",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+    )]
+    private static partial Regex FunctionArgsRegex();
+
+    [GeneratedRegex(
+        @"(?<=\s|\[|^)(?!AND\b|OR\b|\d+|'[^']*'|""[^""]*"")[^\[\]""\s=<>!()]+(?=\s*=\s*'|\s|$|\])",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+    )]
+    private static partial Regex PropertyAccessWhereClauseRegex();
+
+    [GeneratedRegex(
+        @"IS_OF_MODEL\(([^)]+)\)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+    )]
+    private static partial Regex IsOfModelRegex();
+
+    [GeneratedRegex(
+        @"IS_OF_MODEL\(([^)]+)\)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+    )]
+    private static partial Regex IsOfModelRegex2();
+
+    [GeneratedRegex(
+        @"STARTSWITH\(([^,]+),\s*'([^']+)'\)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+    )]
+    private static partial Regex StartsWithFunctionRegex();
+
+    [GeneratedRegex(
+        @"ENDSWITH\(([^,]+),\s*'([^']+)'\)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+    )]
+    private static partial Regex EndsWithFunctionRegex();
+
+    [GeneratedRegex(
+        @"CONTAINS\(([^,]+),\s*'([^']+)'\)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+    )]
+    private static partial Regex ContainsFunctionRegex();
+
+    [GeneratedRegex(@"IS_NULL\(([^)]+)\)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex IsNullFunctionRegex();
+
+    [GeneratedRegex(
+        @"IS_DEFINED\(([^)]+)\)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+    )]
+    private static partial Regex IsNotNullRegex();
+
+    [GeneratedRegex(@"(\.\$[\w]+)")]
+    private static partial Regex DollarSignPropertyRegex();
 }
