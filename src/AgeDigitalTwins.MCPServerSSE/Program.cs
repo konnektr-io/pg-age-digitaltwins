@@ -1,16 +1,9 @@
-using System.ComponentModel;
-using System.Text.Json;
 using AgeDigitalTwins;
-using Json.Patch;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using ModelContextProtocol.Server;
 using Npgsql;
 using Npgsql.Age;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddMcpServer().WithToolsFromAssembly(); // Tools are now in DigitalTwinsTools.cs
+builder.Services.AddMcpServer().WithToolsFromAssembly();
 
 // Add Npgsql data source with custom settings.
 builder.AddKeyedNpgsqlDataSource(
@@ -79,4 +72,6 @@ builder.Services.AddSingleton(sp =>
     return new AgeDigitalTwinsClient(dataSourceRw, dataSourceRo, graphName);
 });
 
-await builder.Build().RunAsync();
+var app = builder.Build();
+app.MapMcp();
+app.Run();

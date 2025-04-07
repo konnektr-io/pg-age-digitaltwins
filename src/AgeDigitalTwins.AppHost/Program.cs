@@ -10,4 +10,7 @@ builder
 
 // builder.AddProject<Projects.AgeDigitalTwins_Events>("events").WithReference(ageConnectionString);
 
+// var mcp = builder.AddProject<Projects.MCPServerSSE>("server");
+// builder.AddMCPInspector().WithSSE(mcp);
+
 builder.Build().Run();
