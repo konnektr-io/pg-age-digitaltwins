@@ -323,7 +323,7 @@ public partial class AgeDigitalTwinsClient
             }
             else
             {
-                throw new NotSupportedException(
+                throw new Exceptions.NotSupportedException(
                     $"Operation '{op.Op}' with value '{op.Value}' is not supported"
                 );
             }
