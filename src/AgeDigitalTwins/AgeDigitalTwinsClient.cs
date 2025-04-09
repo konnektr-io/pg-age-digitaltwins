@@ -57,7 +57,7 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
     internal NpgsqlDataSource GetDataSource(bool readOnly)
     {
         return _dataSource.WithTargetSession(
-            readOnly ? TargetSessionAttributes.PreferStandby : TargetSessionAttributes.Primary
+            readOnly ? TargetSessionAttributes.ReadOnly : TargetSessionAttributes.ReadWrite
         );
     }
 
