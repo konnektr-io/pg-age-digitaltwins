@@ -45,9 +45,7 @@ builder.AddNpgsqlMultihostDataSource(
 // Add AgeDigitalTwinsClient
 builder.Services.AddSingleton(sp =>
 {
-    NpgsqlMultiHostDataSource dataSource = sp.GetRequiredKeyedService<NpgsqlMultiHostDataSource>(
-        "agedb"
-    );
+    NpgsqlMultiHostDataSource dataSource = sp.GetRequiredService<NpgsqlMultiHostDataSource>();
     string graphName =
         builder.Configuration.GetSection("Parameters")["AgeGraphName"]
         ?? builder.Configuration["Parameters:AgeGraphName"]
