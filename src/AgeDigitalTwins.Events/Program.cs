@@ -76,7 +76,6 @@ app.Lifetime.ApplicationStarted.Register(async () =>
 app.Lifetime.ApplicationStopping.Register(() =>
 {
     cts.Cancel();
-    subscription.Stop(); // Assuming Stop method exists to stop the subscription gracefully
 });
 
 app.UseRequestTimeouts();

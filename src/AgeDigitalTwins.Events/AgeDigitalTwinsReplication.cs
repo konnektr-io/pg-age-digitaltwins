@@ -49,7 +49,6 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
     private readonly EventSinkFactory _eventSinkFactory;
     private readonly ILogger<AgeDigitalTwinsReplication> _logger;
     private LogicalReplicationConnection? _conn;
-    private CancellationTokenSource? _cancellationTokenSource;
     private readonly ConcurrentQueue<EventData> _eventQueue = new();
 
     public async Task StartAsync(CancellationToken cancellationToken = default)
@@ -58,7 +57,7 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
             async () => await ConsumeQueueAsync(cancellationToken),
             cancellationToken
         );
-        while (true)
+        while (true && !cancellationToken.IsCancellationRequested)
         {
             try
             {
@@ -288,20 +287,13 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
         }
     }
 
-    public void Stop()
-    {
-        _cancellationTokenSource?.Cancel();
-    }
-
     public async ValueTask DisposeAsync()
     {
-        Stop();
         if (_conn != null)
         {
             await _conn.DisposeAsync();
             _conn = null;
         }
-        _cancellationTokenSource?.Dispose();
         GC.SuppressFinalize(this);
     }
 

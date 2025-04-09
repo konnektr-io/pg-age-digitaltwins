@@ -21,11 +21,11 @@ builder.AddNpgsqlMultihostDataSource(
     "agedb",
     configureSettings: settings =>
     {
-        // settings.ConnectionString ??=
-        //     builder.Configuration.GetConnectionString("agedb")
-        //     ?? builder.Configuration["ConnectionStrings:agedb"]
-        //     ?? builder.Configuration["AgeConnectionString"]
-        //     ?? throw new InvalidOperationException("Connection string is required.");
+        settings.ConnectionString ??=
+            builder.Configuration.GetConnectionString("agedb")
+            ?? builder.Configuration["ConnectionStrings:agedb"]
+            ?? builder.Configuration["AgeConnectionString"]
+            ?? throw new InvalidOperationException("Connection string is required.");
         // Setting the search path allows to avoid setting this on every connection
         NpgsqlConnectionStringBuilder connectionStringBuilder =
             new(settings.ConnectionString)
