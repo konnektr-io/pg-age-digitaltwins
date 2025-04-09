@@ -54,13 +54,6 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
         InitializeGraphAsync().GetAwaiter().GetResult();
     }
 
-    internal NpgsqlDataSource GetDataSource(bool readOnly)
-    {
-        return _dataSource.WithTargetSession(
-            readOnly ? TargetSessionAttributes.ReadOnly : TargetSessionAttributes.ReadWrite
-        );
-    }
-
     public async ValueTask DisposeAsync()
     {
         await _dataSource.DisposeAsync();

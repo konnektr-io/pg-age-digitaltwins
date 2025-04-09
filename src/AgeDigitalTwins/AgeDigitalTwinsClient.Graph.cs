@@ -17,16 +17,20 @@ public partial class AgeDigitalTwinsClient
 
     public virtual async Task<bool?> GraphExistsAsync(CancellationToken cancellationToken = default)
     {
-        await using var connection = await GetDataSource(false)
-            .OpenConnectionAsync(cancellationToken);
+        await using var connection = await _dataSource.OpenConnectionAsync(
+            TargetSessionAttributes.ReadWrite,
+            cancellationToken
+        );
         await using var command = connection.GraphExistsCommand(_graphName);
         return (bool?)await command.ExecuteScalarAsync(cancellationToken);
     }
 
     public virtual async Task CreateGraphAsync(CancellationToken cancellationToken = default)
     {
-        await using var connection = await GetDataSource(false)
-            .OpenConnectionAsync(cancellationToken);
+        await using var connection = await _dataSource.OpenConnectionAsync(
+            TargetSessionAttributes.ReadWrite,
+            cancellationToken
+        );
         await using var command = connection.CreateGraphCommand(_graphName);
         await command.ExecuteNonQueryAsync(cancellationToken);
 
@@ -45,8 +49,10 @@ public partial class AgeDigitalTwinsClient
 
     public virtual async Task DropGraphAsync(CancellationToken cancellationToken = default)
     {
-        await using var connection = await GetDataSource(false)
-            .OpenConnectionAsync(cancellationToken);
+        await using var connection = await _dataSource.OpenConnectionAsync(
+            TargetSessionAttributes.ReadWrite,
+            cancellationToken
+        );
         await using var command = connection.DropGraphCommand(_graphName);
         await command.ExecuteNonQueryAsync(cancellationToken);
     }

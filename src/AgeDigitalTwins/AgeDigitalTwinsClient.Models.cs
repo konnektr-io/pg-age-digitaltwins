@@ -33,8 +33,10 @@ public partial class AgeDigitalTwinsClient
     {
         // TODO: Implement dependenciesFor parameter
         string cypher = $@"MATCH (m:Model) RETURN m";
-        await using var connection = await GetDataSource(true)
-            .OpenConnectionAsync(cancellationToken);
+        await using var connection = await _dataSource.OpenConnectionAsync(
+            TargetSessionAttributes.ReadOnly,
+            cancellationToken
+        );
         await using var command = connection.CreateCypherCommand(_graphName, cypher);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
@@ -52,8 +54,10 @@ public partial class AgeDigitalTwinsClient
     )
     {
         string cypher = $@"MATCH (m:Model) WHERE m.id = '{modelId}' RETURN m";
-        await using var connection = await GetDataSource(true)
-            .OpenConnectionAsync(cancellationToken);
+        await using var connection = await _dataSource.OpenConnectionAsync(
+            TargetSessionAttributes.ReadOnly,
+            cancellationToken
+        );
         await using var command = connection.CreateCypherCommand(_graphName, cypher);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
@@ -96,8 +100,10 @@ public partial class AgeDigitalTwinsClient
             SET m = modelAgtype
             RETURN m";
 
-            await using var connection = await GetDataSource(false)
-                .OpenConnectionAsync(cancellationToken);
+            await using var connection = await _dataSource.OpenConnectionAsync(
+                TargetSessionAttributes.ReadWrite,
+                cancellationToken
+            );
             await using var command = connection.CreateCypherCommand(_graphName, cypher);
 
             List<DigitalTwinsModelData> result = [];
@@ -206,8 +212,10 @@ public partial class AgeDigitalTwinsClient
             WHERE m.id = '{modelId}' 
             OPTIONAL MATCH (m)-[r:_extends]-()
             DELETE r, m";
-        await using var connection = await GetDataSource(false)
-            .OpenConnectionAsync(cancellationToken);
+        await using var connection = await _dataSource.OpenConnectionAsync(
+            TargetSessionAttributes.ReadWrite,
+            cancellationToken
+        );
         await using var command = connection.CreateCypherCommand(_graphName, cypher);
         int rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken);
         if (rowsAffected == 0)
