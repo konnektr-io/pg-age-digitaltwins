@@ -59,9 +59,7 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
         if (_dataSource is NpgsqlMultiHostDataSource npgsqlMultiHostDataSource)
         {
             return npgsqlMultiHostDataSource.WithTargetSession(
-                readOnly
-                    ? TargetSessionAttributes.PreferStandby | TargetSessionAttributes.ReadOnly
-                    : TargetSessionAttributes.Primary
+                readOnly ? TargetSessionAttributes.PreferStandby : TargetSessionAttributes.Primary
             );
         }
         else
