@@ -24,6 +24,37 @@ public static class GraphInitialization
             new(@$"SELECT create_elabel('{graphName}', '_extends');"),
             new(@$"ALTER TABLE {graphName}.""_extends"" REPLICA IDENTITY FULL;"),
             new(
+                @$"CREATE OR REPLACE FUNCTION {graphName}.is_of_model(
+                twin agtype,
+                model_id agtype,
+                strict boolean DEFAULT false
+            )
+            RETURNS boolean
+            LANGUAGE plpgsql
+            AS $function$
+            DECLARE
+                twin_model_id text;
+                result boolean;
+            BEGIN
+                SELECT ag_catalog.agtype_access_operator(twin, '""$metadata""'::agtype, '""$model""'::agtype)
+                INTO twin_model_id;
+
+                IF strict THEN
+                    RETURN twin_model_id = model_id::text;
+                ELSE
+                    RETURN twin_model_id = model_id::text OR EXISTS (
+                        SELECT 1
+                        FROM ag_catalog.cypher('{graphName}', $$
+                            MATCH (m:Model) - [:_extends*0..]->(n:Model)
+                            WHERE m.id = %s AND n.id = %s
+                            RETURN m.id
+                        $$) AS (m text)
+                    );
+                END IF;
+            END;
+            $function$;"
+            ),
+            /* new(
                 @$"CREATE OR REPLACE FUNCTION {graphName}.is_of_model(twin agtype, model_id agtype, strict boolean default false)
         RETURNS boolean
         LANGUAGE plpgsql
@@ -51,7 +82,7 @@ public static class GraphInitialization
                     RETURN result;
                     END;
         $function$;"
-            ),
+            ), */
             new(
                 @$"CREATE OR REPLACE FUNCTION public.agtype_set(target agtype, path agtype, new_value agtype)
         RETURNS agtype AS $$
