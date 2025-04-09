@@ -2,6 +2,16 @@ name: Run Tests
 
 on:
   workflow_dispatch:
+    inputs:
+      test_project:
+        description: "Select the test project to run"
+        required: true
+        default: "All"
+        type: choice
+        options:
+          - All
+          - ProjectA.Tests
+          - ProjectB.Tests
 
 jobs:
   build:
@@ -18,4 +28,9 @@ jobs:
             9.0.x
 
       - name: Test
-        run: dotnet test './src'
+        run: |
+          if [ "${{ github.event.inputs.test_project }}" == "All" ]; then
+            dotnet test './src'
+          else
+            dotnet test "./src/${{ github.event.inputs.test_project }}"
+          fi
