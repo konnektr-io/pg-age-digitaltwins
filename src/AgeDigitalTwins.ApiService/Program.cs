@@ -83,12 +83,7 @@ if (enableAuthentication)
                 ValidateIssuer = true,
                 ValidateAudience = true,
                 ValidateIssuerSigningKey = true,
-                ValidAudiences = builder
-                    .Configuration.GetSection("Authentication:ValidAudiences")
-                    .Get<string[]>(),
-                ValidIssuers = builder
-                    .Configuration.GetSection("Authentication:ValidIssuers")
-                    .Get<string[]>(),
+                ValidIssuer = builder.Configuration["Authentication:Issuer"],
             };
 
             jwtOptions.MapInboundClaims = false;
