@@ -27,7 +27,7 @@ public static class GraphInitialization
                 @$"CREATE OR REPLACE FUNCTION {graphName}.is_of_model(
                     twin agtype,
                     model_id agtype,
-                    strict boolean DEFAULT false
+                    strict boolean default false
                 )
                 RETURNS boolean
                 LANGUAGE plpgsql
@@ -42,18 +42,15 @@ public static class GraphInitialization
                     IF strict THEN
                         RETURN twin_model_id = model_id::text;
                     ELSE
-                        EXECUTE format(
-                            $$
+                        EXECUTE format('
                             SELECT EXISTS (
                                 SELECT 1
-                                FROM ag_catalog.cypher('%s', $$
+                                FROM ag_catalog.cypher(''{graphName}'', $$
                                     MATCH (m:Model) - [:_extends*0..]->(n:Model)
-                                    WHERE m.id = '%s' AND n.id = '%s'
+                                    WHERE m.id = %s AND n.id = %s
                                     RETURN m.id
                                 $$) AS (m text)
-                            )
-                            $$,
-                            '{graphName}', twin_model_id, model_id
+                            )', twin_model_id, model_id
                         )
                         INTO result;
 
