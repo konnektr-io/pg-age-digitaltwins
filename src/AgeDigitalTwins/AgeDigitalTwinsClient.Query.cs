@@ -30,12 +30,6 @@ public partial class AgeDigitalTwinsClient
         await using var connection = await GetDataSource(true)
             .OpenConnectionAsync(cancellationToken);
         await using var command = connection.CreateCypherCommand(_graphName, cypher);
-
-        // Set readonly
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = "SET TRANSACTION READ ONLY";
-        await cmd.ExecuteNonQueryAsync(cancellationToken);
-
         await using var reader =
             await command.ExecuteReaderAsync(cancellationToken)
             ?? throw new InvalidOperationException("Reader is null");
