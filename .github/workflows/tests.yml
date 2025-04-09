@@ -10,8 +10,10 @@ on:
         type: choice
         options:
           - All
-          - ProjectA.Tests
-          - ProjectB.Tests
+          - AgeDigitalTwins.Test
+          - AgeDigitalTwins.ApiService.Test
+          - AgeDigitalTwins.Events.Test
+          - AgeDigitalTwins.MCPServerSSE.Test
 
 jobs:
   build:
