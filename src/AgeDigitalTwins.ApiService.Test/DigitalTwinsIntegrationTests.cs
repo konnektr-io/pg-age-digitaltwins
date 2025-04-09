@@ -1,6 +1,6 @@
-using Aspire.Hosting;
-using System.Text.Json;
 using System.Text;
+using System.Text.Json;
+using Aspire.Hosting;
 
 namespace AgeDigitalTwins.ApiService.Test;
 
@@ -15,20 +15,29 @@ public class DigitalTwinsIntegrationTests : IAsyncLifetime
         await _app.StartAsync();
         _httpClient = _app.CreateHttpClient("apiservice");
 
-        string[] sModels = [
-            SampleData.DtdlRoom, SampleData.DtdlTemperatureSensor, SampleData.DtdlCelestialBody, SampleData.DtdlPlanet, SampleData.DtdlCrater];
-        List<JsonElement> jModels = sModels.Select(m => JsonDocument.Parse(m)).Select(j => j.RootElement).ToList();
+        string[] sModels =
+        [
+            SampleData.DtdlRoom,
+            SampleData.DtdlTemperatureSensor,
+            SampleData.DtdlCelestialBody,
+            SampleData.DtdlPlanet,
+            SampleData.DtdlCrater,
+        ];
+        List<JsonElement> jModels = sModels
+            .Select(m => JsonDocument.Parse(m))
+            .Select(j => j.RootElement)
+            .ToList();
 
         var modelResponse = await _httpClient!.PostAsync(
             "/models",
-            new StringContent(JsonSerializer.Serialize(jModels), Encoding.UTF8, "application/json"));
+            new StringContent(JsonSerializer.Serialize(jModels), Encoding.UTF8, "application/json")
+        );
         string modelResponseContent = await modelResponse.Content.ReadAsStringAsync();
     }
 
     public async Task DisposeAsync()
     {
-        var response = await _httpClient!.DeleteAsync(
-            "/graph/delete");
+        var response = await _httpClient!.DeleteAsync("/graph/delete");
         if (_app != null)
         {
             await _app.DisposeAsync();
@@ -41,7 +50,8 @@ public class DigitalTwinsIntegrationTests : IAsyncLifetime
     {
         var twinResponse = await _httpClient!.PutAsync(
             "/digitaltwins/crater1",
-            new StringContent(SampleData.TwinCrater, Encoding.UTF8, "application/json"));
+            new StringContent(SampleData.TwinCrater, Encoding.UTF8, "application/json")
+        );
         string twinResponseContent = await twinResponse.Content.ReadAsStringAsync();
 
         // Assert
@@ -51,40 +61,50 @@ public class DigitalTwinsIntegrationTests : IAsyncLifetime
         Assert.Equal("crater1", twinJson.RootElement.GetProperty("$dtId").GetString());
     }
 
-
     [Fact]
     public async Task CreateOrUpdateDigitalTwin_InvalidTwin_ReturnsValidationFailed()
     {
         var twinResponse = await _httpClient!.PutAsync(
             "/digitaltwins/crater1",
-            new StringContent(@"{
+            new StringContent(
+                @"{
                 ""$dtId"": ""crater1"",
                 ""$metadata"": {
                     ""$model"": ""dtmi:com:contoso:Crater;1""
                 },
                 ""badproperty"": 100
-            }", Encoding.UTF8, "application/json"));
+            }",
+                Encoding.UTF8,
+                "application/json"
+            )
+        );
         string twinResponseContent = await twinResponse.Content.ReadAsStringAsync();
 
         // Assert
         Assert.Equal(HttpStatusCode.BadRequest, twinResponse.StatusCode);
         JsonDocument responseJson = JsonDocument.Parse(twinResponseContent);
-        Assert.Equal("ValidationFailedException", responseJson.RootElement.GetProperty("type").GetString());
-        Assert.True(responseJson.RootElement.TryGetProperty("detail", out JsonElement messageElement));
+        Assert.Equal(
+            "ValidationFailedException",
+            responseJson.RootElement.GetProperty("type").GetString()
+        );
+        Assert.True(
+            responseJson.RootElement.TryGetProperty("detail", out JsonElement messageElement)
+        );
         Assert.Equal(JsonValueKind.String, messageElement.ValueKind);
         Assert.Contains("badproperty", messageElement.GetString());
     }
-
 
     [Fact]
     public async Task UpdateDigitalTwin_ValidTwin_UpdatesTwin()
     {
         var twinResponse = await _httpClient!.PutAsync(
             "/digitaltwins/earth",
-            new StringContent(SampleData.TwinPlanetEarth, Encoding.UTF8, "application/json"));
+            new StringContent(SampleData.TwinPlanetEarth, Encoding.UTF8, "application/json")
+        );
         string twinResponseContent = await twinResponse.Content.ReadAsStringAsync();
 
-        string jsonPatch = @"[
+        string jsonPatch =
+            @"[
             {
                 ""op"": ""replace"",
                 ""path"": ""/name"",
@@ -99,7 +119,8 @@ public class DigitalTwinsIntegrationTests : IAsyncLifetime
 
         var patchResponse = await _httpClient!.PatchAsync(
             "/digitaltwins/earth",
-            new StringContent(jsonPatch, Encoding.UTF8, "application/json-patch+json"));
+            new StringContent(jsonPatch, Encoding.UTF8, "application/json-patch+json")
+        );
 
         var modifiedTwinResponse = await _httpClient!.GetAsync("/digitaltwins/earth");
 
@@ -115,6 +136,5 @@ public class DigitalTwinsIntegrationTests : IAsyncLifetime
         JsonDocument modifiedTwinJson = JsonDocument.Parse(modifiedTwinResponseContent);
         Assert.Equal("Earth 2", modifiedTwinJson.RootElement.GetProperty("name").GetString());
         Assert.Equal(5.972E18, modifiedTwinJson.RootElement.GetProperty("mass").GetDouble());
-
     }
 }
