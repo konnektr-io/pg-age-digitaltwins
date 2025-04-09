@@ -40,9 +40,9 @@ AgeDigitalTwins is an SDK and API designed to support Digital Twins applications
   - [x] ETags
   - [x] Authentication
 - **MCP Server**
-  - [ ] Models CRUD operations
-  - [ ] Digital Twins CRUD operations
-  - [ ] Relationships CRUD operations
+  - [x] Models CRUD operations
+  - [x] Digital Twins CRUD operations
+  - [x] Relationships CRUD operations
   - [ ] Authentication
 - **Deployment**:
   - [x] Dockerize the API
