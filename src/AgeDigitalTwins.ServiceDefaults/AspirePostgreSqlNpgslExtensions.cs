@@ -120,9 +120,9 @@ public static class AspirePostgreSqlNpgsqlMultihostExtensions
         Action<NpgsqlDataSourceBuilder>? configureDataSourceBuilder
     )
     {
-        builder.AddNpgsqlMultihostDataSource(
+        builder.Services.AddMultiHostNpgsqlDataSource(
             settings.ConnectionString ?? string.Empty,
-            configureDataSourceBuilder: dataSourceBuilder =>
+            dataSourceBuilder =>
             {
                 // delay validating the ConnectionString until the DataSource is requested. This ensures an exception doesn't happen until a Logger is established.
                 ConnectionStringValidation.ValidateConnectionString(
@@ -132,7 +132,8 @@ public static class AspirePostgreSqlNpgsqlMultihostExtensions
                 );
 
                 configureDataSourceBuilder?.Invoke(dataSourceBuilder);
-            }
+            },
+            serviceKey: serviceKey
         );
     }
 }
