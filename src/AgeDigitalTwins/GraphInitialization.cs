@@ -42,14 +42,22 @@ public static class GraphInitialization
                     IF strict THEN
                         RETURN twin_model_id = model_id::text;
                     ELSE
-                        RETURN twin_model_id = model_id::text OR EXISTS (
-                            SELECT 1
-                            FROM ag_catalog.cypher('{graphName}', $$
-                                MATCH (m:Model) - [:_extends*0..]->(n:Model)
-                                WHERE m.id = %s AND n.id = %s
-                                RETURN m.id
-                            $$) AS (m text)
-                        );
+                        EXECUTE format(
+                            $$
+                            SELECT EXISTS (
+                                SELECT 1
+                                FROM ag_catalog.cypher('%s', $$
+                                    MATCH (m:Model) - [:_extends*0..]->(n:Model)
+                                    WHERE m.id = '%s' AND n.id = '%s'
+                                    RETURN m.id
+                                $$) AS (m text)
+                            )
+                            $$,
+                            '{graphName}', twin_model_id, model_id
+                        )
+                        INTO result;
+
+                        RETURN result;
                     END IF;
                 END;
                 $function$;"
