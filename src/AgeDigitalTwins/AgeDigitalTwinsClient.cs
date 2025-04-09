@@ -10,7 +10,7 @@ namespace AgeDigitalTwins;
 
 public partial class AgeDigitalTwinsClient : IAsyncDisposable
 {
-    private readonly NpgsqlDataSource _dataSource;
+    private readonly NpgsqlMultiHostDataSource _dataSource;
 
     private readonly string _graphName;
 
@@ -56,14 +56,9 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
 
     internal NpgsqlDataSource GetDataSource(bool readOnly)
     {
-        if (_dataSource is NpgsqlMultiHostDataSource npgsqlMultiHostDataSource)
-        {
-            return npgsqlMultiHostDataSource.WithTargetSession(
-                readOnly ? TargetSessionAttributes.PreferStandby : TargetSessionAttributes.Primary
-            );
-        }
-        else
-            return _dataSource;
+        return _dataSource.WithTargetSession(
+            readOnly ? TargetSessionAttributes.PreferStandby : TargetSessionAttributes.Primary
+        );
     }
 
     public async ValueTask DisposeAsync()
