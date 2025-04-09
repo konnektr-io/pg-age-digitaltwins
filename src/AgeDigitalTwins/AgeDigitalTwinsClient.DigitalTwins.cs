@@ -26,7 +26,7 @@ public partial class AgeDigitalTwinsClient
     {
         string cypher = $"MATCH (t:Twin) WHERE t['$dtId'] = '{digitalTwinId}' RETURN t";
         await using var connection = await _dataSource.OpenConnectionAsync(
-            Npgsql.TargetSessionAttributes.ReadOnly,
+            Npgsql.TargetSessionAttributes.PreferStandby,
             cancellationToken
         );
         await using var command = connection.CreateCypherCommand(_graphName, cypher);
@@ -43,7 +43,7 @@ public partial class AgeDigitalTwinsClient
         string cypher =
             $"MATCH (t:Twin) WHERE t['$dtId'] = '{digitalTwinId}' AND t['$etag'] = '{etag}' RETURN t";
         await using var connection = await _dataSource.OpenConnectionAsync(
-            Npgsql.TargetSessionAttributes.ReadOnly,
+            Npgsql.TargetSessionAttributes.PreferStandby,
             cancellationToken
         );
         await using var command = connection.CreateCypherCommand(_graphName, cypher);
@@ -58,7 +58,7 @@ public partial class AgeDigitalTwinsClient
     {
         string cypher = $"MATCH (t:Twin) WHERE t['$dtId'] = '{digitalTwinId}' RETURN t";
         await using var connection = await _dataSource.OpenConnectionAsync(
-            Npgsql.TargetSessionAttributes.ReadOnly,
+            Npgsql.TargetSessionAttributes.PreferStandby,
             cancellationToken
         );
         await using var command = connection.CreateCypherCommand(_graphName, cypher);

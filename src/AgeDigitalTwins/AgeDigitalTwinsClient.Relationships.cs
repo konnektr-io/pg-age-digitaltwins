@@ -23,7 +23,7 @@ public partial class AgeDigitalTwinsClient
         string cypher =
             $@"MATCH (source:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel {{`$relationshipId`: '{relationshipId}'}}]->(target:Twin) RETURN rel";
         await using var connection = await _dataSource.OpenConnectionAsync(
-            Npgsql.TargetSessionAttributes.ReadOnly,
+            Npgsql.TargetSessionAttributes.PreferStandby,
             cancellationToken
         );
         await using var command = connection.CreateCypherCommand(_graphName, cypher);
@@ -41,7 +41,7 @@ public partial class AgeDigitalTwinsClient
         string cypher =
             $"MATCH (source:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel {{`$relationshipId`: '{relationshipId}'}}]->(target:Twin) WHERE rel['$etag'] = '{etag}' RETURN rel";
         await using var connection = await _dataSource.OpenConnectionAsync(
-            Npgsql.TargetSessionAttributes.ReadOnly,
+            Npgsql.TargetSessionAttributes.PreferStandby,
             cancellationToken
         );
         await using var command = connection.CreateCypherCommand(_graphName, cypher);
@@ -58,7 +58,7 @@ public partial class AgeDigitalTwinsClient
         string cypher =
             $@"MATCH (source:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel {{`$relationshipId`: '{relationshipId}'}}]->(target:Twin) RETURN rel";
         await using var connection = await _dataSource.OpenConnectionAsync(
-            Npgsql.TargetSessionAttributes.ReadOnly,
+            Npgsql.TargetSessionAttributes.PreferStandby,
             cancellationToken
         );
         await using var command = connection.CreateCypherCommand(_graphName, cypher);

@@ -28,9 +28,15 @@ public partial class AgeDigitalTwinsClient
             cypher = query;
         }
         await using var connection = await _dataSource.OpenConnectionAsync(
-            Npgsql.TargetSessionAttributes.ReadOnly,
+            Npgsql.TargetSessionAttributes.PreferStandby,
             cancellationToken
         );
+
+        // Set session as readonly
+        await using var readonlyCommand = connection.CreateCommand();
+        readonlyCommand.CommandText = "SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY;";
+        await readonlyCommand.ExecuteNonQueryAsync(cancellationToken);
+
         await using var command = connection.CreateCypherCommand(_graphName, cypher);
 
         await using var reader =

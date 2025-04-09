@@ -34,7 +34,7 @@ public partial class AgeDigitalTwinsClient
         // TODO: Implement dependenciesFor parameter
         string cypher = $@"MATCH (m:Model) RETURN m";
         await using var connection = await _dataSource.OpenConnectionAsync(
-            TargetSessionAttributes.ReadOnly,
+            TargetSessionAttributes.PreferStandby,
             cancellationToken
         );
         await using var command = connection.CreateCypherCommand(_graphName, cypher);
@@ -55,7 +55,7 @@ public partial class AgeDigitalTwinsClient
     {
         string cypher = $@"MATCH (m:Model) WHERE m.id = '{modelId}' RETURN m";
         await using var connection = await _dataSource.OpenConnectionAsync(
-            TargetSessionAttributes.ReadOnly,
+            TargetSessionAttributes.PreferStandby,
             cancellationToken
         );
         await using var command = connection.CreateCypherCommand(_graphName, cypher);
