@@ -47,7 +47,7 @@ public static class GraphInitialization
                             SELECT EXISTS (
                                 SELECT 1
                                 FROM ag_catalog.cypher(''%s'', $$
-                                    MATCH (m:Model) - [:_extends*0..]->(n:Model)
+                                    MATCH (m:Model)-[:_extends*0..]->(n:Model)
                                     WHERE m.id = %s AND n.id = %s
                                     RETURN m.id
                                 $$) AS (m text)
@@ -83,7 +83,7 @@ public static class GraphInitialization
                             SELECT EXISTS (
                                 SELECT 1
                                 FROM ag_catalog.cypher(''{graphName}'', $$
-                                    MATCH (m:Model) - [:_extends*0..]->(n:Model)
+                                    MATCH (m:Model)-[:_extends*0..]->(n:Model)
                                     WHERE m.id = %s AND n.id = %s
                                     RETURN m.id
                                 $$) AS (m text)
@@ -114,7 +114,7 @@ public static class GraphInitialization
                 SELECT ''%s'' = ''%s'' OR
                 EXISTS
                     (SELECT m FROM ag_catalog.cypher(''{graphName}'', $$
-                      MATCH(m:Model) - [:_extends*0..]->(n:Model)
+                      MATCH(m:Model)-[:_extends*0..]->(n:Model)
                       WHERE m.id = %s AND n.id = %s
                       RETURN m.id
                     $$) AS(m text))
