@@ -69,76 +69,42 @@ namespace AgeDigitalTwins.Models
 
         public DigitalTwinsModelData(Dictionary<string, object?> modelData)
         {
-            if (modelData.TryGetValue("id", out var idValue))
-            {
-                Id = idValue?.ToString()!;
-            }
-            else
-            {
-                throw new ArgumentException("Model data must contain an 'id' property.");
-            }
+            Id = modelData.TryGetValue("id", out var idValue)
+                ? idValue?.ToString()!
+                : throw new ArgumentException("Model data must contain an 'id' property.");
 
-            if (modelData.TryGetValue("model", out var modelValue))
-            {
-                DtdlModel = modelValue?.ToString();
-            }
+            DtdlModel = modelData.TryGetValue("model", out var modelValue)
+                ? modelValue?.ToString()
+                : null;
 
-            if (
+            UploadedOn =
                 modelData.TryGetValue("uploadTime", out var uploadTimeValue)
                 && DateTimeOffset.TryParse(uploadTimeValue?.ToString(), out var parsedUploadTime)
-            )
-            {
-                UploadedOn = parsedUploadTime;
-            }
-            else
-            {
-                UploadedOn = DateTimeOffset.MinValue;
-            }
+                    ? parsedUploadTime
+                    : DateTimeOffset.MinValue;
 
-            if (modelData.TryGetValue("displayName", out var displayNameValue))
-            {
-                LanguageDisplayNames = JsonSerializer.Deserialize<Dictionary<string, string>>(
+            LanguageDisplayNames = modelData.TryGetValue("displayName", out var displayNameValue)
+                ? JsonSerializer.Deserialize<Dictionary<string, string>>(
                     displayNameValue?.ToString() ?? "{}"
-                )!;
-            }
-            else
-            {
-                LanguageDisplayNames = new Dictionary<string, string>();
-            }
+                )!
+                : new Dictionary<string, string>();
 
-            if (modelData.TryGetValue("description", out var descriptionValue))
-            {
-                LanguageDescriptions = JsonSerializer.Deserialize<Dictionary<string, string>>(
+            LanguageDescriptions = modelData.TryGetValue("description", out var descriptionValue)
+                ? JsonSerializer.Deserialize<Dictionary<string, string>>(
                     descriptionValue?.ToString() ?? "{}"
-                )!;
-            }
-            else
-            {
-                LanguageDescriptions = new Dictionary<string, string>();
-            }
+                )!
+                : new Dictionary<string, string>();
 
-            if (
+            IsDecommissioned =
                 modelData.TryGetValue("decommissioned", out var decommissionedValue)
                 && bool.TryParse(decommissionedValue?.ToString(), out var parsedDecommissioned)
-            )
-            {
-                IsDecommissioned = parsedDecommissioned;
-            }
-            else
-            {
-                IsDecommissioned = false;
-            }
+                    ? parsedDecommissioned
+                    : false;
 
-            if (modelData.TryGetValue("bases", out var basesValue))
-            {
-                Bases =
-                    JsonSerializer.Deserialize<string[]>(basesValue?.ToString() ?? "[]")
-                    ?? Array.Empty<string>();
-            }
-            else
-            {
-                Bases = Array.Empty<string>();
-            }
+            Bases = modelData.TryGetValue("bases", out var basesValue)
+                ? JsonSerializer.Deserialize<string[]>(basesValue?.ToString() ?? "[]")
+                    ?? Array.Empty<string>()
+                : Array.Empty<string>();
         }
 
         public DigitalTwinsModelData(string dtdlModel)
