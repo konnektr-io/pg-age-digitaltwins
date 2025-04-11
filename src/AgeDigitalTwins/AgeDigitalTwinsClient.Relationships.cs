@@ -366,17 +366,25 @@ public partial class AgeDigitalTwinsClient
     )
     {
         string cypher =
-            $@"MATCH (source:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel {{`$relationshipId`: '{relationshipId}'}}]->(target:Twin) DELETE rel";
+            $@"MATCH (source:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel {{`$relationshipId`: '{relationshipId}'}}]->(target:Twin) 
+            DELETE rel
+            RETURN COUNT(m) AS deletedCount";
         await using var connection = await _dataSource.OpenConnectionAsync(
             Npgsql.TargetSessionAttributes.ReadWrite,
             cancellationToken
         );
         await using var command = connection.CreateCypherCommand(_graphName, cypher);
-        int rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        int rowsAffected = 0;
+        if (await reader.ReadAsync(cancellationToken))
+        {
+            var agResult = await reader.GetFieldValueAsync<Agtype?>(0).ConfigureAwait(false);
+            rowsAffected = (int)agResult;
+        }
         if (rowsAffected <= 0)
         {
             throw new RelationshipNotFoundException(
-                $"Relationship with ID {relationshipId} not found"
+                $"Relationship with ID {relationshipId} on {digitalTwinId} not found"
             );
         }
     }

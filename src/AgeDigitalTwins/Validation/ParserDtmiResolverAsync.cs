@@ -30,7 +30,7 @@ internal static class ModelsRepositoryClientExtensions
             var agResult = await reader.GetFieldValueAsync<Agtype>(0).ConfigureAwait(false);
             var vertex = agResult.GetVertex();
             var modelData = new DigitalTwinsModelData(vertex.Properties);
-            yield return modelData.DtdlModel;
+            yield return modelData.DtdlModel!;
         }
     }
 }

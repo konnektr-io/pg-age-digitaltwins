@@ -40,19 +40,12 @@ public partial class AgeDigitalTwinsClient
             cancellationToken
         );
 
-        // Set session as readonly
-        await using var readonlyCommand = connection.CreateCommand();
-        readonlyCommand.CommandText = "SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY;";
-        await readonlyCommand.ExecuteNonQueryAsync(cancellationToken);
-
         await using var command = connection.CreateCypherCommand(_graphName, cypher);
-
         await using var reader =
             await command.ExecuteReaderAsync(cancellationToken)
             ?? throw new InvalidOperationException("Reader is null");
 
         var schema = await reader.GetColumnSchemaAsync(cancellationToken);
-
         while (await reader.ReadAsync(cancellationToken))
         {
             Dictionary<string, object> row = new();

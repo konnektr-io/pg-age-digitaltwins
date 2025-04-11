@@ -120,6 +120,11 @@ namespace AgeDigitalTwins.Test
                         ""@type"": ""Component"",
                         ""name"": ""deepestCrater"",
                         ""schema"": ""dtmi:com:contoso:Crater;1""
+                    },
+                    {
+                        ""@type"": ""Property"",
+                        ""name"": ""hasLife"",
+                        ""schema"": ""boolean""
                     }
                 ]
             }";
@@ -131,6 +136,15 @@ namespace AgeDigitalTwins.Test
                 ""@type"": ""Interface"",
                 ""displayName"": ""Moon"",
                 ""extends"": ""dtmi:com:contoso:CelestialBody;1""
+            }";
+
+        public const string DtdlHabitablePlanet =
+            @"{
+                ""@context"": ""dtmi:dtdl:context;3"",
+                ""@id"": ""dtmi:com:contoso:HabitablePlanet;1"",
+                ""@type"": ""Interface"",
+                ""displayName"": ""Habitable Planet"",
+                ""extends"": ""dtmi:com:contoso:Planet;1""
             }";
 
         public const string TwinPlanetEarth =

@@ -147,10 +147,10 @@ public partial class AgeDigitalTwinsClient
             // Trying so will raise a unique constraint violation
             string cypher =
                 $@"UNWIND {modelsString} as model
-            WITH model::agtype as modelAgtype
-            CREATE (m:Model {{id: modelAgtype['id']}})
-            SET m = modelAgtype
-            RETURN m";
+                WITH model::agtype as modelAgtype
+                CREATE (m:Model {{id: modelAgtype['id']}})
+                SET m = modelAgtype
+                RETURN m";
 
             await using var connection = await _dataSource.OpenConnectionAsync(
                 TargetSessionAttributes.ReadWrite,
@@ -177,27 +177,46 @@ public partial class AgeDigitalTwinsClient
 
             foreach (var entityInfoKv in objectModel)
             {
-                // Add edges based on the 'extends' field (especially needed for the 'IS_OF_MODEL' function)
-                if (
-                    entityInfoKv.Value is DTInterfaceInfo dTInterfaceInfo
-                    && dTInterfaceInfo.Extends != null
-                    && dTInterfaceInfo.Extends.Count > 0
-                )
+                if (entityInfoKv.Value is DTInterfaceInfo dTInterfaceInfo)
                 {
-                    // Get extends and create relationships
-                    foreach (var extend in dTInterfaceInfo.Extends)
+                    // Add edges for dependencies based on the 'extends' field
+                    if (dTInterfaceInfo.Extends != null && dTInterfaceInfo.Extends.Count > 0)
                     {
-                        string extendsCypher =
-                            $@"MATCH (m:Model), (m2:Model)
-                        WHERE m.id = '{dTInterfaceInfo
-                            .Id.AbsoluteUri}' AND m2.id = '{extend.Id.AbsoluteUri}'
-                        CREATE (m)-[:_extends]->(m2)";
-                        await using var extendsCommand = connection.CreateCypherCommand(
-                            _graphName,
-                            extendsCypher
-                        );
-                        // TODO: run these as batch commands
-                        await extendsCommand.ExecuteNonQueryAsync(cancellationToken);
+                        // Get extends and create relationships
+                        foreach (var extend in dTInterfaceInfo.Extends)
+                        {
+                            string extendsCypher =
+                                $@"MATCH (m:Model), (m2:Model)
+                                WHERE m.id = '{dTInterfaceInfo
+                                .Id.AbsoluteUri}' AND m2.id = '{extend.Id.AbsoluteUri}'
+                                CREATE (m)-[:_extends]->(m2)";
+                            await using var extendsCommand = connection.CreateCypherCommand(
+                                _graphName,
+                                extendsCypher
+                            );
+                            // TODO: run these as batch commands
+                            await extendsCommand.ExecuteNonQueryAsync(cancellationToken);
+                        }
+                    }
+
+                    // Add edges for dependencies based on the 'schema' field of components
+                    if (dTInterfaceInfo.Components != null && dTInterfaceInfo.Components.Count > 0)
+                    {
+                        foreach (var component in dTInterfaceInfo.Components.Values)
+                        {
+                            if (component.Schema != null && component.Schema.Id != null)
+                            {
+                                string hasComponentCypher =
+                                    $@"MATCH (m:Model), (m2:Model)
+                                    WHERE m.id = '{dTInterfaceInfo
+                                    .Id.AbsoluteUri}' AND m2.id = '{component.Schema.Id.AbsoluteUri}'
+                                    CREATE (m)-[:_hasComponent]->(m2)";
+
+                                await using var hasComponentCommand =
+                                    connection.CreateCypherCommand(_graphName, hasComponentCypher);
+                                await hasComponentCommand.ExecuteNonQueryAsync(cancellationToken);
+                            }
+                        }
                     }
                 }
 
@@ -258,20 +277,35 @@ public partial class AgeDigitalTwinsClient
         CancellationToken cancellationToken = default
     )
     {
-        // TODO: should not be able to delete a model where other models extend from.
-        string cypher =
-            $@"
-            MATCH (m:Model {{id: '{modelId}'}})
-            DETACH DELETE m";
-        await using var connection = await _dataSource.OpenConnectionAsync(
-            TargetSessionAttributes.ReadWrite,
-            cancellationToken
-        );
-        await using var command = connection.CreateCypherCommand(_graphName, cypher);
-        int rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken);
-        if (rowsAffected <= 0)
+        try
         {
-            throw new ModelNotFoundException($"Model with ID {modelId} not found");
+            // Delete the model and outgoing relationships
+            // If there are any other relationships left (dependencies), the query should fail
+            string cypher =
+                $@"MATCH (m:Model {{id: '{modelId}'}})
+                OPTIONAL MATCH (m)-[r]->(:Model)
+                DELETE r, m
+                RETURN COUNT(m) AS deletedCount";
+            await using var connection = await _dataSource.OpenConnectionAsync(
+                TargetSessionAttributes.ReadWrite,
+                cancellationToken
+            );
+            await using var command = connection.CreateCypherCommand(_graphName, cypher);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            int rowsAffected = 0;
+            if (await reader.ReadAsync(cancellationToken))
+            {
+                var agResult = await reader.GetFieldValueAsync<Agtype?>(0).ConfigureAwait(false);
+                rowsAffected = (int)agResult;
+            }
+            if (rowsAffected <= 0)
+            {
+                throw new ModelNotFoundException($"Model with ID {modelId} not found");
+            }
+        }
+        catch (PostgresException ex) when (ex.Routine == "check_for_connected_edges")
+        {
+            throw new ModelReferencesNotDeletedException();
         }
     }
 }

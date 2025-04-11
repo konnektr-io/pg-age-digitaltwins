@@ -117,7 +117,7 @@ public class ModelsIntegrationTests : IAsyncLifetime
 
         for (int i = 0; i < jModels2.Count; i++)
         {
-            var resultJson = JsonDocument.Parse(results[i].DtdlModel);
+            var resultJson = JsonDocument.Parse(results[i].DtdlModel!);
             var sampleDataJson = jModels2[i];
 
             var resultId = resultJson.RootElement.GetProperty("@id").GetString();

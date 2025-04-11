@@ -24,42 +24,35 @@ public static class GraphInitialization
             new(@$"ALTER TABLE {graphName}.""Model"" REPLICA IDENTITY FULL;"),
             new(@$"SELECT create_elabel('{graphName}', '_extends');"),
             new(@$"ALTER TABLE {graphName}.""_extends"" REPLICA IDENTITY FULL;"),
+            new(@$"SELECT create_elabel('{graphName}', '_hasComponent');"),
+            new(@$"ALTER TABLE {graphName}.""_hasComponent"" REPLICA IDENTITY FULL;"),
             new(
-                @$"CREATE OR REPLACE FUNCTION public.is_of_model(
-                    twin agtype,
-                    model_id agtype,
-                    exact boolean default false,
-                    graph_name text default 'digitaltwins'
-                )
+                @$"CREATE OR REPLACE FUNCTION {graphName}.is_of_model(twin agtype, model_id agtype, exact boolean default false)
                 RETURNS boolean
                 LANGUAGE plpgsql
                 AS $function$
                 DECLARE
-                    twin_model_id text;
+                    sql VARCHAR;
+                    twin_model_id agtype;
                     result boolean;
                 BEGIN
-                    SELECT ag_catalog.agtype_access_operator(twin, '""$metadata""'::agtype, '""$model""'::agtype)
-                    INTO twin_model_id;
-
+                    SELECT ag_catalog.agtype_access_operator(twin,'""$metadata""'::agtype,'""$model""'::agtype) INTO twin_model_id;
                     IF exact THEN
-                        RETURN twin_model_id = model_id::text;
+                        sql := format('SELECT ''%s'' = ''%s''', twin_model_id, model_id);
                     ELSE
-                        EXECUTE format('
-                            SELECT EXISTS (
-                                SELECT 1
-                                FROM ag_catalog.cypher(''%s'', $$
-                                    MATCH (m:Model {{id: %s}})
-                                    WHERE %s IN m.bases
-                                    RETURN m.id
-                                $$) AS (m text)
-                            )', graph_name, twin_model_id, model_id
-                        )
-                        INTO result;
-
-                        RETURN result;
+                        sql:= format('SELECT ''%s'' = ''%s'' OR
+                        EXISTS
+                            (SELECT 1 FROM ag_catalog.cypher(''{graphName}'', $$
+                                MATCH (m:Model)
+                                WHERE m.id = %s AND %s IN m.bases
+                                RETURN m.id
+                            $$) AS (m text))
+                        ', twin_model_id, model_id, twin_model_id, model_id);
                     END IF;
+                    EXECUTE sql INTO result;
+                    RETURN result;
                 END;
-                $function$;"
+                $function$"
             ),
             new(
                 @$"CREATE OR REPLACE FUNCTION public.agtype_set(target agtype, path agtype, new_value agtype)

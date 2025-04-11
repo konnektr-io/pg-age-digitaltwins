@@ -23,7 +23,10 @@ public static partial class AdtQueryHelpers
             limitClause = selectMatch.Groups["limit"].Success
                 ? "LIMIT " + selectMatch.Groups["limit"].Value
                 : string.Empty;
-            returnClause = ProcessPropertyAccessors(selectMatch.Groups["projections"].Value);
+            returnClause = ProcessPropertyAccessors(
+                selectMatch.Groups["projections"].Value,
+                graphName
+            );
             if (returnClause.Contains("COUNT()", StringComparison.OrdinalIgnoreCase))
             {
                 returnClause = "COUNT(*)";
@@ -175,6 +178,7 @@ public static partial class AdtQueryHelpers
                 // Process WHERE clause
                 whereClause = ProcessPropertyAccessors(
                     adtWhereClause,
+                    graphName,
                     usesWildcard
                         && adtQuery.Contains(
                             "FROM RELATIONSHIPS",
@@ -220,7 +224,11 @@ public static partial class AdtQueryHelpers
         return cypher;
     }
 
-    internal static string ProcessPropertyAccessors(string whereClause, string? prependAlias = null)
+    internal static string ProcessPropertyAccessors(
+        string whereClause,
+        string graphName,
+        string? prependAlias = null
+    )
     {
         if (!string.IsNullOrEmpty(prependAlias))
         {
@@ -263,19 +271,39 @@ public static partial class AdtQueryHelpers
                     whereClause,
                     m =>
                     {
-                        return $"public.is_of_model({prependAlias},{m.Groups[1].Value})";
+                        var args = m.Groups[1].Value.Split(',');
+                        var modelId = args[0].Trim();
+                        // We need to remove T.exact (not exact), because the prependAlias was already added
+                        if (
+                            args.Length > 1
+                            && args[1].Trim().Equals("T.exact", StringComparison.OrdinalIgnoreCase)
+                        )
+                        {
+                            return $"{graphName}.is_of_model({prependAlias},{modelId},true)";
+                        }
+                        return $"{graphName}.is_of_model({prependAlias},{modelId})";
                     }
                 );
         }
         else
         {
-            // Process IS_OF_MODEL function without prepend alias (alias should already been defined in caught group)
+            // Process IS_OF_MODEL function without prepend alias (alias/twin collection should already be defined in caught group)
             whereClause = IsOfModelRegex()
                 .Replace(
                     whereClause,
                     m =>
                     {
-                        return $"public.is_of_model({m.Groups[1].Value})";
+                        var args = m.Groups[1].Value.Split(',');
+                        var twinCollection = args[0].Trim();
+                        var modelId = args[1].Trim();
+                        if (
+                            args.Length > 2
+                            && args[2].Trim().Equals("exact", StringComparison.OrdinalIgnoreCase)
+                        )
+                        {
+                            return $"{graphName}.is_of_model({twinCollection},{modelId},true)";
+                        }
+                        return $"{graphName}.is_of_model({twinCollection},{modelId})";
                     }
                 );
         }

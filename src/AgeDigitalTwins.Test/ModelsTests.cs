@@ -17,7 +17,7 @@ public class ModelsTests : TestBase
 
         for (int i = 0; i < models.Length; i++)
         {
-            var resultJson = JsonDocument.Parse(results[i].DtdlModel);
+            var resultJson = JsonDocument.Parse(results[i].DtdlModel!);
             var resultId = resultJson.RootElement.GetProperty("@id").GetString();
 
             Assert.Equal(sampleDataId, resultId);
@@ -25,7 +25,7 @@ public class ModelsTests : TestBase
 
         var result = await Client.GetModelAsync("dtmi:com:adt:dtsample:room;1");
         Assert.NotNull(result);
-        var parsedResult = JsonDocument.Parse(result.DtdlModel);
+        var parsedResult = JsonDocument.Parse(result.DtdlModel!);
         Assert.Equal(sampleDataId, parsedResult.RootElement.GetProperty("@id").GetString());
     }
 
@@ -37,18 +37,31 @@ public class ModelsTests : TestBase
             SampleData.DtdlPlanet,
             SampleData.DtdlCelestialBody,
             SampleData.DtdlCrater,
+            SampleData.DtdlHabitablePlanet,
         ];
         var results = await Client.CreateModelsAsync(models);
 
         for (int i = 0; i < models.Length; i++)
         {
-            var resultJson = JsonDocument.Parse(results[i].DtdlModel);
+            var resultJson = JsonDocument.Parse(results[i].DtdlModel!);
             var sampleDataJson = JsonDocument.Parse(models[i]);
 
             var resultId = resultJson.RootElement.GetProperty("@id").GetString();
             var sampleDataId = sampleDataJson.RootElement.GetProperty("@id").GetString();
 
             Assert.Equal(sampleDataId, resultId);
+            // Check if bases are correct
+            if (resultId == "dtmi:com:contoso:Planet;1")
+            {
+                Assert.Single(results[i].Bases);
+                Assert.Contains("dtmi:com:contoso:CelestialBody;1", results[i].Bases);
+            }
+            if (resultId == "dtmi:com:contoso:HabitablePlanet;1")
+            {
+                Assert.Equal(2, results[i].Bases.Length);
+                Assert.Contains("dtmi:com:contoso:CelestialBody;1", results[i].Bases);
+                Assert.Contains("dtmi:com:contoso:Planet;1", results[i].Bases);
+            }
         }
     }
 
@@ -62,7 +75,7 @@ public class ModelsTests : TestBase
 
         for (int i = 0; i < models.Length; i++)
         {
-            var resultJson = JsonDocument.Parse(results[i].DtdlModel);
+            var resultJson = JsonDocument.Parse(results[i].DtdlModel!);
             var sampleDataJson = JsonDocument.Parse(models[i]);
 
             var resultId = resultJson.RootElement.GetProperty("@id").GetString();
@@ -111,20 +124,79 @@ public class ModelsTests : TestBase
     }
 
     [Fact]
-    public async Task DeleteModels_DependentModels_DeletesEdges()
+    public async Task DeleteModels_DeletesModelsWithNoDependencies()
     {
+        // First delete everything
+        string[] modelIds =
+        [
+            "dtmi:com:contoso:Planet;1",
+            "dtmi:com:contoso:CelestialBody;1",
+            "dtmi:com:contoso:Crater;1",
+        ];
+        foreach (var modelId in modelIds)
+        {
+            try
+            {
+                await Client.DeleteModelAsync(modelId);
+            }
+            catch
+            {
+                // Ignore exception if model does not exist
+            }
+        }
+
+        // Create all models again
         await Client.CreateModelsAsync(
             [SampleData.DtdlCelestialBody, SampleData.DtdlCrater, SampleData.DtdlPlanet]
         );
 
-        await Client.DeleteModelAsync("dtmi:com:contoso:Crater;1");
+        await Client.DeleteModelAsync("dtmi:com:contoso:Planet;1");
 
         bool exceptionThrown = false;
         try
         {
-            var result = await Client.GetModelAsync("dtmi:com:contoso:Crater;1");
+            var result = await Client.GetModelAsync("dtmi:com:contoso:Planet;1");
         }
         catch (ModelNotFoundException)
+        {
+            exceptionThrown = true;
+        }
+        Assert.True(exceptionThrown);
+    }
+
+    [Fact]
+    public async Task DeleteModels_ThrowsWhenModelReferencesAreNotDeleted()
+    {
+        // First delete any existing models to avoid conflicts (in correct order)
+        string[] modelIds =
+        [
+            "dtmi:com:contoso:Planet;1",
+            "dtmi:com:contoso:CelestialBody;1",
+            "dtmi:com:contoso:Crater;1",
+        ];
+        foreach (var modelId in modelIds)
+        {
+            try
+            {
+                await Client.DeleteModelAsync(modelId);
+            }
+            catch
+            {
+                // Ignore exception if model does not exist
+            }
+        }
+
+        await Client.CreateModelsAsync(
+            [SampleData.DtdlCelestialBody, SampleData.DtdlCrater, SampleData.DtdlPlanet]
+        );
+
+        bool exceptionThrown = false;
+
+        try
+        {
+            await Client.DeleteModelAsync("dtmi:com:contoso:Crater;1");
+        }
+        catch (ModelReferencesNotDeletedException)
         {
             exceptionThrown = true;
         }
@@ -171,8 +243,9 @@ public class ModelsTests : TestBase
         }
         var m1 = await Client.CreateModelsAsync([SampleData.DtdlRoom]);
         Assert.Equal("dtmi:com:adt:dtsample:room;1", m1[0].Id);
-        await Client.DeleteModelAsync("dtmi:com:adt:dtsample:room;1");
+        await Client.DeleteModelAsync(m1[0].Id);
         var m2 = await Client.CreateModelsAsync([SampleData.DtdlRoom]);
         Assert.Equal("dtmi:com:adt:dtsample:room;1", m2[0].Id);
+        await Client.DeleteModelAsync(m2[0].Id);
     }
 }

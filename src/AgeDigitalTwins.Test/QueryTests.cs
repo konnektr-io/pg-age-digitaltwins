@@ -14,7 +14,15 @@ public class QueryTests : TestBase
         try
         {
             // Load required models
-            string[] models = [SampleData.DtdlRoom, SampleData.DtdlTemperatureSensor];
+            string[] models =
+            [
+                SampleData.DtdlRoom,
+                SampleData.DtdlTemperatureSensor,
+                SampleData.DtdlPlanet,
+                SampleData.DtdlCelestialBody,
+                SampleData.DtdlCrater,
+                SampleData.DtdlHabitablePlanet,
+            ];
             await Client.CreateModelsAsync(models);
         }
         catch { }
@@ -426,7 +434,8 @@ public class QueryTests : TestBase
 
         foreach (var twin in twins)
         {
-            await Client.CreateOrReplaceDigitalTwinAsync(twin.Key, twin.Value);
+            var t = await Client.CreateOrReplaceDigitalTwinAsync(twin.Key, twin.Value);
+            Assert.NotNull(t);
         }
 
         int count = 0;
@@ -443,5 +452,132 @@ public class QueryTests : TestBase
             count++;
         }
         Assert.Equal(2, count);
+    }
+
+    [Fact]
+    public async Task QueryAsync_IsOfModel_ReturnsAllMatchingTwins()
+    {
+        await IntializeAsync();
+
+        await foreach (var twin in Client.QueryAsync<JsonDocument>(@"SELECT * FROM DIGITALTWINS"))
+        {
+            await Client.DeleteDigitalTwinAsync(
+                twin!.RootElement.GetProperty("$dtId")!.GetString()!
+            );
+        }
+
+        Dictionary<string, string> twins =
+            new()
+            {
+                {
+                    "planet1",
+                    @"{""$dtId"": ""planet1"", ""$metadata"": {""$model"": ""dtmi:com:contoso:Planet;1""}, ""name"": ""Planet 1""}"
+                },
+                {
+                    "celestialBody1",
+                    @"{""$dtId"": ""celestialBody1"", ""$metadata"": {""$model"": ""dtmi:com:contoso:CelestialBody;1""}, ""name"": ""Celestial Body 1"", ""mass"": 5.972e24}"
+                },
+                {
+                    "habitablePlanet1",
+                    @"{""$dtId"": ""habitablePlanet1"", ""$metadata"": {""$model"": ""dtmi:com:contoso:HabitablePlanet;1""}, ""name"": ""Habitable Planet 1"", ""hasLife"": true}"
+                },
+            };
+
+        foreach (var twin in twins)
+        {
+            var t = await Client.CreateOrReplaceDigitalTwinAsync(twin.Key, twin.Value);
+            Assert.NotNull(t);
+        }
+
+        int count = 0;
+        await foreach (
+            var line in Client.QueryAsync<JsonDocument>(
+                @"SELECT * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:contoso:CelestialBody;1')"
+            )
+        )
+        {
+            count++;
+        }
+        Assert.Equal(3, count);
+    }
+
+    [Fact]
+    public async Task QueryAsync_IsOfModel_ReturnsOnlyPlanets()
+    {
+        await IntializeAsync();
+
+        Dictionary<string, string> twins =
+            new()
+            {
+                {
+                    "planet1",
+                    @"{""$dtId"": ""planet1"", ""$metadata"": {""$model"": ""dtmi:com:contoso:Planet;1""}, ""name"": ""Planet 1""}"
+                },
+                {
+                    "celestialBody1",
+                    @"{""$dtId"": ""celestialBody1"", ""$metadata"": {""$model"": ""dtmi:com:contoso:CelestialBody;1""}, ""name"": ""Celestial Body 1"", ""mass"": 5.972e24}"
+                },
+                {
+                    "habitablePlanet1",
+                    @"{""$dtId"": ""habitablePlanet1"", ""$metadata"": {""$model"": ""dtmi:com:contoso:HabitablePlanet;1""}, ""name"": ""Habitable Planet 1"", ""hasLife"": true}"
+                },
+            };
+
+        foreach (var twin in twins)
+        {
+            var t = await Client.CreateOrReplaceDigitalTwinAsync(twin.Key, twin.Value);
+            Assert.NotNull(t);
+        }
+
+        int count = 0;
+        await foreach (
+            var line in Client.QueryAsync<JsonDocument>(
+                @"SELECT * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:contoso:Planet;1')"
+            )
+        )
+        {
+            count++;
+        }
+        Assert.Equal(2, count);
+    }
+
+    [Fact]
+    public async Task QueryAsync_IsOfModel_ReturnsExactCelestialBody()
+    {
+        await IntializeAsync();
+
+        Dictionary<string, string> twins =
+            new()
+            {
+                {
+                    "planet1",
+                    @"{""$dtId"": ""planet1"", ""$metadata"": {""$model"": ""dtmi:com:contoso:Planet;1""}, ""name"": ""Planet 1""}"
+                },
+                {
+                    "celestialBody1",
+                    @"{""$dtId"": ""celestialBody1"", ""$metadata"": {""$model"": ""dtmi:com:contoso:CelestialBody;1""}, ""name"": ""Celestial Body 1"", ""mass"": 5.972e24}"
+                },
+                {
+                    "habitablePlanet1",
+                    @"{""$dtId"": ""habitablePlanet1"", ""$metadata"": {""$model"": ""dtmi:com:contoso:HabitablePlanet;1""}, ""name"": ""Habitable Planet 1"", ""hasLife"": true}"
+                },
+            };
+
+        foreach (var twin in twins)
+        {
+            var t = await Client.CreateOrReplaceDigitalTwinAsync(twin.Key, twin.Value);
+            Assert.NotNull(t);
+        }
+
+        int count = 0;
+        await foreach (
+            var line in Client.QueryAsync<JsonDocument>(
+                @"SELECT * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:contoso:CelestialBody;1', exact)"
+            )
+        )
+        {
+            count++;
+        }
+        Assert.Equal(1, count);
     }
 }

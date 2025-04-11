@@ -1,6 +1,5 @@
 using System;
 using System.Net;
-using OpenTelemetry.Trace;
 
 namespace AgeDigitalTwins.Exceptions;
 
@@ -42,6 +41,15 @@ public class ModelNotFoundException : AgeDigitalTwinsException
         : base(message)
     {
         StatusCode = HttpStatusCode.NotFound;
+    }
+}
+
+public class ModelReferencesNotDeletedException : AgeDigitalTwinsException
+{
+    public ModelReferencesNotDeletedException()
+        : base("The model refers to models that are not deleted.")
+    {
+        StatusCode = HttpStatusCode.Conflict;
     }
 }
 
