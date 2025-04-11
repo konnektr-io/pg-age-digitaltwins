@@ -18,7 +18,7 @@ namespace AgeDigitalTwins.Models
         /// <see href="https://docs.microsoft.com/en-us/azure/digital-twins/concepts-models">Understand twin models in Azure Digital Twins</see>.
         /// </remarks>
         [JsonPropertyName("model")]
-        public JsonElement DtdlModelJson { get; set; }
+        public JsonElement DtdlModelJson { get; private set; }
 
         [JsonIgnore]
         public string DtdlModel
@@ -41,6 +41,9 @@ namespace AgeDigitalTwins.Models
         [JsonPropertyName("description")]
         public IReadOnlyDictionary<string, string> LanguageDescriptions { get; }
 
+        [JsonPropertyName("bases")]
+        public string[] Bases { get; set; }
+
         [JsonPropertyName("decommissioned")]
         public bool IsDecommissioned { get; }
 
@@ -51,7 +54,8 @@ namespace AgeDigitalTwins.Models
             DateTimeOffset? uploadedOn,
             IReadOnlyDictionary<string, string> languageDisplayNames,
             IReadOnlyDictionary<string, string> languageDescriptions,
-            bool isDecommissioned
+            bool isDecommissioned,
+            string[]? bases
         )
         {
             Id = id;
@@ -60,6 +64,7 @@ namespace AgeDigitalTwins.Models
             LanguageDisplayNames = languageDisplayNames;
             LanguageDescriptions = languageDescriptions;
             IsDecommissioned = isDecommissioned;
+            Bases = bases ?? [];
         }
 
         public DigitalTwinsModelData(Dictionary<string, object?> modelData)
@@ -74,6 +79,9 @@ namespace AgeDigitalTwins.Models
                 modelData["description"]?.ToString()!
             )!;
             IsDecommissioned = bool.Parse(modelData["decommissioned"]?.ToString()!);
+            Bases =
+                JsonSerializer.Deserialize<string[]>(modelData["bases"]?.ToString()!)
+                ?? Array.Empty<string>();
         }
 
         public DigitalTwinsModelData(string dtdlModel)
@@ -125,30 +133,7 @@ namespace AgeDigitalTwins.Models
             }
             LanguageDescriptions ??= new Dictionary<string, string>();
             IsDecommissioned = false;
-        }
-    }
-
-    public class JsonDocumentConverter : JsonConverter<JsonDocument>
-    {
-        public override JsonDocument Read(
-            ref Utf8JsonReader reader,
-            Type typeToConvert,
-            JsonSerializerOptions options
-        )
-        {
-            using (JsonDocument doc = JsonDocument.ParseValue(ref reader))
-            {
-                return JsonDocument.Parse(doc.RootElement.GetRawText());
-            }
-        }
-
-        public override void Write(
-            Utf8JsonWriter writer,
-            JsonDocument value,
-            JsonSerializerOptions options
-        )
-        {
-            value.WriteTo(writer);
+            Bases = Array.Empty<string>();
         }
     }
 }

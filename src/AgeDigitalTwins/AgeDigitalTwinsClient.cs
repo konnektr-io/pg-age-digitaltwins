@@ -29,6 +29,7 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
         _modelParser = new(
             new ParsingOptions()
             {
+                MaxDtdlVersion = 4,
                 DtmiResolverAsync = (dtmis, ct) =>
                     _dataSource.ParserDtmiResolverAsync(_graphName, dtmis, ct),
             }
@@ -47,6 +48,7 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
         _modelParser = new(
             new ParsingOptions()
             {
+                MaxDtdlVersion = 4,
                 DtmiResolverAsync = (dtmis, ct) =>
                     _dataSource.ParserDtmiResolverAsync(_graphName, dtmis, ct),
             }

@@ -80,13 +80,36 @@ public partial class AgeDigitalTwinsClient
     {
         try
         {
-            var parsedModels = await _modelParser.ParseAsync(
+            var objectModel = await _modelParser.ParseAsync(
                 ConvertToAsyncEnumerable(dtdlModels),
                 cancellationToken: cancellationToken
             );
-            IEnumerable<DigitalTwinsModelData> modelDatas = dtdlModels.Select(
-                dtdlModel => new DigitalTwinsModelData(dtdlModel)
-            );
+            IEnumerable<DigitalTwinsModelData> modelDatas = dtdlModels.Select(dtdlModel =>
+            {
+                // Prepare the bases array to store all bases (dtmis that the interface extends from)
+                var bases = new List<string>();
+                // Parse the original json and prepare the modelData object
+                var modelData = new DigitalTwinsModelData(dtdlModel);
+                // Find the interface from the objectModel dictionary using the modelId
+                var interfaceInfo = (DTInterfaceInfo)objectModel[new Dtmi(modelData.Id)];
+                // Recursively add all base interfaces to the list of bases
+                void AddBaseInterfaces(DTInterfaceInfo currentInterface)
+                {
+                    foreach (DTInterfaceInfo extendedInterface in currentInterface.Extends)
+                    {
+                        if (!bases.Contains(extendedInterface.Id.AbsoluteUri))
+                        {
+                            bases.Add(extendedInterface.Id.AbsoluteUri);
+                            AddBaseInterfaces(extendedInterface); // Recursive call
+                        }
+                    }
+                }
+                // Add the base interfaces to the list of bases (recursively)
+                AddBaseInterfaces(interfaceInfo);
+                // Add the collected bases to the modelData
+                modelData.Bases = bases.ToArray();
+                return modelData;
+            });
             // This is needed as after unwinding, it gets converted to agtype again
             string modelsString =
                 $"['{string.Join("','", modelDatas.Select(m => JsonSerializer.Serialize(m, serializerOptions).Replace("'", "\\'")))}']";
@@ -123,11 +146,11 @@ public partial class AgeDigitalTwinsClient
 
             List<string> relationshipNames = [];
 
-            foreach (var model in parsedModels)
+            foreach (var entityInfoKv in objectModel)
             {
                 // Add edges based on the 'extends' field (especially needed for the 'IS_OF_MODEL' function)
                 if (
-                    model.Value is DTInterfaceInfo dTInterfaceInfo
+                    entityInfoKv.Value is DTInterfaceInfo dTInterfaceInfo
                     && dTInterfaceInfo.Extends != null
                     && dTInterfaceInfo.Extends.Count > 0
                 )
@@ -150,7 +173,7 @@ public partial class AgeDigitalTwinsClient
                 }
 
                 // Collect all relationship names so we can prepare the edge labels with replication full
-                if (model.Value is DTRelationshipInfo dTRelationshipInfo)
+                if (entityInfoKv.Value is DTRelationshipInfo dTRelationshipInfo)
                 {
                     if (relationshipNames.Contains(dTRelationshipInfo.Name))
                     {
