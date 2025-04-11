@@ -75,9 +75,14 @@ public static class DigitalTwinsTools
     )
     {
         var models = new List<string>();
-        await foreach (var model in client.GetModelsAsync(cancellationToken))
+        await foreach (
+            var model in client.GetModelsAsync(
+                new() { IncludeModelDefinition = true },
+                cancellationToken
+            )
+        )
         {
-            models.Add(model.DtdlModel);
+            models.Add(model.DtdlModel!);
         }
         return models.Any() ? models : new[] { "No models found." };
     }

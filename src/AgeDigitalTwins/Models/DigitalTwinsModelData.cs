@@ -18,13 +18,13 @@ namespace AgeDigitalTwins.Models
         /// <see href="https://docs.microsoft.com/en-us/azure/digital-twins/concepts-models">Understand twin models in Azure Digital Twins</see>.
         /// </remarks>
         [JsonPropertyName("model")]
-        public JsonElement DtdlModelJson { get; private set; }
+        public JsonElement? DtdlModelJson { get; private set; }
 
         [JsonIgnore]
-        public string DtdlModel
+        public string? DtdlModel
         {
-            get => DtdlModelJson.GetRawText();
-            set => DtdlModelJson = JsonDocument.Parse(value).RootElement;
+            get => DtdlModelJson?.GetRawText();
+            set => DtdlModelJson = value is not null ? JsonDocument.Parse(value).RootElement : null;
         }
 
         /// <summary>
@@ -50,7 +50,7 @@ namespace AgeDigitalTwins.Models
         [JsonConstructor]
         public DigitalTwinsModelData(
             string id,
-            JsonElement dtdlModelJson,
+            JsonElement? dtdlModelJson,
             DateTimeOffset? uploadedOn,
             IReadOnlyDictionary<string, string> languageDisplayNames,
             IReadOnlyDictionary<string, string> languageDescriptions,
@@ -69,28 +69,90 @@ namespace AgeDigitalTwins.Models
 
         public DigitalTwinsModelData(Dictionary<string, object?> modelData)
         {
-            Id = modelData["id"]?.ToString()!;
-            DtdlModel = modelData["model"]?.ToString()!;
-            UploadedOn = DateTimeOffset.Parse(modelData["uploadTime"]?.ToString()!);
-            LanguageDisplayNames = JsonSerializer.Deserialize<Dictionary<string, string>>(
-                modelData["displayName"]?.ToString()!
-            )!;
-            LanguageDescriptions = JsonSerializer.Deserialize<Dictionary<string, string>>(
-                modelData["description"]?.ToString()!
-            )!;
-            IsDecommissioned = bool.Parse(modelData["decommissioned"]?.ToString()!);
-            Bases =
-                JsonSerializer.Deserialize<string[]>(modelData["bases"]?.ToString()!)
-                ?? Array.Empty<string>();
+            if (modelData.TryGetValue("id", out var idValue))
+            {
+                Id = idValue?.ToString()!;
+            }
+            else
+            {
+                throw new ArgumentException("Model data must contain an 'id' property.");
+            }
+
+            if (modelData.TryGetValue("model", out var modelValue))
+            {
+                DtdlModel = modelValue?.ToString();
+            }
+
+            if (
+                modelData.TryGetValue("uploadTime", out var uploadTimeValue)
+                && DateTimeOffset.TryParse(uploadTimeValue?.ToString(), out var parsedUploadTime)
+            )
+            {
+                UploadedOn = parsedUploadTime;
+            }
+            else
+            {
+                UploadedOn = DateTimeOffset.MinValue;
+            }
+
+            if (modelData.TryGetValue("displayName", out var displayNameValue))
+            {
+                LanguageDisplayNames = JsonSerializer.Deserialize<Dictionary<string, string>>(
+                    displayNameValue?.ToString() ?? "{}"
+                )!;
+            }
+            else
+            {
+                LanguageDisplayNames = new Dictionary<string, string>();
+            }
+
+            if (modelData.TryGetValue("description", out var descriptionValue))
+            {
+                LanguageDescriptions = JsonSerializer.Deserialize<Dictionary<string, string>>(
+                    descriptionValue?.ToString() ?? "{}"
+                )!;
+            }
+            else
+            {
+                LanguageDescriptions = new Dictionary<string, string>();
+            }
+
+            if (
+                modelData.TryGetValue("decommissioned", out var decommissionedValue)
+                && bool.TryParse(decommissionedValue?.ToString(), out var parsedDecommissioned)
+            )
+            {
+                IsDecommissioned = parsedDecommissioned;
+            }
+            else
+            {
+                IsDecommissioned = false;
+            }
+
+            if (modelData.TryGetValue("bases", out var basesValue))
+            {
+                Bases =
+                    JsonSerializer.Deserialize<string[]>(basesValue?.ToString() ?? "[]")
+                    ?? Array.Empty<string>();
+            }
+            else
+            {
+                Bases = Array.Empty<string>();
+            }
         }
 
         public DigitalTwinsModelData(string dtdlModel)
         {
             DtdlModel = dtdlModel;
-            Id = DtdlModelJson.GetProperty("@id")!.GetString()!;
+            Id = ((JsonElement)DtdlModelJson!).GetProperty("@id")!.GetString()!;
             DtdlModel = dtdlModel;
             UploadedOn = DateTimeOffset.UtcNow;
-            if (DtdlModelJson.TryGetProperty("displayName", out JsonElement displayName))
+            if (
+                ((JsonElement)DtdlModelJson!).TryGetProperty(
+                    "displayName",
+                    out JsonElement displayName
+                )
+            )
             {
                 if (displayName.ValueKind == JsonValueKind.Object)
                 {
@@ -111,7 +173,12 @@ namespace AgeDigitalTwins.Models
                 }
             }
             LanguageDisplayNames ??= new Dictionary<string, string>();
-            if (DtdlModelJson.TryGetProperty("description", out JsonElement description))
+            if (
+                ((JsonElement)DtdlModelJson!).TryGetProperty(
+                    "description",
+                    out JsonElement description
+                )
+            )
             {
                 if (description.ValueKind == JsonValueKind.Object)
                 {

@@ -28,11 +28,40 @@ public partial class AgeDigitalTwinsClient
     }
 
     public virtual async IAsyncEnumerable<DigitalTwinsModelData> GetModelsAsync(
+        GetModelsOptions? options = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default
     )
     {
-        // TODO: Implement dependenciesFor parameter
-        string cypher = $@"MATCH (m:Model) RETURN m";
+        options ??= new GetModelsOptions();
+
+        string cypher;
+
+        if (options.DependenciesFor != null && options.DependenciesFor.Length > 0)
+        {
+            string dependenciesForList = $"['{string.Join("','", options.DependenciesFor)}']";
+            cypher =
+                $@"
+                UNWIND {dependenciesForList} AS modelId
+                MATCH (m:Model {{id: modelId}})
+                UNWIND m.bases AS dependency
+                MATCH (m2:Model {{id: dependency}})
+                RETURN m2 AS model";
+        }
+        else
+        {
+            cypher = @"MATCH (m:Model)";
+        }
+
+        if (options.IncludeModelDefinition)
+        {
+            cypher += "RETURN m";
+        }
+        else
+        {
+            cypher +=
+                @"RETURN {id:m.id, uploadTime: m.uploadTime, displayName: m.displayName, description: m.description, decommissioned: m.decommissioned} AS m";
+        }
+
         await using var connection = await _dataSource.OpenConnectionAsync(
             TargetSessionAttributes.PreferStandby,
             cancellationToken
@@ -232,8 +261,7 @@ public partial class AgeDigitalTwinsClient
         // TODO: should not be able to delete a model where other models extend from.
         string cypher =
             $@"
-            MATCH (m:Model)
-            WHERE m.id = '{modelId}' 
+            MATCH (m:Model {{id: '{modelId}'}})
             OPTIONAL MATCH (m)-[r:_extends]-()
             DELETE r, m";
         await using var connection = await _dataSource.OpenConnectionAsync(

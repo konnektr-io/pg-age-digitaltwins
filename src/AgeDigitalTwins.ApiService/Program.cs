@@ -1,6 +1,7 @@
 using System.Text.Json;
 using AgeDigitalTwins;
 using AgeDigitalTwins.ApiService;
+using AgeDigitalTwins.Models;
 using Json.Patch;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -363,20 +364,42 @@ app.MapPost(
 app.MapGet(
         "/models",
         [Authorize]
-        async ([FromServices] AgeDigitalTwinsClient client, CancellationToken cancellationToken) =>
+        async (
+            HttpContext httpContext,
+            [FromServices] AgeDigitalTwinsClient client,
+            CancellationToken cancellationToken
+        ) =>
         {
-            // TODO: Implement dependenciesFor parameter
+            var query = httpContext.Request.Query;
+
+            // Parse query parameters
+            string[] dependenciesFor =
+            [
+                .. query["dependenciesFor"].Where<string>(x => !string.IsNullOrEmpty(x)),
+            ];
+            bool includeModelDefinition =
+                query.ContainsKey("includeModelDefinition")
+                && bool.TryParse(query["includeModelDefinition"], out var include)
+                && include;
+
+            var options = new GetModelsOptions
+            {
+                DependenciesFor = dependenciesFor.Length > 0 ? dependenciesFor : null,
+                IncludeModelDefinition = includeModelDefinition,
+            };
+
             return Results.Json(
                 new
                 {
                     value = await client
-                        .GetModelsAsync(cancellationToken)
+                        .GetModelsAsync(options, cancellationToken)
                         .ToListAsync(cancellationToken),
                 }
             );
         }
     )
-    .WithName("ListModels");
+    .WithName("ListModels")
+    .WithDescription("Retrieves model metadata and, optionally, model definitions");
 
 app.MapPost(
         "/models",
