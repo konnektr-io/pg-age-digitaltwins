@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
 using Npgsql.Age;
 using Npgsql.Age.Types;
@@ -27,8 +28,15 @@ public partial class AgeDigitalTwinsClient
         {
             cypher = query;
         }
+
+        // Detect variable-length edge query using regex
+        // VLE queries can't run on read-only connections
+        var isVariableLengthEdgeQuery = VariableLengthEdgeRegex().IsMatch(cypher);
+
         await using var connection = await _dataSource.OpenConnectionAsync(
-            Npgsql.TargetSessionAttributes.PreferStandby,
+            isVariableLengthEdgeQuery
+                ? Npgsql.TargetSessionAttributes.ReadWrite
+                : Npgsql.TargetSessionAttributes.PreferStandby,
             cancellationToken
         );
 
@@ -134,4 +142,7 @@ public partial class AgeDigitalTwinsClient
             }
         }
     }
+
+    [GeneratedRegexAttribute(@"\[[^\]]*:\w*\*[\d.]*\]", RegexOptions.Compiled)]
+    private static partial Regex VariableLengthEdgeRegex();
 }
