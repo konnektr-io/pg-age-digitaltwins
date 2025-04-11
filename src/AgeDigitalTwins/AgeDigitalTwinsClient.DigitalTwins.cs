@@ -388,14 +388,14 @@ public partial class AgeDigitalTwinsClient
         CancellationToken cancellationToken = default
     )
     {
-        string cypher = $@"MATCH (t:Twin) WHERE t['$dtId'] = '{digitalTwinId}' DELETE t";
+        string cypher = $@"MATCH (t:Twin {{`$dtId`: '{digitalTwinId}'}}) DELETE t";
         await using var connection = await _dataSource.OpenConnectionAsync(
             Npgsql.TargetSessionAttributes.ReadWrite,
             cancellationToken
         );
         await using var command = connection.CreateCypherCommand(_graphName, cypher);
         int rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken);
-        if (rowsAffected == 0)
+        if (rowsAffected <= 0)
         {
             throw new DigitalTwinNotFoundException(
                 $"Digital Twin with ID {digitalTwinId} not found"

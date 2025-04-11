@@ -262,15 +262,14 @@ public partial class AgeDigitalTwinsClient
         string cypher =
             $@"
             MATCH (m:Model {{id: '{modelId}'}})
-            OPTIONAL MATCH (m)-[r:_extends]-()
-            DELETE r, m";
+            DETACH DELETE m";
         await using var connection = await _dataSource.OpenConnectionAsync(
             TargetSessionAttributes.ReadWrite,
             cancellationToken
         );
         await using var command = connection.CreateCypherCommand(_graphName, cypher);
         int rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken);
-        if (rowsAffected == 0)
+        if (rowsAffected <= 0)
         {
             throw new ModelNotFoundException($"Model with ID {modelId} not found");
         }

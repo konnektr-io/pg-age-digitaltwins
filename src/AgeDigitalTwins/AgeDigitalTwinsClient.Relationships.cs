@@ -373,7 +373,7 @@ public partial class AgeDigitalTwinsClient
         );
         await using var command = connection.CreateCypherCommand(_graphName, cypher);
         int rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken);
-        if (rowsAffected == 0)
+        if (rowsAffected <= 0)
         {
             throw new RelationshipNotFoundException(
                 $"Relationship with ID {relationshipId} not found"
