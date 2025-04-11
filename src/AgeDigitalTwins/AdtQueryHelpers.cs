@@ -23,10 +23,7 @@ public static partial class AdtQueryHelpers
             limitClause = selectMatch.Groups["limit"].Success
                 ? "LIMIT " + selectMatch.Groups["limit"].Value
                 : string.Empty;
-            returnClause = ProcessPropertyAccessors(
-                selectMatch.Groups["projections"].Value,
-                graphName
-            );
+            returnClause = ProcessPropertyAccessors(selectMatch.Groups["projections"].Value);
             if (returnClause.Contains("COUNT()", StringComparison.OrdinalIgnoreCase))
             {
                 returnClause = "COUNT(*)";
@@ -73,7 +70,7 @@ public static partial class AdtQueryHelpers
                     var adtMatchClause = match.Groups[1].Value;
 
                     // Add :Twin to all round brackets in the MATCH clause
-                    matchClause = Regex.Replace(adtMatchClause, @"\((\w+)\)", "($1:Twin)");
+                    matchClause = ParenthesesTwinRegex().Replace(adtMatchClause, "($1:Twin)");
 
                     // AGE currently doesn't support the pipe operator
                     // See https://github.com/apache/age/issues/1714
@@ -178,7 +175,6 @@ public static partial class AdtQueryHelpers
                 // Process WHERE clause
                 whereClause = ProcessPropertyAccessors(
                     adtWhereClause,
-                    graphName,
                     usesWildcard
                         && adtQuery.Contains(
                             "FROM RELATIONSHIPS",
@@ -224,11 +220,7 @@ public static partial class AdtQueryHelpers
         return cypher;
     }
 
-    internal static string ProcessPropertyAccessors(
-        string whereClause,
-        string graphName,
-        string? prependAlias = null
-    )
+    internal static string ProcessPropertyAccessors(string whereClause, string? prependAlias = null)
     {
         if (!string.IsNullOrEmpty(prependAlias))
         {
@@ -271,19 +263,19 @@ public static partial class AdtQueryHelpers
                     whereClause,
                     m =>
                     {
-                        return $"{graphName}.is_of_model({prependAlias},{m.Groups[1].Value})";
+                        return $"public.is_of_model({prependAlias},{m.Groups[1].Value})";
                     }
                 );
         }
         else
         {
-            // Process IS_OF_MODEL function without prepend alias
-            whereClause = IsOfModelRegex2()
+            // Process IS_OF_MODEL function without prepend alias (alias should already been defined in caught group)
+            whereClause = IsOfModelRegex()
                 .Replace(
                     whereClause,
                     m =>
                     {
-                        return $"{graphName}.is_of_model({m.Groups[1].Value})";
+                        return $"public.is_of_model({m.Groups[1].Value})";
                     }
                 );
         }
@@ -407,12 +399,6 @@ public static partial class AdtQueryHelpers
     private static partial Regex IsOfModelRegex();
 
     [GeneratedRegex(
-        @"IS_OF_MODEL\(([^)]+)\)",
-        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
-    )]
-    private static partial Regex IsOfModelRegex2();
-
-    [GeneratedRegex(
         @"STARTSWITH\(([^,]+),\s*'([^']+)'\)",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
     )]
@@ -441,4 +427,7 @@ public static partial class AdtQueryHelpers
 
     [GeneratedRegex(@"(\.\$[\w]+)")]
     private static partial Regex DollarSignPropertyRegex();
+
+    [GeneratedRegex(@"\((\w+)\)")]
+    private static partial Regex ParenthesesTwinRegex();
 }

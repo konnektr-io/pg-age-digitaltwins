@@ -204,6 +204,7 @@ public partial class AgeDigitalTwinsClient
                 );
                 await createElabelCommand.ExecuteNonQueryAsync(cancellationToken);
 
+                // Set the replication identity to FULL for the new label (to ensure all properties are replicated)
                 await using var setReplicationCommand = new NpgsqlCommand(
                     $@"ALTER TABLE {_graphName}.""{relationshipName}"" REPLICA IDENTITY FULL",
                     connection

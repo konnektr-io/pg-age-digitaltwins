@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Data.Common;
 using Npgsql;
 
 namespace AgeDigitalTwins;
@@ -27,7 +28,7 @@ public static class GraphInitialization
                 @$"CREATE OR REPLACE FUNCTION public.is_of_model(
                     twin agtype,
                     model_id agtype,
-                    strict boolean default false,
+                    exact boolean default false,
                     graph_name text default 'digitaltwins'
                 )
                 RETURNS boolean
@@ -40,15 +41,15 @@ public static class GraphInitialization
                     SELECT ag_catalog.agtype_access_operator(twin, '""$metadata""'::agtype, '""$model""'::agtype)
                     INTO twin_model_id;
 
-                    IF strict THEN
+                    IF exact THEN
                         RETURN twin_model_id = model_id::text;
                     ELSE
                         EXECUTE format('
                             SELECT EXISTS (
                                 SELECT 1
                                 FROM ag_catalog.cypher(''%s'', $$
-                                    MATCH (m:Model)-[:_extends*0..]->(n:Model)
-                                    WHERE m.id = %s AND n.id = %s
+                                    MATCH (m:Model {{id: %s}})
+                                    WHERE %s IN m.bases
                                     RETURN m.id
                                 $$) AS (m text)
                             )', graph_name, twin_model_id, model_id
@@ -60,71 +61,6 @@ public static class GraphInitialization
                 END;
                 $function$;"
             ),
-            new(
-                @$"CREATE OR REPLACE FUNCTION {graphName}.is_of_model(
-                    twin agtype,
-                    model_id agtype,
-                    strict boolean default false
-                )
-                RETURNS boolean
-                LANGUAGE plpgsql
-                AS $function$
-                DECLARE
-                    twin_model_id text;
-                    result boolean;
-                BEGIN
-                    SELECT ag_catalog.agtype_access_operator(twin, '""$metadata""'::agtype, '""$model""'::agtype)
-                    INTO twin_model_id;
-
-                    IF strict THEN
-                        RETURN twin_model_id = model_id::text;
-                    ELSE
-                        EXECUTE format('
-                            SELECT EXISTS (
-                                SELECT 1
-                                FROM ag_catalog.cypher(''{graphName}'', $$
-                                    MATCH (m:Model)-[:_extends*0..]->(n:Model)
-                                    WHERE m.id = %s AND n.id = %s
-                                    RETURN m.id
-                                $$) AS (m text)
-                            )', twin_model_id, model_id
-                        )
-                        INTO result;
-
-                        RETURN result;
-                    END IF;
-                END;
-                $function$;"
-            ),
-            /* new(
-                @$"CREATE OR REPLACE FUNCTION {graphName}.is_of_model(twin agtype, model_id agtype, strict boolean default false)
-        RETURNS boolean
-        LANGUAGE plpgsql
-        AS $function$
-        DECLARE
-            sql VARCHAR;
-            twin_model_id text;
-            result boolean;
-        BEGIN
-            SELECT ag_catalog.agtype_access_operator(twin,'""$metadata""'::agtype,'""$model""'::agtype) INTO twin_model_id;
-            IF strict THEN
-              sql:= format('SELECT ''%s'' = ''%s''', twin_model_id, model_id);
-            ELSE
-              sql:= format('
-                SELECT ''%s'' = ''%s'' OR
-                EXISTS
-                    (SELECT m FROM ag_catalog.cypher(''{graphName}'', $$
-                      MATCH(m:Model)-[:_extends*0..]->(n:Model)
-                      WHERE m.id = %s AND n.id = %s
-                      RETURN m.id
-                    $$) AS(m text))
-                ', twin_model_id, model_id, twin_model_id, model_id);
-            END IF;
-                    EXECUTE sql INTO result;
-                    RETURN result;
-                    END;
-        $function$;"
-            ), */
             new(
                 @$"CREATE OR REPLACE FUNCTION public.agtype_set(target agtype, path agtype, new_value agtype)
                 RETURNS agtype AS $$
