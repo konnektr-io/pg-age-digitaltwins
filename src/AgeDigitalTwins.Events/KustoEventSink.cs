@@ -160,58 +160,72 @@ public class KustoEventSink : IEventSink, IDisposable
 
         foreach (var eventGroup in eventsByType)
         {
-            var eventType = eventGroup.Key;
-            if (eventType is null)
+            try
             {
-                _logger.LogWarning("Event type must be specified");
-                continue;
-            }
-
-            if (!_ingestionProperties.TryGetValue(eventType, out var ingestionProperties))
-            {
-                _logger.LogWarning("Unsupported event type: {EventType}", eventType);
-                continue;
-            }
-
-            using var stream = new MemoryStream();
-            using (var writer = new StreamWriter(stream, Encoding.UTF8, 4096, true))
-            {
-                foreach (var cloudEvent in eventGroup)
+                var eventType = eventGroup.Key;
+                if (eventType is null)
                 {
-                    if (cloudEvent.Data is not JsonObject data)
-                    {
-                        _logger.LogError("Data must be a JSON object");
-                        continue;
-                    }
-
-                    var jsonData = JsonSerializer.Serialize(data);
-                    await writer.WriteLineAsync(jsonData);
+                    _logger.LogWarning("Event type must be specified");
+                    continue;
                 }
-            }
-            stream.Position = 0;
 
-            IKustoIngestionResult ingestionResult = await _ingestClient.IngestFromStreamAsync(
-                stream,
-                ingestionProperties
-            );
-            ingestionResult
-                .GetIngestionStatusCollection()
-                .ToList()
-                .ForEach(status =>
+                if (!_ingestionProperties.TryGetValue(eventType, out var ingestionProperties))
                 {
-                    if (status.Status != Status.Pending && status.Status != Status.Succeeded)
+                    _logger.LogWarning("Unsupported event type: {EventType}", eventType);
+                    continue;
+                }
+
+                using var stream = new MemoryStream();
+                using (var writer = new StreamWriter(stream, Encoding.UTF8, 4096, true))
+                {
+                    foreach (var cloudEvent in eventGroup)
                     {
-                        _logger.LogError(
-                            "Ingestion to Kusto failed: {Status}",
-                            JsonSerializer.Serialize(status)
-                        );
+                        if (cloudEvent.Data is not JsonObject data)
+                        {
+                            _logger.LogError("Data must be a JSON object");
+                            continue;
+                        }
+
+                        var jsonData = JsonSerializer.Serialize(data);
+                        await writer.WriteLineAsync(jsonData);
                     }
-                });
-            _logger.LogDebug(
-                "Ingested {EventCount} events of type {EventType} to Kusto",
-                eventGroup.Count(),
-                eventType
-            );
+                }
+                stream.Position = 0;
+
+                IKustoIngestionResult ingestionResult = await _ingestClient.IngestFromStreamAsync(
+                    stream,
+                    ingestionProperties
+                );
+                ingestionResult
+                    .GetIngestionStatusCollection()
+                    .ToList()
+                    .ForEach(status =>
+                    {
+                        if (status.Status != Status.Pending && status.Status != Status.Succeeded)
+                        {
+                            _logger.LogError(
+                                "Ingestion to Kusto failed: {Status}",
+                                JsonSerializer.Serialize(status)
+                            );
+                        }
+                    });
+                _logger.LogDebug(
+                    "Ingested {EventCount} events of type {EventType} to Kusto",
+                    eventGroup.Count(),
+                    eventType
+                );
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Ingestion failed for sink {SinkName}: {Reason}",
+                    Name,
+                    ex.Message
+                );
+                // Optionally, you can rethrow the exception or handle it as needed.
+                // For example, you might want to log it and continue processing other events.
+            }
         }
     }
 

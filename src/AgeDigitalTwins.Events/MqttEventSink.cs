@@ -56,7 +56,7 @@ public class MqttEventSink : IEventSink, IDisposable
             }
             catch (Exception e)
             {
-                _logger.LogError(e, "Publishing failed: {Reason}", e.Message);
+                _logger.LogError(e, "Publishing failed for {SinkName}: {Reason}", Name, e.Message);
             }
         }
     }
