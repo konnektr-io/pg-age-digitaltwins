@@ -60,6 +60,9 @@ public class KafkaEventSink : IEventSink, IDisposable
                 "Using OAUTHBEARER (Azure) authentication for Kafka sink '{SinkName}'",
                 Name
             );
+            // This is passed to the TokenRefreshHandler
+            // and used to get the token from Azure AD
+            // We pass in the scope for the Event Hubs namespace
             config.SaslOauthbearerConfig =
                 $"https://{options.BrokerList.Replace(":9093", "")}/.default";
             _producer = new ProducerBuilder<string?, byte[]>(config)
@@ -107,7 +110,7 @@ public class KafkaEventSink : IEventSink, IDisposable
         }
     }
 
-    private void TokenRefreshHandler(IProducer<string?, byte[]> producer, string config)
+    private void TokenRefreshHandler(IProducer<string?, byte[]> producer, string scope)
     {
         if (_credential == null)
         {
@@ -115,7 +118,7 @@ public class KafkaEventSink : IEventSink, IDisposable
             return;
         }
 
-        TokenRequestContext request = new([config]);
+        TokenRequestContext request = new([scope]);
 
         try
         {
