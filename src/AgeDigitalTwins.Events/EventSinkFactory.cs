@@ -14,34 +14,64 @@ public class EventSinkFactory(IConfiguration configuration, ILoggerFactory logge
         var kafkaSinks = _configuration
             .GetSection("EventSinks:Kafka")
             .Get<List<KafkaSinkOptions>>();
-        if (kafkaSinks != null)
+        if (kafkaSinks != null && kafkaSinks.Count > 0)
         {
+            var logger = _loggerFactory.CreateLogger<KafkaEventSink>();
             foreach (var kafkaSink in kafkaSinks)
             {
-                var logger = _loggerFactory.CreateLogger<KafkaEventSink>();
-                sinks.Add(new KafkaEventSink(kafkaSink, new DefaultAzureCredential(), logger));
+                try
+                {
+                    sinks.Add(new KafkaEventSink(kafkaSink, new DefaultAzureCredential(), logger));
+                }
+                catch (ArgumentException ex)
+                {
+                    logger.LogError(
+                        ex,
+                        "Failed to create Kafka event sink. Check the configuration for errors."
+                    );
+                }
             }
         }
 
         var mqttSinks = _configuration.GetSection("EventSinks:MQTT").Get<List<MqttSinkOptions>>();
-        if (mqttSinks != null)
+        if (mqttSinks != null && mqttSinks.Count > 0)
         {
+            var logger = _loggerFactory.CreateLogger<MqttEventSink>();
             foreach (var mqttSink in mqttSinks)
             {
-                var logger = _loggerFactory.CreateLogger<MqttEventSink>();
-                sinks.Add(new MqttEventSink(mqttSink, logger));
+                try
+                {
+                    sinks.Add(new MqttEventSink(mqttSink, logger));
+                }
+                catch (ArgumentException ex)
+                {
+                    logger.LogError(
+                        ex,
+                        "Failed to create MQTT event sink. Check the configuration for errors."
+                    );
+                }
             }
         }
 
         var kustoSinks = _configuration
             .GetSection("EventSinks:Kusto")
             .Get<List<KustoSinkOptions>>();
-        if (kustoSinks != null)
+        if (kustoSinks != null && kustoSinks.Count > 0)
         {
+            var logger = _loggerFactory.CreateLogger<KustoEventSink>();
             foreach (var kustoSink in kustoSinks)
             {
-                var logger = _loggerFactory.CreateLogger<KustoEventSink>();
-                sinks.Add(new KustoEventSink(kustoSink, new DefaultAzureCredential(), logger));
+                try
+                {
+                    sinks.Add(new KustoEventSink(kustoSink, new DefaultAzureCredential(), logger));
+                }
+                catch (ArgumentException ex)
+                {
+                    logger.LogError(
+                        ex,
+                        "Failed to create Kusto event sink. Check the configuration for errors."
+                    );
+                }
             }
         }
 
