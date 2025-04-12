@@ -1,5 +1,4 @@
 using Azure.Core;
-using Azure.Identity;
 using CloudNative.CloudEvents;
 using CloudNative.CloudEvents.Kafka;
 using CloudNative.CloudEvents.SystemTextJson;

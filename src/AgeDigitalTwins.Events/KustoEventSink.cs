@@ -2,8 +2,6 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Azure.Core;
-using Azure.Messaging;
-using CloudNative.CloudEvents;
 using Kusto.Data;
 using Kusto.Data.Common;
 using Kusto.Data.Ingestion;
