@@ -45,6 +45,7 @@ public class KafkaEventSink : IEventSink, IDisposable
 
         if (saslMechanism == SaslMechanism.Plain)
         {
+            logger.LogDebug("Using SASL/PLAIN authentication for Kafka sink '{SinkName}'", Name);
             config.SaslUsername = options.SaslUsername;
             config.SaslPassword = options.SaslPassword;
             _producer = new ProducerBuilder<string?, byte[]>(config).Build();
@@ -55,6 +56,10 @@ public class KafkaEventSink : IEventSink, IDisposable
             && bootstrapServers.Contains("servicebus")
         )
         {
+            logger.LogDebug(
+                "Using OAUTHBEARER (Azure) authentication for Kafka sink '{SinkName}'",
+                Name
+            );
             config.SaslOauthbearerConfig =
                 $"https://{options.BrokerList.Replace(":9093", "")}/.default";
             _producer = new ProducerBuilder<string?, byte[]>(config)
@@ -63,7 +68,7 @@ public class KafkaEventSink : IEventSink, IDisposable
         }
         else
         {
-            throw new InvalidOperationException("Invalid SaslMechanism");
+            throw new InvalidOperationException($"Invalid SaslMechanism for Kafka sink {Name}");
         }
     }
 
