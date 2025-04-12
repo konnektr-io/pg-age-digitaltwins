@@ -322,13 +322,13 @@ public partial class AgeDigitalTwinsClient
                 )
                 {
                     patchOperations.Add(
-                        $"SET t = public.agtype_set(properties(t),['{string.Join("','", path.Split('.'))}'],'{JsonSerializer.Serialize(op.Value, serializerOptions)}')"
+                        $"SET t = public.agtype_set(properties(t),['{string.Join("','", path.Split('.'))}'],'{JsonSerializer.Serialize(op.Value, serializerOptions).Replace("'", "\\'")}')"
                     );
                 }
                 else if (op.Value.GetValueKind() == JsonValueKind.String)
                 {
                     patchOperations.Add(
-                        $"SET t = public.agtype_set(properties(t),['{string.Join("','", path.Split('.'))}'],'{op.Value}')"
+                        $"SET t = public.agtype_set(properties(t),['{string.Join("','", path.Split('.'))}'],'{op.Value.ToString().Replace("'", "\\'")}')"
                     );
                 }
                 else
@@ -364,7 +364,7 @@ public partial class AgeDigitalTwinsClient
         patchOperations.Add($"SET t.`$etag` = '{newEtag}'");
 
         string cypher =
-            $@"MATCH (t:Twin) WHERE t['$dtId'] = '{digitalTwinId}'
+            $@"MATCH (t:Twin {{`$dtId`: '{digitalTwinId}'}})
             {string.Join("\n", updateTimeSetOperations)}
             {string.Join("\n", patchOperations)}
             RETURN t";
