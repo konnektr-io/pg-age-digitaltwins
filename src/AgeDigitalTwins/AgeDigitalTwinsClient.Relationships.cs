@@ -368,7 +368,7 @@ public partial class AgeDigitalTwinsClient
         string cypher =
             $@"MATCH (source:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel {{`$relationshipId`: '{relationshipId}'}}]->(target:Twin) 
             DELETE rel
-            RETURN COUNT(m) AS deletedCount";
+            RETURN COUNT(rel) AS deletedCount";
         await using var connection = await _dataSource.OpenConnectionAsync(
             Npgsql.TargetSessionAttributes.ReadWrite,
             cancellationToken
