@@ -213,7 +213,25 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
     private async Task ConsumeQueueAsync(CancellationToken cancellationToken = default)
     {
         List<IEventSink> eventSinks = _eventSinkFactory.CreateEventSinks();
+        _logger.LogDebug(
+            "Event sinks created: {Sinks}",
+            JsonSerializer.Serialize(eventSinks.Select(s => s.Name))
+        );
+        if (eventSinks.Count == 0)
+        {
+            _logger.LogWarning("No event sinks configured. Exiting.");
+            return;
+        }
         List<EventRoute> eventRoutes = _eventSinkFactory.GetEventRoutes();
+        _logger.LogDebug(
+            "Event routes created: {Routes}",
+            JsonSerializer.Serialize(eventRoutes.Select(r => r.ToString()))
+        );
+        if (eventRoutes.Count == 0)
+        {
+            _logger.LogWarning("No event routes configured. Exiting.");
+            return;
+        }
 
         while (true)
         {

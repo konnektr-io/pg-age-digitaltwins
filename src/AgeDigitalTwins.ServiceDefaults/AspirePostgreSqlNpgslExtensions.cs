@@ -85,8 +85,10 @@ public static class AspirePostgreSqlNpgsqlMultihostExtensions
                     sp => new NpgSqlHealthCheck(
                         new NpgSqlHealthCheckOptions(
                             serviceKey is null
-                                ? sp.GetRequiredService<NpgsqlDataSource>()
-                                : sp.GetRequiredKeyedService<NpgsqlDataSource>(serviceKey)
+                                ? sp.GetRequiredService<NpgsqlMultiHostDataSource>()
+                                    .WithTargetSession(TargetSessionAttributes.ReadWrite)
+                                : sp.GetRequiredKeyedService<NpgsqlMultiHostDataSource>(serviceKey)
+                                    .WithTargetSession(TargetSessionAttributes.ReadWrite)
                         )
                     ),
                     failureStatus: default,
