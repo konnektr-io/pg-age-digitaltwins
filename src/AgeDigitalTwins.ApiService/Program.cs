@@ -10,7 +10,6 @@ using Microsoft.Extensions.Primitives;
 using Microsoft.IdentityModel.Tokens;
 using Npgsql;
 using Npgsql.Age;
-using OpenTelemetry.Metrics;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -46,13 +45,14 @@ builder.AddNpgsqlMultihostDataSource(
 // Add AgeDigitalTwinsClient
 builder.Services.AddSingleton(sp =>
 {
+    var logger = sp.GetRequiredService<ILogger<Program>>();
     NpgsqlMultiHostDataSource dataSource = sp.GetRequiredService<NpgsqlMultiHostDataSource>();
     string graphName =
         builder.Configuration.GetSection("Parameters")["AgeGraphName"]
         ?? builder.Configuration["Parameters:AgeGraphName"]
         ?? builder.Configuration["AgeGraphName"]
         ?? "digitaltwins";
-    Console.WriteLine($"Using graph: {graphName}");
+    logger.LogInformation("Using graph: {GraphName}", graphName);
     return new AgeDigitalTwinsClient(dataSource, graphName);
 });
 
