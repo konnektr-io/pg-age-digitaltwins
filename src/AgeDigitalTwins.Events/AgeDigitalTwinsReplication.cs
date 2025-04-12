@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using CloudNative.CloudEvents;
 using Npgsql;
 using Npgsql.Replication;
@@ -42,33 +43,89 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// The connection string to the PostgreSQL database. This is used to connect to the database.
+    /// </summary>
     private readonly string _connectionString;
+
+    /// <summary>
+    /// The publication name. This is used to identify the publication in PostgreSQL.
+    /// Defaults to "age_pub".
+    /// </summary>
     private readonly string _publication;
+
+    /// <summary>
+    /// The replication slot name. This is used to identify the replication slot in PostgreSQL.
+    /// Defaults to "age_slot".
+    /// </summary>
     private readonly string _replicationSlot;
+
+    /// <summary>
+    /// The source URI for the event sink. This is used to identify the source of the events.
+    /// </summary>
     private readonly Uri _sourceUri;
     private readonly EventSinkFactory _eventSinkFactory;
     private readonly ILogger<AgeDigitalTwinsReplication> _logger;
     private LogicalReplicationConnection? _conn;
     private readonly ConcurrentQueue<EventData> _eventQueue = new();
 
-    public async Task StartAsync(CancellationToken cancellationToken = default)
+    private readonly JsonSerializerOptions _jsonSerializerOptions =
+        new()
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            WriteIndented = true,
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        };
+
+    public async Task RunAsync(CancellationToken cancellationToken = default)
     {
-        var consumerTask = Task.Run(
-            async () => await ConsumeQueueAsync(cancellationToken),
+        var replicationTask = Task.Run(
+            async () =>
+            {
+                while (!cancellationToken.IsCancellationRequested)
+                {
+                    try
+                    {
+                        await StartReplicationAsync(cancellationToken);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogInformation(
+                            ex,
+                            "Error during replication: {Message}\nRetrying in 5 seconds...",
+                            ex.Message
+                        );
+                        await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken); // Wait before retrying
+                    }
+                }
+            },
             cancellationToken
         );
-        while (true && !cancellationToken.IsCancellationRequested)
-        {
-            try
+
+        var consumerTask = Task.Run(
+            async () =>
             {
-                await StartReplicationAsync(cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogInformation(ex, "Error during replication: {Message}", ex.Message);
-                await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken); // Wait before retrying
-            }
-        }
+                while (!cancellationToken.IsCancellationRequested)
+                {
+                    try
+                    {
+                        await ConsumeQueueAsync(cancellationToken);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(
+                            ex,
+                            "Error while consuming the event queue: {Message}\nRetrying in 5 seconds...",
+                            ex.Message
+                        );
+                        await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken); // Wait before retrying
+                    }
+                }
+            },
+            cancellationToken
+        );
+
+        await Task.WhenAll(replicationTask, consumerTask);
     }
 
     private async Task StartReplicationAsync(CancellationToken cancellationToken = default)
@@ -132,7 +189,6 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                         _logger.LogDebug("Skipping insert message without a JSON value");
                         continue;
                     }
-                    // Console.WriteLine($"Inserted row: {currentEvent.NewValue}");
                 }
                 else if (message is FullUpdateMessage updateMessage)
                 {
@@ -188,6 +244,10 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                     }
                     currentEvent.Timestamp = commitMessage.TransactionCommitTimestamp;
                     _eventQueue.Enqueue(currentEvent);
+                    _logger.LogDebug(
+                        "Enqueued event: {Event}",
+                        JsonSerializer.Serialize(currentEvent, _jsonSerializerOptions)
+                    );
                     currentEvent = null;
                 }
                 else
@@ -215,7 +275,7 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
         List<IEventSink> eventSinks = _eventSinkFactory.CreateEventSinks();
         _logger.LogDebug(
             "Event sinks created: {Sinks}",
-            JsonSerializer.Serialize(eventSinks.Select(s => s.Name))
+            JsonSerializer.Serialize(eventSinks, _jsonSerializerOptions)
         );
         if (eventSinks.Count == 0)
         {
@@ -225,7 +285,7 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
         List<EventRoute> eventRoutes = _eventSinkFactory.GetEventRoutes();
         _logger.LogDebug(
             "Event routes created: {Routes}",
-            JsonSerializer.Serialize(eventRoutes.Select(r => r.ToString()))
+            JsonSerializer.Serialize(eventRoutes, _jsonSerializerOptions)
         );
         if (eventRoutes.Count == 0)
         {
@@ -245,8 +305,8 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                             "Processing {EventType} from {Source} for event route: {Route}\n{EventData}",
                             Enum.GetName(typeof(EventType), eventData.EventType),
                             _sourceUri,
-                            JsonSerializer.Serialize(route),
-                            JsonSerializer.Serialize(eventData)
+                            JsonSerializer.Serialize(route, _jsonSerializerOptions),
+                            JsonSerializer.Serialize(eventData, _jsonSerializerOptions)
                         );
                         if (
                             route.EventTypes == null
@@ -274,13 +334,18 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                                 else
                                 {
                                     _logger.LogDebug(
-                                        "Skipping event route without a valid event format"
+                                        "Skipping event route for {SinkName} with unsupported event format {EventFormat}",
+                                        route.SinkName,
+                                        route.EventFormat
                                     );
                                     continue;
                                 }
                                 if (cloudEvents.Count == 0)
                                 {
-                                    _logger.LogDebug("Skipping event route without any events");
+                                    _logger.LogDebug(
+                                        "Skipping event route for {SinkName} without any events",
+                                        route.SinkName
+                                    );
                                     continue;
                                 }
                                 await sink.SendEventsAsync(cloudEvents).ConfigureAwait(false);
@@ -291,8 +356,8 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                     {
                         _logger.LogError(
                             ex,
-                            "Error while processing event route to {Route}: {Message}",
-                            JsonSerializer.Serialize(route),
+                            "Error while processing event route {Route}: {Message}",
+                            JsonSerializer.Serialize(route, _jsonSerializerOptions),
                             ex.Message
                         );
                     }

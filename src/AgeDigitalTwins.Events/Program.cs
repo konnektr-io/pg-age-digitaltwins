@@ -63,12 +63,12 @@ app.Lifetime.ApplicationStarted.Register(async () =>
 {
     try
     {
-        await subscription.StartAsync(cts.Token);
+        await subscription.RunAsync(cts.Token);
     }
     catch (Exception ex)
     {
         // Log the exception and exit
-        logger.LogError(ex, "Failed to start subscription");
+        logger.LogError(ex, "Error while running the subscription.");
         app.Lifetime.StopApplication();
     }
 });
