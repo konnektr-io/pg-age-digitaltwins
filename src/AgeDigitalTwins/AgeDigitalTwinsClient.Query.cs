@@ -136,6 +136,6 @@ public partial class AgeDigitalTwinsClient
         }
     }
 
-    [GeneratedRegexAttribute(@"\[[^\]]*:\w*\*[\d.]*\]", RegexOptions.Compiled)]
-    private static partial Regex VariableLengthEdgeRegex();
+    [GeneratedRegexAttribute(@"\[[^\]]*(?::\w*)?\*[\d.]*\]", RegexOptions.Compiled)]
+    internal static partial Regex VariableLengthEdgeRegex();
 }
