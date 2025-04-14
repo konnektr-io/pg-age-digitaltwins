@@ -342,4 +342,34 @@ public partial class AgeDigitalTwinsClient
             throw new ModelReferencesNotDeletedException();
         }
     }
+
+    /// <summary>
+    /// Deletes all models asynchronously.
+    /// </summary>
+    /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    public virtual async Task DeleteAllModelsAsync(CancellationToken cancellationToken = default)
+    {
+        // Delete all models and relationships
+        string cypher =
+            $@"MATCH (m:Model)
+            DETACH DELETE m
+            RETURN COUNT(m) AS deletedCount";
+        await using var connection = await _dataSource.OpenConnectionAsync(
+            TargetSessionAttributes.ReadWrite,
+            cancellationToken
+        );
+        await using var command = connection.CreateCypherCommand(_graphName, cypher);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        int rowsAffected = 0;
+        if (await reader.ReadAsync(cancellationToken))
+        {
+            var agResult = await reader.GetFieldValueAsync<Agtype?>(0).ConfigureAwait(false);
+            rowsAffected = (int)agResult;
+        }
+        if (rowsAffected <= 0)
+        {
+            throw new ModelNotFoundException($"No models found");
+        }
+    }
 }

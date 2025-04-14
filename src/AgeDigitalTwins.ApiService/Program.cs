@@ -430,6 +430,17 @@ app.MapPost(
     .WithName("CreateModels");
 
 app.MapDelete(
+        "/models",
+        [Authorize]
+        async ([FromServices] AgeDigitalTwinsClient client, CancellationToken cancellationToken) =>
+        {
+            await client.DeleteAllModelsAsync(cancellationToken);
+            return Results.NoContent();
+        }
+    )
+    .WithName("DeleteAllModels");
+
+app.MapDelete(
         "/models/{id}",
         [Authorize]
         async (
