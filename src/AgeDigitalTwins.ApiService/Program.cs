@@ -199,13 +199,20 @@ app.MapDelete(
 app.MapGet(
         "/digitaltwins/{id}/incomingrelationships",
         [Authorize]
-        (
+        async (
             string id,
             [FromServices] AgeDigitalTwinsClient client,
             CancellationToken cancellationToken
         ) =>
         {
-            return client.GetIncomingRelationshipsAsync<JsonDocument>(id, cancellationToken);
+            return Results.Json(
+                new
+                {
+                    value = await client
+                        .GetIncomingRelationshipsAsync<JsonDocument>(id, cancellationToken)
+                        .ToListAsync(cancellationToken),
+                }
+            );
         }
     )
     .WithName("ListIncomingRelationships");
@@ -213,7 +220,7 @@ app.MapGet(
 app.MapGet(
         "/digitaltwins/{id}/relationships",
         [Authorize]
-        (
+        async (
             string id,
             HttpContext httpContext,
             [FromServices] AgeDigitalTwinsClient client,
@@ -221,10 +228,17 @@ app.MapGet(
         ) =>
         {
             string? relationshipName = httpContext.Request.Query["relationshipName"];
-            return client.GetRelationshipsAsync<JsonDocument>(
-                id,
-                relationshipName,
-                cancellationToken
+            return Results.Json(
+                new
+                {
+                    value = await client
+                        .GetRelationshipsAsync<JsonDocument>(
+                            id,
+                            relationshipName,
+                            cancellationToken
+                        )
+                        .ToListAsync(cancellationToken),
+                }
             );
         }
     )
