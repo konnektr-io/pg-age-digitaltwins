@@ -16,6 +16,11 @@ namespace AgeDigitalTwins;
 
 public partial class AgeDigitalTwinsClient
 {
+    /// <summary>
+    /// Converts an enumerable of strings to an asynchronous enumerable.
+    /// </summary>
+    /// <param name="source">The source enumerable of strings.</param>
+    /// <returns>An asynchronous enumerable of strings.</returns>
     public static async IAsyncEnumerable<string> ConvertToAsyncEnumerable(
         IEnumerable<string> source
     )
@@ -27,6 +32,12 @@ public partial class AgeDigitalTwinsClient
         }
     }
 
+    /// <summary>
+    /// Retrieves models asynchronously based on the provided options.
+    /// </summary>
+    /// <param name="options">Options to filter and include model definitions.</param>
+    /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
+    /// <returns>An asynchronous enumerable of <see cref="DigitalTwinsModelData"/>.</returns>
     public virtual async IAsyncEnumerable<DigitalTwinsModelData> GetModelsAsync(
         GetModelsOptions? options = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default
@@ -77,6 +88,13 @@ public partial class AgeDigitalTwinsClient
         }
     }
 
+    /// <summary>
+    /// Retrieves a specific model asynchronously by its ID.
+    /// </summary>
+    /// <param name="modelId">The ID of the model to retrieve.</param>
+    /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
+    /// <returns>The retrieved <see cref="DigitalTwinsModelData"/>.</returns>
+    /// <exception cref="ModelNotFoundException">Thrown when the model with the specified ID is not found.</exception>
     public virtual async Task<DigitalTwinsModelData> GetModelAsync(
         string modelId,
         CancellationToken cancellationToken = default
@@ -102,6 +120,14 @@ public partial class AgeDigitalTwinsClient
         }
     }
 
+    /// <summary>
+    /// Creates models asynchronously from the provided DTDL models.
+    /// </summary>
+    /// <param name="dtdlModels">The DTDL models to create.</param>
+    /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
+    /// <returns>A list of created <see cref="DigitalTwinsModelData"/>.</returns>
+    /// <exception cref="ModelAlreadyExistsException">Thrown when a model with the same ID already exists.</exception>
+    /// <exception cref="DTDLParserParsingException">Thrown when there is an error parsing the DTDL models.</exception>
     public virtual async Task<IReadOnlyList<DigitalTwinsModelData>> CreateModelsAsync(
         IEnumerable<string> dtdlModels,
         CancellationToken cancellationToken = default
@@ -272,6 +298,14 @@ public partial class AgeDigitalTwinsClient
         }
     }
 
+    /// <summary>
+    /// Deletes a model asynchronously by its ID.
+    /// </summary>
+    /// <param name="modelId">The ID of the model to delete.</param>
+    /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    /// <exception cref="ModelNotFoundException">Thrown when the model with the specified ID is not found.</exception>
+    /// <exception cref="ModelReferencesNotDeletedException">Thrown when the model has references that are not deleted.</exception>
     public virtual async Task DeleteModelAsync(
         string modelId,
         CancellationToken cancellationToken = default
