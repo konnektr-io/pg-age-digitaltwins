@@ -21,7 +21,7 @@ public partial class AgeDigitalTwinsClient
     )
     {
         string cypher =
-            $@"MATCH (:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel {{`$relationshipId`: '{relationshipId}'}}]->(:Twin) RETURN rel";
+            $"MATCH (:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})-[rel {{`$relationshipId`: '{relationshipId.Replace("'", "\\'")}'}}]->(:Twin) RETURN rel";
         await using var connection = await _dataSource.OpenConnectionAsync(
             Npgsql.TargetSessionAttributes.PreferStandby,
             cancellationToken
@@ -39,7 +39,7 @@ public partial class AgeDigitalTwinsClient
     )
     {
         string cypher =
-            $"MATCH (:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel {{`$relationshipId`: '{relationshipId}'}}]->(:Twin) WHERE rel['$etag'] = '{etag}' RETURN rel";
+            $"MATCH (:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})-[rel {{`$relationshipId`: '{relationshipId.Replace("'", "\\'")}'}}]->(:Twin) WHERE rel['$etag'] = '{etag}' RETURN rel";
         await using var connection = await _dataSource.OpenConnectionAsync(
             Npgsql.TargetSessionAttributes.PreferStandby,
             cancellationToken
@@ -56,7 +56,7 @@ public partial class AgeDigitalTwinsClient
     )
     {
         string cypher =
-            $@"MATCH (:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel {{`$relationshipId`: '{relationshipId}'}}]->(:Twin) RETURN rel";
+            $"MATCH (:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})-[rel {{`$relationshipId`: '{relationshipId.Replace("'", "\\'")}'}}]->(:Twin) RETURN rel";
         await using var connection = await _dataSource.OpenConnectionAsync(
             Npgsql.TargetSessionAttributes.PreferStandby,
             cancellationToken
@@ -86,7 +86,7 @@ public partial class AgeDigitalTwinsClient
     {
         string edgeLabel = !string.IsNullOrEmpty(relationshipName) ? $":{relationshipName}" : "";
         string cypher =
-            $@"MATCH (:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel{edgeLabel}]->(:Twin) RETURN rel";
+            $@"MATCH (:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})-[rel{edgeLabel}]->(:Twin) RETURN rel";
         await foreach (JsonElement json in QueryAsync<JsonElement>(cypher, cancellationToken))
         {
             yield return JsonSerializer.Deserialize<T>(json.GetProperty("rel").GetRawText());
@@ -98,7 +98,8 @@ public partial class AgeDigitalTwinsClient
         [EnumeratorCancellation] CancellationToken cancellationToken = default
     )
     {
-        string cypher = $@"MATCH (:Twin)-[rel]->(:Twin {{`$dtId`: '{digitalTwinId}'}}) RETURN rel";
+        string cypher =
+            $@"MATCH (:Twin)-[rel]->(:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}}) RETURN rel";
         await foreach (JsonElement json in QueryAsync<JsonElement>(cypher, cancellationToken))
         {
             yield return JsonSerializer.Deserialize<T>(json.GetProperty("rel").GetRawText());
@@ -230,8 +231,8 @@ public partial class AgeDigitalTwinsClient
 
         string cypher =
             $@"WITH '{updatedRelationshipJson}'::agtype as relationship
-            MATCH (source:Twin {{`$dtId`: '{digitalTwinId}'}}),(target:Twin {{`$dtId`: '{targetId}'}})
-            MERGE (source)-[rel:{relationshipName} {{`$relationshipId`: '{relationshipId}'}}]->(target)
+            MATCH (source:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}}),(target:Twin {{`$dtId`: '{targetId.Replace("'", "\\'")}'}})
+            MERGE (source)-[rel:{relationshipName} {{`$relationshipId`: '{relationshipId.Replace("'", "\\'")}'}}]->(target)
             SET rel = relationship
             RETURN rel";
         await using var connection = await _dataSource.OpenConnectionAsync(
@@ -340,7 +341,7 @@ public partial class AgeDigitalTwinsClient
         patchOperations.Add($"SET rel.`$etag` = '{newEtag}'");
 
         string cypher =
-            $@"MATCH (:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel {{`$relationshipId`: '{relationshipId}'}}]->(:Twin)
+            $@"MATCH (:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})-[rel {{`$relationshipId`: '{relationshipId.Replace("'", "\\'")}'}}]->(:Twin)
             {string.Join("\n", patchOperations)}
             RETURN rel";
         await using var connection = await _dataSource.OpenConnectionAsync(
@@ -365,9 +366,7 @@ public partial class AgeDigitalTwinsClient
     )
     {
         string cypher =
-            $@"MATCH (:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel {{`$relationshipId`: '{relationshipId}'}}]->(:Twin) 
-            DELETE rel
-            RETURN COUNT(rel) AS deletedCount";
+            $"MATCH (:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})-[rel {{`$relationshipId`: '{relationshipId.Replace("'", "\\'")}'}}]->(:Twin) DELETE rel RETURN COUNT(rel) AS deletedCount";
         await using var connection = await _dataSource.OpenConnectionAsync(
             Npgsql.TargetSessionAttributes.ReadWrite,
             cancellationToken

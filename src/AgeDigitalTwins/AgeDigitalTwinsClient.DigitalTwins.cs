@@ -24,7 +24,8 @@ public partial class AgeDigitalTwinsClient
         CancellationToken cancellationToken = default
     )
     {
-        string cypher = $"MATCH (t:Twin) WHERE t['$dtId'] = '{digitalTwinId}' RETURN t";
+        string cypher =
+            $"MATCH (t:Twin) WHERE t['$dtId'] = '{digitalTwinId.Replace("'", "\\'")}' RETURN t";
         await using var connection = await _dataSource.OpenConnectionAsync(
             Npgsql.TargetSessionAttributes.PreferStandby,
             cancellationToken
@@ -41,7 +42,7 @@ public partial class AgeDigitalTwinsClient
     )
     {
         string cypher =
-            $"MATCH (t:Twin) WHERE t['$dtId'] = '{digitalTwinId}' AND t['$etag'] = '{etag}' RETURN t";
+            $"MATCH (t:Twin) WHERE t['$dtId'] = '{digitalTwinId.Replace("'", "\\'")}' AND t['$etag'] = '{etag}' RETURN t";
         await using var connection = await _dataSource.OpenConnectionAsync(
             Npgsql.TargetSessionAttributes.PreferStandby,
             cancellationToken
@@ -56,7 +57,8 @@ public partial class AgeDigitalTwinsClient
         CancellationToken cancellationToken = default
     )
     {
-        string cypher = $"MATCH (t:Twin) WHERE t['$dtId'] = '{digitalTwinId}' RETURN t";
+        string cypher =
+            $"MATCH (t:Twin) WHERE t['$dtId'] = '{digitalTwinId.Replace("'", "\\'")}' RETURN t";
         await using var connection = await _dataSource.OpenConnectionAsync(
             Npgsql.TargetSessionAttributes.PreferStandby,
             cancellationToken
@@ -248,7 +250,7 @@ public partial class AgeDigitalTwinsClient
 
             string cypher =
                 $@"WITH '{updatedDigitalTwinJson}'::agtype as twin
-                MERGE (t: Twin {{`$dtId`: '{digitalTwinId}'}})
+                MERGE (t: Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})
                 SET t = twin
                 RETURN t";
             await using var connection = await _dataSource.OpenConnectionAsync(
@@ -370,7 +372,7 @@ public partial class AgeDigitalTwinsClient
         patchOperations.Add($"SET t.`$etag` = '{newEtag}'");
 
         string cypher =
-            $@"MATCH (t:Twin {{`$dtId`: '{digitalTwinId}'}})
+            $@"MATCH (t:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})
             {string.Join("\n", updateTimeSetOperations)}
             {string.Join("\n", patchOperations)}
             RETURN t";
@@ -395,7 +397,7 @@ public partial class AgeDigitalTwinsClient
     )
     {
         string cypher =
-            $@"MATCH (t:Twin {{`$dtId`: '{digitalTwinId}'}}) 
+            $@"MATCH (t:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}}) 
             DELETE t
             RETURN COUNT(t) AS deletedCount";
         await using var connection = await _dataSource.OpenConnectionAsync(
