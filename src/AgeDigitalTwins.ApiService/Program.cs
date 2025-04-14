@@ -127,7 +127,9 @@ app.MapGet(
             return client.GetDigitalTwinAsync<JsonDocument>(id, cancellationToken);
         }
     )
-    .WithName("GetDigitalTwin");
+    .WithName("GetDigitalTwin")
+    .WithTags("Digital Twins")
+    .WithSummary("Retrieves a digital twin by its ID.");
 
 app.MapPut(
         "/digitaltwins/{id}",
@@ -154,7 +156,9 @@ app.MapPut(
             return client.CreateOrReplaceDigitalTwinAsync(id, digitalTwin, etag, cancellationToken);
         }
     )
-    .WithName("CreateOrReplaceDigitalTwin");
+    .WithName("CreateOrReplaceDigitalTwin")
+    .WithTags("Digital Twins")
+    .WithSummary("Creates or replaces a digital twin by its ID.");
 
 app.MapPatch(
         "digitaltwins/{id}",
@@ -179,7 +183,9 @@ app.MapPatch(
             return Results.NoContent();
         }
     )
-    .WithName("UpdateDigitalTwin");
+    .WithName("UpdateDigitalTwin")
+    .WithTags("Digital Twins")
+    .WithSummary("Updates a digital twin by its ID.");
 
 app.MapDelete(
         "/digitaltwins/{id}",
@@ -194,7 +200,9 @@ app.MapDelete(
             return Results.NoContent();
         }
     )
-    .WithName("DeleteDigitalTwin");
+    .WithName("DeleteDigitalTwin")
+    .WithTags("Digital Twins")
+    .WithSummary("Deletes a digital twin by its ID.");
 
 app.MapGet(
         "/digitaltwins/{id}/incomingrelationships",
@@ -215,7 +223,9 @@ app.MapGet(
             );
         }
     )
-    .WithName("ListIncomingRelationships");
+    .WithName("ListIncomingRelationships")
+    .WithTags("Relationships")
+    .WithSummary("Lists all incoming relationships for a digital twin.");
 
 app.MapGet(
         "/digitaltwins/{id}/relationships",
@@ -242,7 +252,9 @@ app.MapGet(
             );
         }
     )
-    .WithName("ListRelationships");
+    .WithName("ListRelationships")
+    .WithTags("Relationships")
+    .WithSummary("Lists all relationships for a digital twin.");
 
 app.MapGet(
         "/digitaltwins/{id}/relationships/{relationshipId}",
@@ -257,7 +269,9 @@ app.MapGet(
             return client.GetRelationshipAsync<JsonDocument>(id, relationshipId, cancellationToken);
         }
     )
-    .WithName("GetRelationship");
+    .WithName("GetRelationship")
+    .WithTags("Relationships")
+    .WithSummary("Retrieves a specific relationship by its ID.");
 
 app.MapPut(
         "/digitaltwins/{id}/relationships/{relationshipId}",
@@ -291,7 +305,9 @@ app.MapPut(
             );
         }
     )
-    .WithName("CreateOrReplaceRelationship");
+    .WithName("CreateOrReplaceRelationship")
+    .WithTags("Relationships")
+    .WithSummary("Creates or replaces a relationship for a digital twin.");
 
 app.MapPatch(
         "/digitaltwins/{id}/relationships/{relationshipId}",
@@ -323,7 +339,9 @@ app.MapPatch(
             return Results.NoContent();
         }
     )
-    .WithName("UpdateRelationship");
+    .WithName("UpdateRelationship")
+    .WithTags("Relationships")
+    .WithSummary("Updates a specific relationship for a digital twin.");
 
 app.MapDelete(
         "/digitaltwins/{id}/relationships/{relationshipId}",
@@ -339,7 +357,9 @@ app.MapDelete(
             return Results.NoContent();
         }
     )
-    .WithName("DeleteRelationship");
+    .WithName("DeleteRelationship")
+    .WithTags("Relationships")
+    .WithSummary("Deletes a specific relationship for a digital twin.");
 
 app.MapPost(
         "/query",
@@ -373,7 +393,9 @@ app.MapPost(
             );
         }
     )
-    .WithName("Query");
+    .WithName("Query")
+    .WithTags("Query")
+    .WithSummary("Executes a query against the digital twins graph.");
 
 app.MapGet(
         "/models",
@@ -413,7 +435,8 @@ app.MapGet(
         }
     )
     .WithName("ListModels")
-    .WithDescription("Retrieves model metadata and, optionally, model definitions");
+    .WithTags("Models")
+    .WithSummary("Lists all models in the digital twins graph.");
 
 app.MapPost(
         "/models",
@@ -427,7 +450,9 @@ app.MapPost(
             return client.CreateModelsAsync(models.Select(m => m.GetRawText()), cancellationToken);
         }
     )
-    .WithName("CreateModels");
+    .WithName("CreateModels")
+    .WithTags("Models")
+    .WithSummary("Creates new models in the digital twins graph.");
 
 app.MapDelete(
         "/models",
@@ -438,7 +463,9 @@ app.MapDelete(
             return Results.NoContent();
         }
     )
-    .WithName("DeleteAllModels");
+    .WithName("DeleteAllModels")
+    .WithTags("Models")
+    .WithSummary("Deletes all models in the digital twins graph.");
 
 app.MapDelete(
         "/models/{id}",
@@ -453,7 +480,9 @@ app.MapDelete(
             return Results.NoContent();
         }
     )
-    .WithName("DeleteModel");
+    .WithName("DeleteModel")
+    .WithTags("Models")
+    .WithSummary("Deletes a specific model by its ID.");
 
 // This endpoint is only used for cleanup in tests
 // When the client is initiated, a new graph will automatically be created if the specified graph doesn't exist
