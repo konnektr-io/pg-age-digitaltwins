@@ -31,6 +31,10 @@ public class AdtQueryToCypherTests
         "MATCH (T:Twin) WHERE STARTS_WITH(T.name, 'foo') RETURN *"
     )]
     [InlineData(
+        "SELECT $dtId, name FROM DIGITALTWINS WHERE STARTS_WITH(name, 'foo')",
+        "MATCH (T:Twin) WHERE STARTS_WITH(T.name, 'foo') RETURN T['$dtId'], T.name"
+    )]
+    [InlineData(
         "SELECT * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:adt:dtsample:room;1') AND name = 'foo'",
         "MATCH (T:Twin) WHERE testgraph.is_of_model(T,'dtmi:com:adt:dtsample:room;1') AND T.name = 'foo' RETURN *"
     )]
@@ -82,6 +86,22 @@ public class AdtQueryToCypherTests
     [InlineData(
         "SELECT r, t FROM DIGITALTWINS\n      MATCH (s)<-[r]-(t)\n      WHERE s.$dtId = 'root3'",
         "MATCH (s:Twin)<-[r]-(t:Twin) WHERE s['$dtId'] = 'root3' RETURN r, t"
+    )]
+    [InlineData(
+        "SELECT * FROM RELATIONSHIPS WHERE $sourceId = 'source' AND $targetId = 'target'",
+        "MATCH (:Twin)-[R]->(:Twin) WHERE R['$sourceId'] = 'source' AND R['$targetId'] = 'target' RETURN *"
+    )]
+    [InlineData(
+        "SELECT * FROM relationships WHERE $sourceId = 'source' AND $targetId = 'target'",
+        "MATCH (:Twin)-[R]->(:Twin) WHERE R['$sourceId'] = 'source' AND R['$targetId'] = 'target' RETURN *"
+    )]
+    [InlineData(
+        "SELECT R.$sourceId, R.$targetId FROM relationships R WHERE R.$sourceId IN ['s1','s2','s3'] AND R.$relationshipName = 'nextActivity'",
+        "MATCH (:Twin)-[R]->(:Twin) WHERE R['$sourceId'] IN ['s1','s2','s3'] AND R['$relationshipName'] = 'nextActivity' RETURN R['$sourceId'], R['$targetId']"
+    )]
+    [InlineData(
+        "SELECT $sourceId, $targetId FROM relationships WHERE $sourceId IN ['s1','s2','s3'] AND $relationshipName = 'nextActivity'",
+        "MATCH (:Twin)-[R]->(:Twin) WHERE R['$sourceId'] IN ['s1','s2','s3'] AND R['$relationshipName'] = 'nextActivity' RETURN R['$sourceId'], R['$targetId']"
     )]
     public void ConvertAdtQueryToCypher_ReturnsExpectedCypher(
         string adtQuery,

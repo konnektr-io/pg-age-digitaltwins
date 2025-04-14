@@ -23,10 +23,7 @@ public static partial class AdtQueryHelpers
             limitClause = selectMatch.Groups["limit"].Success
                 ? "LIMIT " + selectMatch.Groups["limit"].Value
                 : string.Empty;
-            returnClause = ProcessPropertyAccessors(
-                selectMatch.Groups["projections"].Value,
-                graphName
-            );
+            returnClause = ProcessWhereClause(selectMatch.Groups["projections"].Value, graphName);
             if (returnClause.Contains("COUNT()", StringComparison.OrdinalIgnoreCase))
             {
                 returnClause = "COUNT(*)";
@@ -43,31 +40,43 @@ public static partial class AdtQueryHelpers
         string matchClause;
         // MultiLabel Edge WHERE clause
         List<string> multiLabelEdgeWhereClauses = new();
+        // Handle relationships
         if (adtQuery.Contains("FROM RELATIONSHIPS", StringComparison.OrdinalIgnoreCase))
         {
-            // Handle RELATIONSHIPS source
-            var match = GetRelationshipPattern().Match(adtQuery);
+            // Find relationship collection/alias
+            var match = GetRelationshipsCollectionRegex().Match(adtQuery);
             if (match.Success)
             {
-                var relationshipAlias = match.Groups[1].Value;
+                var relationshipAlias = match.Groups[1].Success ? match.Groups[1].Value : "R";
                 matchClause = $"(:Twin)-[{relationshipAlias}]->(:Twin)";
             }
-            else if (
-                string.Equals(returnClause, "*")
-                || string.Equals(returnClause, "COUNT(*)", StringComparison.OrdinalIgnoreCase)
-            )
-            {
-                matchClause = "(:Twin)-[R]->(:Twin)";
-            }
             else
-                throw new InvalidAdtQueryException("Invalid query format.");
+            {
+                usesWildcard = true;
+                matchClause = $"(:Twin)-[R]->(:Twin)";
+                // Process RETURN clause to add alias (in case return does not contain *)
+                if (!returnClause.Contains('*'))
+                {
+                    returnClause = PropertyAccessWhereClauseRegex()
+                        .Replace(
+                            returnClause,
+                            m =>
+                            {
+                                return $"R.{m.Value}";
+                            }
+                        );
+                    returnClause = DollarSignPropertyRegex()
+                        .Replace(returnClause, m => $"['{m.Value[1..]}']");
+                }
+            }
         }
+        // Handle digital twins
         else if (adtQuery.Contains("FROM DIGITALTWINS", StringComparison.OrdinalIgnoreCase))
         {
             if (adtQuery.Contains("MATCH", StringComparison.OrdinalIgnoreCase))
             {
-                // Handle MATCH clause
-                var match = GetDigitalTwinsMatchRegex().Match(adtQuery);
+                // Find twin collection/alias
+                var match = GetDigitalTwinsMatchClauseRegex().Match(adtQuery);
                 if (match.Success)
                 {
                     var adtMatchClause = match.Groups[1].Value;
@@ -107,7 +116,7 @@ public static partial class AdtQueryHelpers
                     }
                 }
                 else
-                    throw new InvalidAdtQueryException("Invalid query format.");
+                    throw new InvalidAdtQueryException($"Invalid query format: {adtQuery}");
             }
             else if (adtQuery.Contains("JOIN", StringComparison.OrdinalIgnoreCase))
             {
@@ -138,45 +147,55 @@ public static partial class AdtQueryHelpers
                 }
 
                 if (matchClauses.Count == 0)
-                    throw new InvalidAdtQueryException("Invalid query format.");
+                    throw new InvalidAdtQueryException($"Invalid query format: {adtQuery}");
 
                 matchClause = string.Join(",", matchClauses);
             }
             else
             {
+                // Find digitaltwins collection/alias
                 var match = ExtractDigitalTwinNameRegex().Match(adtQuery);
                 if (match.Success)
                 {
-                    var twinAlias = match.Groups[1].Value;
-                    matchClause = $"({twinAlias}:Twin)";
-                }
-                else if (
-                    string.Equals(returnClause, "*")
-                    || string.Equals(returnClause, "COUNT(*)", StringComparison.OrdinalIgnoreCase)
-                )
-                {
-                    matchClause = "(T:Twin)";
+                    matchClause = $"({match.Groups[1].Value}:Twin)";
                 }
                 else
-                    throw new InvalidAdtQueryException("Invalid query format.");
+                {
+                    usesWildcard = true;
+                    matchClause = $"(T:Twin)";
+                    // Process RETURN clause to add alias (in case return does not contain *)
+                    if (!returnClause.Contains('*'))
+                    {
+                        returnClause = PropertyAccessWhereClauseRegex()
+                            .Replace(
+                                returnClause,
+                                m =>
+                                {
+                                    return $"T.{m.Value}";
+                                }
+                            );
+                        returnClause = DollarSignPropertyRegex()
+                            .Replace(returnClause, m => $"['{m.Value[1..]}']");
+                    }
+                }
             }
         }
         else
         {
-            throw new InvalidAdtQueryException("Invalid query format.");
+            throw new InvalidAdtQueryException("Invalid query format: {adtQuery}");
         }
 
         // Prepare WHERE clause
         string whereClause = string.Empty;
         if (adtQuery.Contains("WHERE", StringComparison.OrdinalIgnoreCase))
         {
-            var match = CreateWhereClauseRegex().Match(adtQuery);
+            var match = WhereClauseRegex().Match(adtQuery);
             if (match.Success)
             {
                 var adtWhereClause = match.Groups[1].Value;
 
                 // Process WHERE clause
-                whereClause = ProcessPropertyAccessors(
+                whereClause = ProcessWhereClause(
                     adtWhereClause,
                     graphName,
                     usesWildcard
@@ -190,7 +209,7 @@ public static partial class AdtQueryHelpers
                 );
             }
             else
-                throw new InvalidAdtQueryException("Invalid query format.");
+                throw new InvalidAdtQueryException("Invalid query format: {adtQuery}");
         }
 
         // Join everything together to form the final Cypher query
@@ -224,7 +243,7 @@ public static partial class AdtQueryHelpers
         return cypher;
     }
 
-    internal static string ProcessPropertyAccessors(
+    internal static string ProcessWhereClause(
         string whereClause,
         string graphName,
         string? prependAlias = null
@@ -233,7 +252,7 @@ public static partial class AdtQueryHelpers
         if (!string.IsNullOrEmpty(prependAlias))
         {
             // Handle function calls without prepending the alias to the function name
-            whereClause = PropertyAccessRegex()
+            whereClause = FunctionCallRegex()
                 .Replace(
                     whereClause,
                     m =>
@@ -379,13 +398,13 @@ public static partial class AdtQueryHelpers
         @"FROM RELATIONSHIPS (\w+)?(?=\s+WHERE|\s*$)",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
     )]
-    private static partial Regex GetRelationshipPattern();
+    private static partial Regex GetRelationshipsCollectionRegex();
 
     [GeneratedRegex(
         @"FROM DIGITALTWINS MATCH (.+?)(?=\s+WHERE|\s*$)",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
     )]
-    private static partial Regex GetDigitalTwinsMatchRegex();
+    private static partial Regex GetDigitalTwinsMatchClauseRegex();
 
     [GeneratedRegex(@"\[(\w+):([\w\|]+)\]")]
     private static partial Regex MultiLabelRegex();
@@ -403,10 +422,10 @@ public static partial class AdtQueryHelpers
     private static partial Regex ExtractDigitalTwinNameRegex();
 
     [GeneratedRegex(@"WHERE (.+)")]
-    private static partial Regex CreateWhereClauseRegex();
+    private static partial Regex WhereClauseRegex();
 
     [GeneratedRegex(@"(\w+)\(([^)]+)\)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex PropertyAccessRegex();
+    private static partial Regex FunctionCallRegex();
 
     [GeneratedRegex(
         @"(?<=\s|\[|^)(?!\d+|'[^']*'|""[^""]*"")[^\[\]""\s=<>!]+(?=\s*=\s*'|\s|$|\])",
@@ -415,7 +434,7 @@ public static partial class AdtQueryHelpers
     private static partial Regex FunctionArgsRegex();
 
     [GeneratedRegex(
-        @"(?<=\s|\[|^)(?!AND\b|OR\b|\d+|'[^']*'|""[^""]*"")[^\[\]""\s=<>!()]+(?=\s*=\s*'|\s|$|\])",
+        @"(?<=\s|\[|^)(?!AND\b|OR\b|IN\b|NOT\b|\d+|'[^']*'|""[^""]*"")[^\[\]""\s=<>!()]+(?=\s*=\s*'|\s|$|\])",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
     )]
     private static partial Regex PropertyAccessWhereClauseRegex();
