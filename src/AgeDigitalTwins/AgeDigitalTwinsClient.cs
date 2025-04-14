@@ -19,6 +19,11 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
     private readonly JsonSerializerOptions serializerOptions =
         new() { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="AgeDigitalTwinsClient"/> class with a data source and graph name.
+    /// </summary>
+    /// <param name="dataSource">The data source for connecting to the database.</param>
+    /// <param name="graphName">The name of the graph to use. Defaults to "digitaltwins".</param>
     public AgeDigitalTwinsClient(
         NpgsqlMultiHostDataSource dataSource,
         string graphName = "digitaltwins"
@@ -37,6 +42,11 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
         InitializeGraphAsync().GetAwaiter().GetResult();
     }
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="AgeDigitalTwinsClient"/> class with a connection string and graph name.
+    /// </summary>
+    /// <param name="connectionString">The connection string for the database.</param>
+    /// <param name="graphName">The name of the graph to use. Defaults to "digitaltwins".</param>
     public AgeDigitalTwinsClient(string connectionString, string graphName = "digitaltwins")
     {
         NpgsqlConnectionStringBuilder connectionStringBuilder =
@@ -56,6 +66,10 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
         InitializeGraphAsync().GetAwaiter().GetResult();
     }
 
+    /// <summary>
+    /// Disposes the resources used by the <see cref="AgeDigitalTwinsClient"/> instance asynchronously.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous dispose operation.</returns>
     public async ValueTask DisposeAsync()
     {
         await _dataSource.DisposeAsync();

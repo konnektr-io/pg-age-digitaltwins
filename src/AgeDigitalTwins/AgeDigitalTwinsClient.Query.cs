@@ -11,6 +11,13 @@ namespace AgeDigitalTwins;
 
 public partial class AgeDigitalTwinsClient
 {
+    /// <summary>
+    /// Executes a query asynchronously and returns the results as an asynchronous enumerable.
+    /// </summary>
+    /// <typeparam name="T">The type to which the query results will be deserialized.</typeparam>
+    /// <param name="query">The query to execute.</param>
+    /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
+    /// <returns>An asynchronous enumerable of query results.</returns>
     public virtual async IAsyncEnumerable<T?> QueryAsync<T>(
         string query,
         [EnumeratorCancellation] CancellationToken cancellationToken = default

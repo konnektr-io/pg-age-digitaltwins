@@ -19,6 +19,12 @@ namespace AgeDigitalTwins;
 
 public partial class AgeDigitalTwinsClient
 {
+    /// <summary>
+    /// Checks if a digital twin exists asynchronously.
+    /// </summary>
+    /// <param name="digitalTwinId">The ID of the digital twin to check.</param>
+    /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result contains a boolean indicating whether the digital twin exists.</returns>
     public virtual async Task<bool> DigitalTwinExistsAsync(
         string digitalTwinId,
         CancellationToken cancellationToken = default
@@ -35,6 +41,13 @@ public partial class AgeDigitalTwinsClient
         return await reader.ReadAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// Checks if a digital twin's ETag matches asynchronously.
+    /// </summary>
+    /// <param name="digitalTwinId">The ID of the digital twin to check.</param>
+    /// <param name="etag">The ETag to compare.</param>
+    /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result contains a boolean indicating whether the ETag matches.</returns>
     public virtual async Task<bool> DigitalTwinEtagMatchesAsync(
         string digitalTwinId,
         string etag,
@@ -52,6 +65,13 @@ public partial class AgeDigitalTwinsClient
         return await reader.ReadAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// Retrieves a digital twin asynchronously.
+    /// </summary>
+    /// <typeparam name="T">The type to which the digital twin will be deserialized.</typeparam>
+    /// <param name="digitalTwinId">The ID of the digital twin to retrieve.</param>
+    /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result contains the retrieved digital twin.</returns>
     public virtual async Task<T> GetDigitalTwinAsync<T>(
         string digitalTwinId,
         CancellationToken cancellationToken = default
@@ -85,6 +105,15 @@ public partial class AgeDigitalTwinsClient
         }
     }
 
+    /// <summary>
+    /// Creates or replaces a digital twin asynchronously.
+    /// </summary>
+    /// <typeparam name="T">The type of the digital twin to create or replace.</typeparam>
+    /// <param name="digitalTwinId">The ID of the digital twin to create or replace.</param>
+    /// <param name="digitalTwin">The digital twin object to create or replace.</param>
+    /// <param name="ifNoneMatch">The If-None-Match header value to check for conditional creation.</param>
+    /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result contains the created or replaced digital twin.</returns>
     public virtual async Task<T?> CreateOrReplaceDigitalTwinAsync<T>(
         string digitalTwinId,
         T digitalTwin,
@@ -286,6 +315,14 @@ public partial class AgeDigitalTwinsClient
         }
     }
 
+    /// <summary>
+    /// Updates a digital twin asynchronously.
+    /// </summary>
+    /// <param name="digitalTwinId">The ID of the digital twin to update.</param>
+    /// <param name="patch">The JSON patch document containing the updates.</param>
+    /// <param name="ifMatch">The If-Match header value to check for conditional updates.</param>
+    /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
     public virtual async Task UpdateDigitalTwinAsync(
         string digitalTwinId,
         JsonPatch patch,
@@ -391,6 +428,12 @@ public partial class AgeDigitalTwinsClient
         }
     }
 
+    /// <summary>
+    /// Deletes a digital twin asynchronously.
+    /// </summary>
+    /// <param name="digitalTwinId">The ID of the digital twin to delete.</param>
+    /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
     public virtual async Task DeleteDigitalTwinAsync(
         string digitalTwinId,
         CancellationToken cancellationToken = default

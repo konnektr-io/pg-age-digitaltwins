@@ -14,6 +14,13 @@ namespace AgeDigitalTwins;
 
 public partial class AgeDigitalTwinsClient
 {
+    /// <summary>
+    /// Checks if a relationship exists asynchronously.
+    /// </summary>
+    /// <param name="digitalTwinId">The ID of the source digital twin.</param>
+    /// <param name="relationshipId">The ID of the relationship to check.</param>
+    /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result contains a boolean indicating whether the relationship exists.</returns>
     public virtual async Task<bool> RelationshipExistsAsync(
         string digitalTwinId,
         string relationshipId,
@@ -31,6 +38,14 @@ public partial class AgeDigitalTwinsClient
         return await reader.ReadAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// Checks if a relationship's ETag matches asynchronously.
+    /// </summary>
+    /// <param name="digitalTwinId">The ID of the source digital twin.</param>
+    /// <param name="relationshipId">The ID of the relationship to check.</param>
+    /// <param name="etag">The ETag to compare.</param>
+    /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result contains a boolean indicating whether the ETag matches.</returns>
     public virtual async Task<bool> RelationshipEtagMatchesAsync(
         string digitalTwinId,
         string relationshipId,
@@ -49,6 +64,14 @@ public partial class AgeDigitalTwinsClient
         return await reader.ReadAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// Retrieves a relationship asynchronously.
+    /// </summary>
+    /// <typeparam name="T">The type to which the relationship will be deserialized.</typeparam>
+    /// <param name="digitalTwinId">The ID of the source digital twin.</param>
+    /// <param name="relationshipId">The ID of the relationship to retrieve.</param>
+    /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result contains the retrieved relationship.</returns>
     public virtual async Task<T?> GetRelationshipAsync<T>(
         string digitalTwinId,
         string relationshipId,
@@ -78,6 +101,14 @@ public partial class AgeDigitalTwinsClient
         }
     }
 
+    /// <summary>
+    /// Retrieves all relationships of a digital twin asynchronously.
+    /// </summary>
+    /// <typeparam name="T">The type to which the relationships will be deserialized.</typeparam>
+    /// <param name="digitalTwinId">The ID of the source digital twin.</param>
+    /// <param name="relationshipName">The name of the relationship to filter by (optional).</param>
+    /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
+    /// <returns>An asynchronous enumerable of the retrieved relationships.</returns>
     public virtual async IAsyncEnumerable<T?> GetRelationshipsAsync<T>(
         string digitalTwinId,
         string? relationshipName = default,
@@ -93,6 +124,13 @@ public partial class AgeDigitalTwinsClient
         }
     }
 
+    /// <summary>
+    /// Retrieves all incoming relationships of a digital twin asynchronously.
+    /// </summary>
+    /// <typeparam name="T">The type to which the relationships will be deserialized.</typeparam>
+    /// <param name="digitalTwinId">The ID of the target digital twin.</param>
+    /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
+    /// <returns>An asynchronous enumerable of the retrieved incoming relationships.</returns>
     public virtual async IAsyncEnumerable<T?> GetIncomingRelationshipsAsync<T>(
         string digitalTwinId,
         [EnumeratorCancellation] CancellationToken cancellationToken = default
@@ -106,6 +144,16 @@ public partial class AgeDigitalTwinsClient
         }
     }
 
+    /// <summary>
+    /// Creates or replaces a relationship asynchronously.
+    /// </summary>
+    /// <typeparam name="T">The type of the relationship to create or replace.</typeparam>
+    /// <param name="digitalTwinId">The ID of the source digital twin.</param>
+    /// <param name="relationshipId">The ID of the relationship to create or replace.</param>
+    /// <param name="relationship">The relationship object to create or replace.</param>
+    /// <param name="ifNoneMatch">The If-None-Match header value to check for conditional creation (optional).</param>
+    /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result contains the created or replaced relationship.</returns>
     public virtual async Task<T?> CreateOrReplaceRelationshipAsync<T>(
         string digitalTwinId,
         string relationshipId,
@@ -260,6 +308,15 @@ public partial class AgeDigitalTwinsClient
             return default;
     }
 
+    /// <summary>
+    /// Updates a relationship asynchronously.
+    /// </summary>
+    /// <param name="digitalTwinId">The ID of the source digital twin.</param>
+    /// <param name="relationshipId">The ID of the relationship to update.</param>
+    /// <param name="patch">The JSON patch document containing the updates.</param>
+    /// <param name="ifMatch">The If-Match header value to check for conditional updates (optional).</param>
+    /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
     public virtual async Task UpdateRelationshipAsync(
         string digitalTwinId,
         string relationshipId,
@@ -359,6 +416,13 @@ public partial class AgeDigitalTwinsClient
         }
     }
 
+    /// <summary>
+    /// Deletes a relationship asynchronously.
+    /// </summary>
+    /// <param name="digitalTwinId">The ID of the source digital twin.</param>
+    /// <param name="relationshipId">The ID of the relationship to delete.</param>
+    /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
     public virtual async Task DeleteRelationshipAsync(
         string digitalTwinId,
         string relationshipId,
