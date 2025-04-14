@@ -21,7 +21,7 @@ public partial class AgeDigitalTwinsClient
     )
     {
         string cypher =
-            $@"MATCH (source:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel {{`$relationshipId`: '{relationshipId}'}}]->(target:Twin) RETURN rel";
+            $@"MATCH (:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel {{`$relationshipId`: '{relationshipId}'}}]->(:Twin) RETURN rel";
         await using var connection = await _dataSource.OpenConnectionAsync(
             Npgsql.TargetSessionAttributes.PreferStandby,
             cancellationToken
@@ -39,7 +39,7 @@ public partial class AgeDigitalTwinsClient
     )
     {
         string cypher =
-            $"MATCH (source:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel {{`$relationshipId`: '{relationshipId}'}}]->(target:Twin) WHERE rel['$etag'] = '{etag}' RETURN rel";
+            $"MATCH (:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel {{`$relationshipId`: '{relationshipId}'}}]->(:Twin) WHERE rel['$etag'] = '{etag}' RETURN rel";
         await using var connection = await _dataSource.OpenConnectionAsync(
             Npgsql.TargetSessionAttributes.PreferStandby,
             cancellationToken
@@ -56,7 +56,7 @@ public partial class AgeDigitalTwinsClient
     )
     {
         string cypher =
-            $@"MATCH (source:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel {{`$relationshipId`: '{relationshipId}'}}]->(target:Twin) RETURN rel";
+            $@"MATCH (:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel {{`$relationshipId`: '{relationshipId}'}}]->(:Twin) RETURN rel";
         await using var connection = await _dataSource.OpenConnectionAsync(
             Npgsql.TargetSessionAttributes.PreferStandby,
             cancellationToken
@@ -84,9 +84,9 @@ public partial class AgeDigitalTwinsClient
         [EnumeratorCancellation] CancellationToken cancellationToken = default
     )
     {
-        string edgeLabel = !string.IsNullOrEmpty(relationshipName) ? "" : $":{relationshipName}";
+        string edgeLabel = !string.IsNullOrEmpty(relationshipName) ? $":{relationshipName}" : "";
         string cypher =
-            $@"MATCH (source:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel{edgeLabel}]->(target:Twin) RETURN rel";
+            $@"MATCH (:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel{edgeLabel}]->(:Twin) RETURN rel";
         await foreach (JsonElement json in QueryAsync<JsonElement>(cypher, cancellationToken))
         {
             yield return JsonSerializer.Deserialize<T>(json.GetProperty("rel").GetRawText());
@@ -98,8 +98,7 @@ public partial class AgeDigitalTwinsClient
         [EnumeratorCancellation] CancellationToken cancellationToken = default
     )
     {
-        string cypher =
-            $@"MATCH (source:Twin)-[rel]->(target:Twin {{`$dtId`: '{digitalTwinId}'}}) RETURN rel";
+        string cypher = $@"MATCH (:Twin)-[rel]->(:Twin {{`$dtId`: '{digitalTwinId}'}}) RETURN rel";
         await foreach (JsonElement json in QueryAsync<JsonElement>(cypher, cancellationToken))
         {
             yield return JsonSerializer.Deserialize<T>(json.GetProperty("rel").GetRawText());
@@ -341,7 +340,7 @@ public partial class AgeDigitalTwinsClient
         patchOperations.Add($"SET rel.`$etag` = '{newEtag}'");
 
         string cypher =
-            $@"MATCH (source:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel {{`$relationshipId`: '{relationshipId}'}}]->(target:Twin)
+            $@"MATCH (:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel {{`$relationshipId`: '{relationshipId}'}}]->(:Twin)
             {string.Join("\n", patchOperations)}
             RETURN rel";
         await using var connection = await _dataSource.OpenConnectionAsync(
@@ -366,7 +365,7 @@ public partial class AgeDigitalTwinsClient
     )
     {
         string cypher =
-            $@"MATCH (source:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel {{`$relationshipId`: '{relationshipId}'}}]->(target:Twin) 
+            $@"MATCH (:Twin {{`$dtId`: '{digitalTwinId}'}})-[rel {{`$relationshipId`: '{relationshipId}'}}]->(:Twin) 
             DELETE rel
             RETURN COUNT(rel) AS deletedCount";
         await using var connection = await _dataSource.OpenConnectionAsync(
