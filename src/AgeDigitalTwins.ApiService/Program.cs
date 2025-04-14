@@ -365,6 +365,7 @@ app.MapPost(
         "/query",
         [Authorize]
         async (
+            HttpContext httpContext,
             JsonElement requestBody,
             [FromServices] AgeDigitalTwinsClient client,
             CancellationToken cancellationToken
@@ -382,20 +383,48 @@ app.MapPost(
                     }
                 );
             }
+
             string query = queryElement.GetString()!;
-            return Results.Json(
-                new
+
+            // Parse max-items-per-page header
+            int? maxItemsPerPage = null;
+            if (
+                httpContext.Request.Headers.TryGetValue(
+                    "max-items-per-page",
+                    out var maxItemsHeader
+                )
+            )
+            {
+                if (int.TryParse(maxItemsHeader, out var maxItems))
                 {
-                    value = await client
-                        .QueryAsync<JsonDocument>(query, cancellationToken)
-                        .ToListAsync(cancellationToken),
+                    maxItemsPerPage = maxItems;
                 }
-            );
+            }
+
+            // Parse continuation token from request body
+            string? continuationToken = null;
+            if (
+                requestBody.TryGetProperty(
+                    "continuationToken",
+                    out JsonElement continuationTokenElement
+                )
+                && continuationTokenElement.ValueKind == JsonValueKind.String
+            )
+            {
+                continuationToken = continuationTokenElement.GetString();
+            }
+
+            var page = await client
+                .QueryAsync<JsonDocument>(query, cancellationToken)
+                .AsPages(continuationToken, maxItemsPerPage, cancellationToken)
+                .FirstAsync(cancellationToken);
+
+            return Results.Json(page);
         }
     )
     .WithName("Query")
     .WithTags("Query")
-    .WithSummary("Executes a query against the digital twins graph.");
+    .WithSummary("Executes a query against the digital twins graph with pagination.");
 
 app.MapGet(
         "/models",
