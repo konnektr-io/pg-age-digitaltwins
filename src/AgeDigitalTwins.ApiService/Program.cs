@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Primitives;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.VisualBasic;
 using Npgsql;
 using Npgsql.Age;
 
@@ -115,6 +116,7 @@ app.UseExceptionHandler();
 
 app.UseAuthentication();
 app.UseAuthorization();
+
 app.MapGet(
         "/digitaltwins/{id}",
         [Authorize]
@@ -386,8 +388,9 @@ app.MapPost(
 
             string query = queryElement.GetString()!;
 
+            int? maxItemsPerPage = 2000; // Default value
+
             // Parse max-items-per-page header
-            int? maxItemsPerPage = null;
             if (
                 httpContext.Request.Headers.TryGetValue(
                     "max-items-per-page",
@@ -402,7 +405,7 @@ app.MapPost(
             }
 
             // Parse continuation token from request body
-            string? continuationToken = null;
+            ContinuationToken? continuationToken = null;
             if (
                 requestBody.TryGetProperty(
                     "continuationToken",
@@ -411,7 +414,13 @@ app.MapPost(
                 && continuationTokenElement.ValueKind == JsonValueKind.String
             )
             {
-                continuationToken = continuationTokenElement.GetString();
+                continuationToken = ContinuationToken.Deserialize(
+                    continuationTokenElement.GetString()!
+                );
+                if (continuationToken == null)
+                {
+                    return Results.BadRequest(new { error = "Invalid continuation token." });
+                }
             }
 
             var page = await client

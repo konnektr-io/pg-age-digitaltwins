@@ -1,9 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using System.Threading;
+using AgeDigitalTwins.Models;
 using Npgsql.Age;
 using Npgsql.Age.Types;
 
@@ -27,30 +30,44 @@ public partial class AgeDigitalTwinsClient
             async (continuationToken, maxItemsPerPage, ct) =>
             {
                 string cypher;
-                if (
+                // Use query from token if available
+                if (continuationToken != null)
+                {
+                    cypher = continuationToken.Query; // Override query with the one from the token
+                }
+                // ADT query that needs to be converted
+                else if (
                     query.Contains("SELECT", StringComparison.InvariantCultureIgnoreCase)
                     && !query.Contains("RETURN", StringComparison.InvariantCultureIgnoreCase)
                 )
                 {
                     cypher = AdtQueryHelpers.ConvertAdtQueryToCypher(query, _graphName);
                 }
+                // New Cypher query
                 else
                 {
                     cypher = query;
                 }
 
+                // Store the query before modifying it for pagination
+                // This is used to include in the next continuation token
+                // to allow resuming the query from the same point
+                string nextContinuationQuery = cypher;
+
                 // Add pagination logic to the cypher query
+                if (continuationToken != null)
+                {
+                    cypher += $" SKIP {continuationToken.RowNumber}";
+                }
+
                 if (maxItemsPerPage.HasValue)
                 {
                     cypher += $" LIMIT {maxItemsPerPage.Value}";
                 }
 
-                if (!string.IsNullOrEmpty(continuationToken))
-                {
-                    cypher += $" OFFSET {continuationToken}"; // Assuming token is an offset for simplicity
-                }
-
-                // Detect variable-length edge query using regex
+                // Detect variable-length edge query using regex (need read-write access)
+                // This is a workaround for the fact that Age does not support variable-length edge queries
+                // On read-only connections
                 var isVariableLengthEdgeQuery = VariableLengthEdgeRegex().IsMatch(cypher);
 
                 await using var connection = await _dataSource.OpenConnectionAsync(
@@ -156,17 +173,21 @@ public partial class AgeDigitalTwinsClient
                     }
                 }
 
-                // Generate a continuation token (e.g., next offset)
-                string? nextContinuationToken =
-                    results.Count < maxItemsPerPage
-                        ? null
-                        : (int.Parse(continuationToken ?? "0") + results.Count).ToString();
+                // Generate a continuation token (e.g., next row number)
+                var nextToken = new ContinuationToken
+                {
+                    RowNumber = (continuationToken?.RowNumber ?? 0) + results.Count,
+                    Query = nextContinuationQuery,
+                };
+
+                ContinuationToken? nextContinuationToken =
+                    results.Count < maxItemsPerPage ? null : nextToken;
 
                 return (results, nextContinuationToken);
             }
         );
     }
 
-    [GeneratedRegexAttribute(@"\[[^\]]*(?::\w*)?\*[\d.]*\]", RegexOptions.Compiled)]
+    [GeneratedRegex(@"\[[^\]]*(?::\w*)?\*[\d.]*\]", RegexOptions.Compiled)]
     internal static partial Regex VariableLengthEdgeRegex();
 }

@@ -1,5 +1,5 @@
+using System.Linq.Async;
 using System.Text.Json;
-using AgeDigitalTwins.Exceptions;
 using Azure.DigitalTwins.Core;
 using DTDLParser;
 using Json.Patch;
@@ -579,5 +579,57 @@ public class QueryTests : TestBase
             count++;
         }
         Assert.Equal(1, count);
+    }
+
+    [Fact]
+    public async Task QueryAsync_Pagination_ReturnsPaginatedResults()
+    {
+        await IntializeAsync();
+
+        Dictionary<string, string> twins =
+            new()
+            {
+                {
+                    "twin1",
+                    "{\"$dtId\": \"twin1\", \"$metadata\": {\"$model\": \"dtmi:com:adt:dtsample:room;1\"}, \"name\": \"Twin 1\"}"
+                },
+                {
+                    "twin2",
+                    "{\"$dtId\": \"twin2\", \"$metadata\": {\"$model\": \"dtmi:com:adt:dtsample:room;1\"}, \"name\": \"Twin 2\"}"
+                },
+                {
+                    "twin3",
+                    "{\"$dtId\": \"twin3\", \"$metadata\": {\"$model\": \"dtmi:com:adt:dtsample:room;1\"}, \"name\": \"Twin 3\"}"
+                },
+            };
+
+        foreach (var twin in twins)
+        {
+            await Client.CreateOrReplaceDigitalTwinAsync(twin.Key, twin.Value);
+        }
+
+        // First page
+        var firstPage = await Client
+            .QueryAsync<JsonDocument>(
+                "SELECT * FROM DIGITALTWINS WHERE $metadata.$model = 'dtmi:com:adt:dtsample:room;1'"
+            )
+            .AsPages(pageSizeHint: 2)
+            .FirstAsync();
+
+        Assert.NotNull(firstPage);
+        Assert.Equal(2, firstPage.Values.Count());
+        Assert.NotNull(firstPage.ContinuationToken);
+
+        // Second page
+        var secondPage = await Client
+            .QueryAsync<JsonDocument>(
+                "SELECT * FROM DIGITALTWINS WHERE $metadata.$model = 'dtmi:com:adt:dtsample:room;1'"
+            )
+            .AsPages(firstPage.ContinuationToken, pageSizeHint: 2)
+            .FirstAsync();
+
+        Assert.NotNull(secondPage);
+        Assert.Single(secondPage.Values);
+        Assert.Null(secondPage.ContinuationToken);
     }
 }
