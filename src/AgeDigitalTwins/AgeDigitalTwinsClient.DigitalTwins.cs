@@ -172,9 +172,13 @@ public partial class AgeDigitalTwinsClient
             foreach (KeyValuePair<string, JsonNode?> kv in digitalTwinObject)
             {
                 string property = kv.Key;
-                JsonElement value = kv.Value.ToJsonDocument().RootElement;
 
-                if (property == "$metadata" || property == "$dtId" || property == "$etag")
+                if (
+                    property == "$metadata"
+                    || property == "$dtId"
+                    || property == "$etag"
+                    || property == "$lastUpdateTime"
+                )
                 {
                     continue;
                 }
@@ -184,6 +188,8 @@ public partial class AgeDigitalTwinsClient
                     violations.Add($"Property '{property}' is not defined in the model");
                     continue;
                 }
+
+                JsonElement value = kv.Value.ToJsonDocument().RootElement;
 
                 if (contentInfo is DTPropertyInfo propertyDef)
                 {
