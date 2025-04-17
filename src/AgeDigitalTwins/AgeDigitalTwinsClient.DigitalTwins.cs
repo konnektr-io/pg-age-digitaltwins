@@ -367,7 +367,7 @@ public partial class AgeDigitalTwinsClient
                 )
                 {
                     patchOperations.Add(
-                        $"SET t = public.agtype_set(properties(t),['{string.Join("','", path.Split('.'))}'],'{JsonSerializer.Serialize(op.Value, serializerOptions).Replace("'", "\\'")}')"
+                        $"SET t = public.agtype_set(properties(t),['{string.Join("','", path.Split('.'))}'],'{JsonSerializer.Serialize(op.Value, serializerOptions).Replace("'", "\\'")}'::agtype)"
                     );
                 }
                 else if (op.Value.GetValueKind() == JsonValueKind.String)
