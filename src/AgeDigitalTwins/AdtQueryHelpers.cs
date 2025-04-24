@@ -382,6 +382,18 @@ public static partial class AdtQueryHelpers
         // Replace property access with $ character
         whereClause = DollarSignPropertyRegex().Replace(whereClause, m => $"['{m.Value[1..]}']");
 
+        // Process != operator
+        whereClause = InequalityOperatorRegex()
+            .Replace(
+                whereClause,
+                m =>
+                {
+                    var operand1 = m.Groups["operand1"].Value;
+                    var operand2 = m.Groups["operand2"].Value;
+                    return $"NOT ({operand1} = {operand2})";
+                }
+            );
+
         return whereClause;
     }
 
@@ -477,4 +489,7 @@ public static partial class AdtQueryHelpers
 
     [GeneratedRegex(@"\((\w+)\)")]
     private static partial Regex ParenthesesTwinRegex();
+
+    [GeneratedRegex("(?<operand1>[^\\s]+)\\s*!=\\s*(?<operand2>[^\\s]+)")]
+    private static partial Regex InequalityOperatorRegex();
 }
