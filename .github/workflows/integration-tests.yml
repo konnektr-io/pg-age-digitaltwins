@@ -37,7 +37,7 @@ jobs:
             -e POSTGRES_DB=app \
             -v "${{ github.workspace }}/src/data/init.sql:/docker-entrypoint-initdb.d/init.sql" \
             -p 5432:5432 \
-            apache/age:release_PG16_1.5.0 \
+            ghcr.io/konnektr-io/age:16-bookworm-4 \
             -c wal_level=logical &
 
       - name: Wait for PostgreSQL to be ready
