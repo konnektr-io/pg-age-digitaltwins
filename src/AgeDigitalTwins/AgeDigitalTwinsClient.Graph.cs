@@ -52,9 +52,7 @@ public partial class AgeDigitalTwinsClient
         // Initialize the graph by creating labels, indexes, functions, ...
         using var batch = new NpgsqlBatch(connection);
         foreach (
-            NpgsqlBatchCommand initBatchCommand in GraphInitialization.GetGraphInitCommands(
-                _graphName
-            )
+            NpgsqlBatchCommand initBatchCommand in Initialization.GetGraphInitCommands(_graphName)
         )
         {
             batch.BatchCommands.Add(initBatchCommand);

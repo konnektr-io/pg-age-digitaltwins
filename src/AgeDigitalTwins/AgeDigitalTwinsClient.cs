@@ -1,5 +1,6 @@
 using System;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using AgeDigitalTwins.Validation;
 using DTDLParser;
@@ -39,6 +40,7 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
                     _dataSource.ParserDtmiResolverAsync(_graphName, dtmis, ct),
             }
         );
+        InitializeDatabaseAsync().GetAwaiter().GetResult();
         InitializeGraphAsync().GetAwaiter().GetResult();
     }
 
@@ -63,6 +65,7 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
                     _dataSource.ParserDtmiResolverAsync(_graphName, dtmis, ct),
             }
         );
+        InitializeDatabaseAsync().GetAwaiter().GetResult();
         InitializeGraphAsync().GetAwaiter().GetResult();
     }
 
@@ -74,5 +77,17 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
     {
         await _dataSource.DisposeAsync();
         GC.SuppressFinalize(this);
+    }
+
+    private async Task InitializeDatabaseAsync(CancellationToken cancellationToken = default)
+    {
+        await using var connection = await _dataSource.OpenConnectionAsync(
+            TargetSessionAttributes.ReadWrite,
+            cancellationToken
+        );
+        foreach (NpgsqlCommand command in Initialization.GetDatabaseInitCommands(connection))
+        {
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
     }
 }

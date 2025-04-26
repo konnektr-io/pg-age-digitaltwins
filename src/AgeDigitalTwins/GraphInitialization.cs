@@ -3,8 +3,92 @@ using Npgsql;
 
 namespace AgeDigitalTwins;
 
-public static class GraphInitialization
+public static class Initialization
 {
+    public static List<NpgsqlCommand> GetDatabaseInitCommands(NpgsqlConnection? connection)
+    {
+        return
+        [
+            new(
+                @$"DO $$
+                BEGIN
+                    PERFORM proname 'name' FROM pg_proc WHERE proname LIKE 'agtype_set';
+                    IF NOT FOUND THEN
+                        CREATE OR REPLACE FUNCTION public.agtype_set(target agtype, path agtype, new_value agtype)
+                        RETURNS agtype AS $$
+                        DECLARE
+                            json_target jsonb;
+                            json_new_value jsonb;
+                            text_path text[];
+                        BEGIN
+                            -- Cast agtype to jsonb
+                            json_target := target::json::jsonb;
+
+                            -- Convert agtype path to text array
+                            text_path := ARRAY(SELECT json_array_elements_text(path::json));
+
+                            BEGIN
+                                -- Attempt to cast new_value to jsonb directly
+                                json_new_value := new_value::json::jsonb;
+                            EXCEPTION
+                                WHEN others THEN
+                                    -- Handle different types of new_value
+                                    IF new_value::text ~ '^[0-9]+$|^[0-9]*\\.[0-9]+$|^[0-9]+(\\.[0-9]+)?[eE][+-]?[0-9]+$' THEN
+                                        -- Convert all numeric values to float
+                                        json_new_value := to_jsonb(new_value::float);
+                                    ELSIF new_value::text = 'true' OR new_value::text = 'false' THEN
+                                        -- Boolean
+                                        json_new_value := to_jsonb(new_value::boolean);
+                                    ELSE
+                                        -- Default to text
+                                        json_new_value := to_jsonb(new_value);
+                                    END IF;
+                            END;
+
+                            -- Use jsonb_set to update the json value
+                            json_target := jsonb_set(json_target::jsonb, text_path, json_new_value);
+
+                            -- Cast the result back to agtype
+                            RETURN json_target::text::agtype;
+                        END;
+                        $$ LANGUAGE plpgsql;
+                    END IF;
+                END;
+                $$",
+                connection
+            ),
+            new(
+                @$"DO $$
+                BEGIN
+                    PERFORM proname 'name' FROM pg_proc WHERE proname LIKE 'agtype_delete_key';
+                    IF NOT FOUND THEN
+                        CREATE OR REPLACE FUNCTION public.agtype_delete_key(target agtype, path agtype)
+                        RETURNS agtype AS $$
+                        DECLARE
+                            json_target jsonb;
+                            text_path text[];
+                        BEGIN
+                            -- Cast agtype to jsonb
+                            json_target := target::json::jsonb;
+
+                            -- Convert agtype path to text array
+                            text_path := ARRAY(SELECT json_array_elements_text(path::json));
+
+                            -- Use jsonb delete key to update the json value
+                            json_target := json_target #- text_path;
+
+                            -- Cast the result back to agtype
+                            RETURN json_target::text::agtype;
+                        END;
+                        $$ LANGUAGE plpgsql;
+                    END IF;
+                END;
+                $$",
+                connection
+            ),
+        ];
+    }
+
     public static List<NpgsqlBatchCommand> GetGraphInitCommands(string graphName)
     {
         return
@@ -52,81 +136,6 @@ public static class GraphInitialization
                     RETURN result;
                 END;
                 $function$"
-            ),
-            new(
-                @$"DO $$
-                BEGIN
-                    PERFORM proname 'name' FROM pg_proc WHERE proname LIKE 'agtype_set';
-                    IF NOT FOUND THEN
-                        CREATE OR REPLACE FUNCTION public.agtype_set(target agtype, path agtype, new_value agtype)
-                        RETURNS agtype AS $$
-                        DECLARE
-                            json_target jsonb;
-                            json_new_value jsonb;
-                            text_path text[];
-                        BEGIN
-                            -- Cast agtype to jsonb
-                            json_target := target::json::jsonb;
-
-                            -- Convert agtype path to text array
-                            text_path := ARRAY(SELECT json_array_elements_text(path::json));
-
-                            BEGIN
-                                -- Attempt to cast new_value to jsonb directly
-                                json_new_value := new_value::json::jsonb;
-                            EXCEPTION
-                                WHEN others THEN
-                                    -- Handle different types of new_value
-                                    IF new_value::text ~ '^[0-9]+$|^[0-9]*\\.[0-9]+$|^[0-9]+(\\.[0-9]+)?[eE][+-]?[0-9]+$' THEN
-                                        -- Convert all numeric values to float
-                                        json_new_value := to_jsonb(new_value::float);
-                                    ELSIF new_value::text = 'true' OR new_value::text = 'false' THEN
-                                        -- Boolean
-                                        json_new_value := to_jsonb(new_value::boolean);
-                                    ELSE
-                                        -- Default to text
-                                        json_new_value := to_jsonb(new_value);
-                                    END IF;
-                            END;
-
-                            -- Use jsonb_set to update the json value
-                            json_target := jsonb_set(json_target::jsonb, text_path, json_new_value);
-
-                            -- Cast the result back to agtype
-                            RETURN json_target::text::agtype;
-                        END;
-                        $$ LANGUAGE plpgsql;
-                    END IF;
-                END;
-                $$"
-            ),
-            new(
-                @$"DO $$
-                BEGIN
-                    PERFORM proname 'name' FROM pg_proc WHERE proname LIKE 'agtype_delete_key';
-                    IF NOT FOUND THEN
-                        CREATE OR REPLACE FUNCTION public.agtype_delete_key(target agtype, path agtype)
-                        RETURNS agtype AS $$
-                        DECLARE
-                            json_target jsonb;
-                            text_path text[];
-                        BEGIN
-                            -- Cast agtype to jsonb
-                            json_target := target::json::jsonb;
-
-                            -- Convert agtype path to text array
-                            text_path := ARRAY(SELECT json_array_elements_text(path::json));
-
-                            -- Use jsonb delete key to update the json value
-                            json_target := json_target #- text_path;
-
-                            -- Cast the result back to agtype
-                            RETURN json_target::text::agtype;
-                        END;
-                        $$ LANGUAGE plpgsql;
-                    END IF;
-                END;
-                $$"
             ),
         ];
     }
