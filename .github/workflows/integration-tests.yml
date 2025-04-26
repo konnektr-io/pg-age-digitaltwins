@@ -38,18 +38,20 @@ jobs:
             -v "${{ github.workspace }}/src/data/init.sql:/docker-entrypoint-initdb.d/init.sql" \
             -p 5432:5432 \
             ghcr.io/konnektr-io/age:16-bookworm-3 \
-            -c wal_level=logical
+            -c wal_level=logical &
 
       - name: Wait for PostgreSQL to be ready
         run: |
           for i in {1..30}; do
-            if docker exec postgres-test pg_isready -U app; then
+            if docker exec postgres-test pg_isready -U app -d app; then
               echo "PostgreSQL is ready";
-              break;
+              exit 0;
             fi;
             echo "Waiting for PostgreSQL...";
             sleep 2;
           done
+          echo "PostgreSQL did not become ready in time";
+          exit 1
 
       - name: Test
         run: |
