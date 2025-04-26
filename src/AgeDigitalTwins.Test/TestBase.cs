@@ -6,7 +6,6 @@ public class TestBase : IAsyncDisposable
 {
     private readonly AgeDigitalTwinsClient _client;
     private static bool _isDatabaseInitialized = false;
-    private static readonly object _initLock = new object();
 
     public TestBase()
     {
@@ -29,13 +28,10 @@ public class TestBase : IAsyncDisposable
 
     private void EnsureDatabaseInitialized()
     {
-        lock (_initLock)
+        if (!_isDatabaseInitialized)
         {
-            if (!_isDatabaseInitialized)
-            {
-                _client.InitializeDatabaseAsync().GetAwaiter().GetResult();
-                _isDatabaseInitialized = true;
-            }
+            _client.InitializeDatabaseAsync().GetAwaiter().GetResult();
+            _isDatabaseInitialized = true;
         }
     }
 
