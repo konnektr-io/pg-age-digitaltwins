@@ -211,10 +211,10 @@ public class DigitalTwinsTests : TestBase
         ]";
 
         JsonPatch jsonPatch = JsonSerializer.Deserialize<JsonPatch>(sJsonPatch)!;
-        await Client.UpdateDigitalTwinAsync(digitalTwin!.Id, jsonPatch);
+        await Client.UpdateDigitalTwinAsync(createdTwin!.Id, jsonPatch);
 
         // Read digital twin
-        var readTwin = await Client.GetDigitalTwinAsync<BasicDigitalTwin>(digitalTwin.Id);
+        var readTwin = await Client.GetDigitalTwinAsync<BasicDigitalTwin>(createdTwin.Id);
         Assert.NotNull(readTwin);
         Assert.Equal(digitalTwin.Id, readTwin.Id);
         Assert.Equal("Earth 2", readTwin.Contents["name"].ToString());
