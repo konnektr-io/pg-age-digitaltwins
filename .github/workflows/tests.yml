@@ -29,6 +29,27 @@ jobs:
             8.0.x
             9.0.x
 
+      - name: Start custom PostgreSQL container
+        run: |
+          docker run --name postgres-test \
+            -e POSTGRES_USER=app \
+            -e POSTGRES_PASSWORD=app \
+            -e POSTGRES_DB=app \
+            -v "${{ github.workspace }}/src/AgeDigitalTwins.AppHost/data/init.sql:/docker-entrypoint-initdb.d/init.sql" \
+            -p 5432:5432 \
+            custom-postgres-image:latest
+
+      - name: Wait for PostgreSQL to be ready
+        run: |
+          for i in {1..30}; do
+            if docker exec postgres-test pg_isready -U app; then
+              echo "PostgreSQL is ready";
+              break;
+            fi;
+            echo "Waiting for PostgreSQL...";
+            sleep 2;
+          done
+
       - name: Test
         run: |
           if [ "${{ github.event.inputs.test_project }}" == "All" ]; then
@@ -36,3 +57,9 @@ jobs:
           else
             dotnet test "./src/${{ github.event.inputs.test_project }}"
           fi
+
+      - name: Stop PostgreSQL container
+        if: always()
+        run: |
+          docker stop postgres-test
+          docker rm postgres-test

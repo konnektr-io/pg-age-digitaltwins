@@ -1,4 +1,3 @@
-using System.Linq.Async;
 using System.Text.Json;
 using Azure.DigitalTwins.Core;
 using DTDLParser;
