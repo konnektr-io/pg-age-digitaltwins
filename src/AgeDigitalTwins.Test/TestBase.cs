@@ -5,8 +5,9 @@ namespace AgeDigitalTwins.Test;
 public class TestBase : IAsyncDisposable
 {
     private readonly AgeDigitalTwinsClient _client;
-    private static Task? _initializationTask;
-    private static readonly object _initLock = new object();
+    private static readonly Lazy<Task> _initializationTask = new Lazy<Task>(
+        InitializeDatabaseAsync
+    );
 
     public TestBase()
     {
@@ -22,41 +23,29 @@ public class TestBase : IAsyncDisposable
         _client = new AgeDigitalTwinsClient(connectionString, graphName, true, true);
 
         // Only initialize database once
-        EnsureDatabaseInitialized();
+        Console.WriteLine("Initializing database...");
+        _initializationTask.Value.GetAwaiter().GetResult();
         // Initialize graph for each test
         Console.WriteLine($"Initializing graph {graphName} ...");
         _client.InitializeGraphAsync().GetAwaiter().GetResult();
         Console.WriteLine($"Graph {graphName} initialized.");
     }
 
-    /* private void EnsureDatabaseInitialized()
+    private static async Task InitializeDatabaseAsync()
     {
-        if (!_isDatabaseInitialized)
-        {
-            Console.WriteLine("Initializing database...");
-            _client.InitializeDatabaseAsync().GetAwaiter().GetResult();
-            Console.WriteLine("Database initialized.");
-            _isDatabaseInitialized = true;
-        }
-    } */
+        // Replace with your actual initialization logic
+        var configuration = new ConfigurationBuilder()
+            .SetBasePath(AppContext.BaseDirectory)
+            .AddJsonFile("appsettings.Development.json")
+            .Build();
 
-    private void EnsureDatabaseInitialized()
-    {
-        if (_initializationTask == null)
-        {
-            lock (_initLock)
-            {
-                if (_initializationTask == null)
-                {
-                    Console.WriteLine("Initializing database...");
-                    _initializationTask = Task.Run(() => _client.InitializeDatabaseAsync());
-                }
-            }
-        }
+        string connectionString =
+            configuration.GetConnectionString("agedb") + ";Include Error Detail=true"
+            ?? throw new ArgumentNullException("agedb");
 
-        // Wait for the initialization to complete
-        _initializationTask.GetAwaiter().GetResult();
-        Console.WriteLine("Database initialized.");
+        var client = new AgeDigitalTwinsClient(connectionString, noInitialization: true);
+        await client.InitializeDatabaseAsync();
+        await client.DisposeAsync();
     }
 
     public AgeDigitalTwinsClient Client => _client!;
