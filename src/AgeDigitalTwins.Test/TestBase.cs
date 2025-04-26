@@ -5,7 +5,8 @@ namespace AgeDigitalTwins.Test;
 public class TestBase : IAsyncDisposable
 {
     private readonly AgeDigitalTwinsClient _client;
-    private static bool _isDatabaseInitialized = false;
+    private static Task? _initializationTask;
+    private static readonly object _initLock = new object();
 
     public TestBase()
     {
@@ -28,7 +29,7 @@ public class TestBase : IAsyncDisposable
         Console.WriteLine($"Graph {graphName} initialized.");
     }
 
-    private void EnsureDatabaseInitialized()
+    /* private void EnsureDatabaseInitialized()
     {
         if (!_isDatabaseInitialized)
         {
@@ -37,6 +38,25 @@ public class TestBase : IAsyncDisposable
             Console.WriteLine("Database initialized.");
             _isDatabaseInitialized = true;
         }
+    } */
+
+    private void EnsureDatabaseInitialized()
+    {
+        if (_initializationTask == null)
+        {
+            lock (_initLock)
+            {
+                if (_initializationTask == null)
+                {
+                    Console.WriteLine("Initializing database...");
+                    _initializationTask = Task.Run(() => _client.InitializeDatabaseAsync());
+                }
+            }
+        }
+
+        // Wait for the initialization to complete
+        _initializationTask.GetAwaiter().GetResult();
+        Console.WriteLine("Database initialized.");
     }
 
     public AgeDigitalTwinsClient Client => _client!;
