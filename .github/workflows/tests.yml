@@ -37,7 +37,7 @@ jobs:
             -e POSTGRES_DB=app \
             -v "${{ github.workspace }}/src/AgeDigitalTwins.AppHost/data/init.sql:/docker-entrypoint-initdb.d/init.sql" \
             -p 5432:5432 \
-            custom-postgres-image:latest
+            ghcr.io/konnektr-io/age:16-bookworm-4
 
       - name: Wait for PostgreSQL to be ready
         run: |
