@@ -49,12 +49,16 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
     /// </summary>
     /// <param name="connectionString">The connection string for the database.</param>
     /// <param name="graphName">The name of the graph to use. Defaults to "digitaltwins".</param>
-    public AgeDigitalTwinsClient(string connectionString, string graphName = "digitaltwins")
+    public AgeDigitalTwinsClient(
+        string connectionString,
+        string graphName = "digitaltwins",
+        bool loadAgeFromPlugins = false
+    )
     {
         NpgsqlConnectionStringBuilder connectionStringBuilder =
             new(connectionString) { SearchPath = "ag_catalog, \"$user\", public" };
         NpgsqlDataSourceBuilder dataSourceBuilder = new(connectionStringBuilder.ConnectionString);
-        _dataSource = dataSourceBuilder.UseAge(true).BuildMultiHost();
+        _dataSource = dataSourceBuilder.UseAge(loadAgeFromPlugins).BuildMultiHost();
 
         _graphName = graphName;
         _modelParser = new(
