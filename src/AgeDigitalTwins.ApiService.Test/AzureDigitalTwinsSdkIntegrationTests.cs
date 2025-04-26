@@ -6,6 +6,7 @@ using Azure.DigitalTwins.Core;
 
 namespace AgeDigitalTwins.ApiService.Test;
 
+[Trait("Category", "Integration")]
 public class AzureDigitalTwinsSdkIntegrationTests : IAsyncLifetime
 {
     private DigitalTwinsClient? _digitalTwinsClient;
