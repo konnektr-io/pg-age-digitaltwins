@@ -6,6 +6,7 @@ using Json.Pointer;
 
 namespace AgeDigitalTwins.Test;
 
+[Trait("Category", "Integration")]
 public class DigitalTwinsTests : TestBase
 {
     [Fact]

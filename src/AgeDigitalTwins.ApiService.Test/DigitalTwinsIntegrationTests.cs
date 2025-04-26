@@ -4,6 +4,7 @@ using Aspire.Hosting;
 
 namespace AgeDigitalTwins.ApiService.Test;
 
+[Trait("Category", "Integration")]
 public class DigitalTwinsIntegrationTests : IAsyncLifetime
 {
     private TestingAspireAppHost? _app;

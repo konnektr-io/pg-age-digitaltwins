@@ -1,10 +1,10 @@
 using System.Text;
 using System.Text.Json;
 using AgeDigitalTwins.Models;
-using Aspire.Hosting;
 
 namespace AgeDigitalTwins.ApiService.Test;
 
+[Trait("Category", "Integration")]
 public class ModelsIntegrationTests : IAsyncLifetime
 {
     private TestingAspireAppHost? _app;

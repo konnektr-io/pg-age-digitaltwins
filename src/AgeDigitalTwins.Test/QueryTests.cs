@@ -6,6 +6,7 @@ using Json.Pointer;
 
 namespace AgeDigitalTwins.Test;
 
+[Trait("Category", "Integration")]
 public class QueryTests : TestBase
 {
     internal async Task IntializeAsync()
