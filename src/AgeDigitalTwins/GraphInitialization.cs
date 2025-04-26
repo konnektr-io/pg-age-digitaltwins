@@ -56,9 +56,8 @@ public static class GraphInitialization
             new(
                 @$"DO $$
                 BEGIN
-                    IF NOT EXISTS (
-                        SELECT 1 FROM pg_proc WHERE proname = 'agtype_set'
-                    ) THEN
+                    PERFORM proname 'name' FROM pg_proc WHERE proname LIKE 'agtype_set';
+                    IF NOT FOUND THEN
                         CREATE OR REPLACE FUNCTION public.agtype_set(target agtype, path agtype, new_value agtype)
                         RETURNS agtype AS $$
                         DECLARE
@@ -104,9 +103,8 @@ public static class GraphInitialization
             new(
                 @$"DO $$
                 BEGIN
-                    IF NOT EXISTS (
-                        SELECT 1 FROM pg_proc WHERE proname = 'agtype_delete_key'
-                    ) THEN
+                    PERFORM proname 'name' FROM pg_proc WHERE proname LIKE 'agtype_delete_key';
+                    IF NOT FOUND THEN
                         CREATE OR REPLACE FUNCTION public.agtype_delete_key(target agtype, path agtype)
                         RETURNS agtype AS $$
                         DECLARE
