@@ -29,7 +29,7 @@ public static class Initialization
                     EXCEPTION
                         WHEN others THEN
                             -- Handle different types of new_value
-                            IF new_value::text ~ '^[0-9]+$|^[0-9]*\\.[0-9]+$|^[0-9]+(\\.[0-9]+)?[eE][+-]?[0-9]+$' THEN
+                            IF new_value::text ~ '^[0-9]+$|^[0-9]*\.[0-9]+$|^[0-9]+(\.[0-9]+)?[eE][+-]?[0-9]+$' THEN
                                 -- Convert all numeric values to float
                                 json_new_value := to_jsonb(new_value::float);
                             ELSIF new_value::text = 'true' OR new_value::text = 'false' THEN
@@ -47,8 +47,7 @@ public static class Initialization
                     -- Cast the result back to agtype
                     RETURN json_target::text::agtype;
                 END;
-                $$ LANGUAGE plpgsql;
-                ",
+                $$ LANGUAGE plpgsql;",
                 connection
             ),
             new(
@@ -65,7 +64,7 @@ public static class Initialization
                     text_path := ARRAY(SELECT json_array_elements_text(path::json));
 
                     -- Use jsonb delete key to update the json value
-                    json_target := json_target #- text_path;
+                    json_target := json_target  #- text_path;
 
                     -- Cast the result back to agtype
                     RETURN json_target::text::agtype;
