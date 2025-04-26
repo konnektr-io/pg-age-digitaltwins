@@ -23,14 +23,18 @@ public class TestBase : IAsyncDisposable
         // Only initialize database once
         EnsureDatabaseInitialized();
         // Initialize graph for each test
+        Console.WriteLine($"Initializing graph {graphName} ...");
         _client.InitializeGraphAsync().GetAwaiter().GetResult();
+        Console.WriteLine($"Graph {graphName} initialized.");
     }
 
     private void EnsureDatabaseInitialized()
     {
         if (!_isDatabaseInitialized)
         {
+            Console.WriteLine("Initializing database...");
             _client.InitializeDatabaseAsync().GetAwaiter().GetResult();
+            Console.WriteLine("Database initialized.");
             _isDatabaseInitialized = true;
         }
     }
