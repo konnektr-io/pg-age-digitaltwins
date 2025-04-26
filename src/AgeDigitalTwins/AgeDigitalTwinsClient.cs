@@ -25,9 +25,11 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
     /// </summary>
     /// <param name="dataSource">The data source for connecting to the database.</param>
     /// <param name="graphName">The name of the graph to use. Defaults to "digitaltwins".</param>
+    /// <param name="noInitialization">If true, skips the initialization of the database and graph.</param>
     public AgeDigitalTwinsClient(
         NpgsqlMultiHostDataSource dataSource,
-        string graphName = "digitaltwins"
+        string graphName = "digitaltwins",
+        bool noInitialization = false
     )
     {
         _graphName = graphName;
@@ -40,6 +42,8 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
                     _dataSource.ParserDtmiResolverAsync(_graphName, dtmis, ct),
             }
         );
+        if (noInitialization)
+            return;
         InitializeDatabaseAsync().GetAwaiter().GetResult();
         InitializeGraphAsync().GetAwaiter().GetResult();
     }
@@ -49,10 +53,13 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
     /// </summary>
     /// <param name="connectionString">The connection string for the database.</param>
     /// <param name="graphName">The name of the graph to use. Defaults to "digitaltwins".</param>
+    /// <param name="loadAgeFromPlugins">If true, loads the Age extension from plugins.</param>
+    /// <param name="noInitialization">If true, skips the initialization of the database and graph.</param>
     public AgeDigitalTwinsClient(
         string connectionString,
         string graphName = "digitaltwins",
-        bool loadAgeFromPlugins = false
+        bool loadAgeFromPlugins = false,
+        bool noInitialization = false
     )
     {
         NpgsqlConnectionStringBuilder connectionStringBuilder =
@@ -69,6 +76,8 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
                     _dataSource.ParserDtmiResolverAsync(_graphName, dtmis, ct),
             }
         );
+        if (noInitialization)
+            return;
         InitializeDatabaseAsync().GetAwaiter().GetResult();
         InitializeGraphAsync().GetAwaiter().GetResult();
     }
@@ -83,7 +92,7 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
         GC.SuppressFinalize(this);
     }
 
-    private async Task InitializeDatabaseAsync(CancellationToken cancellationToken = default)
+    public async Task InitializeDatabaseAsync(CancellationToken cancellationToken = default)
     {
         await using var connection = await _dataSource.OpenConnectionAsync(
             TargetSessionAttributes.ReadWrite,

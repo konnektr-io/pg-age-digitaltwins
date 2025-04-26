@@ -5,6 +5,8 @@ namespace AgeDigitalTwins.Test;
 public class TestBase : IAsyncDisposable
 {
     private readonly AgeDigitalTwinsClient _client;
+    private static bool _isDatabaseInitialized = false;
+    private static readonly object _initLock = new object();
 
     public TestBase()
     {
@@ -17,7 +19,24 @@ public class TestBase : IAsyncDisposable
             configuration.GetConnectionString("agedb") ?? throw new ArgumentNullException("agedb");
 
         var graphName = "temp_graph_" + Guid.NewGuid().ToString("N");
-        _client = new AgeDigitalTwinsClient(connectionString, graphName);
+        _client = new AgeDigitalTwinsClient(connectionString, graphName, true, true);
+
+        // Only initialize database once
+        EnsureDatabaseInitialized();
+        // Initialize graph for each test
+        _client.InitializeGraphAsync().GetAwaiter().GetResult();
+    }
+
+    private void EnsureDatabaseInitialized()
+    {
+        lock (_initLock)
+        {
+            if (!_isDatabaseInitialized)
+            {
+                _client.InitializeDatabaseAsync().GetAwaiter().GetResult();
+                _isDatabaseInitialized = true;
+            }
+        }
     }
 
     public AgeDigitalTwinsClient Client => _client!;
