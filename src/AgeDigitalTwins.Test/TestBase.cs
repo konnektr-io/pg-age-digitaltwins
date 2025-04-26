@@ -43,7 +43,11 @@ public class TestBase : IAsyncDisposable
             configuration.GetConnectionString("agedb") + ";Include Error Detail=true"
             ?? throw new ArgumentNullException("agedb");
 
-        var client = new AgeDigitalTwinsClient(connectionString, noInitialization: true);
+        var client = new AgeDigitalTwinsClient(
+            connectionString,
+            loadAgeFromPlugins: true,
+            noInitialization: true
+        );
         await client.InitializeDatabaseAsync();
         await client.DisposeAsync();
     }
