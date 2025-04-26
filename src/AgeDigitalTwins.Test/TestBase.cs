@@ -5,9 +5,6 @@ namespace AgeDigitalTwins.Test;
 public class TestBase : IAsyncDisposable
 {
     private readonly AgeDigitalTwinsClient _client;
-    private static readonly Lazy<Task> _initializationTask = new Lazy<Task>(
-        InitializeDatabaseAsync
-    );
 
     public TestBase()
     {
@@ -24,32 +21,12 @@ public class TestBase : IAsyncDisposable
 
         // Only initialize database once
         Console.WriteLine("Initializing database...");
-        _initializationTask.Value.GetAwaiter().GetResult();
+        _client.InitializeDatabaseAsync().GetAwaiter().GetResult();
+        Console.WriteLine("Database initialized.");
         // Initialize graph for each test
         Console.WriteLine($"Initializing graph {graphName} ...");
         _client.InitializeGraphAsync().GetAwaiter().GetResult();
         Console.WriteLine($"Graph {graphName} initialized.");
-    }
-
-    private static async Task InitializeDatabaseAsync()
-    {
-        // Replace with your actual initialization logic
-        var configuration = new ConfigurationBuilder()
-            .SetBasePath(AppContext.BaseDirectory)
-            .AddJsonFile("appsettings.Development.json")
-            .Build();
-
-        string connectionString =
-            configuration.GetConnectionString("agedb") + ";Include Error Detail=true"
-            ?? throw new ArgumentNullException("agedb");
-
-        var client = new AgeDigitalTwinsClient(
-            connectionString,
-            loadAgeFromPlugins: true,
-            noInitialization: true
-        );
-        await client.InitializeDatabaseAsync();
-        await client.DisposeAsync();
     }
 
     public AgeDigitalTwinsClient Client => _client!;
