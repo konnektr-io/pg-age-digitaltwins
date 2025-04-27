@@ -240,6 +240,9 @@ public class DigitalTwinsTests : TestBase
             digitalTwin
         );
 
+        Assert.NotNull(createdTwin);
+        Assert.Equal(digitalTwin.Id, createdTwin.Id);
+
         var now = DateTime.UtcNow;
         var nowString = now.ToString("o");
 

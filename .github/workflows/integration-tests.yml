@@ -20,16 +20,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: |
-            8.0.x
-            9.0.x
-
       - name: Start custom PostgreSQL container
         run: |
           docker run --name postgres-test \
@@ -55,6 +45,16 @@ jobs:
           echo "PostgreSQL did not become ready in time";
           exit 1;
 
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+
       - name: Test
         run: |
           if [ "${{ github.event.inputs.test_project }}" == "All" ]; then
@@ -62,3 +62,8 @@ jobs:
           else
             dotnet test './src/${{ github.event.inputs.test_project }}' --logger 'GitHubActions' --verbosity detailed
           fi
+
+      - name: Stop PostgreSQL container
+        run: |
+          docker stop postgres-test || true
+          docker rm postgres-test || true
