@@ -390,11 +390,6 @@ public partial class AgeDigitalTwinsClient
                         $"SET t = {_graphName}.agtype_set(t, ['{string.Join("','", pathParts)}'], {propertyValue})"
                     );
                 }
-
-                // UpdateTime is set on the root of the property
-                updateTimeSetOperations.Add(
-                    $"SET t = {_graphName}.agtype_set(properties(t),['$metadata','{pathParts.First()}','lastUpdateTime'],'{now:o}')"
-                );
             }
             else if (op.Op == OperationType.Remove)
             {
@@ -408,10 +403,6 @@ public partial class AgeDigitalTwinsClient
                         $"SET t = {_graphName}.agtype_delete_key(properties(t),['{string.Join("','", pathParts)}'])"
                     );
                 }
-                // This won't do anything for nested properties (which is fine as we need to keep the root property last update time)
-                updateTimeSetOperations.Add(
-                    $"SET t = {_graphName}.agtype_set(properties(t),['$metadata','{string.Join("','", pathParts)}','lastUpdateTime'],'{now:o}')"
-                );
             }
             else
             {
@@ -419,6 +410,11 @@ public partial class AgeDigitalTwinsClient
                     $"Operation '{op.Op}' with value '{op.Value}' is not supported"
                 );
             }
+
+            // UpdateTime is set on the root of the property
+            updateTimeSetOperations.Add(
+                $"SET t = {_graphName}.agtype_set(properties(t),['$metadata','{pathParts.First()}','lastUpdateTime'],'{now:o}')"
+            );
         }
 
         string newEtag = ETagGenerator.GenerateEtag(digitalTwinId, now);
