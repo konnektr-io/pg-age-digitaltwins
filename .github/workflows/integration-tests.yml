@@ -34,8 +34,8 @@ jobs:
           --health-cmd "pg_isready -U app -d app"
           --health-interval 10s
           --health-timeout 5s
-          --health-retries 5
-          --c wal_level=logical
+          --health-retries 20
+          -c wal_level=logical
 
     steps:
       - name: Checkout
