@@ -29,7 +29,6 @@ jobs:
           POSTGRES_PASSWORD: app
         volumes:
           - ${{ github.workspace }}/src/data/init.sql:/docker-entrypoint-initdb.d/init.sql
-          - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
         options: >-
           --health-cmd "pg_isready -U app -d app"
           --health-interval 10s
