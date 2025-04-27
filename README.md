@@ -30,8 +30,7 @@ AgeDigitalTwins is an SDK and API designed to support Digital Twins applications
   - [ ] Pagination
   - [ ] Components
   - [ ] Telemetry
-  - [ ] Authentication
-  - [ ] Authorization: RBAC with user impersonation (same principle as in [Postgrest](https://docs.postgrest.org/en/v12/references/auth.html))
+  - [ ] Diagnostics and Prometheus metrics
 - **API**:
   - [x] Digital Twins CRUD operations
   - [x] Models CRUD operations
@@ -39,6 +38,8 @@ AgeDigitalTwins is an SDK and API designed to support Digital Twins applications
   - [x] Error Handling
   - [x] ETags
   - [x] Authentication
+  - [ ] Authorization
+  - [x] OpenTelemetry support
 - **MCP Server**
   - [x] Models CRUD operations
   - [x] Digital Twins CRUD operations
@@ -54,8 +55,6 @@ AgeDigitalTwins is an SDK and API designed to support Digital Twins applications
   - [x] Kafka sink
   - [x] Kusto sink (Azure Data Explorer / Fabric Real-Time)
   - [x] MQTT sink
-- **Monitoring**:
-  - [ ] Distributed tracing
 
 ## Contributing
 
