@@ -64,6 +64,7 @@ jobs:
           fi
 
       - name: Stop PostgreSQL container
+        if: always()
         run: |
           docker stop postgres-test || true
           docker rm postgres-test || true
