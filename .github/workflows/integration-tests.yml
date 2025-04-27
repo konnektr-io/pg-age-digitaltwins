@@ -57,9 +57,9 @@ jobs:
       - name: Test
         run: |
           if [ "${{ github.event.inputs.test_project }}" == "All" ]; then
-            dotnet test './src' --logger "GitHubActions"
+            dotnet test './src' --logger 'GitHubActions'
           else
-            dotnet test "./src/${{ github.event.inputs.test_project }} --logger "GitHubActions"
+            dotnet test './src/${{ github.event.inputs.test_project }}' --logger 'GitHubActions'
           fi
 
       - name: Stop PostgreSQL container
