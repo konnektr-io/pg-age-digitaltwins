@@ -58,7 +58,7 @@ jobs:
       - name: Test
         run: |
           if [ "${{ github.event.inputs.test_project }}" == "All" ]; then
-            dotnet test './src' --logger 'GitHubActions' --verbosity detailed --blame-hang --timeout 600
+            dotnet test './src' --logger 'GitHubActions' --verbosity detailed --blame-hang-timeout 5m
           else
             dotnet test './src/${{ github.event.inputs.test_project }}' --logger 'GitHubActions' --verbosity detailed --blame-hang --timeout 600
           fi
