@@ -18,6 +18,25 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: ghcr.io/konnektr-io/age:16-bookworm-4
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: app
+        volumes:
+          - ${{ github.workspace }}/src/data/init.sql:/docker-entrypoint-initdb.d/init.sql
+        options: >-
+          --health-cmd "pg_isready -U app -d app"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+          --wal_level=logical
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,37 +48,12 @@ jobs:
             8.0.x
             9.0.x
 
-      - name: Start custom PostgreSQL container
-        run: |
-          docker run --name postgres-test \
-            -e POSTGRES_USER=app \
-            -e POSTGRES_PASSWORD=app \
-            -e POSTGRES_DB=app \
-            -v "${{ github.workspace }}/src/data/init.sql:/docker-entrypoint-initdb.d/init.sql" \
-            -p 5432:5432 \
-            ghcr.io/konnektr-io/age:16-bookworm-4 \
-            -c wal_level=logical &
-
-      - name: Wait for PostgreSQL to be ready
-        run: |
-          for i in {1..30}; do
-            if docker exec postgres-test pg_isready -U app -d app; then
-              echo "PostgreSQL is ready";
-              sleep 2;
-              exit 0;
-            fi;
-            echo "Waiting for PostgreSQL...";
-            sleep 2;
-          done
-          echo "PostgreSQL did not become ready in time";
-          exit 1
-
       - name: Test
         run: |
           if [ "${{ github.event.inputs.test_project }}" == "All" ]; then
-            dotnet test './src' --logger 'GitHubActions;verbosity=detailed'
+            dotnet test './src' --logger 'GitHubActions' --verbosity detailed
           else
-            dotnet test './src/${{ github.event.inputs.test_project }}' --logger 'GitHubActions;verbosity=detailed'
+            dotnet test './src/${{ github.event.inputs.test_project }}' --logger 'GitHubActions' --verbosity detailed
           fi
 
       - name: Stop PostgreSQL container
