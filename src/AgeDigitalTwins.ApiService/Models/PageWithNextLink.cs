@@ -1,7 +1,4 @@
-using System;
-using System.Collections.Generic;
 using AgeDigitalTwins.Models;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.WebUtilities;
 
 namespace AgeDigitalTwins.ApiService.Models;

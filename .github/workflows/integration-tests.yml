@@ -21,7 +21,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        
+
       - name: Start custom PostgreSQL container
         run: |
           docker run --name postgres-test \

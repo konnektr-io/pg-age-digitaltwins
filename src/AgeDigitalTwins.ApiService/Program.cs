@@ -9,7 +9,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Primitives;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.VisualBasic;
 using Npgsql;
 using Npgsql.Age;
 
@@ -98,6 +97,7 @@ if (enableAuthentication)
 }
 else
 {
+    builder.Services.AddAuthentication();
     builder
         .Services.AddAuthorizationBuilder()
         .SetDefaultPolicy(new AuthorizationPolicyBuilder().RequireAssertion(_ => true).Build());
