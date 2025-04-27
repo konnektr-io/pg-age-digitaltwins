@@ -252,7 +252,7 @@ public class DigitalTwinsTests : TestBase
                 PatchOperation.Add(JsonPointer.Parse("/$metadata/name/sourceTime"), nowString)
             );
 
-        await Client.UpdateDigitalTwinAsync(createdTwin!.Id, jsonPatch);
+        await Client.UpdateDigitalTwinAsync(createdTwin.Id, jsonPatch);
 
         // Read digital twin
         var readTwin = await Client.GetDigitalTwinAsync<BasicDigitalTwin>(createdTwin.Id);
