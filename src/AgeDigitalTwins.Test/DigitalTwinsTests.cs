@@ -249,10 +249,10 @@ public class DigitalTwinsTests : TestBase
                 PatchOperation.Add(JsonPointer.Parse("/$metadata/name/sourceTime"), nowString)
             );
 
-        await Client.UpdateDigitalTwinAsync(digitalTwin!.Id, jsonPatch);
+        await Client.UpdateDigitalTwinAsync(createdTwin!.Id, jsonPatch);
 
         // Read digital twin
-        var readTwin = await Client.GetDigitalTwinAsync<BasicDigitalTwin>(digitalTwin.Id);
+        var readTwin = await Client.GetDigitalTwinAsync<BasicDigitalTwin>(createdTwin.Id);
         Assert.NotNull(readTwin);
         Assert.Equal(digitalTwin.Id, readTwin.Id);
         Assert.Equal("Earth 3", readTwin.Contents["name"].ToString());
