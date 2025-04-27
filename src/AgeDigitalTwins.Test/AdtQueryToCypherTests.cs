@@ -56,6 +56,18 @@ public class AdtQueryToCypherTests
         "MATCH (current:Twin)-[R]->(T:Twin) WHERE current['$dtId']='root' RETURN T,R"
     )]
     [InlineData(
+        "SELECT T FROM DIGITALTWINS MATCH (E)-[]->(T) WHERE T.$dtId = 'abc' AND E.$dtId != 'def'",
+        "MATCH (E:Twin)-[]->(T:Twin) WHERE T['$dtId'] = 'abc' AND NOT (E['$dtId'] = 'def') RETURN T"
+    )]
+    [InlineData(
+        "SELECT T FROM DIGITALTWINS MATCH (E)-[]->(T) WHERE T.$dtId != 'abc' AND E.$dtId != 'def'",
+        "MATCH (E:Twin)-[]->(T:Twin) WHERE NOT (T['$dtId'] = 'abc') AND NOT (E['$dtId'] = 'def') RETURN T"
+    )]
+    [InlineData(
+        "SELECT T FROM DIGITALTWINS MATCH (E)-[]->(T) WHERE T.size != 1 AND E.$dtId != 'def'",
+        "MATCH (E:Twin)-[]->(T:Twin) WHERE NOT (T.size = 1) AND NOT (E['$dtId'] = 'def') RETURN T"
+    )]
+    [InlineData(
         "SELECT B, R FROM DIGITALTWINS DT JOIN B RELATED DT.has R WHERE DT.$dtId = 'root2'",
         "MATCH (DT:Twin)-[R:has]->(B:Twin) WHERE DT['$dtId'] = 'root2' RETURN B, R"
     )]
