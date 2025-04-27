@@ -28,8 +28,7 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
     /// <param name="noInitialization">If true, skips the initialization of the database and graph.</param>
     public AgeDigitalTwinsClient(
         NpgsqlMultiHostDataSource dataSource,
-        string graphName = "digitaltwins",
-        bool noInitialization = false
+        string graphName = "digitaltwins"
     )
     {
         _graphName = graphName;
@@ -42,9 +41,6 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
                     _dataSource.ParserDtmiResolverAsync(_graphName, dtmis, ct),
             }
         );
-        if (noInitialization)
-            return;
-        InitializeDatabaseAsync().GetAwaiter().GetResult();
         InitializeGraphAsync().GetAwaiter().GetResult();
     }
 
@@ -58,8 +54,7 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
     public AgeDigitalTwinsClient(
         string connectionString,
         string graphName = "digitaltwins",
-        bool loadAgeFromPlugins = false,
-        bool noInitialization = false
+        bool loadAgeFromPlugins = false
     )
     {
         NpgsqlConnectionStringBuilder connectionStringBuilder =
@@ -76,9 +71,6 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
                     _dataSource.ParserDtmiResolverAsync(_graphName, dtmis, ct),
             }
         );
-        if (noInitialization)
-            return;
-        InitializeDatabaseAsync().GetAwaiter().GetResult();
         InitializeGraphAsync().GetAwaiter().GetResult();
     }
 
@@ -90,17 +82,5 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
     {
         await _dataSource.DisposeAsync();
         GC.SuppressFinalize(this);
-    }
-
-    public async Task InitializeDatabaseAsync(CancellationToken cancellationToken = default)
-    {
-        await using var connection = await _dataSource.OpenConnectionAsync(
-            TargetSessionAttributes.ReadWrite,
-            cancellationToken
-        );
-        foreach (NpgsqlCommand command in Initialization.GetDatabaseInitCommands(connection))
-        {
-            await command.ExecuteNonQueryAsync(cancellationToken);
-        }
     }
 }

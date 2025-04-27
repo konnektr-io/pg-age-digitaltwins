@@ -17,16 +17,7 @@ public class TestBase : IAsyncDisposable
             configuration.GetConnectionString("agedb") ?? throw new ArgumentNullException("agedb");
 
         var graphName = "temp_graph_" + Guid.NewGuid().ToString("N");
-        _client = new AgeDigitalTwinsClient(connectionString, graphName, true, true);
-
-        // Only initialize database once
-        Console.WriteLine("Initializing database...");
-        _client.InitializeDatabaseAsync().GetAwaiter().GetResult();
-        Console.WriteLine("Database initialized.");
-        // Initialize graph for each test
-        Console.WriteLine($"Initializing graph {graphName} ...");
-        _client.InitializeGraphAsync().GetAwaiter().GetResult();
-        Console.WriteLine($"Graph {graphName} initialized.");
+        _client = new AgeDigitalTwinsClient(connectionString, graphName, true);
     }
 
     public AgeDigitalTwinsClient Client => _client!;

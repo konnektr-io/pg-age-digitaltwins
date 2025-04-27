@@ -348,7 +348,7 @@ public partial class AgeDigitalTwinsClient
         List<string> updateTimeSetOperations =
             new()
             {
-                $"SET t = public.agtype_set(properties(t),['$metadata','$lastUpdateTime'],'{now:o}')",
+                $"SET t = {_graphName}.agtype_set(properties(t),['$metadata','$lastUpdateTime'],'{now:o}')",
             };
         List<string> patchOperations = new();
 
@@ -367,24 +367,24 @@ public partial class AgeDigitalTwinsClient
                 )
                 {
                     patchOperations.Add(
-                        $"SET t = public.agtype_set(properties(t),['{string.Join("','", path.Split('.'))}'],'{JsonSerializer.Serialize(op.Value, serializerOptions).Replace("'", "\\'")}')"
+                        $"SET t = {_graphName}.agtype_set(properties(t),['{string.Join("','", path.Split('.'))}'],'{JsonSerializer.Serialize(op.Value, serializerOptions).Replace("'", "\\'")}')"
                     );
                 }
                 else if (op.Value.GetValueKind() == JsonValueKind.String)
                 {
                     patchOperations.Add(
-                        $"SET t = public.agtype_set(properties(t),['{string.Join("','", path.Split('.'))}'],'{op.Value.ToString().Replace("'", "\\'")}')"
+                        $"SET t = {_graphName}.agtype_set(properties(t),['{string.Join("','", path.Split('.'))}'],'{op.Value.ToString().Replace("'", "\\'")}')"
                     );
                 }
                 else
                 {
                     patchOperations.Add(
-                        $"SET t = public.agtype_set(properties(t),['{string.Join("','", path.Split('.'))}'],{op.Value})"
+                        $"SET t = {_graphName}.agtype_set(properties(t),['{string.Join("','", path.Split('.'))}'],{op.Value})"
                     );
                 }
                 // UpdateTime is set on the root of the property
                 updateTimeSetOperations.Add(
-                    $"SET t = public.agtype_set(properties(t),['$metadata','{path.Split('.').First()}','lastUpdateTime'],'{now:o}')"
+                    $"SET t = {_graphName}.agtype_set(properties(t),['$metadata','{path.Split('.').First()}','lastUpdateTime'],'{now:o}')"
                 );
             }
             else if (op.Op == OperationType.Remove)
@@ -394,7 +394,7 @@ public partial class AgeDigitalTwinsClient
                 );
                 // This won't do anything for nested properties (which is fine as we need to keep the root property last update time)
                 updateTimeSetOperations.Add(
-                    $"SET t = public.agtype_set(properties(t),['$metadata','{string.Join("','", path.Split('.'))}','lastUpdateTime'],'{now:o}')"
+                    $"SET t = {_graphName}.agtype_set(properties(t),['$metadata','{string.Join("','", path.Split('.'))}','lastUpdateTime'],'{now:o}')"
                 );
             }
             else
