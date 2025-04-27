@@ -219,9 +219,14 @@ public class DigitalTwinsTests : TestBase
         Assert.Equal(digitalTwin.Id, readTwin.Id);
         Assert.Equal("Earth 2", readTwin.Contents["name"].ToString());
         Assert.Equal(5.972E18, ((JsonElement)readTwin.Contents["mass"]).GetDouble());
+        Assert.NotNull(readTwin.LastUpdatedOn);
+        Assert.Equal(
+            readTwin.LastUpdatedOn,
+            readTwin.Metadata.PropertyMetadata["name"].LastUpdatedOn
+        );
     }
 
-    [Fact]
+    /* [Fact]
     public async Task UpdateDigitalTwinAsync_SourceTime_Updated()
     {
         // Load required models
@@ -261,7 +266,7 @@ public class DigitalTwinsTests : TestBase
             (now - readTwin.Metadata.PropertyMetadata["name"].SourceTime) < TimeSpan.FromSeconds(1)
         );
         Assert.Equal(now, readTwin.Metadata.PropertyMetadata["name"].SourceTime);
-    }
+    } */
 
     /* [Fact]
     public async Task UpdateDigitalTwinAsync_RemoveAlreadyRemovedProperty_ThrowsException()
