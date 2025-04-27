@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Aspire.Hosting;
 
 namespace AgeDigitalTwins.ApiService.Test;
@@ -137,5 +138,56 @@ public class DigitalTwinsIntegrationTests : IAsyncLifetime
         JsonDocument modifiedTwinJson = JsonDocument.Parse(modifiedTwinResponseContent);
         Assert.Equal("Earth 2", modifiedTwinJson.RootElement.GetProperty("name").GetString());
         Assert.Equal(5.972E18, modifiedTwinJson.RootElement.GetProperty("mass").GetDouble());
+    }
+
+    [Fact]
+    public async Task Query_WithSimpleQuery_ReturnsResult()
+    {
+        // Arrange
+
+        try
+        {
+            var delres3 = await _httpClient!.DeleteAsync("/models/dtmi:com:contoso:Crater;1");
+            delres3.EnsureSuccessStatusCode();
+        }
+        catch { }
+        string[] sModels = [SampleData.DtdlCrater];
+        List<JsonElement> jModels = sModels
+            .Select(m => JsonDocument.Parse(m))
+            .Select(j => j.RootElement)
+            .ToList();
+        var createModelsResponse = await _httpClient!.PostAsync(
+            "/models",
+            new StringContent(JsonSerializer.Serialize(jModels), Encoding.UTF8, "application/json")
+        );
+        var createTwinResponse = _httpClient!.PutAsync(
+            "/digitaltwins/crater1",
+            new StringContent(SampleData.TwinCrater, Encoding.UTF8, "application/json")
+        );
+
+        // Wait for a few seconds to ensure the twin is created
+        await Task.Delay(2000);
+
+        // Act
+        string query = "SELECT * FROM digitaltwins";
+        JsonObject queryBody = new() { ["query"] = query };
+        var queryResponse = await _httpClient!.PostAsync(
+            "/query",
+            new StringContent(queryBody.ToJsonString(), Encoding.UTF8, "application/json")
+        );
+
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, queryResponse.StatusCode);
+        string queryResponseContent = await queryResponse.Content.ReadAsStringAsync();
+        JsonDocument queryResponseJson = JsonDocument.Parse(queryResponseContent);
+        var results = queryResponseJson.RootElement.GetProperty("value").EnumerateArray().ToList();
+        Assert.NotEmpty(results);
+        bool found = false;
+        foreach (var result in results)
+        {
+            var twinId = result.GetProperty("$dtId").GetString();
+            found = true;
+        }
+        Assert.True(found);
     }
 }
