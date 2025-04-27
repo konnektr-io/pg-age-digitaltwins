@@ -238,14 +238,14 @@ app.MapGet(
             // Parse continuation token from query string
             ContinuationToken? continuationToken = null;
             if (
-                httpContext.Request.Headers.TryGetValue(
+                httpContext.Request.Query.TryGetValue(
                     "continuationToken",
-                    out var continuationTokenQueryString
+                    out var continuationTokenStringValues
                 )
             )
             {
                 continuationToken = ContinuationToken.Deserialize(
-                    continuationTokenQueryString.ToString()
+                    continuationTokenStringValues.ToString()
                 );
                 if (continuationToken == null)
                 {
@@ -296,14 +296,14 @@ app.MapGet(
             // Parse continuation token from query string
             ContinuationToken? continuationToken = null;
             if (
-                httpContext.Request.Headers.TryGetValue(
+                httpContext.Request.Query.TryGetValue(
                     "continuationToken",
-                    out var continuationTokenQueryString
+                    out var continuationTokenStringValues
                 )
             )
             {
                 continuationToken = ContinuationToken.Deserialize(
-                    continuationTokenQueryString.ToString()
+                    continuationTokenStringValues.ToString()
                 );
                 if (continuationToken == null)
                 {

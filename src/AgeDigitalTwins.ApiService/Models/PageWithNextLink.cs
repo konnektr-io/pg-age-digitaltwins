@@ -9,7 +9,7 @@ public class PageWithNextLink<T> : Page<T>
 
     public PageWithNextLink(Page<T> page, HttpRequest request)
     {
-        Values = page.Values;
+        Value = page.Value;
         ContinuationToken = page.ContinuationToken;
 
         if (page.ContinuationToken == null)
