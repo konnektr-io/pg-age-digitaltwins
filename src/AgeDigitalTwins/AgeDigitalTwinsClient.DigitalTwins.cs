@@ -78,7 +78,7 @@ public partial class AgeDigitalTwinsClient
     )
     {
         string cypher =
-            $"MATCH (t:Twin) WHERE t['$dtId'] = '{digitalTwinId.Replace("'", "\\'")}' RETURN t";
+            $"MATCH (t:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}}) RETURN t";
         await using var connection = await _dataSource.OpenConnectionAsync(
             Npgsql.TargetSessionAttributes.PreferStandby,
             cancellationToken
