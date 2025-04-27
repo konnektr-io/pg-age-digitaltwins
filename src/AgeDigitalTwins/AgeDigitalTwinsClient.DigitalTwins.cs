@@ -390,7 +390,7 @@ public partial class AgeDigitalTwinsClient
             else if (op.Op == OperationType.Remove)
             {
                 patchOperations.Add(
-                    $"SET t = public.agtype_delete_key(properties(t),['{string.Join("','", path.Split('.'))}'])"
+                    $"SET t = {_graphName}.agtype_delete_key(properties(t),['{string.Join("','", path.Split('.'))}'])"
                 );
                 // This won't do anything for nested properties (which is fine as we need to keep the root property last update time)
                 updateTimeSetOperations.Add(

@@ -5,7 +5,6 @@ using DTDLParser;
 namespace AgeDigitalTwins.Test;
 
 [Trait("Category", "Integration")]
-[Collection("Sequential Integration Tests")]
 public class ModelsTests : TestBase
 {
     [Fact]

@@ -383,7 +383,7 @@ public partial class AgeDigitalTwinsClient
             else if (op.Op == OperationType.Remove)
             {
                 patchOperations.Add(
-                    $"SET rel = public.agtype_delete_key(properties(t),['{string.Join("','", path.Split('.'))}'])"
+                    $"SET rel = {_graphName}.agtype_delete_key(properties(t),['{string.Join("','", path.Split('.'))}'])"
                 );
             }
             else

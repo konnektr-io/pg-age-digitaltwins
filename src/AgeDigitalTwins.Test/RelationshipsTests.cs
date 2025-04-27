@@ -8,7 +8,6 @@ using Json.Pointer;
 namespace AgeDigitalTwins.Test;
 
 [Trait("Category", "Integration")]
-[Collection("Sequential Integration Tests")]
 public class RelationshipTests : TestBase
 {
     [Fact]
