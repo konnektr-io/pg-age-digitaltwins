@@ -19,23 +19,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
-    services:
-      postgres:
-        image: ghcr.io/konnektr-io/age:16-bookworm-4
-        ports:
-          - 5432:5432
-        env:
-          POSTGRES_USER: app
-          POSTGRES_PASSWORD: app
-          POSTGRES_DB: app
-        volumes:
-          - ${{ github.workspace }}/src/data/init.sql:/docker-entrypoint-initdb.d/init.sql
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 20
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -47,18 +30,30 @@ jobs:
             8.0.x
             9.0.x
 
-      - name: Set wal_level to logical
-        env:
-          PGPASSWORD: "app"
-        run: psql -h localhost -U app -c "ALTER SYSTEM SET wal_level = 'logical';"
+      - name: Start custom PostgreSQL container
+        run: |
+          docker run --name postgres-test \
+            -e POSTGRES_USER=app \
+            -e POSTGRES_PASSWORD=app \
+            -e POSTGRES_DB=app \
+            -v "${{ github.workspace }}/src/data/init.sql:/docker-entrypoint-initdb.d/init.sql" \
+            -p 5432:5432 \
+            ghcr.io/konnektr-io/age:16-bookworm-4 \
+            -c wal_level=logical &
 
-      - name: Restart Postgres
-        env:
-          PGPASSWORD: "postgres"
-        run: docker restart $(docker ps -q --filter "ancestor=age:16-bookworm-4")
-
-      - name: Print Services
-        run: service --status-all
+      - name: Wait for PostgreSQL to be ready
+        run: |
+          for i in {1..20}; do
+            if docker exec postgres-test pg_isready -U app -d app; then
+              echo "PostgreSQL is ready";
+              sleep 5;
+              exit 0;
+            fi;
+            echo "Waiting for PostgreSQL...";
+            sleep 5;
+          done
+          echo "PostgreSQL did not become ready in time";
+          exit 1;
 
       - name: Test
         run: |
