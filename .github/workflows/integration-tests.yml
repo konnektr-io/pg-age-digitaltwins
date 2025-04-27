@@ -27,6 +27,7 @@ jobs:
         env:
           POSTGRES_USER: app
           POSTGRES_PASSWORD: app
+          POSTGRES_DB: app
         volumes:
           - ${{ github.workspace }}/src/data/init.sql:/docker-entrypoint-initdb.d/init.sql
         options: >-
@@ -50,11 +51,6 @@ jobs:
         env:
           PGPASSWORD: "app"
         run: psql -h localhost -U app -c "ALTER SYSTEM SET wal_level = 'logical';"
-
-      - name: Create Database
-        env:
-          PGPASSWORD: "app"
-        run: psql -h localhost -U app -c 'CREATE DATABASE "app";'
 
       - name: Restart Postgres
         env:
