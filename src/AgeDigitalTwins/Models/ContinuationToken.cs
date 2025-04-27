@@ -33,4 +33,9 @@ public class ContinuationToken
         var json = Encoding.UTF8.GetString(Convert.FromBase64String(base64Token));
         return JsonSerializer.Deserialize<ContinuationToken>(json);
     }
+
+    public override string ToString()
+    {
+        return Serialize(this);
+    }
 }

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using AgeDigitalTwins;
 using AgeDigitalTwins.ApiService;
+using AgeDigitalTwins.ApiService.Models;
 using AgeDigitalTwins.Models;
 using Json.Patch;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -211,18 +212,53 @@ app.MapGet(
         [Authorize]
         async (
             string id,
+            HttpContext httpContext,
             [FromServices] AgeDigitalTwinsClient client,
             CancellationToken cancellationToken
         ) =>
         {
-            return Results.Json(
-                new
+            string? relationshipName = httpContext.Request.Query["relationshipName"];
+
+            int? maxItemsPerPage = 2000; // Default value
+
+            // Parse max-items-per-page header
+            if (
+                httpContext.Request.Headers.TryGetValue(
+                    "max-items-per-page",
+                    out var maxItemsHeader
+                )
+            )
+            {
+                if (int.TryParse(maxItemsHeader, out var maxItems))
                 {
-                    value = await client
-                        .GetIncomingRelationshipsAsync<JsonDocument>(id, cancellationToken)
-                        .ToListAsync(cancellationToken),
+                    maxItemsPerPage = maxItems;
                 }
-            );
+            }
+
+            // Parse continuation token from query string
+            ContinuationToken? continuationToken = null;
+            if (
+                httpContext.Request.Headers.TryGetValue(
+                    "continuationToken",
+                    out var continuationTokenQueryString
+                )
+            )
+            {
+                continuationToken = ContinuationToken.Deserialize(
+                    continuationTokenQueryString.ToString()
+                );
+                if (continuationToken == null)
+                {
+                    return Results.BadRequest(new { error = "Invalid continuation token." });
+                }
+            }
+
+            var page = await client
+                .GetIncomingRelationshipsAsync<JsonDocument>(id, cancellationToken)
+                .AsPages(continuationToken, maxItemsPerPage, cancellationToken)
+                .FirstAsync(cancellationToken);
+
+            return Results.Json(new PageWithNextLink<JsonDocument?>(page, httpContext.Request));
         }
     )
     .WithName("ListIncomingRelationships")
@@ -240,18 +276,47 @@ app.MapGet(
         ) =>
         {
             string? relationshipName = httpContext.Request.Query["relationshipName"];
-            return Results.Json(
-                new
+
+            int? maxItemsPerPage = 2000; // Default value
+
+            // Parse max-items-per-page header
+            if (
+                httpContext.Request.Headers.TryGetValue(
+                    "max-items-per-page",
+                    out var maxItemsHeader
+                )
+            )
+            {
+                if (int.TryParse(maxItemsHeader, out var maxItems))
                 {
-                    value = await client
-                        .GetRelationshipsAsync<JsonDocument>(
-                            id,
-                            relationshipName,
-                            cancellationToken
-                        )
-                        .ToListAsync(cancellationToken),
+                    maxItemsPerPage = maxItems;
                 }
-            );
+            }
+
+            // Parse continuation token from query string
+            ContinuationToken? continuationToken = null;
+            if (
+                httpContext.Request.Headers.TryGetValue(
+                    "continuationToken",
+                    out var continuationTokenQueryString
+                )
+            )
+            {
+                continuationToken = ContinuationToken.Deserialize(
+                    continuationTokenQueryString.ToString()
+                );
+                if (continuationToken == null)
+                {
+                    return Results.BadRequest(new { error = "Invalid continuation token." });
+                }
+            }
+
+            var page = await client
+                .GetRelationshipsAsync<JsonDocument>(id, relationshipName, cancellationToken)
+                .AsPages(continuationToken, maxItemsPerPage, cancellationToken)
+                .FirstAsync(cancellationToken);
+
+            return Results.Json(new PageWithNextLink<JsonDocument?>(page, httpContext.Request));
         }
     )
     .WithName("ListRelationships")

@@ -19,6 +19,8 @@ public class CustomAsyncPageable<T> : IAsyncEnumerable<T>
         Task<(IEnumerable<T> Items, ContinuationToken? ContinuationToken)>
     > _fetchPage;
 
+    private const int DefaultPageSize = 2000;
+
     public CustomAsyncPageable(
         Func<
             ContinuationToken?,
@@ -33,7 +35,7 @@ public class CustomAsyncPageable<T> : IAsyncEnumerable<T>
 
     public async IAsyncEnumerable<Page<T>> AsPages(
         ContinuationToken? continuationToken = default,
-        int? pageSizeHint = default,
+        int? pageSizeHint = DefaultPageSize,
         [EnumeratorCancellation] CancellationToken cancellationToken = default
     )
     {

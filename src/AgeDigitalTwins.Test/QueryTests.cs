@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Azure.DigitalTwins.Core;
 using DTDLParser;
+using Json.More;
 using Json.Patch;
 using Json.Pointer;
 
@@ -630,6 +631,186 @@ public class QueryTests : TestBase
 
         Assert.NotNull(secondPage);
         Assert.Single(secondPage.Values);
+        Assert.Null(secondPage.ContinuationToken);
+    }
+
+    [Fact]
+    public async Task QueryAsync_Pagination_HandlesSmallerLimitInQuery()
+    {
+        await IntializeAsync();
+
+        Dictionary<string, string> twins =
+            new()
+            {
+                {
+                    "twin1",
+                    "{\"$dtId\": \"twin1\", \"$metadata\": {\"$model\": \"dtmi:com:adt:dtsample:room;1\"}, \"name\": \"Twin 1\"}"
+                },
+                {
+                    "twin2",
+                    "{\"$dtId\": \"twin2\", \"$metadata\": {\"$model\": \"dtmi:com:adt:dtsample:room;1\"}, \"name\": \"Twin 2\"}"
+                },
+                {
+                    "twin3",
+                    "{\"$dtId\": \"twin3\", \"$metadata\": {\"$model\": \"dtmi:com:adt:dtsample:room;1\"}, \"name\": \"Twin 3\"}"
+                },
+                {
+                    "twin4",
+                    "{\"$dtId\": \"twin4\", \"$metadata\": {\"$model\": \"dtmi:com:adt:dtsample:room;1\"}, \"name\": \"Twin 4\"}"
+                },
+                {
+                    "twin5",
+                    "{\"$dtId\": \"twin5\", \"$metadata\": {\"$model\": \"dtmi:com:adt:dtsample:room;1\"}, \"name\": \"Twin 5\"}"
+                },
+            };
+
+        foreach (var twin in twins)
+        {
+            await Client.CreateOrReplaceDigitalTwinAsync(twin.Key, twin.Value);
+        }
+
+        // First page
+        var firstPage = await Client
+            .QueryAsync<JsonDocument>(
+                "MATCH (t:Twin) WHERE t.`$metadata`.`$model` = 'dtmi:com:adt:dtsample:room;1' RETURN t LIMIT 2"
+            )
+            .AsPages(pageSizeHint: 4)
+            .FirstAsync();
+
+        Assert.NotNull(firstPage);
+        Assert.Equal(2, firstPage.Values.Count());
+        Assert.Null(firstPage.ContinuationToken);
+    }
+
+    [Fact]
+    public async Task QueryAsync_Pagination_HandlesBiggerLimitInQuery()
+    {
+        await IntializeAsync();
+
+        Dictionary<string, string> twins =
+            new()
+            {
+                {
+                    "twin1",
+                    "{\"$dtId\": \"twin1\", \"$metadata\": {\"$model\": \"dtmi:com:adt:dtsample:room;1\"}, \"name\": \"Twin 1\"}"
+                },
+                {
+                    "twin2",
+                    "{\"$dtId\": \"twin2\", \"$metadata\": {\"$model\": \"dtmi:com:adt:dtsample:room;1\"}, \"name\": \"Twin 2\"}"
+                },
+                {
+                    "twin3",
+                    "{\"$dtId\": \"twin3\", \"$metadata\": {\"$model\": \"dtmi:com:adt:dtsample:room;1\"}, \"name\": \"Twin 3\"}"
+                },
+                {
+                    "twin4",
+                    "{\"$dtId\": \"twin4\", \"$metadata\": {\"$model\": \"dtmi:com:adt:dtsample:room;1\"}, \"name\": \"Twin 4\"}"
+                },
+                {
+                    "twin5",
+                    "{\"$dtId\": \"twin5\", \"$metadata\": {\"$model\": \"dtmi:com:adt:dtsample:room;1\"}, \"name\": \"Twin 5\"}"
+                },
+            };
+
+        foreach (var twin in twins)
+        {
+            await Client.CreateOrReplaceDigitalTwinAsync(twin.Key, twin.Value);
+        }
+
+        // First page
+        var firstPage = await Client
+            .QueryAsync<JsonDocument>(
+                "MATCH (t:Twin) WHERE t.`$metadata`.`$model` = 'dtmi:com:adt:dtsample:room;1' RETURN t LIMIT 4"
+            )
+            .AsPages(pageSizeHint: 2)
+            .FirstAsync();
+
+        Assert.NotNull(firstPage);
+        Assert.Equal(2, firstPage.Values.Count());
+        Assert.NotNull(firstPage.ContinuationToken);
+
+        // Second page
+        var secondPage = await Client
+            .QueryAsync<JsonDocument>(
+                "MATCH (t:Twin) WHERE t.`$metadata`.`$model` = 'dtmi:com:adt:dtsample:room;1' RETURN t LIMIT 4"
+            )
+            .AsPages(firstPage.ContinuationToken, pageSizeHint: 2)
+            .FirstAsync();
+
+        Assert.NotNull(secondPage);
+        Assert.Equal(2, secondPage.Values.Count());
+        Assert.Null(secondPage.ContinuationToken);
+    }
+
+    [Fact]
+    public async Task QueryAsync_Pagination_HandlesSkipAndLimitInQuery()
+    {
+        await IntializeAsync();
+
+        Dictionary<string, string> twins =
+            new()
+            {
+                {
+                    "twin1",
+                    "{\"$dtId\": \"twin1\", \"$metadata\": {\"$model\": \"dtmi:com:adt:dtsample:room;1\"}, \"name\": \"Twin 1\"}"
+                },
+                {
+                    "twin2",
+                    "{\"$dtId\": \"twin2\", \"$metadata\": {\"$model\": \"dtmi:com:adt:dtsample:room;1\"}, \"name\": \"Twin 2\"}"
+                },
+                {
+                    "twin3",
+                    "{\"$dtId\": \"twin3\", \"$metadata\": {\"$model\": \"dtmi:com:adt:dtsample:room;1\"}, \"name\": \"Twin 3\"}"
+                },
+                {
+                    "twin4",
+                    "{\"$dtId\": \"twin4\", \"$metadata\": {\"$model\": \"dtmi:com:adt:dtsample:room;1\"}, \"name\": \"Twin 4\"}"
+                },
+                {
+                    "twin5",
+                    "{\"$dtId\": \"twin5\", \"$metadata\": {\"$model\": \"dtmi:com:adt:dtsample:room;1\"}, \"name\": \"Twin 5\"}"
+                },
+            };
+
+        foreach (var twin in twins)
+        {
+            await Client.CreateOrReplaceDigitalTwinAsync(twin.Key, twin.Value);
+        }
+
+        // First page
+        var firstPage = await Client
+            .QueryAsync<JsonDocument>(
+                "MATCH (t:Twin) WHERE t.`$metadata`.`$model` = 'dtmi:com:adt:dtsample:room;1' RETURN t SKIP 2 LIMIT 4"
+            )
+            .AsPages(pageSizeHint: 2)
+            .FirstAsync();
+
+        Assert.NotNull(firstPage);
+        Assert.Equal(2, firstPage.Values.Count());
+        Assert.Equal(
+            "twin3",
+            firstPage.Values.First()!.RootElement.GetProperty("t").GetProperty("$dtId").GetString()
+        );
+        Assert.Equal(
+            "twin4",
+            firstPage.Values.Last()!.RootElement.GetProperty("t").GetProperty("$dtId").GetString()
+        );
+        Assert.NotNull(firstPage.ContinuationToken);
+
+        // Second page
+        var secondPage = await Client
+            .QueryAsync<JsonDocument>(
+                "MATCH (t:Twin) WHERE t.`$metadata`.`$model` = 'dtmi:com:adt:dtsample:room;1' RETURN t SKIP 2 LIMIT 4"
+            )
+            .AsPages(firstPage.ContinuationToken, pageSizeHint: 2)
+            .FirstAsync();
+
+        Assert.NotNull(secondPage);
+        Assert.Single(secondPage.Values);
+        Assert.Equal(
+            "twin5",
+            secondPage.Values.First()!.RootElement.GetProperty("t").GetProperty("$dtId").GetString()
+        );
         Assert.Null(secondPage.ContinuationToken);
     }
 }

@@ -131,6 +131,17 @@ namespace AgeDigitalTwins.ApiService.Test
                 ""name"": ""Earth""
             }";
 
+        public const string TwinMoonLuna =
+            @"{
+                ""$dtId"": ""luna"",
+                ""$metadata"": {
+                    ""$model"": ""dtmi:com:contoso:Moon;1""
+                },
+                ""name"": ""Luna"",
+                ""mass"": 7.34767309E22,
+                ""temperature"": 100
+            }";
+
         public const string DtdlCrater =
             @"{
                 ""@context"": ""dtmi:dtdl:context;3"",

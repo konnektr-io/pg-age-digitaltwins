@@ -54,14 +54,47 @@ public partial class AgeDigitalTwinsClient
                 // to allow resuming the query from the same point
                 string nextContinuationQuery = cypher;
 
-                // Add pagination logic to the cypher query
-                if (continuationToken != null)
+                // Check if the query already contains a LIMIT clause
+                var limitMatch = LimitRegex().Match(cypher);
+                // Check if the query already contains a SKIP clause
+                var skipMatch = SkipRegex().Match(cypher);
+
+                // Handle existing SKIP and LIMIT clauses
+                if (skipMatch.Success)
                 {
+                    int existingSkip = int.Parse(skipMatch.Groups[1].Value);
+                    int newSkip = existingSkip + (continuationToken?.RowNumber ?? 0);
+                    cypher = SkipRegex().Replace(cypher, $"SKIP {newSkip}");
+                }
+                // Handle case where there is no existing SKIP but an existing LIMIT
+                else if (limitMatch.Success && continuationToken != null)
+                {
+                    // Remove the existing LIMIT clause
+                    cypher = LimitRegex().Replace(cypher, "");
+
+                    // Add SKIP before the LIMIT
+                    cypher +=
+                        $" SKIP {continuationToken.RowNumber} LIMIT {limitMatch.Groups[1].Value}";
+                }
+                else if (continuationToken != null)
+                {
+                    // Add SKIP clause if it doesn't exist
                     cypher += $" SKIP {continuationToken.RowNumber}";
                 }
 
-                if (maxItemsPerPage.HasValue)
+                int existingLimit = int.MaxValue;
+                if (limitMatch.Success)
                 {
+                    existingLimit = int.Parse(limitMatch.Groups[1].Value);
+                    if (maxItemsPerPage.HasValue && maxItemsPerPage.Value < existingLimit)
+                    {
+                        // Replace the existing LIMIT with the smaller maxItemsPerPage
+                        cypher = LimitRegex().Replace(cypher, $"LIMIT {maxItemsPerPage.Value}");
+                    }
+                }
+                else if (maxItemsPerPage.HasValue)
+                {
+                    // Add LIMIT clause if it doesn't exist
                     cypher += $" LIMIT {maxItemsPerPage.Value}";
                 }
 
@@ -173,15 +206,18 @@ public partial class AgeDigitalTwinsClient
                     }
                 }
 
-                // Generate a continuation token (e.g., next row number)
-                var nextToken = new ContinuationToken
-                {
-                    RowNumber = (continuationToken?.RowNumber ?? 0) + results.Count,
-                    Query = nextContinuationQuery,
-                };
-
+                var rowNumber = (continuationToken?.RowNumber ?? 0) + results.Count;
                 ContinuationToken? nextContinuationToken =
-                    results.Count < maxItemsPerPage ? null : nextToken;
+                    results.Count < maxItemsPerPage || rowNumber >= existingLimit
+                        // No more results to fetch, so no continuation token
+                        ? null
+                        // Generate a continuation token (e.g., next row number)
+                        : new ContinuationToken
+                        {
+                            RowNumber = rowNumber,
+                            Query = nextContinuationQuery,
+                        };
+                ;
 
                 return (results, nextContinuationToken);
             }
@@ -190,4 +226,16 @@ public partial class AgeDigitalTwinsClient
 
     [GeneratedRegex(@"\[[^\]]*(?::\w*)?\*[\d.]*\]", RegexOptions.Compiled)]
     internal static partial Regex VariableLengthEdgeRegex();
+
+    [GeneratedRegex(
+        @"SKIP\s+(\d+)",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+    )]
+    private static partial Regex SkipRegex();
+
+    [GeneratedRegex(
+        @"LIMIT\s+(\d+)",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+    )]
+    private static partial Regex LimitRegex();
 }
