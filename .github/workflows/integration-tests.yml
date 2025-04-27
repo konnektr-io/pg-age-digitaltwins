@@ -30,7 +30,7 @@ jobs:
         volumes:
           - ${{ github.workspace }}/src/data/init.sql:/docker-entrypoint-initdb.d/init.sql
         options: >-
-          --health-cmd "pg_isready -U app -d app"
+          --health-cmd pg_isready
           --health-interval 10s
           --health-timeout 5s
           --health-retries 20
