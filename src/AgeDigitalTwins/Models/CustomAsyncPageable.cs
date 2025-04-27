@@ -47,7 +47,7 @@ public class CustomAsyncPageable<T> : IAsyncEnumerable<T>
                 cancellationToken
             );
 
-            yield return new Page<T> { ContinuationToken = nextContinuationToken, Values = items };
+            yield return new Page<T> { ContinuationToken = nextContinuationToken, Value = items };
 
             continuationToken = nextContinuationToken;
         } while (continuationToken != null);
@@ -59,9 +59,9 @@ public class CustomAsyncPageable<T> : IAsyncEnumerable<T>
     {
         await foreach (Page<T> page in AsPages(cancellationToken: cancellationToken))
         {
-            foreach (T value in page.Values)
+            foreach (T item in page.Value)
             {
-                yield return value;
+                yield return item;
             }
         }
     }

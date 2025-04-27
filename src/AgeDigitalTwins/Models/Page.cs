@@ -5,6 +5,6 @@ namespace AgeDigitalTwins.Models;
 
 public class Page<T>
 {
-    public IEnumerable<T> Values { get; set; } = [];
+    public IEnumerable<T> Value { get; set; } = [];
     public ContinuationToken? ContinuationToken { get; set; }
 }
