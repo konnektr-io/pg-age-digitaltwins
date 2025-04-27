@@ -49,7 +49,7 @@ jobs:
       - name: Set wal_level to logical
         env:
           PGPASSWORD: "app"
-        run: psql -h localhost -U postgres -c "ALTER SYSTEM SET wal_level = 'logical';"
+        run: psql -h localhost -U app -c "ALTER SYSTEM SET wal_level = 'logical';"
 
       - name: Create Database
         env:
