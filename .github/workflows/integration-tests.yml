@@ -45,6 +45,7 @@ jobs:
           for i in {1..30}; do
             if docker exec postgres-test pg_isready -U app -d app; then
               echo "PostgreSQL is ready";
+              sleep 2;
               exit 0;
             fi;
             echo "Waiting for PostgreSQL...";
