@@ -35,7 +35,6 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 20
-          --max-connections=100
           --wal_level=logical
 
     steps:
