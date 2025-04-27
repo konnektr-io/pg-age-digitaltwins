@@ -58,9 +58,9 @@ jobs:
       - name: Test
         run: |
           if [ "${{ github.event.inputs.test_project }}" == "All" ]; then
-            dotnet test './src' --logger 'GitHubActions' --verbosity detailed
+            dotnet test './src' --logger 'GitHubActions' --verbosity detailed --blame-hang --timeout 600
           else
-            dotnet test './src/${{ github.event.inputs.test_project }}' --logger 'GitHubActions' --verbosity detailed
+            dotnet test './src/${{ github.event.inputs.test_project }}' --logger 'GitHubActions' --verbosity detailed --blame-hang --timeout 600
           fi
 
       - name: Stop PostgreSQL container
