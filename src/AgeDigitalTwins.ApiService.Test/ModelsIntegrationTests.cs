@@ -78,12 +78,27 @@ public class ModelsIntegrationTests : IAsyncLifetime
     [Fact]
     public async Task CreateModels_MultipleDependentModelsResolveInDb_ValidatedAndCreated()
     {
-        var delres1 = await _httpClient!.DeleteAsync("/models/dtmi:com:contoso:CelestialBody;1");
-        delres1.EnsureSuccessStatusCode();
-        var delres2 = await _httpClient!.DeleteAsync("/models/dtmi:com:contoso:Planet;1");
-        delres2.EnsureSuccessStatusCode();
-        var delres3 = await _httpClient!.DeleteAsync("/models/dtmi:com:contoso:Crater;1");
-        delres3.EnsureSuccessStatusCode();
+        // Clean up any existing models
+        try
+        {
+            var delres1 = await _httpClient!.DeleteAsync(
+                "/models/dtmi:com:contoso:CelestialBody;1"
+            );
+            delres1.EnsureSuccessStatusCode();
+        }
+        catch { }
+        try
+        {
+            var delres2 = await _httpClient!.DeleteAsync("/models/dtmi:com:contoso:Planet;1");
+            delres2.EnsureSuccessStatusCode();
+        }
+        catch { }
+        try
+        {
+            var delres3 = await _httpClient!.DeleteAsync("/models/dtmi:com:contoso:Crater;1");
+            delres3.EnsureSuccessStatusCode();
+        }
+        catch { }
 
         // Arrange
         string[] sModels = [SampleData.DtdlCelestialBody, SampleData.DtdlCrater];
