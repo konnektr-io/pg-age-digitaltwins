@@ -235,10 +235,8 @@ public class DigitalTwinsTests : TestBase
 
         // Create digital twin
         var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinPlanetEarth);
-        var createdTwin = await Client.CreateOrReplaceDigitalTwinAsync(
-            digitalTwin!.Id,
-            digitalTwin
-        );
+        digitalTwin!.Id = "earthTwin";
+        var createdTwin = await Client.CreateOrReplaceDigitalTwinAsync(digitalTwin.Id, digitalTwin);
 
         Assert.NotNull(createdTwin);
         Assert.Equal(digitalTwin.Id, createdTwin.Id);
