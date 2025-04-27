@@ -55,9 +55,3 @@ jobs:
           else
             dotnet test './src/${{ github.event.inputs.test_project }}' --logger 'GitHubActions' --verbosity detailed
           fi
-
-      - name: Stop PostgreSQL container
-        if: always()
-        run: |
-          docker stop postgres-test
-          docker rm postgres-test
