@@ -18,6 +18,7 @@ public class AzureDigitalTwinsSdkIntegrationTests : IAsyncLifetime
     {
         _app = new TestingAspireAppHost();
         await _app.StartAsync();
+        Console.WriteLine("App started");
 
         _generatedhttpClient = _app.CreateHttpClient("apiservice");
         _httpClient = new HttpClient(
