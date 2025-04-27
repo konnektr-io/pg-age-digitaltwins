@@ -359,42 +359,58 @@ public partial class AgeDigitalTwinsClient
             {
                 violations.Add("Cannot update the $dtId property");
             }
+            var pathParts = path.Split('.');
             if (op.Value != null && (op.Op == OperationType.Add || op.Op == OperationType.Replace))
             {
+                string? propertyValue = null;
                 if (
                     op.Value.GetValueKind() == JsonValueKind.Object
                     || op.Value.GetValueKind() == JsonValueKind.Array
                 )
                 {
-                    patchOperations.Add(
-                        $"SET t = {_graphName}.agtype_set(properties(t),['{string.Join("','", path.Split('.'))}'],'{JsonSerializer.Serialize(op.Value, serializerOptions).Replace("'", "\\'")}')"
-                    );
+                    propertyValue =
+                        $"'{JsonSerializer.Serialize(op.Value, serializerOptions).Replace("'", "\\'")}'";
                 }
                 else if (op.Value.GetValueKind() == JsonValueKind.String)
                 {
-                    patchOperations.Add(
-                        $"SET t = {_graphName}.agtype_set(properties(t),['{string.Join("','", path.Split('.'))}'],'{op.Value.ToString().Replace("'", "\\'")}')"
-                    );
+                    propertyValue = $"'{op.Value.ToString().Replace("'", "\\'")}'";
                 }
                 else
                 {
+                    propertyValue = op.Value.ToString();
+                }
+
+                if (pathParts.Length == 1)
+                {
+                    patchOperations.Add($"SET t.{pathParts.First()} = {propertyValue}");
+                }
+                else if (pathParts.Length > 1)
+                {
                     patchOperations.Add(
-                        $"SET t = {_graphName}.agtype_set(properties(t),['{string.Join("','", path.Split('.'))}'],{op.Value})"
+                        $"SET t = {_graphName}.agtype_set(t, ['{string.Join("','", pathParts)}'], {propertyValue})"
                     );
                 }
+
                 // UpdateTime is set on the root of the property
                 updateTimeSetOperations.Add(
-                    $"SET t = {_graphName}.agtype_set(properties(t),['$metadata','{path.Split('.').First()}','lastUpdateTime'],'{now:o}')"
+                    $"SET t = {_graphName}.agtype_set(properties(t),['$metadata','{pathParts.First()}','lastUpdateTime'],'{now:o}')"
                 );
             }
             else if (op.Op == OperationType.Remove)
             {
-                patchOperations.Add(
-                    $"SET t = {_graphName}.agtype_delete_key(properties(t),['{string.Join("','", path.Split('.'))}'])"
-                );
+                if (pathParts.Length == 1)
+                {
+                    patchOperations.Add($"REMOVE t.{pathParts.First()}");
+                }
+                else if (pathParts.Length > 1)
+                {
+                    patchOperations.Add(
+                        $"SET t = {_graphName}.agtype_delete_key(properties(t),['{string.Join("','", pathParts)}'])"
+                    );
+                }
                 // This won't do anything for nested properties (which is fine as we need to keep the root property last update time)
                 updateTimeSetOperations.Add(
-                    $"SET t = {_graphName}.agtype_set(properties(t),['$metadata','{string.Join("','", path.Split('.'))}','lastUpdateTime'],'{now:o}')"
+                    $"SET t = {_graphName}.agtype_set(properties(t),['$metadata','{string.Join("','", pathParts)}','lastUpdateTime'],'{now:o}')"
                 );
             }
             else
