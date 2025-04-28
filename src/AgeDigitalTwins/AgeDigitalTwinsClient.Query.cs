@@ -21,12 +21,12 @@ public partial class AgeDigitalTwinsClient
     /// <param name="query">The query to execute.</param>
     /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
     /// <returns>An asynchronous enumerable of query results.</returns>
-    public virtual CustomAsyncPageable<T?> QueryAsync<T>(
+    public virtual AsyncPageable<T?> QueryAsync<T>(
         string query,
         CancellationToken cancellationToken = default
     )
     {
-        return new CustomAsyncPageable<T?>(
+        return new AsyncPageable<T?>(
             async (continuationToken, maxItemsPerPage, ct) =>
             {
                 string cypher;

@@ -38,7 +38,7 @@ public partial class AgeDigitalTwinsClient
     /// <param name="options">Options to filter and include model definitions.</param>
     /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
     /// <returns>An asynchronous enumerable of <see cref="DigitalTwinsModelData"/>.</returns>
-    public virtual CustomAsyncPageable<DigitalTwinsModelData?> GetModelsAsync(
+    public virtual AsyncPageable<DigitalTwinsModelData?> GetModelsAsync(
         GetModelsOptions? options = null,
         CancellationToken cancellationToken = default
     )

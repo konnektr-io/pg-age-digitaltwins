@@ -10,28 +10,23 @@ namespace AgeDigitalTwins.Models;
 /// A custom implementation of IAsyncEnumerable to support pagination.
 /// </summary>
 /// <typeparam name="T">The type of the values.</typeparam>
-public class CustomAsyncPageable<T> : IAsyncEnumerable<T>
+public class AsyncPageable<T>(
+    Func<
+        ContinuationToken?,
+        int?,
+        CancellationToken,
+        Task<(IEnumerable<T> Items, ContinuationToken? ContinuationToken)>
+    > fetchPage
+) : IAsyncEnumerable<T>
 {
     private readonly Func<
         ContinuationToken?,
         int?,
         CancellationToken,
         Task<(IEnumerable<T> Items, ContinuationToken? ContinuationToken)>
-    > _fetchPage;
+    > _fetchPage = fetchPage;
 
     private const int DefaultPageSize = 2000;
-
-    public CustomAsyncPageable(
-        Func<
-            ContinuationToken?,
-            int?,
-            CancellationToken,
-            Task<(IEnumerable<T> Items, ContinuationToken? ContinuationToken)>
-        > fetchPage
-    )
-    {
-        _fetchPage = fetchPage;
-    }
 
     public async IAsyncEnumerable<Page<T>> AsPages(
         ContinuationToken? continuationToken = default,

@@ -110,7 +110,7 @@ public partial class AgeDigitalTwinsClient
     /// <param name="relationshipName">The name of the relationship to filter by (optional).</param>
     /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
     /// <returns>An asynchronous enumerable of the retrieved relationships.</returns>
-    public virtual CustomAsyncPageable<T?> GetRelationshipsAsync<T>(
+    public virtual AsyncPageable<T?> GetRelationshipsAsync<T>(
         string digitalTwinId,
         string? relationshipName = default,
         CancellationToken cancellationToken = default
@@ -129,7 +129,7 @@ public partial class AgeDigitalTwinsClient
     /// <param name="digitalTwinId">The ID of the target digital twin.</param>
     /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
     /// <returns>An asynchronous enumerable of the retrieved incoming relationships.</returns>
-    public virtual CustomAsyncPageable<T?> GetIncomingRelationshipsAsync<T>(
+    public virtual AsyncPageable<T?> GetIncomingRelationshipsAsync<T>(
         string digitalTwinId,
         CancellationToken cancellationToken = default
     )
