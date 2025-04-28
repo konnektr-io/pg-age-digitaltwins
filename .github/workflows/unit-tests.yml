@@ -21,4 +21,4 @@ jobs:
             9.0.x
 
       - name: Run Unit Tests
-        run: dotnet test --filter "Category!=Integration"
+        run: dotnet test './src' --filter 'Category!=Integration' --logger 'GitHubActions'

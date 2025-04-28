@@ -2,7 +2,8 @@
 
 namespace AgeDigitalTwins.Events.Test;
 
-public class CloudEventFactoryTest
+[Trait("Category", "Unit")]
+public class CloudEventFactoryTests
 {
     [Fact]
     public void CreateDigitalTwinChangeNotificationEvents_ValidEventData_ReturnsCloudEvent()

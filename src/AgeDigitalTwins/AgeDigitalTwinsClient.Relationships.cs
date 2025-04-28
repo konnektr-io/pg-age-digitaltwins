@@ -6,6 +6,7 @@ using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using AgeDigitalTwins.Exceptions;
+using AgeDigitalTwins.Models;
 using Json.Patch;
 using Npgsql.Age;
 using Npgsql.Age.Types;
@@ -109,19 +110,16 @@ public partial class AgeDigitalTwinsClient
     /// <param name="relationshipName">The name of the relationship to filter by (optional).</param>
     /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
     /// <returns>An asynchronous enumerable of the retrieved relationships.</returns>
-    public virtual async IAsyncEnumerable<T?> GetRelationshipsAsync<T>(
+    public virtual AsyncPageable<T?> GetRelationshipsAsync<T>(
         string digitalTwinId,
         string? relationshipName = default,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default
+        CancellationToken cancellationToken = default
     )
     {
         string edgeLabel = !string.IsNullOrEmpty(relationshipName) ? $":{relationshipName}" : "";
         string cypher =
-            $@"MATCH (:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})-[rel{edgeLabel}]->(:Twin) RETURN rel";
-        await foreach (JsonElement json in QueryAsync<JsonElement>(cypher, cancellationToken))
-        {
-            yield return JsonSerializer.Deserialize<T>(json.GetProperty("rel").GetRawText());
-        }
+            $@"MATCH (:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})-[rel{edgeLabel}]->(:Twin) RETURN *";
+        return QueryAsync<T>(cypher, cancellationToken);
     }
 
     /// <summary>
@@ -131,17 +129,14 @@ public partial class AgeDigitalTwinsClient
     /// <param name="digitalTwinId">The ID of the target digital twin.</param>
     /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
     /// <returns>An asynchronous enumerable of the retrieved incoming relationships.</returns>
-    public virtual async IAsyncEnumerable<T?> GetIncomingRelationshipsAsync<T>(
+    public virtual AsyncPageable<T?> GetIncomingRelationshipsAsync<T>(
         string digitalTwinId,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default
+        CancellationToken cancellationToken = default
     )
     {
         string cypher =
-            $@"MATCH (:Twin)-[rel]->(:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}}) RETURN rel";
-        await foreach (JsonElement json in QueryAsync<JsonElement>(cypher, cancellationToken))
-        {
-            yield return JsonSerializer.Deserialize<T>(json.GetProperty("rel").GetRawText());
-        }
+            $@"MATCH (:Twin)-[rel]->(:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}}) RETURN *";
+        return QueryAsync<T>(cypher, cancellationToken);
     }
 
     /// <summary>
@@ -364,26 +359,26 @@ public partial class AgeDigitalTwinsClient
                 )
                 {
                     patchOperations.Add(
-                        $"SET rel = public.agtype_set(properties(t),['{string.Join("','", path.Split('.'))}'],'{JsonSerializer.Serialize(op.Value, serializerOptions).Replace("'", "\\'")}')"
+                        $"SET rel = {_graphName}.agtype_set(properties(t),['{string.Join("','", path.Split('.'))}'],'{JsonSerializer.Serialize(op.Value, serializerOptions).Replace("'", "\\'")}')"
                     );
                 }
                 else if (op.Value.GetValueKind() == JsonValueKind.String)
                 {
                     patchOperations.Add(
-                        $"SET rel = public.agtype_set(properties(t),['{string.Join("','", path.Split('.'))}'],'{op.Value.ToString().Replace("'", "\\'")}')"
+                        $"SET rel = {_graphName}.agtype_set(properties(t),['{string.Join("','", path.Split('.'))}'],'{op.Value.ToString().Replace("'", "\\'")}')"
                     );
                 }
                 else
                 {
                     patchOperations.Add(
-                        $"SET rel = public.agtype_set(properties(t),['{string.Join("','", path.Split('.'))}'],{op.Value})"
+                        $"SET rel = {_graphName}.agtype_set(properties(t),['{string.Join("','", path.Split('.'))}'],{op.Value})"
                     );
                 }
             }
             else if (op.Op == OperationType.Remove)
             {
                 patchOperations.Add(
-                    $"SET rel = public.agtype_delete_key(properties(t),['{string.Join("','", path.Split('.'))}'])"
+                    $"SET rel = {_graphName}.agtype_delete_key(properties(t),['{string.Join("','", path.Split('.'))}'])"
                 );
             }
             else

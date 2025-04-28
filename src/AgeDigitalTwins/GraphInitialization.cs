@@ -54,7 +54,7 @@ public static class GraphInitialization
                 $function$"
             ),
             new(
-                @$"CREATE OR REPLACE FUNCTION public.agtype_set(target agtype, path agtype, new_value agtype)
+                @$"CREATE OR REPLACE FUNCTION {graphName}.agtype_set(target agtype, path agtype, new_value agtype)
                 RETURNS agtype AS $$
                 DECLARE
                     json_target jsonb;
@@ -94,7 +94,7 @@ public static class GraphInitialization
                 $$ LANGUAGE plpgsql;"
             ),
             new(
-                @$"CREATE OR REPLACE FUNCTION public.agtype_delete_key(target agtype, path agtype)
+                @$"CREATE OR REPLACE FUNCTION {graphName}.agtype_delete_key(target agtype, path agtype)
                 RETURNS agtype AS $$
                 DECLARE
                     json_target jsonb;

@@ -1,4 +1,4 @@
-name: Run Tests
+name: Run Integration Tests
 
 on:
   workflow_dispatch:
@@ -14,6 +14,9 @@ on:
           - AgeDigitalTwins.ApiService.Test
           - AgeDigitalTwins.Events.Test
           - AgeDigitalTwins.MCPServerSSE.Test
+  pull_request:
+    branches:
+      - "main"
 
 jobs:
   build:
@@ -21,6 +24,31 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Start custom PostgreSQL container
+        run: |
+          docker run --name postgres-test \
+            -e POSTGRES_USER=app \
+            -e POSTGRES_PASSWORD=app \
+            -e POSTGRES_DB=app \
+            -v "${{ github.workspace }}/src/data/init.sql:/docker-entrypoint-initdb.d/init.sql" \
+            -p 5432:5432 \
+            ghcr.io/konnektr-io/age:16-bookworm-4 \
+            -c wal_level=logical &
+
+      - name: Wait for PostgreSQL to be ready
+        run: |
+          for i in {1..30}; do
+            if docker exec postgres-test pg_isready -U app -d app; then
+              echo "PostgreSQL is ready";
+              sleep 5;
+              exit 0;
+            fi;
+            echo "Waiting for PostgreSQL...";
+            sleep 5;
+          done
+          echo "PostgreSQL did not become ready in time";
+          exit 1;
 
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
@@ -32,7 +60,13 @@ jobs:
       - name: Test
         run: |
           if [ "${{ github.event.inputs.test_project }}" == "All" ]; then
-            dotnet test './src'
+            dotnet test './src' --logger 'GitHubActions' --blame-hang --blame-hang-timeout 5m
           else
-            dotnet test "./src/${{ github.event.inputs.test_project }}"
+            dotnet test './src/${{ github.event.inputs.test_project }}' --logger 'GitHubActions' --blame-hang --blame-hang-timeout 5m
           fi
+
+      - name: Stop PostgreSQL container
+        if: always()
+        run: |
+          docker stop postgres-test || true
+          docker rm postgres-test || true

@@ -6,6 +6,7 @@ using Azure.DigitalTwins.Core;
 
 namespace AgeDigitalTwins.ApiService.Test;
 
+[Trait("Category", "Integration")]
 public class AzureDigitalTwinsSdkIntegrationTests : IAsyncLifetime
 {
     private DigitalTwinsClient? _digitalTwinsClient;
@@ -17,6 +18,7 @@ public class AzureDigitalTwinsSdkIntegrationTests : IAsyncLifetime
     {
         _app = new TestingAspireAppHost();
         await _app.StartAsync();
+        Console.WriteLine("App started");
 
         _generatedhttpClient = _app.CreateHttpClient("apiservice");
         _httpClient = new HttpClient(
@@ -154,6 +156,57 @@ public class AzureDigitalTwinsSdkIntegrationTests : IAsyncLifetime
             // Assert
             Assert.NotNull(twin);
             if (twin.Id == crater.Id)
+            {
+                found = true;
+            }
+        }
+        Assert.True(found);
+    }
+
+    [Fact]
+    public async Task ListRelationships_WithValidId_ReturnsRelationships()
+    {
+        // Arrange
+        Assert.NotNull(_digitalTwinsClient);
+        await _digitalTwinsClient.CreateModelsAsync(
+            new List<string>
+            {
+                SampleData.DtdlCelestialBody,
+                SampleData.DtdlPlanet,
+                SampleData.DtdlMoon,
+                SampleData.DtdlCrater,
+            }
+        );
+        var earth = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinPlanetEarth)!;
+        await _digitalTwinsClient.CreateOrReplaceDigitalTwinAsync(earth.Id, earth);
+        var moon = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinMoonLuna)!;
+        await _digitalTwinsClient.CreateOrReplaceDigitalTwinAsync(moon.Id, moon);
+        string relationshipName = "satellites";
+
+        string relationshipId = "myRelationshipId";
+        var relationship = new BasicRelationship()
+        {
+            Id = relationshipId,
+            TargetId = moon.Id,
+            SourceId = earth.Id,
+            Name = relationshipName,
+        };
+        await _digitalTwinsClient.CreateOrReplaceRelationshipAsync(
+            earth.Id,
+            relationshipId,
+            relationship
+        );
+
+        // Act
+        Assert.NotNull(_digitalTwinsClient);
+        AsyncPageable<BasicRelationship> relationships =
+            _digitalTwinsClient.GetRelationshipsAsync<BasicRelationship>(earth.Id);
+
+        // Assert
+        bool found = false;
+        await foreach (BasicRelationship rel in relationships)
+        {
+            if (rel.Id == relationshipId)
             {
                 found = true;
             }

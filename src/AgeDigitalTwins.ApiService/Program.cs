@@ -1,6 +1,7 @@
 using System.Text.Json;
 using AgeDigitalTwins;
 using AgeDigitalTwins.ApiService;
+using AgeDigitalTwins.ApiService.Models;
 using AgeDigitalTwins.Models;
 using Json.Patch;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -96,6 +97,7 @@ if (enableAuthentication)
 }
 else
 {
+    builder.Services.AddAuthentication();
     builder
         .Services.AddAuthorizationBuilder()
         .SetDefaultPolicy(new AuthorizationPolicyBuilder().RequireAssertion(_ => true).Build());
@@ -115,6 +117,7 @@ app.UseExceptionHandler();
 
 app.UseAuthentication();
 app.UseAuthorization();
+
 app.MapGet(
         "/digitaltwins/{id}",
         [Authorize]
@@ -209,18 +212,53 @@ app.MapGet(
         [Authorize]
         async (
             string id,
+            HttpContext httpContext,
             [FromServices] AgeDigitalTwinsClient client,
             CancellationToken cancellationToken
         ) =>
         {
-            return Results.Json(
-                new
+            string? relationshipName = httpContext.Request.Query["relationshipName"];
+
+            int? maxItemsPerPage = 2000; // Default value
+
+            // Parse max-items-per-page header
+            if (
+                httpContext.Request.Headers.TryGetValue(
+                    "max-items-per-page",
+                    out var maxItemsHeader
+                )
+            )
+            {
+                if (int.TryParse(maxItemsHeader, out var maxItems))
                 {
-                    value = await client
-                        .GetIncomingRelationshipsAsync<JsonDocument>(id, cancellationToken)
-                        .ToListAsync(cancellationToken),
+                    maxItemsPerPage = maxItems;
                 }
-            );
+            }
+
+            // Parse continuation token from query string
+            ContinuationToken? continuationToken = null;
+            if (
+                httpContext.Request.Query.TryGetValue(
+                    "continuationToken",
+                    out var continuationTokenStringValues
+                )
+            )
+            {
+                continuationToken = ContinuationToken.Deserialize(
+                    continuationTokenStringValues.ToString()
+                );
+                if (continuationToken == null)
+                {
+                    return Results.BadRequest(new { error = "Invalid continuation token." });
+                }
+            }
+
+            var page = await client
+                .GetIncomingRelationshipsAsync<JsonDocument>(id, cancellationToken)
+                .AsPages(continuationToken, maxItemsPerPage, cancellationToken)
+                .FirstAsync(cancellationToken);
+
+            return Results.Json(new PageWithNextLink<JsonDocument?>(page, httpContext.Request));
         }
     )
     .WithName("ListIncomingRelationships")
@@ -238,18 +276,47 @@ app.MapGet(
         ) =>
         {
             string? relationshipName = httpContext.Request.Query["relationshipName"];
-            return Results.Json(
-                new
+
+            int? maxItemsPerPage = 2000; // Default value
+
+            // Parse max-items-per-page header
+            if (
+                httpContext.Request.Headers.TryGetValue(
+                    "max-items-per-page",
+                    out var maxItemsHeader
+                )
+            )
+            {
+                if (int.TryParse(maxItemsHeader, out var maxItems))
                 {
-                    value = await client
-                        .GetRelationshipsAsync<JsonDocument>(
-                            id,
-                            relationshipName,
-                            cancellationToken
-                        )
-                        .ToListAsync(cancellationToken),
+                    maxItemsPerPage = maxItems;
                 }
-            );
+            }
+
+            // Parse continuation token from query string
+            ContinuationToken? continuationToken = null;
+            if (
+                httpContext.Request.Query.TryGetValue(
+                    "continuationToken",
+                    out var continuationTokenStringValues
+                )
+            )
+            {
+                continuationToken = ContinuationToken.Deserialize(
+                    continuationTokenStringValues.ToString()
+                );
+                if (continuationToken == null)
+                {
+                    return Results.BadRequest(new { error = "Invalid continuation token." });
+                }
+            }
+
+            var page = await client
+                .GetRelationshipsAsync<JsonDocument>(id, relationshipName, cancellationToken)
+                .AsPages(continuationToken, maxItemsPerPage, cancellationToken)
+                .FirstAsync(cancellationToken);
+
+            return Results.Json(new PageWithNextLink<JsonDocument?>(page, httpContext.Request));
         }
     )
     .WithName("ListRelationships")
@@ -365,6 +432,7 @@ app.MapPost(
         "/query",
         [Authorize]
         async (
+            HttpContext httpContext,
             JsonElement requestBody,
             [FromServices] AgeDigitalTwinsClient client,
             CancellationToken cancellationToken
@@ -382,20 +450,55 @@ app.MapPost(
                     }
                 );
             }
+
             string query = queryElement.GetString()!;
-            return Results.Json(
-                new
+
+            int? maxItemsPerPage = 2000; // Default value
+
+            // Parse max-items-per-page header
+            if (
+                httpContext.Request.Headers.TryGetValue(
+                    "max-items-per-page",
+                    out var maxItemsHeader
+                )
+            )
+            {
+                if (int.TryParse(maxItemsHeader, out var maxItems))
                 {
-                    value = await client
-                        .QueryAsync<JsonDocument>(query, cancellationToken)
-                        .ToListAsync(cancellationToken),
+                    maxItemsPerPage = maxItems;
                 }
-            );
+            }
+
+            // Parse continuation token from request body
+            ContinuationToken? continuationToken = null;
+            if (
+                requestBody.TryGetProperty(
+                    "continuationToken",
+                    out JsonElement continuationTokenElement
+                )
+                && continuationTokenElement.ValueKind == JsonValueKind.String
+            )
+            {
+                continuationToken = ContinuationToken.Deserialize(
+                    continuationTokenElement.GetString()!
+                );
+                if (continuationToken == null)
+                {
+                    return Results.BadRequest(new { error = "Invalid continuation token." });
+                }
+            }
+
+            var page = await client
+                .QueryAsync<JsonDocument>(query, cancellationToken)
+                .AsPages(continuationToken, maxItemsPerPage, cancellationToken)
+                .FirstAsync(cancellationToken);
+
+            return Results.Json(page);
         }
     )
     .WithName("Query")
     .WithTags("Query")
-    .WithSummary("Executes a query against the digital twins graph.");
+    .WithSummary("Executes a query against the digital twins graph with pagination.");
 
 app.MapGet(
         "/models",
@@ -424,13 +527,47 @@ app.MapGet(
                 IncludeModelDefinition = includeModelDefinition,
             };
 
-            return Results.Json(
-                new
+            int? maxItemsPerPage = 2000; // Default value
+
+            // Parse max-items-per-page header
+            if (
+                httpContext.Request.Headers.TryGetValue(
+                    "max-items-per-page",
+                    out var maxItemsHeader
+                )
+            )
+            {
+                if (int.TryParse(maxItemsHeader, out var maxItems))
                 {
-                    value = await client
-                        .GetModelsAsync(options, cancellationToken)
-                        .ToListAsync(cancellationToken),
+                    maxItemsPerPage = maxItems;
                 }
+            }
+
+            // Parse continuation token from query string
+            ContinuationToken? continuationToken = null;
+            if (
+                httpContext.Request.Query.TryGetValue(
+                    "continuationToken",
+                    out var continuationTokenStringValues
+                )
+            )
+            {
+                continuationToken = ContinuationToken.Deserialize(
+                    continuationTokenStringValues.ToString()
+                );
+                if (continuationToken == null)
+                {
+                    return Results.BadRequest(new { error = "Invalid continuation token." });
+                }
+            }
+
+            var page = await client
+                .GetModelsAsync(options, cancellationToken)
+                .AsPages(continuationToken, maxItemsPerPage, cancellationToken)
+                .FirstAsync(cancellationToken);
+
+            return Results.Json(
+                new PageWithNextLink<DigitalTwinsModelData?>(page, httpContext.Request)
             );
         }
     )

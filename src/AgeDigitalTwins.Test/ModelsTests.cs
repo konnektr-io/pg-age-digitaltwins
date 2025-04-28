@@ -4,6 +4,7 @@ using DTDLParser;
 
 namespace AgeDigitalTwins.Test;
 
+[Trait("Category", "Integration")]
 public class ModelsTests : TestBase
 {
     [Fact]

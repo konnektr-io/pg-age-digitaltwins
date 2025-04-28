@@ -1,10 +1,11 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using AgeDigitalTwins.Models;
-using Aspire.Hosting;
 
 namespace AgeDigitalTwins.ApiService.Test;
 
+[Trait("Category", "Integration")]
 public class ModelsIntegrationTests : IAsyncLifetime
 {
     private TestingAspireAppHost? _app;
@@ -64,26 +65,42 @@ public class ModelsIntegrationTests : IAsyncLifetime
             "/models",
             new StringContent(JsonSerializer.Serialize(jModels), Encoding.UTF8, "application/json")
         );
-
-        // Assert
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-
         var getResponse = await _httpClient!.GetAsync("/models");
         getResponse.EnsureSuccessStatusCode();
+
         string getResponseContent = await getResponse.Content.ReadAsStringAsync();
         JsonDocument getResponseJson = JsonDocument.Parse(getResponseContent);
         var results = getResponseJson.RootElement.GetProperty("value").EnumerateArray().ToList();
+
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True(results.Count > 0, "No models found in the response.");
     }
 
     [Fact]
     public async Task CreateModels_MultipleDependentModelsResolveInDb_ValidatedAndCreated()
     {
-        var delres1 = await _httpClient!.DeleteAsync("/models/dtmi:com:contoso:CelestialBody;1");
-        delres1.EnsureSuccessStatusCode();
-        var delres2 = await _httpClient!.DeleteAsync("/models/dtmi:com:contoso:Planet;1");
-        delres2.EnsureSuccessStatusCode();
-        var delres3 = await _httpClient!.DeleteAsync("/models/dtmi:com:contoso:Crater;1");
-        delres3.EnsureSuccessStatusCode();
+        // Clean up any existing models
+        try
+        {
+            var delres1 = await _httpClient!.DeleteAsync(
+                "/models/dtmi:com:contoso:CelestialBody;1"
+            );
+            delres1.EnsureSuccessStatusCode();
+        }
+        catch { }
+        try
+        {
+            var delres2 = await _httpClient!.DeleteAsync("/models/dtmi:com:contoso:Planet;1");
+            delres2.EnsureSuccessStatusCode();
+        }
+        catch { }
+        try
+        {
+            var delres3 = await _httpClient!.DeleteAsync("/models/dtmi:com:contoso:Crater;1");
+            delres3.EnsureSuccessStatusCode();
+        }
+        catch { }
 
         // Arrange
         string[] sModels = [SampleData.DtdlCelestialBody, SampleData.DtdlCrater];

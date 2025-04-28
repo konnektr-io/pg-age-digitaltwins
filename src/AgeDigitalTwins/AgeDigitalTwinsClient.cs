@@ -1,5 +1,6 @@
 using System;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using AgeDigitalTwins.Validation;
 using DTDLParser;
@@ -24,6 +25,7 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
     /// </summary>
     /// <param name="dataSource">The data source for connecting to the database.</param>
     /// <param name="graphName">The name of the graph to use. Defaults to "digitaltwins".</param>
+    /// <param name="noInitialization">If true, skips the initialization of the database and graph.</param>
     public AgeDigitalTwinsClient(
         NpgsqlMultiHostDataSource dataSource,
         string graphName = "digitaltwins"
@@ -47,12 +49,18 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
     /// </summary>
     /// <param name="connectionString">The connection string for the database.</param>
     /// <param name="graphName">The name of the graph to use. Defaults to "digitaltwins".</param>
-    public AgeDigitalTwinsClient(string connectionString, string graphName = "digitaltwins")
+    /// <param name="loadAgeFromPlugins">If true, loads the Age extension from plugins.</param>
+    /// <param name="noInitialization">If true, skips the initialization of the database and graph.</param>
+    public AgeDigitalTwinsClient(
+        string connectionString,
+        string graphName = "digitaltwins",
+        bool loadAgeFromPlugins = false
+    )
     {
         NpgsqlConnectionStringBuilder connectionStringBuilder =
             new(connectionString) { SearchPath = "ag_catalog, \"$user\", public" };
         NpgsqlDataSourceBuilder dataSourceBuilder = new(connectionStringBuilder.ConnectionString);
-        _dataSource = dataSourceBuilder.UseAge(true).BuildMultiHost();
+        _dataSource = dataSourceBuilder.UseAge(loadAgeFromPlugins).BuildMultiHost();
 
         _graphName = graphName;
         _modelParser = new(
