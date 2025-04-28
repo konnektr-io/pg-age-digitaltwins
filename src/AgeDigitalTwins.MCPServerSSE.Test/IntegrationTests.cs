@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Xunit;
 
+[Trait("Category", "Integration")]
 public class IntegrationTests
 {
     private readonly HttpClient _client;

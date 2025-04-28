@@ -27,7 +27,7 @@ AgeDigitalTwins is an SDK and API designed to support Digital Twins applications
     - [ ] Type check functions
   - [x] Error handling
   - [x] ETags
-  - [ ] Pagination
+  - [x] Pagination
   - [ ] Components
   - [ ] Telemetry
   - [ ] Diagnostics and Prometheus metrics

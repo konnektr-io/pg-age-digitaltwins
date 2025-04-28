@@ -7,7 +7,11 @@ namespace AgeDigitalTwins.ApiService;
 
 public class ExceptionHandler : Microsoft.AspNetCore.Diagnostics.IExceptionHandler
 {
-    public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
+    public async ValueTask<bool> TryHandleAsync(
+        HttpContext httpContext,
+        Exception exception,
+        CancellationToken cancellationToken
+    )
     {
         if (exception is AgeDigitalTwinsException ageException)
         {
@@ -21,13 +25,16 @@ public class ExceptionHandler : Microsoft.AspNetCore.Diagnostics.IExceptionHandl
         {
             httpContext.Response.StatusCode = StatusCodes.Status500InternalServerError;
         }
-        await httpContext.Response.WriteAsJsonAsync(new ProblemDetails
-        {
-            Title = "An error occurred",
-            Detail = $"{exception.Message}",
-            Type = exception.GetType().Name,
-            Status = httpContext.Response.StatusCode,
-        }, cancellationToken: cancellationToken);
+        await httpContext.Response.WriteAsJsonAsync(
+            new ProblemDetails
+            {
+                Title = "An error occurred",
+                Detail = $"{exception.Message}",
+                Type = exception.GetType().Name,
+                Status = httpContext.Response.StatusCode,
+            },
+            cancellationToken: cancellationToken
+        );
 
         return true;
     }
