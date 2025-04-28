@@ -618,7 +618,7 @@ public class QueryTests : TestBase
             .FirstAsync();
 
         Assert.NotNull(firstPage);
-        Assert.Equal(2, firstPage.Values.Count());
+        Assert.Equal(2, firstPage.Value.Count());
         Assert.NotNull(firstPage.ContinuationToken);
 
         // Second page
@@ -630,7 +630,7 @@ public class QueryTests : TestBase
             .FirstAsync();
 
         Assert.NotNull(secondPage);
-        Assert.Single(secondPage.Values);
+        Assert.Single(secondPage.Value);
         Assert.Null(secondPage.ContinuationToken);
     }
 
@@ -678,7 +678,7 @@ public class QueryTests : TestBase
             .FirstAsync();
 
         Assert.NotNull(firstPage);
-        Assert.Equal(2, firstPage.Values.Count());
+        Assert.Equal(2, firstPage.Value.Count());
         Assert.Null(firstPage.ContinuationToken);
     }
 
@@ -726,7 +726,7 @@ public class QueryTests : TestBase
             .FirstAsync();
 
         Assert.NotNull(firstPage);
-        Assert.Equal(2, firstPage.Values.Count());
+        Assert.Equal(2, firstPage.Value.Count());
         Assert.NotNull(firstPage.ContinuationToken);
 
         // Second page
@@ -738,7 +738,7 @@ public class QueryTests : TestBase
             .FirstAsync();
 
         Assert.NotNull(secondPage);
-        Assert.Equal(2, secondPage.Values.Count());
+        Assert.Equal(2, secondPage.Value.Count());
         Assert.Null(secondPage.ContinuationToken);
     }
 
@@ -786,14 +786,14 @@ public class QueryTests : TestBase
             .FirstAsync();
 
         Assert.NotNull(firstPage);
-        Assert.Equal(2, firstPage.Values.Count());
+        Assert.Equal(2, firstPage.Value.Count());
         Assert.Equal(
             "twin3",
-            firstPage.Values.First()!.RootElement.GetProperty("t").GetProperty("$dtId").GetString()
+            firstPage.Value.First()!.RootElement.GetProperty("t").GetProperty("$dtId").GetString()
         );
         Assert.Equal(
             "twin4",
-            firstPage.Values.Last()!.RootElement.GetProperty("t").GetProperty("$dtId").GetString()
+            firstPage.Value.Last()!.RootElement.GetProperty("t").GetProperty("$dtId").GetString()
         );
         Assert.NotNull(firstPage.ContinuationToken);
 
@@ -806,10 +806,10 @@ public class QueryTests : TestBase
             .FirstAsync();
 
         Assert.NotNull(secondPage);
-        Assert.Single(secondPage.Values);
+        Assert.Single(secondPage.Value);
         Assert.Equal(
             "twin5",
-            secondPage.Values.First()!.RootElement.GetProperty("t").GetProperty("$dtId").GetString()
+            secondPage.Value.First()!.RootElement.GetProperty("t").GetProperty("$dtId").GetString()
         );
         Assert.Null(secondPage.ContinuationToken);
     }
