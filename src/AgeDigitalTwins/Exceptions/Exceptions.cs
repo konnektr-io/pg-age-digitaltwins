@@ -3,12 +3,9 @@ using System.Net;
 
 namespace AgeDigitalTwins.Exceptions;
 
-public class AgeDigitalTwinsException : Exception
+public class AgeDigitalTwinsException(string message) : Exception(message)
 {
     public HttpStatusCode StatusCode { get; set; } = HttpStatusCode.InternalServerError;
-
-    public AgeDigitalTwinsException(string message)
-        : base(message) { }
 }
 
 public class PreconditionFailedException : AgeDigitalTwinsException
