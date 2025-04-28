@@ -1,9 +1,4 @@
 using System.Text.Json;
-using Azure.DigitalTwins.Core;
-using DTDLParser;
-using Json.More;
-using Json.Patch;
-using Json.Pointer;
 
 namespace AgeDigitalTwins.Test;
 
