@@ -160,10 +160,13 @@ public class DigitalTwinsIntegrationTests : IAsyncLifetime
             "/models",
             new StringContent(JsonSerializer.Serialize(jModels), Encoding.UTF8, "application/json")
         );
-        var createTwinResponse = _httpClient!.PutAsync(
+        var createTwinResponse = await _httpClient!.PutAsync(
             "/digitaltwins/crater1",
             new StringContent(SampleData.TwinCrater, Encoding.UTF8, "application/json")
         );
+        string twinResponseContent = await createTwinResponse.Content.ReadAsStringAsync();
+        JsonDocument twinJson = JsonDocument.Parse(twinResponseContent);
+        Assert.Equal("crater1", twinJson.RootElement.GetProperty("$dtId").GetString());
 
         // Wait for a few seconds to ensure the twin is created
         await Task.Delay(2000);
@@ -186,7 +189,8 @@ public class DigitalTwinsIntegrationTests : IAsyncLifetime
         foreach (var result in results)
         {
             var twinId = result.GetProperty("$dtId").GetString();
-            found = true;
+            if (twinId == "crater1")
+                found = true;
         }
         Assert.True(found);
     }

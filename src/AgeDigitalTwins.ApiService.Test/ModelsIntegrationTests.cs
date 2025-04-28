@@ -65,15 +65,16 @@ public class ModelsIntegrationTests : IAsyncLifetime
             "/models",
             new StringContent(JsonSerializer.Serialize(jModels), Encoding.UTF8, "application/json")
         );
-
-        // Assert
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-
         var getResponse = await _httpClient!.GetAsync("/models");
         getResponse.EnsureSuccessStatusCode();
+
         string getResponseContent = await getResponse.Content.ReadAsStringAsync();
         JsonDocument getResponseJson = JsonDocument.Parse(getResponseContent);
         var results = getResponseJson.RootElement.GetProperty("value").EnumerateArray().ToList();
+
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True(results.Count > 0, "No models found in the response.");
     }
 
     [Fact]

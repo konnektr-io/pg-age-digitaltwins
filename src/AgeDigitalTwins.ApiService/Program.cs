@@ -527,13 +527,47 @@ app.MapGet(
                 IncludeModelDefinition = includeModelDefinition,
             };
 
-            return Results.Json(
-                new
+            int? maxItemsPerPage = 2000; // Default value
+
+            // Parse max-items-per-page header
+            if (
+                httpContext.Request.Headers.TryGetValue(
+                    "max-items-per-page",
+                    out var maxItemsHeader
+                )
+            )
+            {
+                if (int.TryParse(maxItemsHeader, out var maxItems))
                 {
-                    value = await client
-                        .GetModelsAsync(options, cancellationToken)
-                        .ToListAsync(cancellationToken),
+                    maxItemsPerPage = maxItems;
                 }
+            }
+
+            // Parse continuation token from query string
+            ContinuationToken? continuationToken = null;
+            if (
+                httpContext.Request.Query.TryGetValue(
+                    "continuationToken",
+                    out var continuationTokenStringValues
+                )
+            )
+            {
+                continuationToken = ContinuationToken.Deserialize(
+                    continuationTokenStringValues.ToString()
+                );
+                if (continuationToken == null)
+                {
+                    return Results.BadRequest(new { error = "Invalid continuation token." });
+                }
+            }
+
+            var page = await client
+                .GetModelsAsync(options, cancellationToken)
+                .AsPages(continuationToken, maxItemsPerPage, cancellationToken)
+                .FirstAsync(cancellationToken);
+
+            return Results.Json(
+                new PageWithNextLink<DigitalTwinsModelData?>(page, httpContext.Request)
             );
         }
     )

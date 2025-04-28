@@ -38,9 +38,9 @@ public partial class AgeDigitalTwinsClient
     /// <param name="options">Options to filter and include model definitions.</param>
     /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
     /// <returns>An asynchronous enumerable of <see cref="DigitalTwinsModelData"/>.</returns>
-    public virtual async IAsyncEnumerable<DigitalTwinsModelData> GetModelsAsync(
+    public virtual CustomAsyncPageable<DigitalTwinsModelData?> GetModelsAsync(
         GetModelsOptions? options = null,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default
+        CancellationToken cancellationToken = default
     )
     {
         options ??= new GetModelsOptions();
@@ -73,19 +73,7 @@ public partial class AgeDigitalTwinsClient
                 @"RETURN {id:m.id, uploadTime: m.uploadTime, displayName: m.displayName, description: m.description, decommissioned: m.decommissioned} AS m";
         }
 
-        await using var connection = await _dataSource.OpenConnectionAsync(
-            TargetSessionAttributes.PreferStandby,
-            cancellationToken
-        );
-        await using var command = connection.CreateCypherCommand(_graphName, cypher);
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-
-        while (await reader.ReadAsync(cancellationToken))
-        {
-            var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
-            var vertex = (Vertex)agResult;
-            yield return new DigitalTwinsModelData(vertex.Properties);
-        }
+        return QueryAsync<DigitalTwinsModelData>(cypher, cancellationToken);
     }
 
     /// <summary>
