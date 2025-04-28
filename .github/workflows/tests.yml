@@ -14,6 +14,9 @@ on:
           - AgeDigitalTwins.ApiService.Test
           - AgeDigitalTwins.Events.Test
           - AgeDigitalTwins.MCPServerSSE.Test
+  pull_request:
+    branches:
+      - "main"
 
 jobs:
   build:
