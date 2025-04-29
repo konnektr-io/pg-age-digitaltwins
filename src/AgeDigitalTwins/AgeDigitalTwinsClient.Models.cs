@@ -86,7 +86,7 @@ MATCH (m:Model {{id: dependency}})
         CancellationToken cancellationToken = default
     )
     {
-        string cypher = $@"MATCH (m:Model {{id: '{modelId}'}}`) RETURN m";
+        string cypher = $@"MATCH (m:Model {{id: '{modelId}'}}) RETURN m";
         await using var connection = await _dataSource.OpenConnectionAsync(
             TargetSessionAttributes.PreferStandby,
             cancellationToken
