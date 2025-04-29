@@ -213,4 +213,34 @@ public class AzureDigitalTwinsSdkIntegrationTests : IAsyncLifetime
         }
         Assert.True(found);
     }
+
+    [Fact]
+    public async Task GetModels_WithValidModel_ReturnsModelDefinitions()
+    {
+        // Arrange
+        Assert.NotNull(_digitalTwinsClient);
+        await _digitalTwinsClient.CreateModelsAsync(
+            new List<string> { SampleData.DtdlCelestialBody, SampleData.DtdlCrater }
+        );
+        string modelId = "dtmi:com:contoso:Crater;1";
+
+        // Act
+        Assert.NotNull(_digitalTwinsClient);
+        AsyncPageable<DigitalTwinsModelData> models = _digitalTwinsClient.GetModelsAsync(
+            new() { IncludeModelDefinition = true }
+        );
+
+        // Assert
+        bool found = false;
+        await foreach (DigitalTwinsModelData model in models)
+        {
+            Assert.NotNull(model);
+            Assert.NotNull(model.DtdlModel);
+            if (model.Id == modelId)
+            {
+                found = true;
+            }
+        }
+        Assert.True(found);
+    }
 }

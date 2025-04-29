@@ -64,6 +64,16 @@ public class ModelsTests : TestBase
                 Assert.Contains("dtmi:com:contoso:Planet;1", results[i].Bases);
             }
         }
+
+        await foreach (
+            var modelData in Client.GetModelsAsync(new() { IncludeModelDefinition = true })
+        )
+        {
+            var modelId = modelData!.Id;
+            var modelJson = JsonDocument.Parse(modelData.DtdlModel!);
+            var modelIdFromJson = modelJson.RootElement.GetProperty("@id").GetString();
+            Assert.Equal(modelId, modelIdFromJson);
+        }
     }
 
     [Fact]
