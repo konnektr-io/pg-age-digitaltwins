@@ -144,4 +144,41 @@ public class ModelsIntegrationTests : IAsyncLifetime
             Assert.Equal(sampleDataId, resultId);
         }
     }
+
+    [Fact]
+    public async Task GetModels_WithIncludeModelDefinition_ReturnsFullModelContent()
+    {
+        // Arrange
+        string[] sModels = [SampleData.DtdlCrater];
+        List<JsonElement> jModels = sModels
+            .Select(m => JsonDocument.Parse(m))
+            .Select(j => j.RootElement)
+            .ToList();
+
+        // Act
+        var createResponse = await _httpClient!.PostAsync(
+            "/models",
+            new StringContent(JsonSerializer.Serialize(jModels), Encoding.UTF8, "application/json")
+        );
+        createResponse.EnsureSuccessStatusCode();
+
+        var getResponse = await _httpClient!.GetAsync(
+            "/models?api-version=2022-05-31&dependenciesFor=&includeModelDefinition=true"
+        );
+        getResponse.EnsureSuccessStatusCode();
+
+        string getResponseContent = await getResponse.Content.ReadAsStringAsync();
+        JsonDocument getResponseJson = JsonDocument.Parse(getResponseContent);
+        var results = getResponseJson.RootElement.GetProperty("value").EnumerateArray().ToList();
+
+        // Assert
+        Assert.True(results.Count > 0, "No models found in the response.");
+        foreach (var model in results)
+        {
+            Assert.True(
+                model.TryGetProperty("model", out _),
+                "Model content is not included in the response."
+            );
+        }
+    }
 }
