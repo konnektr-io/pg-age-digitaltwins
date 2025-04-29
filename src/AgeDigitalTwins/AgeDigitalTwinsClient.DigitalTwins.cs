@@ -279,9 +279,9 @@ public partial class AgeDigitalTwinsClient
 
             string cypher =
                 $@"WITH '{updatedDigitalTwinJson}'::agtype as twin
-                MERGE (t: Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})
-                SET t = twin
-                RETURN t";
+MERGE (t: Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})
+SET t = twin
+RETURN t";
             await using var connection = await _dataSource.OpenConnectionAsync(
                 Npgsql.TargetSessionAttributes.ReadWrite,
                 cancellationToken
@@ -422,9 +422,9 @@ public partial class AgeDigitalTwinsClient
 
         string cypher =
             $@"MATCH (t:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})
-            {string.Join("\n", updateTimeSetOperations)}
-            {string.Join("\n", patchOperations)}
-            RETURN t";
+{string.Join("\n", updateTimeSetOperations)}
+{string.Join("\n", patchOperations)}
+RETURN t";
         await using var connection = await _dataSource.OpenConnectionAsync(
             Npgsql.TargetSessionAttributes.ReadWrite,
             cancellationToken
@@ -453,8 +453,8 @@ public partial class AgeDigitalTwinsClient
     {
         string cypher =
             $@"MATCH (t:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}}) 
-            DELETE t
-            RETURN COUNT(t) AS deletedCount";
+DELETE t
+RETURN COUNT(t) AS deletedCount";
         await using var connection = await _dataSource.OpenConnectionAsync(
             Npgsql.TargetSessionAttributes.ReadWrite,
             cancellationToken

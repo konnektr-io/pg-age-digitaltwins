@@ -217,7 +217,6 @@ public partial class AgeDigitalTwinsClient
                             RowNumber = rowNumber,
                             Query = nextContinuationQuery,
                         };
-                ;
 
                 return (results, nextContinuationToken);
             }
