@@ -23,7 +23,7 @@ public partial class AgeDigitalTwinsClient
         else
         {
             // Always make sure we are using the last version of all functions and indexes
-            await InitializeGraphAsync(cancellationToken);
+            await GraphUpdateFunctionsAsync(cancellationToken);
         }
     }
 
@@ -56,7 +56,18 @@ public partial class AgeDigitalTwinsClient
         await using var command = connection.CreateGraphCommand(_graphName);
         await command.ExecuteNonQueryAsync(cancellationToken);
 
-        await InitializeGraphAsync(cancellationToken);
+        using var batch = new NpgsqlBatch(connection);
+        foreach (
+            NpgsqlBatchCommand initBatchCommand in GraphInitialization.GetGraphInitCommands(
+                _graphName
+            )
+        )
+        {
+            batch.BatchCommands.Add(initBatchCommand);
+        }
+        await batch.ExecuteNonQueryAsync(cancellationToken);
+
+        await GraphUpdateFunctionsAsync(cancellationToken);
     }
 
     /// <summary>
@@ -80,18 +91,18 @@ public partial class AgeDigitalTwinsClient
     /// <param name="connection"></param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
-    private async Task InitializeGraphAsync(CancellationToken cancellationToken = default)
+    private async Task GraphUpdateFunctionsAsync(CancellationToken cancellationToken = default)
     {
         await using var connection = await _dataSource.OpenConnectionAsync(
             TargetSessionAttributes.ReadWrite,
             cancellationToken
         );
 
-        // Initialize the graph by creating labels, indexes, functions, ...
         // Graph should already exist at this point
+        // Create or Replace Functions to get the latest versions of the functions
         using var batch = new NpgsqlBatch(connection);
         foreach (
-            NpgsqlBatchCommand initBatchCommand in GraphInitialization.GetGraphInitCommands(
+            NpgsqlBatchCommand initBatchCommand in GraphInitialization.GetGraphUpdateFunctionsCommands(
                 _graphName
             )
         )
