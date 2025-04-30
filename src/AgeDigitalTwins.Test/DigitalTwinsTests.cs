@@ -281,9 +281,6 @@ public class DigitalTwinsTests : TestBase
         )!;
         await Client.UpdateDigitalTwinAsync(readTwin!.Id, jsonPatch);
 
-        // Wait for the update to be reflected in the database
-        await Task.Delay(100);
-
         // Read digital twin
         var secondReadTwin = await Client.GetDigitalTwinAsync<BasicDigitalTwin>(readTwin.Id);
         Assert.NotNull(secondReadTwin);
