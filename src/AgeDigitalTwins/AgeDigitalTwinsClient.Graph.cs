@@ -16,11 +16,15 @@ public partial class AgeDigitalTwinsClient
     {
         if (await GraphExistsAsync(cancellationToken) != true)
         {
+            // When a new graph is created, it will also be initialized
+            // with labels, indexes, functions, etc.
             await CreateGraphAsync(cancellationToken);
         }
-
-        // Always make sure we are using the last version of all functions and indexes
-        await InitializeGraphAsync(cancellationToken);
+        else
+        {
+            // Always make sure we are using the last version of all functions and indexes
+            await InitializeGraphAsync(cancellationToken);
+        }
     }
 
     /// <summary>
@@ -83,10 +87,8 @@ public partial class AgeDigitalTwinsClient
             cancellationToken
         );
 
-        await using var command = connection.CreateGraphCommand(_graphName);
-        await command.ExecuteNonQueryAsync(cancellationToken);
-
         // Initialize the graph by creating labels, indexes, functions, ...
+        // Graph should already exist at this point
         using var batch = new NpgsqlBatch(connection);
         foreach (
             NpgsqlBatchCommand initBatchCommand in GraphInitialization.GetGraphInitCommands(
