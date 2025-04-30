@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using AgeDigitalTwins.Models;
 using Microsoft.AspNetCore.WebUtilities;
 
@@ -5,6 +6,7 @@ namespace AgeDigitalTwins.ApiService.Models;
 
 public class PageWithNextLink<T> : Page<T>
 {
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Uri? NextLink { get; set; }
 
     public PageWithNextLink(Page<T> page, HttpRequest request)

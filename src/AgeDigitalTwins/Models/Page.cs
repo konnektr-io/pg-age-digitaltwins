@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace AgeDigitalTwins.Models;
 
@@ -10,5 +11,7 @@ namespace AgeDigitalTwins.Models;
 public class Page<T>
 {
     public IEnumerable<T> Value { get; set; } = [];
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public ContinuationToken? ContinuationToken { get; set; }
 }
