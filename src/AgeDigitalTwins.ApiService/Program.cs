@@ -108,10 +108,10 @@ builder.Services.AddRequestTimeouts();
 builder.Services.AddOutputCache();
 
 // Configure JSON serialization options to omit null values and use camelCase naming
-builder.Services.Configure<JsonOptions>(options =>
+builder.Services.ConfigureHttpJsonOptions(options =>
 {
-    options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
-    options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+    options.SerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+    options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
 });
 
 var app = builder.Build();
@@ -164,9 +164,7 @@ app.MapPut(
             {
                 etag = etagValues[0];
             }
-            return Results.Json(
-                client.CreateOrReplaceDigitalTwinAsync(id, digitalTwin, etag, cancellationToken)
-            );
+            return client.CreateOrReplaceDigitalTwinAsync(id, digitalTwin, etag, cancellationToken);
         }
     )
     .WithName("CreateOrReplaceDigitalTwin")
@@ -343,9 +341,7 @@ app.MapGet(
             CancellationToken cancellationToken
         ) =>
         {
-            return Results.Json(
-                client.GetRelationshipAsync<JsonDocument>(id, relationshipId, cancellationToken)
-            );
+            return client.GetRelationshipAsync<JsonDocument>(id, relationshipId, cancellationToken);
         }
     )
     .WithName("GetRelationship")
@@ -375,14 +371,12 @@ app.MapPut(
             {
                 etag = etagValues[0];
             }
-            return Results.Json(
-                client.CreateOrReplaceRelationshipAsync(
-                    id,
-                    relationshipId,
-                    relationship,
-                    etag,
-                    cancellationToken
-                )
+            return client.CreateOrReplaceRelationshipAsync(
+                id,
+                relationshipId,
+                relationship,
+                etag,
+                cancellationToken
             );
         }
     )
@@ -506,7 +500,6 @@ app.MapPost(
                 .QueryAsync<JsonDocument>(query, cancellationToken)
                 .AsPages(continuationToken, maxItemsPerPage, cancellationToken)
                 .FirstAsync(cancellationToken);
-
             return Results.Json(page);
         }
     )
@@ -598,9 +591,7 @@ app.MapPost(
             CancellationToken cancellationToken
         ) =>
         {
-            return Results.Json(
-                client.CreateModelsAsync(models.Select(m => m.GetRawText()), cancellationToken)
-            );
+            return client.CreateModelsAsync(models.Select(m => m.GetRawText()), cancellationToken);
         }
     )
     .WithName("CreateModels")
@@ -645,7 +636,7 @@ if (app.Environment.IsDevelopment())
         "graph/create",
         ([FromServices] AgeDigitalTwinsClient client, CancellationToken cancellationToken) =>
         {
-            return Results.Json(client.CreateGraphAsync(cancellationToken));
+            return client.CreateGraphAsync(cancellationToken);
         }
     );
     // This endpoint is only used for cleanup in tests
@@ -653,7 +644,7 @@ if (app.Environment.IsDevelopment())
         "graph/delete",
         ([FromServices] AgeDigitalTwinsClient client, CancellationToken cancellationToken) =>
         {
-            return Results.Json(client.DropGraphAsync(cancellationToken));
+            return client.DropGraphAsync(cancellationToken);
         }
     );
 }
