@@ -55,7 +55,7 @@ public partial class AgeDigitalTwinsClient
     )
     {
         string cypher =
-            $"MATCH (t:Twin) WHERE t['$dtId'] = '{digitalTwinId.Replace("'", "\\'")}' AND t['$etag'] = '{etag}' RETURN t";
+            $"MATCH (t:Twin {{ `$dtId`: '{digitalTwinId.Replace("'", "\\'")}', `$etag`: '{etag}'}}) RETURN t";
         await using var connection = await _dataSource.OpenConnectionAsync(
             Npgsql.TargetSessionAttributes.PreferStandby,
             cancellationToken
@@ -380,14 +380,16 @@ RETURN t";
                     propertyValue = op.Value.ToString();
                 }
 
+                // Set the property value directly (doesn't support nested properties)
                 if (pathParts.Length == 1)
                 {
                     patchOperations.Add($"SET t.{pathParts.First()} = {propertyValue}");
                 }
+                // Use custom function to set the property value on nested properties
                 else if (pathParts.Length > 1)
                 {
                     patchOperations.Add(
-                        $"SET t = {_graphName}.agtype_set(t, ['{string.Join("','", pathParts)}'], {propertyValue})"
+                        $"SET t = {_graphName}.agtype_set(properties(t), ['{string.Join("','", pathParts)}'], {propertyValue})"
                     );
                 }
             }
