@@ -41,7 +41,7 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
                     _dataSource.ParserDtmiResolverAsync(_graphName, dtmis, ct),
             }
         );
-        InitializeGraphAsync().GetAwaiter().GetResult();
+        InitializeAsync().GetAwaiter().GetResult();
     }
 
     /// <summary>
@@ -71,7 +71,7 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
                     _dataSource.ParserDtmiResolverAsync(_graphName, dtmis, ct),
             }
         );
-        InitializeGraphAsync().GetAwaiter().GetResult();
+        InitializeAsync().GetAwaiter().GetResult();
     }
 
     /// <summary>

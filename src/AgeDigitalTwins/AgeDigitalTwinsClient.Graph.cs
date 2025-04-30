@@ -12,12 +12,15 @@ public partial class AgeDigitalTwinsClient
     /// </summary>
     /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
     /// <returns>A task that represents the asynchronous operation.</returns>
-    public virtual async Task InitializeGraphAsync(CancellationToken cancellationToken = default)
+    public virtual async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
         if (await GraphExistsAsync(cancellationToken) != true)
         {
             await CreateGraphAsync(cancellationToken);
         }
+
+        // Always make sure we are using the last version of all functions and indexes
+        await InitializeGraphAsync(cancellationToken);
     }
 
     /// <summary>
@@ -49,17 +52,7 @@ public partial class AgeDigitalTwinsClient
         await using var command = connection.CreateGraphCommand(_graphName);
         await command.ExecuteNonQueryAsync(cancellationToken);
 
-        // Initialize the graph by creating labels, indexes, functions, ...
-        using var batch = new NpgsqlBatch(connection);
-        foreach (
-            NpgsqlBatchCommand initBatchCommand in GraphInitialization.GetGraphInitCommands(
-                _graphName
-            )
-        )
-        {
-            batch.BatchCommands.Add(initBatchCommand);
-        }
-        await batch.ExecuteNonQueryAsync(cancellationToken);
+        await InitializeGraphAsync(cancellationToken);
     }
 
     /// <summary>
@@ -75,5 +68,34 @@ public partial class AgeDigitalTwinsClient
         );
         await using var command = connection.DropGraphCommand(_graphName);
         await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Initializes the graph by creating labels, indexes, functions, etc.
+    /// </summary>
+    /// <param name="connection"></param>
+    /// <param name="cancellationToken"></param>
+    /// <returns></returns>
+    private async Task InitializeGraphAsync(CancellationToken cancellationToken = default)
+    {
+        await using var connection = await _dataSource.OpenConnectionAsync(
+            TargetSessionAttributes.ReadWrite,
+            cancellationToken
+        );
+
+        await using var command = connection.CreateGraphCommand(_graphName);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+
+        // Initialize the graph by creating labels, indexes, functions, ...
+        using var batch = new NpgsqlBatch(connection);
+        foreach (
+            NpgsqlBatchCommand initBatchCommand in GraphInitialization.GetGraphInitCommands(
+                _graphName
+            )
+        )
+        {
+            batch.BatchCommands.Add(initBatchCommand);
+        }
+        await batch.ExecuteNonQueryAsync(cancellationToken);
     }
 }
