@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using AgeDigitalTwins;
 using AgeDigitalTwins.ApiService;
 using AgeDigitalTwins.ApiService.Models;
@@ -106,6 +107,13 @@ else
 builder.Services.AddRequestTimeouts();
 builder.Services.AddOutputCache();
 
+// Configure JSON serialization options to omit null values and use camelCase naming
+builder.Services.Configure<JsonOptions>(options =>
+{
+    options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+    options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+});
+
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
@@ -156,7 +164,9 @@ app.MapPut(
             {
                 etag = etagValues[0];
             }
-            return client.CreateOrReplaceDigitalTwinAsync(id, digitalTwin, etag, cancellationToken);
+            return Results.Json(
+                client.CreateOrReplaceDigitalTwinAsync(id, digitalTwin, etag, cancellationToken)
+            );
         }
     )
     .WithName("CreateOrReplaceDigitalTwin")
@@ -333,7 +343,9 @@ app.MapGet(
             CancellationToken cancellationToken
         ) =>
         {
-            return client.GetRelationshipAsync<JsonDocument>(id, relationshipId, cancellationToken);
+            return Results.Json(
+                client.GetRelationshipAsync<JsonDocument>(id, relationshipId, cancellationToken)
+            );
         }
     )
     .WithName("GetRelationship")
@@ -363,12 +375,14 @@ app.MapPut(
             {
                 etag = etagValues[0];
             }
-            return client.CreateOrReplaceRelationshipAsync(
-                id,
-                relationshipId,
-                relationship,
-                etag,
-                cancellationToken
+            return Results.Json(
+                client.CreateOrReplaceRelationshipAsync(
+                    id,
+                    relationshipId,
+                    relationship,
+                    etag,
+                    cancellationToken
+                )
             );
         }
     )
@@ -584,7 +598,9 @@ app.MapPost(
             CancellationToken cancellationToken
         ) =>
         {
-            return client.CreateModelsAsync(models.Select(m => m.GetRawText()), cancellationToken);
+            return Results.Json(
+                client.CreateModelsAsync(models.Select(m => m.GetRawText()), cancellationToken)
+            );
         }
     )
     .WithName("CreateModels")
@@ -621,7 +637,6 @@ app.MapDelete(
     .WithTags("Models")
     .WithSummary("Deletes a specific model by its ID.");
 
-// This endpoint is only used for cleanup in tests
 // When the client is initiated, a new graph will automatically be created if the specified graph doesn't exist
 // Creating and dropping graphs should be done in the control plane
 if (app.Environment.IsDevelopment())
@@ -630,14 +645,15 @@ if (app.Environment.IsDevelopment())
         "graph/create",
         ([FromServices] AgeDigitalTwinsClient client, CancellationToken cancellationToken) =>
         {
-            return client.CreateGraphAsync(cancellationToken);
+            return Results.Json(client.CreateGraphAsync(cancellationToken));
         }
     );
+    // This endpoint is only used for cleanup in tests
     app.MapDelete(
         "graph/delete",
         ([FromServices] AgeDigitalTwinsClient client, CancellationToken cancellationToken) =>
         {
-            return client.DropGraphAsync(cancellationToken);
+            return Results.Json(client.DropGraphAsync(cancellationToken));
         }
     );
 }
