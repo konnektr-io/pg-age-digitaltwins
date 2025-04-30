@@ -359,7 +359,7 @@ RETURN rel";
                 )
                 {
                     patchOperations.Add(
-                        $"SET rel = {_graphName}.agtype_set(properties(t),['{string.Join("','", path.Split('.'))}'],'{JsonSerializer.Serialize(op.Value, serializerOptions).Replace("'", "\\'")}')"
+                        $"SET rel = {_graphName}.agtype_set(properties(t),['{string.Join("','", path.Split('.'))}'],'{JsonSerializer.Serialize(op.Value, serializerOptions).Replace("'", "\\'")}'::agtype)"
                     );
                 }
                 else if (op.Value.GetValueKind() == JsonValueKind.String)

@@ -369,7 +369,7 @@ RETURN t";
                 )
                 {
                     propertyValue =
-                        $"'{JsonSerializer.Serialize(op.Value, serializerOptions).Replace("'", "\\'")}'";
+                        $"'{JsonSerializer.Serialize(op.Value, serializerOptions).Replace("'", "\\'")}'::agtype";
                 }
                 else if (op.Value.GetValueKind() == JsonValueKind.String)
                 {
