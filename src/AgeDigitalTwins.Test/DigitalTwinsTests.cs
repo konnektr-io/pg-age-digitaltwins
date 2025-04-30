@@ -250,10 +250,10 @@ public class DigitalTwinsTests : TestBase
                 }},
                 {""op"": ""remove"", ""path"": ""/humidity""}]"
         )!;
-        await Client.UpdateDigitalTwinAsync(digitalTwin!.Id, jsonPatch);
+        await Client.UpdateDigitalTwinAsync(createdTwin!.Id, jsonPatch);
 
         // Read digital twin
-        var readTwin = await Client.GetDigitalTwinAsync<BasicDigitalTwin>(digitalTwin.Id);
+        var readTwin = await Client.GetDigitalTwinAsync<BasicDigitalTwin>(createdTwin.Id);
         Assert.NotNull(readTwin);
         Assert.Equal(digitalTwin.Id, readTwin.Id);
         Assert.Equal(
@@ -270,10 +270,10 @@ public class DigitalTwinsTests : TestBase
         jsonPatch = JsonSerializer.Deserialize<JsonPatch>(
             @"[{""op"": ""replace"", ""path"": ""/dimensions/length"", ""value"": 7.0}]"
         )!;
-        await Client.UpdateDigitalTwinAsync(digitalTwin!.Id, jsonPatch);
+        await Client.UpdateDigitalTwinAsync(readTwin!.Id, jsonPatch);
 
         // Read digital twin
-        readTwin = await Client.GetDigitalTwinAsync<BasicDigitalTwin>(digitalTwin.Id);
+        readTwin = await Client.GetDigitalTwinAsync<BasicDigitalTwin>(readTwin.Id);
         Assert.NotNull(readTwin);
         Assert.Equal(digitalTwin.Id, readTwin.Id);
         Assert.Equal(
@@ -300,8 +300,10 @@ public class DigitalTwinsTests : TestBase
 
         // Create digital twin
         var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinPlanetEarth);
-        digitalTwin!.Id = "earthTwin";
-        var createdTwin = await Client.CreateOrReplaceDigitalTwinAsync(digitalTwin.Id, digitalTwin);
+        var createdTwin = await Client.CreateOrReplaceDigitalTwinAsync(
+            digitalTwin!.Id,
+            digitalTwin
+        );
 
         Assert.NotNull(createdTwin);
         Assert.Equal(digitalTwin.Id, createdTwin.Id);
