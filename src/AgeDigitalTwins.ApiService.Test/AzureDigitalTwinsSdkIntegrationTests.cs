@@ -269,7 +269,8 @@ public class AzureDigitalTwinsSdkIntegrationTests : IAsyncLifetime
         Assert.NotNull(_digitalTwinsClient);
 
         // Assert
-        int count = 0;
+        int twinCount = 0;
+        int pageCount = 0;
         await foreach (
             Page<BasicDigitalTwin> page in _digitalTwinsClient
                 .QueryAsync<BasicDigitalTwin>(query)
@@ -277,9 +278,10 @@ public class AzureDigitalTwinsSdkIntegrationTests : IAsyncLifetime
         )
         {
             Assert.NotNull(page);
-            Assert.Single(page.Values);
-            count++;
+            twinCount += page.Values.Count;
+            pageCount++;
         }
-        Assert.True(count > 1, "Expected multiple pages of results but found only one page.");
+        Assert.True(pageCount > 1, "Expected multiple pages of results but found only one page.");
+        Assert.Equal(3, twinCount);
     }
 }
