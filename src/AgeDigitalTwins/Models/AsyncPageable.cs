@@ -29,7 +29,22 @@ public class AsyncPageable<T>(
     private const int DefaultPageSize = 2000;
 
     public async IAsyncEnumerable<Page<T>> AsPages(
-        ContinuationToken? continuationToken = default,
+        string? continuationToken = null,
+        int? pageSizeHint = DefaultPageSize,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default
+    )
+    {
+        ContinuationToken? token =
+            continuationToken != null ? ContinuationToken.Deserialize(continuationToken) : null;
+
+        await foreach (Page<T> page in AsPages(token, pageSizeHint, cancellationToken))
+        {
+            yield return page;
+        }
+    }
+
+    internal async IAsyncEnumerable<Page<T>> AsPages(
+        ContinuationToken? continuationToken = null,
         int? pageSizeHint = DefaultPageSize,
         [EnumeratorCancellation] CancellationToken cancellationToken = default
     )
@@ -42,7 +57,11 @@ public class AsyncPageable<T>(
                 cancellationToken
             );
 
-            yield return new Page<T> { ContinuationToken = nextContinuationToken, Value = items };
+            yield return new Page<T>
+            {
+                ContinuationToken = nextContinuationToken?.ToString(),
+                Value = items,
+            };
 
             continuationToken = nextContinuationToken;
         } while (continuationToken != null);
@@ -52,7 +71,9 @@ public class AsyncPageable<T>(
         CancellationToken cancellationToken = default
     )
     {
-        await foreach (Page<T> page in AsPages(cancellationToken: cancellationToken))
+        await foreach (
+            Page<T> page in AsPages((ContinuationToken?)null, cancellationToken: cancellationToken)
+        )
         {
             foreach (T item in page.Value)
             {

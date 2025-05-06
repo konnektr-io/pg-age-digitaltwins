@@ -243,4 +243,43 @@ public class AzureDigitalTwinsSdkIntegrationTests : IAsyncLifetime
         }
         Assert.True(found);
     }
+
+    [Fact]
+    public async Task Query_SupportsPagination()
+    {
+        // Arrange
+        Assert.NotNull(_digitalTwinsClient);
+        await _digitalTwinsClient.CreateModelsAsync(new List<string> { SampleData.DtdlCrater });
+
+        var crater1 = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinCrater)!;
+        crater1.Id = "crater1";
+        await _digitalTwinsClient.CreateOrReplaceDigitalTwinAsync(crater1.Id, crater1);
+
+        var crater2 = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinCrater)!;
+        crater2.Id = "crater2";
+        await _digitalTwinsClient.CreateOrReplaceDigitalTwinAsync(crater2.Id, crater2);
+
+        var crater3 = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinCrater)!;
+        crater3.Id = "crater3";
+        await _digitalTwinsClient.CreateOrReplaceDigitalTwinAsync(crater3.Id, crater3);
+
+        string query = "SELECT * FROM digitaltwins";
+
+        // Act
+        Assert.NotNull(_digitalTwinsClient);
+
+        // Assert
+        int count = 0;
+        await foreach (
+            Page<BasicDigitalTwin> page in _digitalTwinsClient
+                .QueryAsync<BasicDigitalTwin>(query)
+                .AsPages(pageSizeHint: 1)
+        )
+        {
+            Assert.NotNull(page);
+            Assert.Single(page.Values);
+            count++;
+        }
+        Assert.True(count > 1, "Expected multiple pages of results but found only one page.");
+    }
 }
