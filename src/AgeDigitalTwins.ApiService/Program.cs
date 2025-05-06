@@ -469,13 +469,7 @@ app.MapPost(
                 && queryElement.ValueKind == JsonValueKind.String
             )
             {
-                query = queryElement.GetString()!;
-                return Results.BadRequest(
-                    new
-                    {
-                        error = "Invalid request body. Expected a JSON object with a 'query' property.",
-                    }
-                );
+                query = queryElement.GetString();
             }
 
             if (string.IsNullOrEmpty(continuationToken) && string.IsNullOrEmpty(query))
