@@ -22,7 +22,7 @@ public partial class AgeDigitalTwinsClient
     /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
     /// <returns>An asynchronous enumerable of query results.</returns>
     public virtual AsyncPageable<T?> QueryAsync<T>(
-        string query,
+        string? query,
         CancellationToken cancellationToken = default
     )
     {
@@ -37,16 +37,24 @@ public partial class AgeDigitalTwinsClient
                 }
                 // ADT query that needs to be converted
                 else if (
-                    query.Contains("SELECT", StringComparison.InvariantCultureIgnoreCase)
+                    !string.IsNullOrEmpty(query)
+                    && query.Contains("SELECT", StringComparison.InvariantCultureIgnoreCase)
                     && !query.Contains("RETURN", StringComparison.InvariantCultureIgnoreCase)
                 )
                 {
                     cypher = AdtQueryHelpers.ConvertAdtQueryToCypher(query, _graphName);
                 }
                 // New Cypher query
-                else
+                else if (!string.IsNullOrEmpty(query))
                 {
                     cypher = query;
+                }
+                else
+                {
+                    throw new ArgumentNullException(
+                        nameof(query),
+                        "Query cannot be null or empty."
+                    );
                 }
 
                 // Store the query before modifying it for pagination

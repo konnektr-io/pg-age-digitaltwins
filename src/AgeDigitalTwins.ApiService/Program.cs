@@ -434,21 +434,6 @@ app.MapPost(
             CancellationToken cancellationToken
         ) =>
         {
-            if (
-                !requestBody.TryGetProperty("query", out JsonElement queryElement)
-                || queryElement.ValueKind != JsonValueKind.String
-            )
-            {
-                return Results.BadRequest(
-                    new
-                    {
-                        error = "Invalid request body. Expected a JSON object with a 'query' property.",
-                    }
-                );
-            }
-
-            string query = queryElement.GetString()!;
-
             int? maxItemsPerPage = 2000; // Default value
 
             // Parse max-items-per-page header
@@ -476,6 +461,31 @@ app.MapPost(
             )
             {
                 continuationToken = continuationTokenElement.GetString();
+            }
+
+            string? query = null;
+            if (
+                requestBody.TryGetProperty("query", out JsonElement queryElement)
+                && queryElement.ValueKind == JsonValueKind.String
+            )
+            {
+                query = queryElement.GetString()!;
+                return Results.BadRequest(
+                    new
+                    {
+                        error = "Invalid request body. Expected a JSON object with a 'query' property.",
+                    }
+                );
+            }
+
+            if (string.IsNullOrEmpty(continuationToken) && string.IsNullOrEmpty(query))
+            {
+                return Results.BadRequest(
+                    new
+                    {
+                        error = "Invalid request body. Expected a JSON object with a 'query' property.",
+                    }
+                );
             }
 
             var page = await client
