@@ -21,7 +21,6 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
     private readonly JsonSerializerOptions serializerOptions =
         new() { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
-    // Add a static ActivitySource for telemetry
     private static readonly ActivitySource ActivitySource = new("AgeDigitalTwins.SDK", "1.0.0");
 
     /// <summary>

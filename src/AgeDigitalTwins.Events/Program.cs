@@ -73,9 +73,11 @@ app.Lifetime.ApplicationStarted.Register(async () =>
     }
 });
 
-app.Lifetime.ApplicationStopping.Register(() =>
+app.Lifetime.ApplicationStopping.Register(async () =>
 {
     cts.Cancel();
+    // Wait for the subscription to finish processing before disposing
+    await subscription.DisposeAsync();
 });
 
 app.UseRequestTimeouts();
