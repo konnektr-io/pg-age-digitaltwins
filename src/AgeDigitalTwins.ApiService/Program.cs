@@ -243,8 +243,8 @@ app.MapGet(
                 }
             }
 
-            // Parse continuation token from query string
-            ContinuationToken? continuationToken = null;
+            // Get continuation token from query string
+            string? continuationToken = null;
             if (
                 httpContext.Request.Query.TryGetValue(
                     "continuationToken",
@@ -252,13 +252,7 @@ app.MapGet(
                 )
             )
             {
-                continuationToken = ContinuationToken.Deserialize(
-                    continuationTokenStringValues.ToString()
-                );
-                if (continuationToken == null)
-                {
-                    return Results.BadRequest(new { error = "Invalid continuation token." });
-                }
+                continuationToken = continuationTokenStringValues.ToString();
             }
 
             var page = await client
@@ -301,8 +295,8 @@ app.MapGet(
                 }
             }
 
-            // Parse continuation token from query string
-            ContinuationToken? continuationToken = null;
+            // Get continuation token from query string
+            string? continuationToken = null;
             if (
                 httpContext.Request.Query.TryGetValue(
                     "continuationToken",
@@ -310,13 +304,7 @@ app.MapGet(
                 )
             )
             {
-                continuationToken = ContinuationToken.Deserialize(
-                    continuationTokenStringValues.ToString()
-                );
-                if (continuationToken == null)
-                {
-                    return Results.BadRequest(new { error = "Invalid continuation token." });
-                }
+                continuationToken = continuationTokenStringValues.ToString();
             }
 
             var page = await client
@@ -477,8 +465,8 @@ app.MapPost(
                 }
             }
 
-            // Parse continuation token from request body
-            ContinuationToken? continuationToken = null;
+            // Get continuation token from request body
+            string? continuationToken = null;
             if (
                 requestBody.TryGetProperty(
                     "continuationToken",
@@ -487,13 +475,7 @@ app.MapPost(
                 && continuationTokenElement.ValueKind == JsonValueKind.String
             )
             {
-                continuationToken = ContinuationToken.Deserialize(
-                    continuationTokenElement.GetString()!
-                );
-                if (continuationToken == null)
-                {
-                    return Results.BadRequest(new { error = "Invalid continuation token." });
-                }
+                continuationToken = continuationTokenElement.GetString();
             }
 
             var page = await client
@@ -550,8 +532,8 @@ app.MapGet(
                 }
             }
 
-            // Parse continuation token from query string
-            ContinuationToken? continuationToken = null;
+            // Get continuation token from query string
+            string? continuationToken = null;
             if (
                 httpContext.Request.Query.TryGetValue(
                     "continuationToken",
@@ -559,13 +541,7 @@ app.MapGet(
                 )
             )
             {
-                continuationToken = ContinuationToken.Deserialize(
-                    continuationTokenStringValues.ToString()
-                );
-                if (continuationToken == null)
-                {
-                    return Results.BadRequest(new { error = "Invalid continuation token." });
-                }
+                continuationToken = continuationTokenStringValues.ToString();
             }
 
             var page = await client
