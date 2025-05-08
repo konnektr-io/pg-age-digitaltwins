@@ -1,0 +1,29 @@
+# Installation
+
+## Installing with Helm (Kubernetes)
+
+The preferred way to install AgeDigitalTwins is using Helm. Ensure you have Helm installed and configured on your Kubernetes cluster.
+
+### Steps
+
+1. Add the Konnektr Helm repository:
+
+   ```bash
+   helm repo add konnektr https://konnektr-io.github.io/charts
+   ```
+
+2. Install the AgeDigitalTwins chart:
+
+   ```bash
+   helm install my-agedigitaltwins konnektr/agedigitaltwins --values my-values.yaml
+   ```
+
+3. Verify the installation:
+
+   ```bash
+   kubectl get pods
+   ```
+
+## Hosted Version Setup
+
+*This section is a placeholder for the upcoming hosted version setup. Stay tuned for updates.*
