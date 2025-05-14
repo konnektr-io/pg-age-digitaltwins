@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
@@ -12,6 +13,8 @@ namespace AgeDigitalTwins.Events;
 
 public class AgeDigitalTwinsReplication : IAsyncDisposable
 {
+    private static readonly ActivitySource ActivitySource = new("AgeDigitalTwins.Events", "1.0.0");
+
     public AgeDigitalTwinsReplication(
         string connectionString,
         string publication,
@@ -142,6 +145,7 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
         );
 
         EventData? currentEvent = null;
+        Activity? transactionActivity = null;
 
         await foreach (PgOutputReplicationMessage message in messages)
         {
@@ -154,6 +158,11 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
 
                 if (message is BeginMessage beginMessage)
                 {
+                    transactionActivity = ActivitySource.StartActivity(
+                        "Transaction",
+                        ActivityKind.Consumer
+                    );
+                    transactionActivity?.SetTag("transaction.xid", beginMessage.TransactionXid);
                     currentEvent = new EventData();
                     continue;
                 }
@@ -249,6 +258,10 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                         JsonSerializer.Serialize(currentEvent, _jsonSerializerOptions)
                     );
                     currentEvent = null;
+
+                    transactionActivity?.Stop();
+                    transactionActivity?.Dispose();
+                    transactionActivity = null;
                 }
                 else
                 {
@@ -265,6 +278,24 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
             }
             catch (Exception ex)
             {
+                transactionActivity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                transactionActivity?.AddEvent(
+                    new ActivityEvent(
+                        "Exception",
+                        default,
+                        new ActivityTagsCollection
+                        {
+                            { "exception.type", ex.GetType().FullName },
+                            { "exception.message", ex.Message },
+                            { "exception.stacktrace", ex.StackTrace },
+                        }
+                    )
+                );
+
+                transactionActivity?.Stop();
+                transactionActivity?.Dispose();
+                transactionActivity = null;
+
                 _logger.LogError(ex, "Error processing message: {Message}", ex.Message);
             }
         }

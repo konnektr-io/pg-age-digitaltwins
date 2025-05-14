@@ -1,3 +1,5 @@
+using System;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using Npgsql;
@@ -14,16 +16,38 @@ public partial class AgeDigitalTwinsClient
     /// <returns>A task that represents the asynchronous operation.</returns>
     public virtual async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
-        if (await GraphExistsAsync(cancellationToken) != true)
+        using var activity = ActivitySource.StartActivity("InitializeAsync", ActivityKind.Client);
+
+        try
         {
-            // When a new graph is created, it will also be initialized
-            // with labels, indexes, functions, etc.
-            await CreateGraphAsync(cancellationToken);
+            if (await GraphExistsAsync(cancellationToken) != true)
+            {
+                // When a new graph is created, it will also be initialized
+                // with labels, indexes, functions, etc.
+                await CreateGraphAsync(cancellationToken);
+            }
+            else
+            {
+                // Always make sure we are using the last version of all functions and indexes
+                await GraphUpdateFunctionsAsync(cancellationToken);
+            }
         }
-        else
+        catch (Exception ex)
         {
-            // Always make sure we are using the last version of all functions and indexes
-            await GraphUpdateFunctionsAsync(cancellationToken);
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            activity?.AddEvent(
+                new ActivityEvent(
+                    "Exception",
+                    default,
+                    new ActivityTagsCollection
+                    {
+                        { "exception.type", ex.GetType().FullName },
+                        { "exception.message", ex.Message },
+                        { "exception.stacktrace", ex.StackTrace },
+                    }
+                )
+            );
+            throw;
         }
     }
 
@@ -49,25 +73,47 @@ public partial class AgeDigitalTwinsClient
     /// <returns>A task that represents the asynchronous operation.</returns>
     public virtual async Task CreateGraphAsync(CancellationToken cancellationToken = default)
     {
-        await using var connection = await _dataSource.OpenConnectionAsync(
-            TargetSessionAttributes.ReadWrite,
-            cancellationToken
-        );
-        await using var command = connection.CreateGraphCommand(_graphName);
-        await command.ExecuteNonQueryAsync(cancellationToken);
+        using var activity = ActivitySource.StartActivity("CreateGraphAsync", ActivityKind.Client);
 
-        using var batch = new NpgsqlBatch(connection);
-        foreach (
-            NpgsqlBatchCommand initBatchCommand in GraphInitialization.GetGraphInitCommands(
-                _graphName
-            )
-        )
+        try
         {
-            batch.BatchCommands.Add(initBatchCommand);
-        }
-        await batch.ExecuteNonQueryAsync(cancellationToken);
+            await using var connection = await _dataSource.OpenConnectionAsync(
+                TargetSessionAttributes.ReadWrite,
+                cancellationToken
+            );
+            await using var command = connection.CreateGraphCommand(_graphName);
+            await command.ExecuteNonQueryAsync(cancellationToken);
 
-        await GraphUpdateFunctionsAsync(cancellationToken);
+            using var batch = new NpgsqlBatch(connection);
+            foreach (
+                NpgsqlBatchCommand initBatchCommand in GraphInitialization.GetGraphInitCommands(
+                    _graphName
+                )
+            )
+            {
+                batch.BatchCommands.Add(initBatchCommand);
+            }
+            await batch.ExecuteNonQueryAsync(cancellationToken);
+
+            await GraphUpdateFunctionsAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            activity?.AddEvent(
+                new ActivityEvent(
+                    "Exception",
+                    default,
+                    new ActivityTagsCollection
+                    {
+                        { "exception.type", ex.GetType().FullName },
+                        { "exception.message", ex.Message },
+                        { "exception.stacktrace", ex.StackTrace },
+                    }
+                )
+            );
+            throw;
+        }
     }
 
     /// <summary>
@@ -77,12 +123,34 @@ public partial class AgeDigitalTwinsClient
     /// <returns>A task that represents the asynchronous operation.</returns>
     public virtual async Task DropGraphAsync(CancellationToken cancellationToken = default)
     {
-        await using var connection = await _dataSource.OpenConnectionAsync(
-            TargetSessionAttributes.ReadWrite,
-            cancellationToken
-        );
-        await using var command = connection.DropGraphCommand(_graphName);
-        await command.ExecuteNonQueryAsync(cancellationToken);
+        using var activity = ActivitySource.StartActivity("DropGraphAsync", ActivityKind.Client);
+
+        try
+        {
+            await using var connection = await _dataSource.OpenConnectionAsync(
+                TargetSessionAttributes.ReadWrite,
+                cancellationToken
+            );
+            await using var command = connection.DropGraphCommand(_graphName);
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            activity?.AddEvent(
+                new ActivityEvent(
+                    "Exception",
+                    default,
+                    new ActivityTagsCollection
+                    {
+                        { "exception.type", ex.GetType().FullName },
+                        { "exception.message", ex.Message },
+                        { "exception.stacktrace", ex.StackTrace },
+                    }
+                )
+            );
+            throw;
+        }
     }
 
     /// <summary>

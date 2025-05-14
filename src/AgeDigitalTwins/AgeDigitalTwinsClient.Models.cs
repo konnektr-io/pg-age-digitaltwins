@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
@@ -86,23 +87,46 @@ MATCH (m:Model {{id: dependency}})
         CancellationToken cancellationToken = default
     )
     {
-        string cypher = $@"MATCH (m:Model {{id: '{modelId}'}}) RETURN m";
-        await using var connection = await _dataSource.OpenConnectionAsync(
-            TargetSessionAttributes.PreferStandby,
-            cancellationToken
-        );
-        await using var command = connection.CreateCypherCommand(_graphName, cypher);
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        using var activity = ActivitySource.StartActivity("GetModelAsync", ActivityKind.Client);
+        activity?.SetTag("modelId", modelId);
 
-        if (await reader.ReadAsync(cancellationToken))
+        try
         {
-            var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
-            var vertex = (Vertex)agResult;
-            return new DigitalTwinsModelData(vertex.Properties);
+            string cypher = $@"MATCH (m:Model {{id: '{modelId}'}}) RETURN m";
+            await using var connection = await _dataSource.OpenConnectionAsync(
+                TargetSessionAttributes.PreferStandby,
+                cancellationToken
+            );
+            await using var command = connection.CreateCypherCommand(_graphName, cypher);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+            if (await reader.ReadAsync(cancellationToken))
+            {
+                var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
+                var vertex = (Vertex)agResult;
+                return new DigitalTwinsModelData(vertex.Properties);
+            }
+            else
+            {
+                throw new ModelNotFoundException($"Model with ID {modelId} not found");
+            }
         }
-        else
+        catch (Exception ex)
         {
-            throw new ModelNotFoundException($"Model with ID {modelId} not found");
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            activity?.AddEvent(
+                new ActivityEvent(
+                    "Exception",
+                    default,
+                    new ActivityTagsCollection
+                    {
+                        { "exception.type", ex.GetType().FullName },
+                        { "exception.message", ex.Message },
+                        { "exception.stacktrace", ex.StackTrace },
+                    }
+                )
+            );
+            throw;
         }
     }
 
@@ -119,6 +143,9 @@ MATCH (m:Model {{id: dependency}})
         CancellationToken cancellationToken = default
     )
     {
+        using var activity = ActivitySource.StartActivity("CreateModelsAsync", ActivityKind.Client);
+        activity?.SetTag("modelCount", dtdlModels.Count());
+
         try
         {
             var objectModel = await _modelParser.ParseAsync(
@@ -282,6 +309,23 @@ RETURN m";
         {
             throw new DTDLParserParsingException(ex);
         }
+        catch (Exception ex)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            activity?.AddEvent(
+                new ActivityEvent(
+                    "Exception",
+                    default,
+                    new ActivityTagsCollection
+                    {
+                        { "exception.type", ex.GetType().FullName },
+                        { "exception.message", ex.Message },
+                        { "exception.stacktrace", ex.StackTrace },
+                    }
+                )
+            );
+            throw;
+        }
     }
 
     /// <summary>
@@ -297,6 +341,9 @@ RETURN m";
         CancellationToken cancellationToken = default
     )
     {
+        using var activity = ActivitySource.StartActivity("DeleteModelAsync", ActivityKind.Client);
+        activity?.SetTag("modelId", modelId);
+
         try
         {
             // Delete the model and outgoing relationships
@@ -327,6 +374,23 @@ RETURN COUNT(m) AS deletedCount";
         {
             throw new ModelReferencesNotDeletedException();
         }
+        catch (Exception ex)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            activity?.AddEvent(
+                new ActivityEvent(
+                    "Exception",
+                    default,
+                    new ActivityTagsCollection
+                    {
+                        { "exception.type", ex.GetType().FullName },
+                        { "exception.message", ex.Message },
+                        { "exception.stacktrace", ex.StackTrace },
+                    }
+                )
+            );
+            throw;
+        }
     }
 
     /// <summary>
@@ -336,23 +400,48 @@ RETURN COUNT(m) AS deletedCount";
     /// <returns>A task that represents the asynchronous operation.</returns>
     public virtual async Task DeleteAllModelsAsync(CancellationToken cancellationToken = default)
     {
-        // Delete all models and relationships
-        string cypher = $@"MATCH (m:Model) DETACH DELETE m RETURN COUNT(m) AS deletedCount";
-        await using var connection = await _dataSource.OpenConnectionAsync(
-            TargetSessionAttributes.ReadWrite,
-            cancellationToken
+        using var activity = ActivitySource.StartActivity(
+            "DeleteAllModelsAsync",
+            ActivityKind.Client
         );
-        await using var command = connection.CreateCypherCommand(_graphName, cypher);
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        int rowsAffected = 0;
-        if (await reader.ReadAsync(cancellationToken))
+
+        try
         {
-            var agResult = await reader.GetFieldValueAsync<Agtype?>(0).ConfigureAwait(false);
-            rowsAffected = (int)agResult;
+            // Delete all models and relationships
+            string cypher = $@"MATCH (m:Model) DETACH DELETE m RETURN COUNT(m) AS deletedCount";
+            await using var connection = await _dataSource.OpenConnectionAsync(
+                TargetSessionAttributes.ReadWrite,
+                cancellationToken
+            );
+            await using var command = connection.CreateCypherCommand(_graphName, cypher);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            int rowsAffected = 0;
+            if (await reader.ReadAsync(cancellationToken))
+            {
+                var agResult = await reader.GetFieldValueAsync<Agtype?>(0).ConfigureAwait(false);
+                rowsAffected = (int)agResult;
+            }
+            if (rowsAffected <= 0)
+            {
+                throw new ModelNotFoundException($"No models found");
+            }
         }
-        if (rowsAffected <= 0)
+        catch (Exception ex)
         {
-            throw new ModelNotFoundException($"No models found");
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            activity?.AddEvent(
+                new ActivityEvent(
+                    "Exception",
+                    default,
+                    new ActivityTagsCollection
+                    {
+                        { "exception.type", ex.GetType().FullName },
+                        { "exception.message", ex.Message },
+                        { "exception.stacktrace", ex.StackTrace },
+                    }
+                )
+            );
+            throw;
         }
     }
 }
