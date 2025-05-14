@@ -23,7 +23,13 @@ public static partial class AdtQueryHelpers
             limitClause = selectMatch.Groups["limit"].Success
                 ? "LIMIT " + selectMatch.Groups["limit"].Value
                 : string.Empty;
-            returnClause = ProcessWhereClause(selectMatch.Groups["projections"].Value, graphName);
+            // Trim projections and treat empty as '*'
+            var projections = selectMatch.Groups["projections"].Value.Trim();
+            if (string.IsNullOrEmpty(projections))
+            {
+                projections = "*";
+            }
+            returnClause = ProcessWhereClause(projections, graphName);
             if (returnClause.Contains("COUNT()", StringComparison.OrdinalIgnoreCase))
             {
                 returnClause = "COUNT(*)";
@@ -398,7 +404,7 @@ public static partial class AdtQueryHelpers
     }
 
     [GeneratedRegex(
-        @"SELECT (?:TOP\((?<limit>\d+)\) )?(?<projections>.+) FROM",
+        @"SELECT\s*(?:TOP\(\s*(?<limit>\d+)\s*\)\s*)?(?<projections>.*?)\s+FROM",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
     )]
     private static partial Regex SelectRegex();

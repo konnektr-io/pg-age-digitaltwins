@@ -50,6 +50,10 @@ public class AdtQueryToCypherTests
         "SELECT TOP(1) T FROM DIGITALTWINS T WHERE T.$metadata.$model = 'dtmi:com:adt:dtsample:room;1'",
         "MATCH (T:Twin) WHERE T['$metadata']['$model'] = 'dtmi:com:adt:dtsample:room;1' RETURN T LIMIT 1"
     )]
+    [InlineData(
+        "SELECT TOP(1) FROM DIGITALTWINS WHERE $metadata.$model = 'dtmi:com:adt:dtsample:room;1'",
+        "MATCH (T:Twin) WHERE T['$metadata']['$model'] = 'dtmi:com:adt:dtsample:room;1' RETURN * LIMIT 1"
+    )]
     [InlineData("SELECT COUNT() FROM DIGITALTWINS", "MATCH (T:Twin) RETURN COUNT(*)")]
     [InlineData(
         "SELECT T,R FROM DIGITALTWINS MATCH (current)-[R]->(T) WHERE current.$dtId='root'",
@@ -114,6 +118,10 @@ public class AdtQueryToCypherTests
     [InlineData(
         "SELECT $sourceId, $targetId FROM relationships WHERE $sourceId IN ['s1','s2','s3'] AND $relationshipName = 'nextActivity'",
         "MATCH (:Twin)-[R]->(:Twin) WHERE R['$sourceId'] IN ['s1','s2','s3'] AND R['$relationshipName'] = 'nextActivity' RETURN R['$sourceId'], R['$targetId']"
+    )]
+    [InlineData(
+        "SELECT TOP(50) FROM DIGITALTWINS WHERE (CONTAINS(email,'test') OR CONTAINS(name,'test') OR CONTAINS($dtId,'test')) AND (IS_OF_MODEL('dtmi:com:example:identity:User;1') OR IS_OF_MODEL('dtmi:com:example:identity:Invite;1'))",
+        "MATCH (T:Twin) WHERE (T.email CONTAINS 'test' OR T.name CONTAINS 'test' OR T['$dtId'] CONTAINS 'test') AND (testgraph.is_of_model(T,'dtmi:com:example:identity:User;1') OR testgraph.is_of_model(T,'dtmi:com:example:identity:Invite;1')) RETURN * LIMIT 50"
     )]
     public void ConvertAdtQueryToCypher_ReturnsExpectedCypher(
         string adtQuery,
