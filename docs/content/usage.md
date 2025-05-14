@@ -1,0 +1,34 @@
+# Usage
+
+## CRUD Operations
+
+AgeDigitalTwins provides APIs for managing digital twins, models, and relationships. These include:
+
+- **Create**: Add new twins, models, or relationships.
+- **Read**: Retrieve existing entities.
+- **Update**: Modify existing entities.
+- **Delete**: Remove entities from the graph.
+
+## Query Examples
+
+### ADT Query Language
+
+- Find all twins:
+
+  ```sql
+  SELECT * FROM digitaltwins WHERE ...;
+  ```
+
+### Cypher
+
+- Find all twins:
+
+  ```cypher
+  MATCH (t:Twin) RETURN t;
+  ```
+
+- Find relationships:
+
+  ```cypher
+  MATCH (t:Twin)-[r]->(m:Model) RETURN t, r, m;
+  ```
