@@ -4,6 +4,5 @@ We would like to thank the following projects and communities for their contribu
 
 - [Apache AGE](https://age.apache.org/): A PostgreSQL extension for graph database capabilities.
 - [Azure Digital Twins](https://azure.microsoft.com/en-us/services/digital-twins/): For providing the foundational concepts and APIs.
-- [OpenTelemetry](https://opentelemetry.io/): For enabling robust tracing and diagnostics.
 
 Your support and contributions make this project possible!

@@ -1,16 +1,15 @@
 export default defineAppConfig({
   shadcnDocs: {
     site: {
-      name: 'pg-age-digitaltwins',
+      name: 'Digital Twins for Apache AGE',
       description: 'Digital Twins for Apache AGE allows to use Postgres with the Apache AGE extension as a backend for Digital Twins solutions using DTDL.',
     },
     theme: {
-      customizable: true,
       color: 'zinc',
       radius: 0.5,
     },
     header: {
-      title: 'shadcn-docs-starter',
+      title: 'Digital Twins for Apache AGE',
       showTitle: true,
       darkModeToggle: true,
       logo: {
