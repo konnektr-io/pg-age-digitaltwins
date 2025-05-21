@@ -1,5 +1,6 @@
-# Acknowledgements
-
+---
+title: Acknowledgements
+---
 We would like to thank the following projects and communities for their contributions and inspiration:
 
 - [Apache AGE](https://age.apache.org/): A PostgreSQL extension for graph database capabilities.

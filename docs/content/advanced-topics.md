@@ -1,4 +1,6 @@
-# Advanced Topics
+---
+title: Advanced Topics
+---
 
 ## Event Routing and Sinks
 
