@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -19,6 +20,8 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
 
     private readonly JsonSerializerOptions serializerOptions =
         new() { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+
+    private static readonly ActivitySource ActivitySource = new("AgeDigitalTwins.SDK", "1.0.0");
 
     /// <summary>
     /// Initializes a new instance of the <see cref="AgeDigitalTwinsClient"/> class with a data source and graph name.
