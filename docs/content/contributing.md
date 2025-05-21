@@ -1,3 +1,8 @@
+---
+title: Contributing
+navigation: true
+---
+
 # Contributing
 
 We welcome contributions to AgeDigitalTwins! To get started, please follow these steps:

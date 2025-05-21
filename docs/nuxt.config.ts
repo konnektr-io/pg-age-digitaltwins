@@ -5,7 +5,7 @@ export default defineNuxtConfig({
   compatibilityDate: '2024-07-06',
   mdc: {
     highlight: {
-      langs: ['http','cypher','sql'],
+      langs: ['http','cypher','sql','csharp'],
     },
   },
 });
