@@ -1,0 +1,6 @@
+title: Installation & Deployment
+icon: lucide:server
+navigation.redirect: /deployment-installation/installation-and-deployment
+sidebar:
+  style: default
+collapse: false
