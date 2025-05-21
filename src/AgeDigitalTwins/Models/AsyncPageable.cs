@@ -29,22 +29,29 @@ public class AsyncPageable<T>(
     private const int DefaultPageSize = 2000;
 
     public async IAsyncEnumerable<Page<T>> AsPages(
-        ContinuationToken? continuationToken = default,
+        string? continuationToken = null,
         int? pageSizeHint = DefaultPageSize,
         [EnumeratorCancellation] CancellationToken cancellationToken = default
     )
     {
+        ContinuationToken? token =
+            continuationToken != null ? ContinuationToken.Deserialize(continuationToken) : null;
+
         do
         {
             var (items, nextContinuationToken) = await _fetchPage(
-                continuationToken,
+                token,
                 pageSizeHint,
                 cancellationToken
             );
 
-            yield return new Page<T> { ContinuationToken = nextContinuationToken, Value = items };
+            yield return new Page<T>
+            {
+                ContinuationToken = nextContinuationToken?.ToString(),
+                Value = items,
+            };
 
-            continuationToken = nextContinuationToken;
+            token = nextContinuationToken;
         } while (continuationToken != null);
     }
 

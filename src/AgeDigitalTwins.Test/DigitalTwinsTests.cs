@@ -1,6 +1,7 @@
 using System.Text.Json;
 using AgeDigitalTwins.Exceptions;
 using Azure.DigitalTwins.Core;
+using Json.More;
 using Json.Patch;
 using Json.Pointer;
 
@@ -30,6 +31,15 @@ public class DigitalTwinsTests : TestBase
         var readTwin = await Client.GetDigitalTwinAsync<BasicDigitalTwin>(digitalTwin.Id);
         Assert.NotNull(readTwin);
         Assert.Equal(digitalTwin.Id, readTwin.Id);
+
+        // Read it again with a different method, should have the same etag
+        var readTwin2 = await Client.GetDigitalTwinAsync<JsonDocument>(readTwin.Id);
+        Assert.NotNull(readTwin2);
+        Assert.Equal(digitalTwin.Id, readTwin2.RootElement.GetProperty("$dtId").GetString());
+        Assert.Equal(
+            readTwin2.RootElement.GetProperty("$etag").GetString(),
+            readTwin.ETag.ToString()
+        );
     }
 
     [Fact]
@@ -226,7 +236,66 @@ public class DigitalTwinsTests : TestBase
         );
     }
 
-    /* [Fact]
+    [Fact]
+    public async Task UpdateDigitalTwinsAsync_WithObject_UpdatedAndReadable()
+    {
+        // Load required models
+        string[] models = [SampleData.DtdlRoom];
+        await Client.CreateModelsAsync(models);
+
+        // Create digital twin
+        var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinRoom1);
+        var createdTwin = await Client.CreateOrReplaceDigitalTwinAsync(
+            digitalTwin!.Id,
+            digitalTwin
+        );
+
+        // Patch with object
+        JsonPatch jsonPatch = JsonSerializer.Deserialize<JsonPatch>(
+            @"[{""op"": ""add"", ""path"": ""/dimensions"", ""value"": {
+                    ""length"": 6.0,
+                    ""width"": 5.0,
+                    ""height"": 3
+                }},
+                {""op"": ""remove"", ""path"": ""/humidity""}]"
+        )!;
+        await Client.UpdateDigitalTwinAsync(createdTwin!.Id, jsonPatch);
+
+        // Read digital twin
+        var readTwin = await Client.GetDigitalTwinAsync<BasicDigitalTwin>(createdTwin.Id);
+        Assert.NotNull(readTwin);
+        Assert.Equal(digitalTwin.Id, readTwin.Id);
+        Assert.Equal(
+            (double)6.0,
+            ((JsonElement)readTwin.Contents["dimensions"]).GetProperty("length").GetDouble()
+        );
+        Assert.Equal(
+            (double)5.0,
+            ((JsonElement)readTwin.Contents["dimensions"]).GetProperty("width").GetDouble()
+        );
+        Assert.False(readTwin.Contents.ContainsKey("humidity"));
+
+        // Now patch nested property
+        jsonPatch = JsonSerializer.Deserialize<JsonPatch>(
+            @"[{""op"": ""replace"", ""path"": ""/dimensions/length"", ""value"": 7.0}]"
+        )!;
+        await Client.UpdateDigitalTwinAsync(readTwin!.Id, jsonPatch);
+
+        // Read digital twin
+        var secondReadTwin = await Client.GetDigitalTwinAsync<BasicDigitalTwin>(readTwin.Id);
+        Assert.NotNull(secondReadTwin);
+        Assert.Equal(digitalTwin.Id, secondReadTwin.Id);
+        Assert.Equal(
+            (double)7.0,
+            ((JsonElement)secondReadTwin.Contents["dimensions"]).GetProperty("length").GetDouble()
+        );
+        Assert.Equal(
+            (double)5.0,
+            ((JsonElement)secondReadTwin.Contents["dimensions"]).GetProperty("width").GetDouble()
+        );
+    }
+
+    [Fact]
     public async Task UpdateDigitalTwinAsync_SourceTime_Updated()
     {
         // Load required models
@@ -240,8 +309,10 @@ public class DigitalTwinsTests : TestBase
 
         // Create digital twin
         var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinPlanetEarth);
-        digitalTwin!.Id = "earthTwin";
-        var createdTwin = await Client.CreateOrReplaceDigitalTwinAsync(digitalTwin.Id, digitalTwin);
+        var createdTwin = await Client.CreateOrReplaceDigitalTwinAsync(
+            digitalTwin!.Id,
+            digitalTwin
+        );
 
         Assert.NotNull(createdTwin);
         Assert.Equal(digitalTwin.Id, createdTwin.Id);
@@ -266,7 +337,7 @@ public class DigitalTwinsTests : TestBase
             (now - readTwin.Metadata.PropertyMetadata["name"].SourceTime) < TimeSpan.FromSeconds(1)
         );
         Assert.Equal(now, readTwin.Metadata.PropertyMetadata["name"].SourceTime);
-    } */
+    }
 
     /* [Fact]
     public async Task UpdateDigitalTwinAsync_RemoveAlreadyRemovedProperty_ThrowsException()
@@ -277,14 +348,20 @@ public class DigitalTwinsTests : TestBase
 
         // Create digital twin
         var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinCrater);
-        var createdTwin = await Client.CreateOrReplaceDigitalTwinAsync(digitalTwin!.Id, digitalTwin);
+        var createdTwin = await Client.CreateOrReplaceDigitalTwinAsync(
+            digitalTwin!.Id,
+            digitalTwin
+        );
 
-        JsonPatch jsonPatch = JsonSerializer.Deserialize<JsonPatch>(@"[{""op"": ""remove"", ""path"": ""/diameter""}]")!;
+        JsonPatch jsonPatch = JsonSerializer.Deserialize<JsonPatch>(
+            @"[{""op"": ""remove"", ""path"": ""/diameter""}]"
+        )!;
         // Remove first time
         await Client.UpdateDigitalTwinAsync(digitalTwin!.Id, jsonPatch);
         // Second removal should fail
-        var exception = await Assert.ThrowsAsync<ValidationFailedException>(() =>
-            Client.UpdateDigitalTwinAsync(digitalTwin!.Id, jsonPatch));
+        var exception = await Assert.ThrowsAsync<ValidationFailedException>(
+            () => Client.UpdateDigitalTwinAsync(digitalTwin!.Id, jsonPatch)
+        );
     } */
 
     /* [Fact]

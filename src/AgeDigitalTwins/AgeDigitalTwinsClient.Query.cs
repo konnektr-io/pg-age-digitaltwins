@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
@@ -22,206 +23,237 @@ public partial class AgeDigitalTwinsClient
     /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
     /// <returns>An asynchronous enumerable of query results.</returns>
     public virtual AsyncPageable<T?> QueryAsync<T>(
-        string query,
+        string? query,
         CancellationToken cancellationToken = default
     )
     {
-        return new AsyncPageable<T?>(
-            async (continuationToken, maxItemsPerPage, ct) =>
-            {
-                string cypher;
-                // Use query from token if available
-                if (continuationToken != null)
-                {
-                    cypher = continuationToken.Query; // Override query with the one from the token
-                }
-                // ADT query that needs to be converted
-                else if (
-                    query.Contains("SELECT", StringComparison.InvariantCultureIgnoreCase)
-                    && !query.Contains("RETURN", StringComparison.InvariantCultureIgnoreCase)
-                )
-                {
-                    cypher = AdtQueryHelpers.ConvertAdtQueryToCypher(query, _graphName);
-                }
-                // New Cypher query
-                else
-                {
-                    cypher = query;
-                }
+        using var activity = ActivitySource.StartActivity("QueryAsync", ActivityKind.Client);
+        activity?.SetTag("query", query);
+        activity?.SetTag("graphName", _graphName);
 
-                // Store the query before modifying it for pagination
-                // This is used to include in the next continuation token
-                // to allow resuming the query from the same point
-                string nextContinuationQuery = cypher;
-
-                // Check if the query already contains a LIMIT clause
-                var limitMatch = LimitRegex().Match(cypher);
-                // Check if the query already contains a SKIP clause
-                var skipMatch = SkipRegex().Match(cypher);
-
-                // Handle existing SKIP and LIMIT clauses
-                if (skipMatch.Success)
+        try
+        {
+            return new AsyncPageable<T?>(
+                async (continuationToken, maxItemsPerPage, ct) =>
                 {
-                    int existingSkip = int.Parse(skipMatch.Groups[1].Value);
-                    int newSkip = existingSkip + (continuationToken?.RowNumber ?? 0);
-                    cypher = SkipRegex().Replace(cypher, $"SKIP {newSkip}");
-                }
-                // Handle case where there is no existing SKIP but an existing LIMIT
-                else if (limitMatch.Success && continuationToken != null)
-                {
-                    // Remove the existing LIMIT clause
-                    cypher = LimitRegex().Replace(cypher, "");
-
-                    // Add SKIP before the LIMIT
-                    cypher +=
-                        $" SKIP {continuationToken.RowNumber} LIMIT {limitMatch.Groups[1].Value}";
-                }
-                else if (continuationToken != null)
-                {
-                    // Add SKIP clause if it doesn't exist
-                    cypher += $" SKIP {continuationToken.RowNumber}";
-                }
-
-                int existingLimit = int.MaxValue;
-                if (limitMatch.Success)
-                {
-                    existingLimit = int.Parse(limitMatch.Groups[1].Value);
-                    if (maxItemsPerPage.HasValue && maxItemsPerPage.Value < existingLimit)
+                    string cypher;
+                    // Use query from token if available
+                    if (continuationToken != null)
                     {
-                        // Replace the existing LIMIT with the smaller maxItemsPerPage
-                        cypher = LimitRegex().Replace(cypher, $"LIMIT {maxItemsPerPage.Value}");
+                        cypher = continuationToken.Query; // Override query with the one from the token
                     }
-                }
-                else if (maxItemsPerPage.HasValue)
-                {
-                    // Add LIMIT clause if it doesn't exist
-                    cypher += $" LIMIT {maxItemsPerPage.Value}";
-                }
-
-                // Detect variable-length edge query using regex (need read-write access)
-                // This is a workaround for the fact that Age does not support variable-length edge queries
-                // On read-only connections
-                var isVariableLengthEdgeQuery = VariableLengthEdgeRegex().IsMatch(cypher);
-
-                await using var connection = await _dataSource.OpenConnectionAsync(
-                    isVariableLengthEdgeQuery
-                        ? Npgsql.TargetSessionAttributes.ReadWrite
-                        : Npgsql.TargetSessionAttributes.PreferStandby,
-                    ct
-                );
-
-                await using var command = connection.CreateCypherCommand(_graphName, cypher);
-
-                await using var reader =
-                    await command.ExecuteReaderAsync(ct)
-                    ?? throw new InvalidOperationException("Reader is null");
-
-                var schema = await reader.GetColumnSchemaAsync(ct);
-                List<T?> results = new();
-                while (await reader.ReadAsync(ct))
-                {
-                    Dictionary<string, object> row = new();
-                    for (int i = 0; i < schema.Count; i++)
+                    // ADT query that needs to be converted
+                    else if (
+                        !string.IsNullOrEmpty(query)
+                        && query.Contains("SELECT", StringComparison.InvariantCultureIgnoreCase)
+                        && !query.Contains("RETURN", StringComparison.InvariantCultureIgnoreCase)
+                    )
                     {
-                        var column = schema[i];
-                        var value = await reader.GetFieldValueAsync<Agtype?>(i);
-                        if (value == null)
+                        cypher = AdtQueryHelpers.ConvertAdtQueryToCypher(query, _graphName);
+                    }
+                    // New Cypher query
+                    else if (!string.IsNullOrEmpty(query))
+                    {
+                        cypher = query;
+                    }
+                    else
+                    {
+                        throw new ArgumentNullException(
+                            nameof(query),
+                            "Query cannot be null or empty."
+                        );
+                    }
+
+                    // Store the query before modifying it for pagination
+                    // This is used to include in the next continuation token
+                    // to allow resuming the query from the same point
+                    string nextContinuationQuery = cypher;
+
+                    // Check if the query already contains a LIMIT clause
+                    var limitMatch = LimitRegex().Match(cypher);
+                    // Check if the query already contains a SKIP clause
+                    var skipMatch = SkipRegex().Match(cypher);
+
+                    // Handle existing SKIP and LIMIT clauses
+                    if (skipMatch.Success)
+                    {
+                        int existingSkip = int.Parse(skipMatch.Groups[1].Value);
+                        int newSkip = existingSkip + (continuationToken?.RowNumber ?? 0);
+                        cypher = SkipRegex().Replace(cypher, $"SKIP {newSkip}");
+                    }
+                    // Handle case where there is no existing SKIP but an existing LIMIT
+                    else if (limitMatch.Success && continuationToken != null)
+                    {
+                        // Remove the existing LIMIT clause
+                        cypher = LimitRegex().Replace(cypher, "");
+
+                        // Add SKIP before the LIMIT
+                        cypher +=
+                            $" SKIP {continuationToken.RowNumber} LIMIT {limitMatch.Groups[1].Value}";
+                    }
+                    else if (continuationToken != null)
+                    {
+                        // Add SKIP clause if it doesn't exist
+                        cypher += $" SKIP {continuationToken.RowNumber}";
+                    }
+
+                    int existingLimit = int.MaxValue;
+                    if (limitMatch.Success)
+                    {
+                        existingLimit = int.Parse(limitMatch.Groups[1].Value);
+                        if (maxItemsPerPage.HasValue && maxItemsPerPage.Value < existingLimit)
                         {
-                            continue;
+                            // Replace the existing LIMIT with the smaller maxItemsPerPage
+                            cypher = LimitRegex().Replace(cypher, $"LIMIT {maxItemsPerPage.Value}");
                         }
-                        if (((Agtype)value).IsVertex)
+                    }
+                    else if (maxItemsPerPage.HasValue)
+                    {
+                        // Add LIMIT clause if it doesn't exist
+                        cypher += $" LIMIT {maxItemsPerPage.Value}";
+                    }
+
+                    // Detect variable-length edge query using regex (need read-write access)
+                    // This is a workaround for the fact that Age does not support variable-length edge queries
+                    // On read-only connections
+                    var isVariableLengthEdgeQuery = VariableLengthEdgeRegex().IsMatch(cypher);
+
+                    await using var connection = await _dataSource.OpenConnectionAsync(
+                        isVariableLengthEdgeQuery
+                            ? Npgsql.TargetSessionAttributes.ReadWrite
+                            : Npgsql.TargetSessionAttributes.PreferStandby,
+                        ct
+                    );
+
+                    await using var command = connection.CreateCypherCommand(_graphName, cypher);
+
+                    await using var reader =
+                        await command.ExecuteReaderAsync(ct)
+                        ?? throw new InvalidOperationException("Reader is null");
+
+                    var schema = await reader.GetColumnSchemaAsync(ct);
+                    List<T?> results = new();
+                    while (await reader.ReadAsync(ct))
+                    {
+                        Dictionary<string, object> row = new();
+                        for (int i = 0; i < schema.Count; i++)
                         {
-                            row.Add(column.ColumnName, ((Vertex)value).Properties);
-                        }
-                        else if (((Agtype)value).IsEdge)
-                        {
-                            row.Add(column.ColumnName, ((Edge)value).Properties);
-                        }
-                        else
-                        {
-                            string valueString = ((Agtype)value).GetString().Trim('\u0001');
-                            if (int.TryParse(valueString, out int intValue))
+                            var column = schema[i];
+                            var value = await reader.GetFieldValueAsync<Agtype?>(i);
+                            if (value == null)
                             {
-                                row.Add(column.ColumnName, intValue);
+                                continue;
                             }
-                            else if (double.TryParse(valueString, out double doubleValue))
+                            if (((Agtype)value).IsVertex)
                             {
-                                row.Add(column.ColumnName, doubleValue);
+                                row.Add(column.ColumnName, ((Vertex)value).Properties);
                             }
-                            else if (bool.TryParse(valueString, out bool boolValue))
+                            else if (((Agtype)value).IsEdge)
                             {
-                                row.Add(column.ColumnName, boolValue);
+                                row.Add(column.ColumnName, ((Edge)value).Properties);
                             }
-                            else if (valueString.StartsWith('"') && valueString.EndsWith('"'))
+                            else
                             {
-                                row.Add(column.ColumnName, valueString.Trim('"'));
-                            }
-                            else if (valueString.StartsWith('[') && valueString.EndsWith(']'))
-                            {
-                                row.Add(column.ColumnName, ((Agtype)value).GetList());
-                            }
-                            else if (valueString.StartsWith('{') && valueString.EndsWith('}'))
-                            {
-                                var dict = JsonSerializer.Deserialize<Dictionary<string, object>>(
-                                    valueString
-                                );
-                                if (dict != null)
+                                string valueString = ((Agtype)value).GetString().Trim('\u0001');
+                                if (int.TryParse(valueString, out int intValue))
                                 {
-                                    row.Add(column.ColumnName, dict);
+                                    row.Add(column.ColumnName, intValue);
+                                }
+                                else if (double.TryParse(valueString, out double doubleValue))
+                                {
+                                    row.Add(column.ColumnName, doubleValue);
+                                }
+                                else if (bool.TryParse(valueString, out bool boolValue))
+                                {
+                                    row.Add(column.ColumnName, boolValue);
+                                }
+                                else if (valueString.StartsWith('"') && valueString.EndsWith('"'))
+                                {
+                                    row.Add(column.ColumnName, valueString.Trim('"'));
+                                }
+                                else if (valueString.StartsWith('[') && valueString.EndsWith(']'))
+                                {
+                                    row.Add(column.ColumnName, ((Agtype)value).GetList());
+                                }
+                                else if (valueString.StartsWith('{') && valueString.EndsWith('}'))
+                                {
+                                    var dict = JsonSerializer.Deserialize<
+                                        Dictionary<string, object>
+                                    >(valueString);
+                                    if (dict != null)
+                                    {
+                                        row.Add(column.ColumnName, dict);
+                                    }
+                                    else
+                                    {
+                                        row.Add(column.ColumnName, valueString);
+                                    }
                                 }
                                 else
                                 {
                                     row.Add(column.ColumnName, valueString);
                                 }
                             }
+                        }
+                        if (typeof(T) == typeof(string))
+                        {
+                            if (row.Count == 1 && row.TryGetValue("_", out object? value))
+                            {
+                                results.Add((T)(object)JsonSerializer.Serialize(value));
+                            }
                             else
                             {
-                                row.Add(column.ColumnName, valueString);
+                                results.Add((T)(object)JsonSerializer.Serialize(row));
                             }
                         }
-                    }
-                    if (typeof(T) == typeof(string))
-                    {
-                        if (row.Count == 1 && row.TryGetValue("_", out object? value))
-                        {
-                            results.Add((T)(object)JsonSerializer.Serialize(value));
-                        }
                         else
                         {
-                            results.Add((T)(object)JsonSerializer.Serialize(row));
+                            string json;
+                            if (row.Count == 1 && row.TryGetValue("_", out object? value))
+                            {
+                                json = JsonSerializer.Serialize(value);
+                            }
+                            else
+                            {
+                                json = JsonSerializer.Serialize(row);
+                            }
+                            results.Add(JsonSerializer.Deserialize<T>(json));
                         }
                     }
-                    else
-                    {
-                        string json;
-                        if (row.Count == 1 && row.TryGetValue("_", out object? value))
-                        {
-                            json = JsonSerializer.Serialize(value);
-                        }
-                        else
-                        {
-                            json = JsonSerializer.Serialize(row);
-                        }
-                        results.Add(JsonSerializer.Deserialize<T>(json));
-                    }
+
+                    var rowNumber = (continuationToken?.RowNumber ?? 0) + results.Count;
+                    ContinuationToken? nextContinuationToken =
+                        results.Count < maxItemsPerPage || rowNumber >= existingLimit
+                            // No more results to fetch, so no continuation token
+                            ? null
+                            // Generate a continuation token (e.g., next row number)
+                            : new ContinuationToken
+                            {
+                                RowNumber = rowNumber,
+                                Query = nextContinuationQuery,
+                            };
+
+                    return (results, nextContinuationToken);
                 }
-
-                var rowNumber = (continuationToken?.RowNumber ?? 0) + results.Count;
-                ContinuationToken? nextContinuationToken =
-                    results.Count < maxItemsPerPage || rowNumber >= existingLimit
-                        // No more results to fetch, so no continuation token
-                        ? null
-                        // Generate a continuation token (e.g., next row number)
-                        : new ContinuationToken
-                        {
-                            RowNumber = rowNumber,
-                            Query = nextContinuationQuery,
-                        };
-                ;
-
-                return (results, nextContinuationToken);
-            }
-        );
+            );
+        }
+        catch (Exception ex)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            activity?.AddEvent(
+                new ActivityEvent(
+                    "Exception",
+                    default,
+                    new ActivityTagsCollection
+                    {
+                        { "exception.type", ex.GetType().FullName },
+                        { "exception.message", ex.Message },
+                        { "exception.stacktrace", ex.StackTrace },
+                    }
+                )
+            );
+            throw;
+        }
     }
 
     [GeneratedRegex(@"\[[^\]]*(?::\w*)?\*[\d.]*\]", RegexOptions.Compiled)]

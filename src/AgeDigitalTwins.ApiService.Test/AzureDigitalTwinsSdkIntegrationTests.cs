@@ -213,4 +213,75 @@ public class AzureDigitalTwinsSdkIntegrationTests : IAsyncLifetime
         }
         Assert.True(found);
     }
+
+    [Fact]
+    public async Task GetModels_WithValidModel_ReturnsModelDefinitions()
+    {
+        // Arrange
+        Assert.NotNull(_digitalTwinsClient);
+        await _digitalTwinsClient.CreateModelsAsync(
+            new List<string> { SampleData.DtdlCelestialBody, SampleData.DtdlCrater }
+        );
+        string modelId = "dtmi:com:contoso:Crater;1";
+
+        // Act
+        Assert.NotNull(_digitalTwinsClient);
+        AsyncPageable<DigitalTwinsModelData> models = _digitalTwinsClient.GetModelsAsync(
+            new() { IncludeModelDefinition = true }
+        );
+
+        // Assert
+        bool found = false;
+        await foreach (DigitalTwinsModelData model in models)
+        {
+            Assert.NotNull(model);
+            Assert.NotNull(model.DtdlModel);
+            if (model.Id == modelId)
+            {
+                found = true;
+            }
+        }
+        Assert.True(found);
+    }
+
+    [Fact]
+    public async Task Query_SupportsPagination()
+    {
+        // Arrange
+        Assert.NotNull(_digitalTwinsClient);
+        await _digitalTwinsClient.CreateModelsAsync(new List<string> { SampleData.DtdlCrater });
+
+        var crater1 = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinCrater)!;
+        crater1.Id = "crater1";
+        await _digitalTwinsClient.CreateOrReplaceDigitalTwinAsync(crater1.Id, crater1);
+
+        var crater2 = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinCrater)!;
+        crater2.Id = "crater2";
+        await _digitalTwinsClient.CreateOrReplaceDigitalTwinAsync(crater2.Id, crater2);
+
+        var crater3 = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinCrater)!;
+        crater3.Id = "crater3";
+        await _digitalTwinsClient.CreateOrReplaceDigitalTwinAsync(crater3.Id, crater3);
+
+        string query = "SELECT * FROM digitaltwins";
+
+        // Act
+        Assert.NotNull(_digitalTwinsClient);
+
+        // Assert
+        int twinCount = 0;
+        int pageCount = 0;
+        await foreach (
+            Page<BasicDigitalTwin> page in _digitalTwinsClient
+                .QueryAsync<BasicDigitalTwin>(query)
+                .AsPages(pageSizeHint: 1)
+        )
+        {
+            Assert.NotNull(page);
+            twinCount += page.Values.Count;
+            pageCount++;
+        }
+        Assert.True(pageCount > 1, "Expected multiple pages of results but found only one page.");
+        Assert.Equal(3, twinCount);
+    }
 }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Runtime.Serialization;
 using System.Text.Json;
@@ -25,7 +26,7 @@ public partial class AgeDigitalTwinsClient
     /// <param name="digitalTwinId">The ID of the digital twin to check.</param>
     /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
     /// <returns>A task that represents the asynchronous operation. The task result contains a boolean indicating whether the digital twin exists.</returns>
-    public virtual async Task<bool> DigitalTwinExistsAsync(
+    private async Task<bool> DigitalTwinExistsAsync(
         string digitalTwinId,
         CancellationToken cancellationToken = default
     )
@@ -48,14 +49,14 @@ public partial class AgeDigitalTwinsClient
     /// <param name="etag">The ETag to compare.</param>
     /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
     /// <returns>A task that represents the asynchronous operation. The task result contains a boolean indicating whether the ETag matches.</returns>
-    public virtual async Task<bool> DigitalTwinEtagMatchesAsync(
+    private async Task<bool> DigitalTwinEtagMatchesAsync(
         string digitalTwinId,
         string etag,
         CancellationToken cancellationToken = default
     )
     {
         string cypher =
-            $"MATCH (t:Twin) WHERE t['$dtId'] = '{digitalTwinId.Replace("'", "\\'")}' AND t['$etag'] = '{etag}' RETURN t";
+            $"MATCH (t:Twin {{ `$dtId`: '{digitalTwinId.Replace("'", "\\'")}', `$etag`: '{etag}'}}) RETURN t";
         await using var connection = await _dataSource.OpenConnectionAsync(
             Npgsql.TargetSessionAttributes.PreferStandby,
             cancellationToken
@@ -77,31 +78,57 @@ public partial class AgeDigitalTwinsClient
         CancellationToken cancellationToken = default
     )
     {
-        string cypher =
-            $"MATCH (t:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}}) RETURN t";
-        await using var connection = await _dataSource.OpenConnectionAsync(
-            Npgsql.TargetSessionAttributes.PreferStandby,
-            cancellationToken
+        using var activity = ActivitySource.StartActivity(
+            "GetDigitalTwinAsync",
+            ActivityKind.Client
         );
-        await using var command = connection.CreateCypherCommand(_graphName, cypher);
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        activity?.SetTag("digitalTwinId", digitalTwinId);
 
-        if (await reader.ReadAsync(cancellationToken))
+        try
         {
-            var agResult = await reader.GetFieldValueAsync<Agtype?>(0).ConfigureAwait(false);
-            var vertex = (Vertex)agResult;
-            var twin =
-                JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(vertex.Properties))
-                ?? throw new SerializationException(
-                    $"Digital Twin with ID {digitalTwinId} could not be deserialized"
-                );
-            return twin;
-        }
-        else
-        {
-            throw new DigitalTwinNotFoundException(
-                $"Digital Twin with ID {digitalTwinId} not found"
+            string cypher =
+                $"MATCH (t:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}}) RETURN t";
+            await using var connection = await _dataSource.OpenConnectionAsync(
+                Npgsql.TargetSessionAttributes.PreferStandby,
+                cancellationToken
             );
+            await using var command = connection.CreateCypherCommand(_graphName, cypher);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+            if (await reader.ReadAsync(cancellationToken))
+            {
+                var agResult = await reader.GetFieldValueAsync<Agtype?>(0).ConfigureAwait(false);
+                var vertex = (Vertex)agResult;
+                var twin =
+                    JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(vertex.Properties))
+                    ?? throw new SerializationException(
+                        $"Digital Twin with ID {digitalTwinId} could not be deserialized"
+                    );
+                return twin;
+            }
+            else
+            {
+                throw new DigitalTwinNotFoundException(
+                    $"Digital Twin with ID {digitalTwinId} not found"
+                );
+            }
+        }
+        catch (Exception ex)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            activity?.AddEvent(
+                new ActivityEvent(
+                    "Exception",
+                    default,
+                    new ActivityTagsCollection
+                    {
+                        { "exception.type", ex.GetType().FullName },
+                        { "exception.message", ex.Message },
+                        { "exception.stacktrace", ex.StackTrace },
+                    }
+                )
+            );
+            throw;
         }
     }
 
@@ -121,6 +148,13 @@ public partial class AgeDigitalTwinsClient
         CancellationToken cancellationToken = default
     )
     {
+        using var activity = ActivitySource.StartActivity(
+            "CreateOrReplaceDigitalTwinAsync",
+            ActivityKind.Client
+        );
+        activity?.SetTag("digitalTwinId", digitalTwinId);
+        activity?.SetTag("ifNoneMatch", ifNoneMatch);
+
         try
         {
             DateTime now = DateTime.UtcNow;
@@ -279,9 +313,9 @@ public partial class AgeDigitalTwinsClient
 
             string cypher =
                 $@"WITH '{updatedDigitalTwinJson}'::agtype as twin
-                MERGE (t: Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})
-                SET t = twin
-                RETURN t";
+MERGE (t: Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})
+SET t = twin
+RETURN t";
             await using var connection = await _dataSource.OpenConnectionAsync(
                 Npgsql.TargetSessionAttributes.ReadWrite,
                 cancellationToken
@@ -313,6 +347,23 @@ public partial class AgeDigitalTwinsClient
             // When the model is not found, we should not return a 404, but a 400 as this is an issue with the twin itself
             throw new ValidationFailedException(ex.Message);
         }
+        catch (Exception ex)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            activity?.AddEvent(
+                new ActivityEvent(
+                    "Exception",
+                    default,
+                    new ActivityTagsCollection
+                    {
+                        { "exception.type", ex.GetType().FullName },
+                        { "exception.message", ex.Message },
+                        { "exception.stacktrace", ex.StackTrace },
+                    }
+                )
+            );
+            throw;
+        }
     }
 
     /// <summary>
@@ -330,113 +381,144 @@ public partial class AgeDigitalTwinsClient
         CancellationToken cancellationToken = default
     )
     {
-        DateTime now = DateTime.UtcNow;
+        using var activity = ActivitySource.StartActivity(
+            "UpdateDigitalTwinAsync",
+            ActivityKind.Client
+        );
+        activity?.SetTag("digitalTwinId", digitalTwinId);
 
-        // Check etag if defined
-        if (!string.IsNullOrEmpty(ifMatch) && !ifMatch.Equals("*"))
+        try
         {
-            if (!await DigitalTwinEtagMatchesAsync(digitalTwinId, ifMatch, cancellationToken))
+            DateTime now = DateTime.UtcNow;
+
+            // Check etag if defined
+            if (!string.IsNullOrEmpty(ifMatch) && !ifMatch.Equals("*"))
             {
-                throw new PreconditionFailedException(
-                    $"If-Match: {ifMatch} header value does not match the current ETag value of the digital twin with id {digitalTwinId}"
-                );
+                if (!await DigitalTwinEtagMatchesAsync(digitalTwinId, ifMatch, cancellationToken))
+                {
+                    throw new PreconditionFailedException(
+                        $"If-Match: {ifMatch} header value does not match the current ETag value of the digital twin with id {digitalTwinId}"
+                    );
+                }
             }
-        }
 
-        List<string> violations = new();
+            List<string> violations = new();
 
-        List<string> updateTimeSetOperations =
-            new()
-            {
-                $"SET t = {_graphName}.agtype_set(properties(t),['$metadata','$lastUpdateTime'],'{now:o}')",
-            };
-        List<string> patchOperations = new();
+            List<string> updateTimeSetOperations =
+                new()
+                {
+                    $"SET t = {_graphName}.agtype_set(properties(t),['$metadata','$lastUpdateTime'],'{now:o}')",
+                };
+            List<string> patchOperations = new();
 
-        foreach (var op in patch.Operations)
-        {
-            var path = op.Path.ToString().TrimStart('/').Replace("/", ".");
-            if (path == "$dtId")
+            foreach (var op in patch.Operations)
             {
-                violations.Add("Cannot update the $dtId property");
-            }
-            var pathParts = path.Split('.');
-            if (op.Value != null && (op.Op == OperationType.Add || op.Op == OperationType.Replace))
-            {
-                string? propertyValue = null;
+                var path = op.Path.ToString().TrimStart('/').Replace("/", ".");
+                if (path == "$dtId")
+                {
+                    violations.Add("Cannot update the $dtId property");
+                }
+                var pathParts = path.Split('.');
                 if (
-                    op.Value.GetValueKind() == JsonValueKind.Object
-                    || op.Value.GetValueKind() == JsonValueKind.Array
+                    op.Value != null
+                    && (op.Op == OperationType.Add || op.Op == OperationType.Replace)
                 )
                 {
-                    propertyValue =
-                        $"'{JsonSerializer.Serialize(op.Value, serializerOptions).Replace("'", "\\'")}'";
+                    string? propertyValue = null;
+                    if (
+                        op.Value.GetValueKind() == JsonValueKind.Object
+                        || op.Value.GetValueKind() == JsonValueKind.Array
+                    )
+                    {
+                        propertyValue =
+                            $"'{JsonSerializer.Serialize(op.Value, serializerOptions).Replace("'", "\\'")}'::agtype";
+                    }
+                    else if (op.Value.GetValueKind() == JsonValueKind.String)
+                    {
+                        propertyValue = $"'{op.Value.ToString().Replace("'", "\\'")}'";
+                    }
+                    else
+                    {
+                        propertyValue = op.Value.ToString();
+                    }
+
+                    // Set the property value directly (doesn't support nested properties)
+                    if (pathParts.Length == 1)
+                    {
+                        patchOperations.Add($"SET t.{pathParts.First()} = {propertyValue}");
+                    }
+                    // Use custom function to set the property value on nested properties
+                    else if (pathParts.Length > 1)
+                    {
+                        patchOperations.Add(
+                            $"SET t = {_graphName}.agtype_set(properties(t), ['{string.Join("','", pathParts)}'], {propertyValue})"
+                        );
+                    }
                 }
-                else if (op.Value.GetValueKind() == JsonValueKind.String)
+                else if (op.Op == OperationType.Remove)
                 {
-                    propertyValue = $"'{op.Value.ToString().Replace("'", "\\'")}'";
+                    if (pathParts.Length == 1)
+                    {
+                        patchOperations.Add($"REMOVE t.{pathParts.First()}");
+                    }
+                    else if (pathParts.Length > 1)
+                    {
+                        patchOperations.Add(
+                            $"SET t = {_graphName}.agtype_delete_key(properties(t),['{string.Join("','", pathParts)}'])"
+                        );
+                    }
                 }
                 else
                 {
-                    propertyValue = op.Value.ToString();
+                    throw new Exceptions.NotSupportedException(
+                        $"Operation '{op.Op}' with value '{op.Value}' is not supported"
+                    );
                 }
 
-                if (pathParts.Length == 1)
-                {
-                    patchOperations.Add($"SET t.{pathParts.First()} = {propertyValue}");
-                }
-                else if (pathParts.Length > 1)
-                {
-                    patchOperations.Add(
-                        $"SET t = {_graphName}.agtype_set(t, ['{string.Join("','", pathParts)}'], {propertyValue})"
-                    );
-                }
-            }
-            else if (op.Op == OperationType.Remove)
-            {
-                if (pathParts.Length == 1)
-                {
-                    patchOperations.Add($"REMOVE t.{pathParts.First()}");
-                }
-                else if (pathParts.Length > 1)
-                {
-                    patchOperations.Add(
-                        $"SET t = {_graphName}.agtype_delete_key(properties(t),['{string.Join("','", pathParts)}'])"
-                    );
-                }
-            }
-            else
-            {
-                throw new Exceptions.NotSupportedException(
-                    $"Operation '{op.Op}' with value '{op.Value}' is not supported"
+                // UpdateTime is set on the root of the property
+                updateTimeSetOperations.Add(
+                    $"SET t = {_graphName}.agtype_set(properties(t),['$metadata','{pathParts.First()}','lastUpdateTime'],'{now:o}')"
                 );
             }
 
-            // UpdateTime is set on the root of the property
-            updateTimeSetOperations.Add(
-                $"SET t = {_graphName}.agtype_set(properties(t),['$metadata','{pathParts.First()}','lastUpdateTime'],'{now:o}')"
+            string newEtag = ETagGenerator.GenerateEtag(digitalTwinId, now);
+            patchOperations.Add($"SET t.`$etag` = '{newEtag}'");
+
+            string cypher =
+                $@"MATCH (t:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})
+{string.Join("\n", updateTimeSetOperations)}
+{string.Join("\n", patchOperations)}
+RETURN t";
+            await using var connection = await _dataSource.OpenConnectionAsync(
+                Npgsql.TargetSessionAttributes.ReadWrite,
+                cancellationToken
             );
+            await using var command = connection.CreateCypherCommand(_graphName, cypher);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+            if (!await reader.ReadAsync(cancellationToken))
+            {
+                throw new DigitalTwinNotFoundException(
+                    $"Digital Twin with ID {digitalTwinId} not found"
+                );
+            }
         }
-
-        string newEtag = ETagGenerator.GenerateEtag(digitalTwinId, now);
-        patchOperations.Add($"SET t.`$etag` = '{newEtag}'");
-
-        string cypher =
-            $@"MATCH (t:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})
-            {string.Join("\n", updateTimeSetOperations)}
-            {string.Join("\n", patchOperations)}
-            RETURN t";
-        await using var connection = await _dataSource.OpenConnectionAsync(
-            Npgsql.TargetSessionAttributes.ReadWrite,
-            cancellationToken
-        );
-        await using var command = connection.CreateCypherCommand(_graphName, cypher);
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-
-        if (!await reader.ReadAsync(cancellationToken))
+        catch (Exception ex)
         {
-            throw new DigitalTwinNotFoundException(
-                $"Digital Twin with ID {digitalTwinId} not found"
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            activity?.AddEvent(
+                new ActivityEvent(
+                    "Exception",
+                    default,
+                    new ActivityTagsCollection
+                    {
+                        { "exception.type", ex.GetType().FullName },
+                        { "exception.message", ex.Message },
+                        { "exception.stacktrace", ex.StackTrace },
+                    }
+                )
             );
+            throw;
         }
     }
 
@@ -451,27 +533,53 @@ public partial class AgeDigitalTwinsClient
         CancellationToken cancellationToken = default
     )
     {
-        string cypher =
-            $@"MATCH (t:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}}) 
-            DELETE t
-            RETURN COUNT(t) AS deletedCount";
-        await using var connection = await _dataSource.OpenConnectionAsync(
-            Npgsql.TargetSessionAttributes.ReadWrite,
-            cancellationToken
+        using var activity = ActivitySource.StartActivity(
+            "DeleteDigitalTwinAsync",
+            ActivityKind.Client
         );
-        await using var command = connection.CreateCypherCommand(_graphName, cypher);
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        int rowsAffected = 0;
-        if (await reader.ReadAsync(cancellationToken))
+        activity?.SetTag("digitalTwinId", digitalTwinId);
+
+        try
         {
-            var agResult = await reader.GetFieldValueAsync<Agtype?>(0).ConfigureAwait(false);
-            rowsAffected = (int)agResult;
-        }
-        if (rowsAffected <= 0)
-        {
-            throw new DigitalTwinNotFoundException(
-                $"Digital Twin with ID {digitalTwinId} not found"
+            string cypher =
+                $@"MATCH (t:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}}) 
+DELETE t
+RETURN COUNT(t) AS deletedCount";
+            await using var connection = await _dataSource.OpenConnectionAsync(
+                Npgsql.TargetSessionAttributes.ReadWrite,
+                cancellationToken
             );
+            await using var command = connection.CreateCypherCommand(_graphName, cypher);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            int rowsAffected = 0;
+            if (await reader.ReadAsync(cancellationToken))
+            {
+                var agResult = await reader.GetFieldValueAsync<Agtype?>(0).ConfigureAwait(false);
+                rowsAffected = (int)agResult;
+            }
+            if (rowsAffected <= 0)
+            {
+                throw new DigitalTwinNotFoundException(
+                    $"Digital Twin with ID {digitalTwinId} not found"
+                );
+            }
+        }
+        catch (Exception ex)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            activity?.AddEvent(
+                new ActivityEvent(
+                    "Exception",
+                    default,
+                    new ActivityTagsCollection
+                    {
+                        { "exception.type", ex.GetType().FullName },
+                        { "exception.message", ex.Message },
+                        { "exception.stacktrace", ex.StackTrace },
+                    }
+                )
+            );
+            throw;
         }
     }
 }

@@ -1,4 +1,4 @@
-# AgeDigitalTwins
+# Digital Twins for Apache AGE
 
 AgeDigitalTwins is an SDK and API designed to support Digital Twins applications running on PostgreSQL with the Apache AGE extension. It supports DTDL (Digital Twins Definition Language) data models and allows for the validation of instances loaded in the graph database. The API and SDK are designed to make the transition from Azure Digital Twins easy.
 

@@ -40,6 +40,27 @@ namespace AgeDigitalTwins.Test
                         ""unit"": ""gramPerCubicMetre""
                     },
                     {
+                        ""@type"": ""Property"",
+                        ""name"": ""dimensions"",
+                        ""schema"": {
+                            ""@type"": ""Object"",
+                            ""fields"": [
+                                {
+                                    ""name"": ""length"",
+                                    ""schema"": ""double""
+                                },
+                                {
+                                    ""name"": ""width"",
+                                    ""schema"": ""double""
+                                },
+                                {
+                                    ""name"": ""height"",
+                                    ""schema"": ""double""
+                                }
+                            ]
+                        }
+                    },
+                    {
                         ""@type"": ""Relationship"",
                         ""@id"": ""dtmi:com:adt:dtsample:room:rel_has_sensors;1"",
                         ""name"": ""rel_has_sensors"",
@@ -69,6 +90,33 @@ namespace AgeDigitalTwins.Test
                         ""schema"": ""double""
                     }
                 ]
+            }";
+
+        public const string TwinRoom1 =
+            @"{
+                ""$dtId"": ""room1"",
+                ""$metadata"": {
+                    ""$model"": ""dtmi:com:adt:dtsample:room;1""
+                },
+                ""name"": ""Room 1"",
+                ""description"": ""This is a room."",
+                ""temperature"": 22.5,
+                ""humidity"": 0.5,
+                ""dimensions"": {
+                    ""length"": 5.0,
+                    ""width"": 4.0,
+                    ""height"": 3.0
+                }
+            }";
+
+        public const string TwinTemperatureSensor1 =
+            @"{
+                ""$dtId"": ""sensor1"",
+                ""$metadata"": {
+                    ""$model"": ""dtmi:com:adt:dtsample:tempsensor;1""
+                },
+                ""name"": ""Temperature Sensor 1"",
+                ""temperature"": 22.5
             }";
 
         public const string DtdlCelestialBody =

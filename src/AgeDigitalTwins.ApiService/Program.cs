@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using AgeDigitalTwins;
 using AgeDigitalTwins.ApiService;
 using AgeDigitalTwins.ApiService.Models;
@@ -106,6 +107,13 @@ else
 
 builder.Services.AddRequestTimeouts();
 builder.Services.AddOutputCache();
+
+// Configure JSON serialization options to omit null values and use camelCase naming
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+    options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+});
 
 var app = builder.Build();
 
@@ -237,8 +245,8 @@ app.MapGet(
                 }
             }
 
-            // Parse continuation token from query string
-            ContinuationToken? continuationToken = null;
+            // Get continuation token from query string
+            string? continuationToken = null;
             if (
                 httpContext.Request.Query.TryGetValue(
                     "continuationToken",
@@ -246,13 +254,7 @@ app.MapGet(
                 )
             )
             {
-                continuationToken = ContinuationToken.Deserialize(
-                    continuationTokenStringValues.ToString()
-                );
-                if (continuationToken == null)
-                {
-                    return Results.BadRequest(new { error = "Invalid continuation token." });
-                }
+                continuationToken = continuationTokenStringValues.ToString();
             }
 
             var page = await client
@@ -295,8 +297,8 @@ app.MapGet(
                 }
             }
 
-            // Parse continuation token from query string
-            ContinuationToken? continuationToken = null;
+            // Get continuation token from query string
+            string? continuationToken = null;
             if (
                 httpContext.Request.Query.TryGetValue(
                     "continuationToken",
@@ -304,13 +306,7 @@ app.MapGet(
                 )
             )
             {
-                continuationToken = ContinuationToken.Deserialize(
-                    continuationTokenStringValues.ToString()
-                );
-                if (continuationToken == null)
-                {
-                    return Results.BadRequest(new { error = "Invalid continuation token." });
-                }
+                continuationToken = continuationTokenStringValues.ToString();
             }
 
             var page = await client
@@ -440,21 +436,6 @@ app.MapPost(
             CancellationToken cancellationToken
         ) =>
         {
-            if (
-                !requestBody.TryGetProperty("query", out JsonElement queryElement)
-                || queryElement.ValueKind != JsonValueKind.String
-            )
-            {
-                return Results.BadRequest(
-                    new
-                    {
-                        error = "Invalid request body. Expected a JSON object with a 'query' property.",
-                    }
-                );
-            }
-
-            string query = queryElement.GetString()!;
-
             int? maxItemsPerPage = 2000; // Default value
 
             // Parse max-items-per-page header
@@ -471,8 +452,8 @@ app.MapPost(
                 }
             }
 
-            // Parse continuation token from request body
-            ContinuationToken? continuationToken = null;
+            // Get continuation token from request body
+            string? continuationToken = null;
             if (
                 requestBody.TryGetProperty(
                     "continuationToken",
@@ -481,20 +462,32 @@ app.MapPost(
                 && continuationTokenElement.ValueKind == JsonValueKind.String
             )
             {
-                continuationToken = ContinuationToken.Deserialize(
-                    continuationTokenElement.GetString()!
+                continuationToken = continuationTokenElement.GetString();
+            }
+
+            string? query = null;
+            if (
+                requestBody.TryGetProperty("query", out JsonElement queryElement)
+                && queryElement.ValueKind == JsonValueKind.String
+            )
+            {
+                query = queryElement.GetString();
+            }
+
+            if (string.IsNullOrEmpty(continuationToken) && string.IsNullOrEmpty(query))
+            {
+                return Results.BadRequest(
+                    new
+                    {
+                        error = "Invalid request body. Expected a JSON object with a 'query' property.",
+                    }
                 );
-                if (continuationToken == null)
-                {
-                    return Results.BadRequest(new { error = "Invalid continuation token." });
-                }
             }
 
             var page = await client
                 .QueryAsync<JsonDocument>(query, cancellationToken)
                 .AsPages(continuationToken, maxItemsPerPage, cancellationToken)
                 .FirstAsync(cancellationToken);
-
             return Results.Json(page);
         }
     )
@@ -545,8 +538,8 @@ app.MapGet(
                 }
             }
 
-            // Parse continuation token from query string
-            ContinuationToken? continuationToken = null;
+            // Get continuation token from query string
+            string? continuationToken = null;
             if (
                 httpContext.Request.Query.TryGetValue(
                     "continuationToken",
@@ -554,13 +547,7 @@ app.MapGet(
                 )
             )
             {
-                continuationToken = ContinuationToken.Deserialize(
-                    continuationTokenStringValues.ToString()
-                );
-                if (continuationToken == null)
-                {
-                    return Results.BadRequest(new { error = "Invalid continuation token." });
-                }
+                continuationToken = continuationTokenStringValues.ToString();
             }
 
             var page = await client
@@ -623,7 +610,6 @@ app.MapDelete(
     .WithTags("Models")
     .WithSummary("Deletes a specific model by its ID.");
 
-// This endpoint is only used for cleanup in tests
 // When the client is initiated, a new graph will automatically be created if the specified graph doesn't exist
 // Creating and dropping graphs should be done in the control plane
 if (app.Environment.IsDevelopment())
@@ -635,6 +621,7 @@ if (app.Environment.IsDevelopment())
             return client.CreateGraphAsync(cancellationToken);
         }
     );
+    // This endpoint is only used for cleanup in tests
     app.MapDelete(
         "graph/delete",
         ([FromServices] AgeDigitalTwinsClient client, CancellationToken cancellationToken) =>

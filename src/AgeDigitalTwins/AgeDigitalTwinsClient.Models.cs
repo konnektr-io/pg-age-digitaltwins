@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
@@ -46,31 +48,28 @@ public partial class AgeDigitalTwinsClient
         options ??= new GetModelsOptions();
 
         string cypher;
+        string returnStateMent = options.IncludeModelDefinition
+            ? " RETURN *"
+            : " RETURN m.id AS id, m.uploadTime AS uploadTime, m.displayName AS displayName, m.description AS description, m.decommissioned AS decommissioned, m.bases AS bases";
 
         if (options.DependenciesFor != null && options.DependenciesFor.Length > 0)
         {
             string dependenciesForList = $"['{string.Join("','", options.DependenciesFor)}']";
             cypher =
                 $@"
-                UNWIND {dependenciesForList} AS modelId
-                MATCH (m:Model {{id: modelId}})
-                UNWIND m.bases AS dependency
-                MATCH (m2:Model {{id: dependency}})
-                RETURN m2 AS model";
+MATCH (m:Model) WHERE m.id IN {dependenciesForList}
+{returnStateMent}
+UNION
+UNWIND {dependenciesForList} AS modelId
+MATCH (m1:Model {{id: modelId}})
+UNWIND m1.bases AS dependency
+MATCH (m:Model {{id: dependency}})
+{returnStateMent}";
         }
         else
         {
             cypher = @"MATCH (m:Model)";
-        }
-
-        if (options.IncludeModelDefinition)
-        {
-            cypher += "RETURN m";
-        }
-        else
-        {
-            cypher +=
-                @"RETURN {id:m.id, uploadTime: m.uploadTime, displayName: m.displayName, description: m.description, decommissioned: m.decommissioned} AS m";
+            cypher += returnStateMent;
         }
 
         return QueryAsync<DigitalTwinsModelData>(cypher, cancellationToken);
@@ -88,23 +87,46 @@ public partial class AgeDigitalTwinsClient
         CancellationToken cancellationToken = default
     )
     {
-        string cypher = $@"MATCH (m:Model) WHERE m.id = '{modelId}' RETURN m";
-        await using var connection = await _dataSource.OpenConnectionAsync(
-            TargetSessionAttributes.PreferStandby,
-            cancellationToken
-        );
-        await using var command = connection.CreateCypherCommand(_graphName, cypher);
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        using var activity = ActivitySource.StartActivity("GetModelAsync", ActivityKind.Client);
+        activity?.SetTag("modelId", modelId);
 
-        if (await reader.ReadAsync(cancellationToken))
+        try
         {
-            var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
-            var vertex = (Vertex)agResult;
-            return new DigitalTwinsModelData(vertex.Properties);
+            string cypher = $@"MATCH (m:Model {{id: '{modelId}'}}) RETURN m";
+            await using var connection = await _dataSource.OpenConnectionAsync(
+                TargetSessionAttributes.PreferStandby,
+                cancellationToken
+            );
+            await using var command = connection.CreateCypherCommand(_graphName, cypher);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+            if (await reader.ReadAsync(cancellationToken))
+            {
+                var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
+                var vertex = (Vertex)agResult;
+                return new DigitalTwinsModelData(vertex.Properties);
+            }
+            else
+            {
+                throw new ModelNotFoundException($"Model with ID {modelId} not found");
+            }
         }
-        else
+        catch (Exception ex)
         {
-            throw new ModelNotFoundException($"Model with ID {modelId} not found");
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            activity?.AddEvent(
+                new ActivityEvent(
+                    "Exception",
+                    default,
+                    new ActivityTagsCollection
+                    {
+                        { "exception.type", ex.GetType().FullName },
+                        { "exception.message", ex.Message },
+                        { "exception.stacktrace", ex.StackTrace },
+                    }
+                )
+            );
+            throw;
         }
     }
 
@@ -121,6 +143,9 @@ public partial class AgeDigitalTwinsClient
         CancellationToken cancellationToken = default
     )
     {
+        using var activity = ActivitySource.StartActivity("CreateModelsAsync", ActivityKind.Client);
+        activity?.SetTag("modelCount", dtdlModels.Count());
+
         try
         {
             var objectModel = await _modelParser.ParseAsync(
@@ -161,10 +186,10 @@ public partial class AgeDigitalTwinsClient
             // Trying so will raise a unique constraint violation
             string cypher =
                 $@"UNWIND {modelsString} as model
-                WITH model::agtype as modelAgtype
-                CREATE (m:Model {{id: modelAgtype['id']}})
-                SET m = modelAgtype
-                RETURN m";
+WITH model::agtype as modelAgtype
+CREATE (m:Model {{id: modelAgtype['id']}})
+SET m = modelAgtype
+RETURN m";
 
             await using var connection = await _dataSource.OpenConnectionAsync(
                 TargetSessionAttributes.ReadWrite,
@@ -284,6 +309,23 @@ public partial class AgeDigitalTwinsClient
         {
             throw new DTDLParserParsingException(ex);
         }
+        catch (Exception ex)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            activity?.AddEvent(
+                new ActivityEvent(
+                    "Exception",
+                    default,
+                    new ActivityTagsCollection
+                    {
+                        { "exception.type", ex.GetType().FullName },
+                        { "exception.message", ex.Message },
+                        { "exception.stacktrace", ex.StackTrace },
+                    }
+                )
+            );
+            throw;
+        }
     }
 
     /// <summary>
@@ -299,15 +341,18 @@ public partial class AgeDigitalTwinsClient
         CancellationToken cancellationToken = default
     )
     {
+        using var activity = ActivitySource.StartActivity("DeleteModelAsync", ActivityKind.Client);
+        activity?.SetTag("modelId", modelId);
+
         try
         {
             // Delete the model and outgoing relationships
             // If there are any other relationships left (dependencies), the query should fail
             string cypher =
                 $@"MATCH (m:Model {{id: '{modelId}'}})
-                OPTIONAL MATCH (m)-[r]->(:Model)
-                DELETE r, m
-                RETURN COUNT(m) AS deletedCount";
+OPTIONAL MATCH (m)-[r]->(:Model)
+DELETE r, m
+RETURN COUNT(m) AS deletedCount";
             await using var connection = await _dataSource.OpenConnectionAsync(
                 TargetSessionAttributes.ReadWrite,
                 cancellationToken
@@ -329,6 +374,23 @@ public partial class AgeDigitalTwinsClient
         {
             throw new ModelReferencesNotDeletedException();
         }
+        catch (Exception ex)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            activity?.AddEvent(
+                new ActivityEvent(
+                    "Exception",
+                    default,
+                    new ActivityTagsCollection
+                    {
+                        { "exception.type", ex.GetType().FullName },
+                        { "exception.message", ex.Message },
+                        { "exception.stacktrace", ex.StackTrace },
+                    }
+                )
+            );
+            throw;
+        }
     }
 
     /// <summary>
@@ -338,26 +400,48 @@ public partial class AgeDigitalTwinsClient
     /// <returns>A task that represents the asynchronous operation.</returns>
     public virtual async Task DeleteAllModelsAsync(CancellationToken cancellationToken = default)
     {
-        // Delete all models and relationships
-        string cypher =
-            $@"MATCH (m:Model)
-            DETACH DELETE m
-            RETURN COUNT(m) AS deletedCount";
-        await using var connection = await _dataSource.OpenConnectionAsync(
-            TargetSessionAttributes.ReadWrite,
-            cancellationToken
+        using var activity = ActivitySource.StartActivity(
+            "DeleteAllModelsAsync",
+            ActivityKind.Client
         );
-        await using var command = connection.CreateCypherCommand(_graphName, cypher);
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        int rowsAffected = 0;
-        if (await reader.ReadAsync(cancellationToken))
+
+        try
         {
-            var agResult = await reader.GetFieldValueAsync<Agtype?>(0).ConfigureAwait(false);
-            rowsAffected = (int)agResult;
+            // Delete all models and relationships
+            string cypher = $@"MATCH (m:Model) DETACH DELETE m RETURN COUNT(m) AS deletedCount";
+            await using var connection = await _dataSource.OpenConnectionAsync(
+                TargetSessionAttributes.ReadWrite,
+                cancellationToken
+            );
+            await using var command = connection.CreateCypherCommand(_graphName, cypher);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            int rowsAffected = 0;
+            if (await reader.ReadAsync(cancellationToken))
+            {
+                var agResult = await reader.GetFieldValueAsync<Agtype?>(0).ConfigureAwait(false);
+                rowsAffected = (int)agResult;
+            }
+            if (rowsAffected <= 0)
+            {
+                throw new ModelNotFoundException($"No models found");
+            }
         }
-        if (rowsAffected <= 0)
+        catch (Exception ex)
         {
-            throw new ModelNotFoundException($"No models found");
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            activity?.AddEvent(
+                new ActivityEvent(
+                    "Exception",
+                    default,
+                    new ActivityTagsCollection
+                    {
+                        { "exception.type", ex.GetType().FullName },
+                        { "exception.message", ex.Message },
+                        { "exception.stacktrace", ex.StackTrace },
+                    }
+                )
+            );
+            throw;
         }
     }
 }

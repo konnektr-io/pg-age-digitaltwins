@@ -64,6 +64,62 @@ public class ModelsTests : TestBase
                 Assert.Contains("dtmi:com:contoso:Planet;1", results[i].Bases);
             }
         }
+
+        await foreach (
+            var modelData in Client.GetModelsAsync(new() { IncludeModelDefinition = true })
+        )
+        {
+            var modelId = modelData!.Id;
+            var modelJson = JsonDocument.Parse(modelData.DtdlModel!);
+            var modelIdFromJson = modelJson.RootElement.GetProperty("@id").GetString();
+            Assert.Equal(modelId, modelIdFromJson);
+            if (modelId == "dtmi:com:contoso:Planet;1")
+            {
+                Assert.Single(modelData.Bases);
+                Assert.Contains("dtmi:com:contoso:CelestialBody;1", modelData.Bases);
+            }
+        }
+
+        await foreach (
+            var modelData in Client.GetModelsAsync(new() { IncludeModelDefinition = false })
+        )
+        {
+            var modelId = modelData!.Id;
+            Assert.Null(modelData.DtdlModel);
+            if (modelId == "dtmi:com:contoso:Planet;1")
+            {
+                Assert.Single(modelData.Bases);
+                Assert.Contains("dtmi:com:contoso:CelestialBody;1", modelData.Bases);
+            }
+        }
+
+        bool providedModelIncluded = false;
+        bool dependenciesIncluded = false;
+        await foreach (
+            var modelData in Client.GetModelsAsync(
+                new()
+                {
+                    DependenciesFor = ["dtmi:com:contoso:Planet;1"],
+                    IncludeModelDefinition = false,
+                }
+            )
+        )
+        {
+            var modelId = modelData!.Id;
+            Assert.Null(modelData.DtdlModel);
+            if (modelId == "dtmi:com:contoso:Planet;1")
+            {
+                providedModelIncluded = true;
+                Assert.Single(modelData.Bases);
+                Assert.Contains("dtmi:com:contoso:CelestialBody;1", modelData.Bases);
+            }
+            if (modelId == "dtmi:com:contoso:CelestialBody;1")
+            {
+                dependenciesIncluded = true;
+            }
+        }
+        Assert.True(providedModelIncluded);
+        Assert.True(dependenciesIncluded);
     }
 
     [Fact]

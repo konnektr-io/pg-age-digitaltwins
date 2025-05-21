@@ -25,6 +25,13 @@ public static class GraphInitialization
             new(@$"ALTER TABLE {graphName}.""_extends"" REPLICA IDENTITY FULL;"),
             new(@$"SELECT create_elabel('{graphName}', '_hasComponent');"),
             new(@$"ALTER TABLE {graphName}.""_hasComponent"" REPLICA IDENTITY FULL;"),
+        ];
+    }
+
+    public static List<NpgsqlBatchCommand> GetGraphUpdateFunctionsCommands(string graphName)
+    {
+        return
+        [
             new(
                 @$"CREATE OR REPLACE FUNCTION {graphName}.is_of_model(twin agtype, model_id agtype, exact boolean default false)
                 RETURNS boolean
