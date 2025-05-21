@@ -59,7 +59,8 @@ public static class Extensions
                     .AddAspNetCoreInstrumentation()
                     .AddHttpClientInstrumentation()
                     .AddRuntimeInstrumentation()
-                    .AddMeter("AgeDigitalTwins.SDK");
+                    .AddMeter("AgeDigitalTwins.SDK")
+                    .AddMeter("AgeDigitalTwins.Events");
             })
             .WithTracing(tracing =>
             {
@@ -69,7 +70,8 @@ public static class Extensions
                     // Uncomment the following line to enable gRPC instrumentation (requires the OpenTelemetry.Instrumentation.GrpcNetClient package)
                     //.AddGrpcClientInstrumentation()
                     .AddHttpClientInstrumentation()
-                    .AddSource("AgeDigitalTwins.SDK");
+                    .AddSource("AgeDigitalTwins.SDK")
+                    .AddSource("AgeDigitalTwins.Events");
             });
 
         builder.AddOpenTelemetryExporters();
