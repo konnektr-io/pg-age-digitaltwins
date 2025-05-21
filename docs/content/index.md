@@ -9,19 +9,16 @@ announcement:
   icon: 'lucide:party-popper'
   to: /introduction
 actions:
-
 - name: Get Started
-    to: /introduction
+  to: /introduction
 - name: GitHub
-    variant: outline
-    to: <https://github.com/konnektr-io/pg-age-digitaltwins>
-    leftIcon: 'lucide:github'
-
+  variant: outline
+  to: <https://github.com/konnektr-io/pg-age-digitaltwins>
+  leftIcon: 'lucide:github'
 ---
 
 # title
-Welcome to AgeDigitalTwins Documentation
+Welcome to DigitalTwins for Apache AGE Documentation
 
 # description
-Comprehensive guides and references for building and managing digital twins with AgeDigitalTwins. :br Open Source. Compatible. Easy to Use.
-::
+Digital Twins for Apache AGE allows to use Postgres with the Apache AGE extension as a backend for Digital Twins solutions using DTDL.

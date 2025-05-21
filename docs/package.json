@@ -10,9 +10,10 @@
     "postinstall": "nuxt prepare"
   },
   "dependencies": {
-    "nuxt": "^3.17.3",
+    "nuxt": "^3.17.0",
     "shadcn-docs-nuxt": "^0.8.21",
     "vue": "^3.5.13",
     "vue-router": "^4.5.1"
-  }
+  },
+  "packageManager": "pnpm@9.12.0+sha512.4abf725084d7bcbafbd728bfc7bee61f2f791f977fd87542b3579dcb23504d170d46337945e4c66485cd12d588a0c0e570ed9c477e7ccdd8507cf05f3f92eaca"
 }

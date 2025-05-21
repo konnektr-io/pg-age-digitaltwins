@@ -9,7 +9,7 @@ importers:
   .:
     dependencies:
       nuxt:
-        specifier: ^3.16.0
+        specifier: ^3.17.0
         version: 3.17.1(@netlify/blobs@8.2.0)(@parcel/watcher@2.5.1)(@types/node@22.15.3)(db0@0.3.2)(ioredis@5.6.1)(magicast@0.3.5)(rollup@4.40.1)(terser@5.39.0)(typescript@5.8.3)(vite@6.3.3(@types/node@22.15.3)(jiti@2.4.2)(terser@5.39.0)(yaml@2.7.1))(yaml@2.7.1)
       shadcn-docs-nuxt:
         specifier: ^0.8.21
@@ -18,7 +18,7 @@ importers:
         specifier: ^3.5.13
         version: 3.5.13(typescript@5.8.3)
       vue-router:
-        specifier: ^4.5.0
+        specifier: ^4.5.1
         version: 4.5.1(vue@3.5.13(typescript@5.8.3))
 
 packages:

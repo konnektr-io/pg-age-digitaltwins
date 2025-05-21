@@ -1,8 +1,8 @@
 export default defineAppConfig({
   shadcnDocs: {
     site: {
-      name: 'shadcn-docs-nuxt',
-      description: 'Beautifully designed Nuxt Content template built with shadcn-vue. Customizable. Compatible. Open Source.',
+      name: 'pg-age-digitaltwins',
+      description: 'Digital Twins for Apache AGE allows to use Postgres with the Apache AGE extension as a backend for Digital Twins solutions using DTDL.',
     },
     theme: {
       customizable: true,
@@ -20,7 +20,7 @@ export default defineAppConfig({
       nav: [],
       links: [{
         icon: 'lucide:github',
-        to: 'https://github.com/ZTL-UwU/shadcn-docs-nuxt',
+        to: 'https://github.com/konnektr-io/pg-age-digitaltwins',
         target: '_blank',
       }],
     },
@@ -33,10 +33,10 @@ export default defineAppConfig({
       showTitle: true,
     },
     footer: {
-      credits: 'Copyright © 2024',
+      credits: 'Copyright © 2025',
       links: [{
         icon: 'lucide:github',
-        to: 'https://github.com/ZTL-UwU/shadcn-docs-nuxt',
+        to: 'https://github.com/konnektr-io/pg-age-digitaltwins',
         target: '_blank',
       }],
     },
@@ -46,12 +46,12 @@ export default defineAppConfig({
       links: [{
         title: 'Star on GitHub',
         icon: 'lucide:star',
-        to: 'https://github.com/ZTL-UwU/shadcn-docs-nuxt',
+        to: 'https://github.com/konnektr-io/pg-age-digitaltwins',
         target: '_blank',
       }, {
         title: 'Create Issues',
         icon: 'lucide:circle-dot',
-        to: 'https://github.com/ZTL-UwU/shadcn-docs-nuxt/issues',
+        to: 'https://github.com/konnektr-io/pg-age-digitaltwins/issues',
         target: '_blank',
       }],
     },
