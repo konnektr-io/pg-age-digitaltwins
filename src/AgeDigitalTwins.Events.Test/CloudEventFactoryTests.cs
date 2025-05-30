@@ -172,7 +172,9 @@ public class CloudEventFactoryTests
                 .Parse("{\"$dtId\": \"twin1\", \"$metadata\": {\"$model\": \"model1\"}}")!
                 .AsObject(),
             OldValue = JsonNode
-                .Parse("{\"$dtId\": \"twin1\", \"$metadata\": {\"$model\": \"model0\"}}")!
+                .Parse(
+                    "{\"$dtId\": \"twin1\", \"$metadata\": {\"$model\": \"model1\"}, \"test\": \"test\"}"
+                )!
                 .AsObject(),
             Timestamp = DateTime.UtcNow,
         };
@@ -187,5 +189,33 @@ public class CloudEventFactoryTests
 
         // Assert
         Assert.Contains(result, ce => ce.Type == "Custom.DataHistory.PropertyEventType");
+    }
+
+    [Fact]
+    public void CreateDataHistoryEventsModelChange_WithTypeMapping_UsesCustomType()
+    {
+        // Arrange
+        var eventData = new EventData
+        {
+            EventType = EventType.TwinUpdate,
+            NewValue = JsonNode
+                .Parse("{\"$dtId\": \"twin1\", \"$metadata\": {\"$model\": \"model1\"}}")!
+                .AsObject(),
+            OldValue = JsonNode
+                .Parse("{\"$dtId\": \"twin1\", \"$metadata\": {\"$model\": \"model0\"}}")!
+                .AsObject(),
+            Timestamp = DateTime.UtcNow,
+        };
+        var source = new Uri("http://example.com");
+        var mapping = new Dictionary<SinkEventType, string>
+        {
+            { SinkEventType.TwinLifecycle, "Custom.DataHistory.TwinLifecycle" },
+        };
+
+        // Act
+        var result = CloudEventFactory.CreateDataHistoryEvents(eventData, source, mapping);
+
+        // Assert
+        Assert.Contains(result, ce => ce.Type == "Custom.DataHistory.TwinLifecycle");
     }
 }
