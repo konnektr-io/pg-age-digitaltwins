@@ -94,8 +94,9 @@ public class KafkaEventSink : IEventSink, IDisposable
                 );
 
                 _logger.LogDebug(
-                    "Delivered message of type {EventType} to Kafka sink '{SinkName}'",
+                    "Delivered message of type {EventType} with source {EventSource} to Kafka sink '{SinkName}'",
                     cloudEvent.Type,
+                    cloudEvent.Source,
                     Name
                 );
             }
