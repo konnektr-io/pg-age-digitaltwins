@@ -219,7 +219,8 @@ public class KustoEventSink : IEventSink, IDisposable
                         if (status.Status != Status.Pending && status.Status != Status.Succeeded)
                         {
                             _logger.LogError(
-                                "Ingestion to Kusto failed: {Status}",
+                                "Ingestion to Kusto sink '{SinkName}' failed: {Status}",
+                                Name,
                                 JsonSerializer.Serialize(status)
                             );
                         }
