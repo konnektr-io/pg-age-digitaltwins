@@ -93,7 +93,7 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogInformation(
+                        _logger.LogError(
                             ex,
                             "Error during replication: {Message}\nRetrying in 5 seconds...",
                             ex.Message
@@ -304,7 +304,7 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
     private async Task ConsumeQueueAsync(CancellationToken cancellationToken = default)
     {
         List<IEventSink> eventSinks = _eventSinkFactory.CreateEventSinks();
-        _logger.LogDebug(
+        _logger.LogInformation(
             "Event sinks created: {Sinks}",
             JsonSerializer.Serialize(eventSinks, _jsonSerializerOptions)
         );
@@ -314,7 +314,7 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
             return;
         }
         List<EventRoute> eventRoutes = _eventSinkFactory.GetEventRoutes();
-        _logger.LogDebug(
+        _logger.LogInformation(
             "Event routes created: {Routes}",
             JsonSerializer.Serialize(eventRoutes, _jsonSerializerOptions)
         );
