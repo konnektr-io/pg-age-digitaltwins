@@ -73,7 +73,7 @@ public static class CloudEventFactory
                 Id = Guid.NewGuid().ToString(),
                 Source = source,
                 Data = body,
-                Type = "Konnektr.DigitalTwin.Twin.Update", // "Microsoft.DigitalTwin.Twin.Update",
+                Type = "Konnektr.DigitalTwins.Twin.Update", // "Microsoft.DigitalTwins.Twin.Update",
                 DataContentType = "application/json",
                 Subject = twinIdNode.ToString(),
                 Time = eventData.Timestamp,
@@ -102,7 +102,7 @@ public static class CloudEventFactory
                 );
             }
             body = eventData.NewValue;
-            type = "Konnektr.DigitalTwin.Twin.Create"; // "Microsoft.DigitalTwin.Twin.Create";
+            type = "Konnektr.DigitalTwins.Twin.Create"; // "Microsoft.DigitalTwins.Twin.Create";
         }
         else if (eventData.EventType == EventType.TwinDelete)
         {
@@ -114,7 +114,7 @@ public static class CloudEventFactory
                 );
             }
             body = eventData.OldValue;
-            type = "Konnektr.DigitalTwin.Twin.Delete"; // "Microsoft.DigitalTwin.Twin.Delete";
+            type = "Konnektr.DigitalTwins.Twin.Delete"; // "Microsoft.DigitalTwins.Twin.Delete";
         }
         else
         {
@@ -200,7 +200,7 @@ public static class CloudEventFactory
                 Id = Guid.NewGuid().ToString(),
                 Source = source,
                 Data = body,
-                Type = "Konnektr.DigitalTwin.Relationship.Update", // "Microsoft.DigitalTwin.Relationship.Update",
+                Type = "Konnektr.DigitalTwins.Relationship.Update", // "Microsoft.DigitalTwins.Relationship.Update",
                 DataContentType = "application/json",
                 Subject = $"{twinIdNode}/relationships/{relationshipIdNode}",
                 Time = eventData.Timestamp,
@@ -229,7 +229,7 @@ public static class CloudEventFactory
                 );
             }
             body = eventData.NewValue;
-            type = "Konnektr.DigitalTwins.Relationship.Create"; // "Microsoft.DigitalTwin.Relationship.Create";
+            type = "Konnektr.DigitalTwins.Relationship.Create"; // "Microsoft.DigitalTwins.Relationship.Create";
         }
         else if (eventData.EventType == EventType.RelationshipDelete)
         {
@@ -241,7 +241,7 @@ public static class CloudEventFactory
                 );
             }
             body = eventData.OldValue;
-            type = "Konnektr.DigitalTwin.Relationship.Delete"; // "Microsoft.DigitalTwin.Relationship.Delete";
+            type = "Konnektr.DigitalTwins.Relationship.Delete"; // "Microsoft.DigitalTwins.Relationship.Delete";
         }
         else
         {
@@ -342,7 +342,7 @@ public static class CloudEventFactory
                 Id = Guid.NewGuid().ToString(),
                 Source = source,
                 Data = body,
-                Type = "Konnektr.DigitalTwin.Twin.Lifecycle",
+                Type = "Konnektr.DigitalTwins.Twin.Lifecycle",
                 DataContentType = "application/json",
                 Subject = body["twinId"]?.ToString(),
                 Time = eventData.Timestamp,
@@ -401,7 +401,7 @@ public static class CloudEventFactory
                 Id = Guid.NewGuid().ToString(),
                 Source = source,
                 Data = body,
-                Type = "Konnektr.DigitalTwin.Relationship.Lifecycle",
+                Type = "Konnektr.DigitalTwins.Relationship.Lifecycle",
                 DataContentType = "application/json",
                 Subject = $"{body["source"]}/relationships/{body["relationshipId"]}",
                 Time = eventData.Timestamp,
@@ -445,7 +445,7 @@ public static class CloudEventFactory
                     Id = Guid.NewGuid().ToString(),
                     Source = source,
                     Data = body,
-                    Type = "Konnektr.DigitalTwin.Twin.Lifecycle",
+                    Type = "Konnektr.DigitalTwins.Twin.Lifecycle",
                     DataContentType = "application/json",
                     Subject = body["twinId"]?.ToString(),
                     Time = eventData.Timestamp,
@@ -508,7 +508,7 @@ public static class CloudEventFactory
                     Id = Guid.NewGuid().ToString(),
                     Source = source,
                     Data = body,
-                    Type = "Konnektr.DigitalTwin.Property.Event",
+                    Type = "Konnektr.DigitalTwins.Property.Event",
                     DataContentType = "application/json",
                     Subject = string.IsNullOrEmpty(body["relationshipId"]?.ToString())
                         // Twin property update
