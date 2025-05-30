@@ -26,10 +26,14 @@ public class KustoEventSink : IEventSink, IDisposable
         ).WithAadAzureTokenCredentialsAuthentication(credential);
         _ingestClient = KustoIngestFactory.CreateQueuedIngestClient(kustoConnectionStringBuilder);
 
-        _ingestionProperties = new Dictionary<string, KustoQueuedIngestionProperties>
+        // Define the default ingestion properties for each event type
+        var defaultIngestionProperties = new Dictionary<
+            SinkEventType,
+            KustoQueuedIngestionProperties
+        >
         {
             {
-                "DigitalTwin.Property.Event",
+                SinkEventType.PropertyEvent,
                 new KustoQueuedIngestionProperties(
                     _options.Database,
                     _options.PropertyEventsTable ?? "AdtPropertyEvents"
@@ -78,7 +82,7 @@ public class KustoEventSink : IEventSink, IDisposable
                 }
             },
             {
-                "DigitalTwin.Twin.Lifecycle",
+                SinkEventType.TwinLifecycle,
                 new KustoQueuedIngestionProperties(
                     _options.Database,
                     _options.TwinLifeCycleEventsTable ?? "AdtTwinLifeCycleEvents"
@@ -110,7 +114,7 @@ public class KustoEventSink : IEventSink, IDisposable
                 }
             },
             {
-                "DigitalTwin.Relationship.Lifecycle",
+                SinkEventType.RelationshipLifecycle,
                 new KustoQueuedIngestionProperties(
                     _options.Database,
                     _options.RelationshipLifeCycleEventsTable ?? "AdtRelationshipLifeCycleEvents"
@@ -148,6 +152,19 @@ public class KustoEventSink : IEventSink, IDisposable
                 }
             },
         };
+
+        var mappings =
+            _options.EventTypeMappings ?? CloudEventFactory.DefaultDataHistoryTypeMapping;
+
+        // Build the _ingestionProperties dictionary using mapped event types if present
+        _ingestionProperties = [];
+        foreach (var mapping in mappings)
+        {
+            if (defaultIngestionProperties.TryGetValue(mapping.Key, out var prop))
+            {
+                _ingestionProperties[mapping.Value] = prop;
+            }
+        }
     }
 
     public string Name => _options.Name;
@@ -234,12 +251,12 @@ public class KustoEventSink : IEventSink, IDisposable
     }
 }
 
-public class KustoSinkOptions
+public class KustoSinkOptions : SinkOptions
 {
-    public required string Name { get; set; }
     public required string IngestionUri { get; set; }
     public required string Database { get; set; }
     public string? PropertyEventsTable { get; set; }
     public string? TwinLifeCycleEventsTable { get; set; }
     public string? RelationshipLifeCycleEventsTable { get; set; }
+    // EventTypeMappings now uses SinkEventType (inherited)
 }

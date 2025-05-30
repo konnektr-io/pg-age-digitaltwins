@@ -143,9 +143,8 @@ public class KafkaEventSink : IEventSink, IDisposable
     }
 }
 
-public class KafkaSinkOptions
+public class KafkaSinkOptions : SinkOptions
 {
-    public required string Name { get; set; }
     public required string BrokerList { get; set; }
     public required string Topic { get; set; }
     public string? SaslMechanism { get; set; } // Can be PLAIN or OAUTHBEARER for entra id

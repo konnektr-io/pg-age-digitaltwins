@@ -68,9 +68,8 @@ public class MqttEventSink : IEventSink, IDisposable
     }
 }
 
-public class MqttSinkOptions
+public class MqttSinkOptions : SinkOptions
 {
-    public required string Name { get; set; }
     public required string Broker { get; set; }
     public required int Port { get; set; }
     public required string Topic { get; set; }

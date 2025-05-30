@@ -23,7 +23,11 @@ public class CloudEventFactoryTests
         var source = new Uri("http://example.com");
 
         // Act
-        var result = CloudEventFactory.CreateDigitalTwinChangeNotificationEvents(eventData, source);
+        var result = CloudEventFactory.CreateDigitalTwinChangeNotificationEvents(
+            eventData,
+            source,
+            []
+        );
 
         // Assert
         Assert.Single(result);
@@ -48,7 +52,8 @@ public class CloudEventFactoryTests
 
         // Act & Assert
         Assert.Throws<ArgumentNullException>(
-            () => CloudEventFactory.CreateDigitalTwinChangeNotificationEvents(eventData!, source)
+            () =>
+                CloudEventFactory.CreateDigitalTwinChangeNotificationEvents(eventData!, source, [])
         );
     }
 
@@ -67,7 +72,7 @@ public class CloudEventFactoryTests
 
         // Act & Assert
         Assert.Throws<ArgumentNullException>(
-            () => CloudEventFactory.CreateDigitalTwinChangeNotificationEvents(eventData, source)
+            () => CloudEventFactory.CreateDigitalTwinChangeNotificationEvents(eventData, source, [])
         );
     }
 
@@ -88,7 +93,99 @@ public class CloudEventFactoryTests
 
         // Act & Assert
         Assert.Throws<ArgumentException>(
-            () => CloudEventFactory.CreateDigitalTwinChangeNotificationEvents(eventData, source)
+            () => CloudEventFactory.CreateDigitalTwinChangeNotificationEvents(eventData, source, [])
         );
+    }
+
+    [Fact]
+    public void CreateDigitalTwinChangeNotificationEvents_WithCustomTypeMapping_UsesCustomType()
+    {
+        // Arrange
+        var eventData = new EventData
+        {
+            EventType = EventType.TwinUpdate,
+            NewValue = JsonNode
+                .Parse("{\"$dtId\": \"twin1\", \"$metadata\": {\"$model\": \"model1\"}}")!
+                .AsObject(),
+            OldValue = JsonNode
+                .Parse("{\"$dtId\": \"twin1\", \"$metadata\": {\"$model\": \"model0\"}}")!
+                .AsObject(),
+            Timestamp = DateTime.UtcNow,
+        };
+        var source = new Uri("http://example.com");
+        var mapping = new Dictionary<SinkEventType, string>
+        {
+            { SinkEventType.TwinUpdate, "Custom.Type.Update" },
+        };
+
+        // Act
+        var result = CloudEventFactory.CreateDigitalTwinChangeNotificationEvents(
+            eventData,
+            source,
+            mapping
+        );
+
+        // Assert
+        Assert.Single(result);
+        var cloudEvent = result[0];
+        Assert.Equal("Custom.Type.Update", cloudEvent.Type);
+    }
+
+    [Fact]
+    public void CreateEventNotificationEvents_WithTypeMapping_UsesCustomType()
+    {
+        // Arrange
+        var eventData = new EventData
+        {
+            EventType = EventType.TwinUpdate,
+            NewValue = JsonNode
+                .Parse("{\"$dtId\": \"twin1\", \"$metadata\": {\"$model\": \"model1\"}}")!
+                .AsObject(),
+            OldValue = JsonNode
+                .Parse("{\"$dtId\": \"twin1\", \"$metadata\": {\"$model\": \"model0\"}}")!
+                .AsObject(),
+            Timestamp = DateTime.UtcNow,
+        };
+        var source = new Uri("http://example.com");
+        var mapping = new Dictionary<SinkEventType, string>
+        {
+            { SinkEventType.TwinUpdate, "Custom.Type.Update" },
+        };
+
+        // Act
+        var result = CloudEventFactory.CreateEventNotificationEvents(eventData, source, mapping);
+
+        // Assert
+        Assert.Single(result);
+        var cloudEvent = result[0];
+        Assert.Equal("Custom.Type.Update", cloudEvent.Type);
+    }
+
+    [Fact]
+    public void CreateDataHistoryEvents_WithTypeMapping_UsesCustomType()
+    {
+        // Arrange
+        var eventData = new EventData
+        {
+            EventType = EventType.TwinUpdate,
+            NewValue = JsonNode
+                .Parse("{\"$dtId\": \"twin1\", \"$metadata\": {\"$model\": \"model1\"}}")!
+                .AsObject(),
+            OldValue = JsonNode
+                .Parse("{\"$dtId\": \"twin1\", \"$metadata\": {\"$model\": \"model0\"}}")!
+                .AsObject(),
+            Timestamp = DateTime.UtcNow,
+        };
+        var source = new Uri("http://example.com");
+        var mapping = new Dictionary<SinkEventType, string>
+        {
+            { SinkEventType.PropertyEvent, "Custom.DataHistory.PropertyEventType" },
+        };
+
+        // Act
+        var result = CloudEventFactory.CreateDataHistoryEvents(eventData, source, mapping);
+
+        // Assert
+        Assert.Contains(result, ce => ce.Type == "Custom.DataHistory.PropertyEventType");
     }
 }
