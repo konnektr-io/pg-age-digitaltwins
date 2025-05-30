@@ -30,7 +30,7 @@ AgeDigitalTwins is an SDK and API designed to support Digital Twins applications
   - [x] Pagination
   - [ ] Components
   - [ ] Telemetry
-  - [ ] Diagnostics and Prometheus metrics
+  - [x] Diagnostics and Prometheus metrics
 - **API**:
   - [x] Digital Twins CRUD operations
   - [x] Models CRUD operations
@@ -52,6 +52,7 @@ AgeDigitalTwins is an SDK and API designed to support Digital Twins applications
   - [x] Logical replication connection with AgType parser
   - [x] Data History output (same format as Azure Digital Twins)
   - [x] Event Notification output
+  - [x] Event Type Mappings
   - [x] Kafka sink
   - [x] Kusto sink (Azure Data Explorer / Fabric Real-Time)
   - [x] MQTT sink
