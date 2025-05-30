@@ -225,9 +225,10 @@ public class KustoEventSink : IEventSink, IDisposable
                         }
                     });
                 _logger.LogDebug(
-                    "Ingested {EventCount} events of type {EventType} to Kusto",
+                    "Ingested {EventCount} event(s) of type {EventType} to Kusto sink '{SinkName}'",
                     eventGroup.Count(),
-                    eventType
+                    eventType,
+                    Name
                 );
             }
             catch (Exception ex)
