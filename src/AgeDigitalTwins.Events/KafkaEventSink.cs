@@ -94,8 +94,9 @@ public class KafkaEventSink : IEventSink, IDisposable
                 );
 
                 _logger.LogDebug(
-                    "Delivered message to '{TopicPartitionOffset}'",
-                    result.TopicPartitionOffset
+                    "Delivered message of type {EventType} to Kafka sink '{SinkName}'",
+                    cloudEvent.Type,
+                    Name
                 );
             }
             catch (ProduceException<Null, string> e)
