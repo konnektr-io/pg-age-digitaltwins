@@ -224,6 +224,14 @@ public class KustoEventSink : IEventSink, IDisposable
                                 JsonSerializer.Serialize(status)
                             );
                         }
+                        else
+                        {
+                            _logger.LogDebug(
+                                "Ingestion to Kusto sink '{SinkName}' succeeded: {Status}",
+                                Name,
+                                JsonSerializer.Serialize(status)
+                            );
+                        }
                     });
                 _logger.LogDebug(
                     "Ingested {EventCount} event(s) of type {EventType} with source {EventSource} to Kusto sink '{SinkName}'",

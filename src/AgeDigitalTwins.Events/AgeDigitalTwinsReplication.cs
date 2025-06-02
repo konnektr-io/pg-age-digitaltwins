@@ -306,7 +306,7 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
         List<IEventSink> eventSinks = _eventSinkFactory.CreateEventSinks();
         _logger.LogInformation(
             "Event sinks created: {Sinks}",
-            JsonSerializer.Serialize(eventSinks, _jsonSerializerOptions)
+            string.Join(',', eventSinks.Select(r => r.Name))
         );
         if (eventSinks.Count == 0)
         {
@@ -333,10 +333,11 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                     try
                     {
                         _logger.LogDebug(
-                            "Processing {EventType} from {Source} for event route: {Route}\n{EventData}",
+                            "Processing {EventType} with {EventFormat} from {Source} to sink {SinkName} \n{EventData}",
                             Enum.GetName(typeof(EventType), eventData.EventType),
+                            route.EventFormat,
                             _sourceUri,
-                            JsonSerializer.Serialize(route, _jsonSerializerOptions),
+                            route.SinkName,
                             JsonSerializer.Serialize(eventData, _jsonSerializerOptions)
                         );
                         // Removed EventTypes filter: always process event for this route
