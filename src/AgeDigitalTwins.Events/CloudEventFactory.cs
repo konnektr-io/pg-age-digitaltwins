@@ -436,8 +436,8 @@ public static class CloudEventFactory
                 ["timeStamp"] = eventData.Timestamp,
                 ["serviceId"] = source.ToString(),
                 ["name"] =
-                    eventData.NewValue?["name"]?.ToString()
-                    ?? eventData.OldValue?["name"]?.ToString(),
+                    eventData.NewValue?["$relationshipName"]?.ToString()
+                    ?? eventData.OldValue?["$relationshipName"]?.ToString(),
                 ["source"] =
                     eventData.NewValue?["$sourceId"]?.ToString()
                     ?? eventData.OldValue?["$sourceId"]?.ToString(),

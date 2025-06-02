@@ -278,4 +278,83 @@ public class CloudEventFactoryTests
         Assert.Equal("twin1", cloudEvent.Subject);
         Assert.Equal(source, cloudEvent.Source);
     }
+
+    [Fact]
+    public void CreateDataHistoryEvents_HandlesTwinCreateEventWithProperties()
+    {
+        // Arrange
+        var eventData = new EventData
+        {
+            GraphName = "digitaltwins",
+            TableName = "twin",
+            EventType = EventType.TwinCreate,
+            NewValue = JsonNode
+                .Parse(
+                    "{\"$dtId\": \"twin1\", \"$metadata\": {\"$model\": \"model1\"}, \"test\": 123}"
+                )!
+                .AsObject(),
+            OldValue = new JsonObject(),
+            Timestamp = DateTime.UtcNow,
+        };
+        var source = new Uri("http://example.com");
+
+        // Act
+        var result = CloudEventFactory.CreateDataHistoryEvents(eventData, source, []);
+
+        // Assert
+        Assert.Equal(2, result.Count);
+        var lifecycleEvent = result[0];
+        Assert.Equal("Konnektr.DigitalTwins.Twin.Lifecycle", lifecycleEvent.Type);
+        Assert.Equal("application/json", lifecycleEvent.DataContentType);
+        Assert.Equal("twin1", lifecycleEvent.Subject);
+        Assert.Equal(source, lifecycleEvent.Source);
+        var propertyEvent = result[1];
+        Assert.Equal("Konnektr.DigitalTwins.Property.Event", propertyEvent.Type);
+        Assert.Equal("application/json", propertyEvent.DataContentType);
+        Assert.Equal("twin1", propertyEvent.Subject);
+        var propertyEventData = propertyEvent.Data as JsonObject;
+        Assert.NotNull(propertyEventData);
+        Assert.Equal("twin1", propertyEventData["id"]?.ToString());
+        Assert.Equal("model1", propertyEventData["modelId"]?.ToString());
+        Assert.Equal("test", propertyEventData["key"]?.ToString());
+        Assert.Equal("123", propertyEventData["value"]?.ToString());
+    }
+
+    [Fact]
+    public void CreateDataHistoryEvents_HandlesRelationshipCreateEvent()
+    {
+        // Arrange
+        var eventData = new EventData
+        {
+            GraphName = "digitaltwins",
+            TableName = "has",
+            EventType = EventType.RelationshipCreate,
+            NewValue = JsonNode
+                .Parse(
+                    "{\"$relationshipId\": \"rel1\", \"$sourceId\": \"twin1\", \"$targetId\": \"twin2\", \"$relationshipName\": \"has\"}"
+                )!
+                .AsObject(),
+            OldValue = new JsonObject(),
+            Timestamp = DateTime.UtcNow,
+        };
+        var source = new Uri("http://example.com");
+
+        // Act
+        var result = CloudEventFactory.CreateDataHistoryEvents(eventData, source, []);
+
+        // Assert
+        Assert.Single(result);
+        var cloudEvent = result[0];
+        Assert.Equal("Konnektr.DigitalTwins.Relationship.Lifecycle", cloudEvent.Type);
+        Assert.Equal("application/json", cloudEvent.DataContentType);
+        Assert.Equal("twin1/relationships/rel1", cloudEvent.Subject);
+        Assert.Equal(source, cloudEvent.Source);
+        var data = cloudEvent.Data as JsonObject;
+        Assert.NotNull(data);
+        Assert.Equal("twin1", data["source"]?.ToString());
+        Assert.Equal("twin2", data["target"]?.ToString());
+        Assert.Equal("has", data["name"]?.ToString());
+        Assert.Equal("rel1", data["relationshipId"]?.ToString());
+        Assert.Equal("Create", data["action"]?.ToString());
+    }
 }
