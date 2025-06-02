@@ -521,6 +521,11 @@ public static class CloudEventFactory
             {
                 continue;
             }
+            if (op.Path.Count == 0 && op.Value == null)
+            {
+                // Skip empty operations
+                continue;
+            }
             string key = op.Path.ToString().Trim('/').Replace("/", "_");
             JsonObject body =
                 new()

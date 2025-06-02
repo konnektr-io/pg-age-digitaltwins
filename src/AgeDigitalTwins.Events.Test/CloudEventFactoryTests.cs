@@ -218,4 +218,64 @@ public class CloudEventFactoryTests
         // Assert
         Assert.Contains(result, ce => ce.Type == "Custom.DataHistory.TwinLifecycle");
     }
+
+    [Fact]
+    public void CreateDataHistoryEvents_HandlesTwinDeleteEvent()
+    {
+        // Arrange
+        var eventData = new EventData
+        {
+            GraphName = "digitaltwins",
+            TableName = "twin",
+            EventType = EventType.TwinDelete,
+            NewValue = null,
+            OldValue = JsonNode
+                .Parse("{\"$dtId\": \"twin1\", \"$metadata\": {\"$model\": \"model1\"}}")!
+                .AsObject(),
+            Timestamp = DateTime.UtcNow,
+        };
+        var source = new Uri("http://example.com");
+
+        // Act
+        var result = CloudEventFactory.CreateDataHistoryEvents(eventData, source, []);
+
+        // Assert
+        Assert.Single(result);
+        var cloudEvent = result[0];
+        Assert.Equal("Konnektr.DigitalTwins.Twin.Lifecycle", cloudEvent.Type);
+        Assert.Equal("application/json", cloudEvent.DataContentType);
+        Assert.Equal("twin1", cloudEvent.Subject);
+        Assert.Equal(source, cloudEvent.Source);
+    }
+
+    [Fact]
+    public void CreateDataHistoryEvents_HandlesTwinDeleteEventWithProperties()
+    {
+        // Arrange
+        var eventData = new EventData
+        {
+            GraphName = "digitaltwins",
+            TableName = "twin",
+            EventType = EventType.TwinDelete,
+            NewValue = null,
+            OldValue = JsonNode
+                .Parse(
+                    "{\"$dtId\": \"twin1\", \"$metadata\": {\"$model\": \"model1\"}, \"test\": 123}"
+                )!
+                .AsObject(),
+            Timestamp = DateTime.UtcNow,
+        };
+        var source = new Uri("http://example.com");
+
+        // Act
+        var result = CloudEventFactory.CreateDataHistoryEvents(eventData, source, []);
+
+        // Assert
+        Assert.Single(result);
+        var cloudEvent = result[0];
+        Assert.Equal("Konnektr.DigitalTwins.Twin.Lifecycle", cloudEvent.Type);
+        Assert.Equal("application/json", cloudEvent.DataContentType);
+        Assert.Equal("twin1", cloudEvent.Subject);
+        Assert.Equal(source, cloudEvent.Source);
+    }
 }
