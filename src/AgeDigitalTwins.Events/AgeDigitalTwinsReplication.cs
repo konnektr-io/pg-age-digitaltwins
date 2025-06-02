@@ -93,7 +93,7 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogInformation(
+                        _logger.LogError(
                             ex,
                             "Error during replication: {Message}\nRetrying in 5 seconds...",
                             ex.Message
@@ -304,9 +304,9 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
     private async Task ConsumeQueueAsync(CancellationToken cancellationToken = default)
     {
         List<IEventSink> eventSinks = _eventSinkFactory.CreateEventSinks();
-        _logger.LogDebug(
+        _logger.LogInformation(
             "Event sinks created: {Sinks}",
-            JsonSerializer.Serialize(eventSinks, _jsonSerializerOptions)
+            string.Join(',', eventSinks.Select(r => r.Name))
         );
         if (eventSinks.Count == 0)
         {
@@ -314,7 +314,7 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
             return;
         }
         List<EventRoute> eventRoutes = _eventSinkFactory.GetEventRoutes();
-        _logger.LogDebug(
+        _logger.LogInformation(
             "Event routes created: {Routes}",
             JsonSerializer.Serialize(eventRoutes, _jsonSerializerOptions)
         );
@@ -333,54 +333,55 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                     try
                     {
                         _logger.LogDebug(
-                            "Processing {EventType} from {Source} for event route: {Route}\n{EventData}",
+                            "Processing {EventType} with {EventFormat} from {Source} to sink {SinkName} \n{EventData}",
                             Enum.GetName(typeof(EventType), eventData.EventType),
+                            route.EventFormat,
                             _sourceUri,
-                            JsonSerializer.Serialize(route, _jsonSerializerOptions),
+                            route.SinkName,
                             JsonSerializer.Serialize(eventData, _jsonSerializerOptions)
                         );
-                        if (
-                            route.EventTypes == null
-                            || route.EventTypes.Contains((EventType)eventData.EventType)
-                        )
+                        // Removed EventTypes filter: always process event for this route
+                        var sink = eventSinks.FirstOrDefault(s => s.Name == route.SinkName);
+                        if (sink != null)
                         {
-                            var sink = eventSinks.FirstOrDefault(s => s.Name == route.SinkName);
-                            if (sink != null)
+                            List<CloudEvent> cloudEvents;
+                            // Get the typeMapping from the sink's EventTypeMappings property
+                            var sinkOptions = sink as SinkOptions;
+                            var typeMapping = sinkOptions?.EventTypeMappings;
+                            if (route.EventFormat == EventFormat.EventNotification)
                             {
-                                List<CloudEvent> cloudEvents;
-                                if (route.EventFormat == EventFormat.EventNotification)
-                                {
-                                    cloudEvents = CloudEventFactory.CreateEventNotificationEvents(
-                                        eventData,
-                                        _sourceUri
-                                    );
-                                }
-                                else if (route.EventFormat == EventFormat.DataHistory)
-                                {
-                                    cloudEvents = CloudEventFactory.CreateDataHistoryEvents(
-                                        eventData,
-                                        _sourceUri
-                                    );
-                                }
-                                else
-                                {
-                                    _logger.LogDebug(
-                                        "Skipping event route for {SinkName} with unsupported event format {EventFormat}",
-                                        route.SinkName,
-                                        route.EventFormat
-                                    );
-                                    continue;
-                                }
-                                if (cloudEvents.Count == 0)
-                                {
-                                    _logger.LogDebug(
-                                        "Skipping event route for {SinkName} without any events",
-                                        route.SinkName
-                                    );
-                                    continue;
-                                }
-                                await sink.SendEventsAsync(cloudEvents).ConfigureAwait(false);
+                                cloudEvents = CloudEventFactory.CreateEventNotificationEvents(
+                                    eventData,
+                                    _sourceUri,
+                                    typeMapping
+                                );
                             }
+                            else if (route.EventFormat == EventFormat.DataHistory)
+                            {
+                                cloudEvents = CloudEventFactory.CreateDataHistoryEvents(
+                                    eventData,
+                                    _sourceUri,
+                                    typeMapping
+                                );
+                            }
+                            else
+                            {
+                                _logger.LogDebug(
+                                    "Skipping event route for {SinkName} with unsupported event format {EventFormat}",
+                                    route.SinkName,
+                                    route.EventFormat
+                                );
+                                continue;
+                            }
+                            if (cloudEvents.Count == 0)
+                            {
+                                _logger.LogDebug(
+                                    "Skipping event route for {SinkName} without any events",
+                                    route.SinkName
+                                );
+                                continue;
+                            }
+                            await sink.SendEventsAsync(cloudEvents).ConfigureAwait(false);
                         }
                     }
                     catch (Exception ex)

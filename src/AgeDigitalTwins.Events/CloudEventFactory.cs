@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using CloudNative.CloudEvents;
 using Json.More;
@@ -8,26 +7,67 @@ namespace AgeDigitalTwins.Events;
 
 public static class CloudEventFactory
 {
+    // Default CloudEvent type mappings for EventNotification
+    public static readonly Dictionary<SinkEventType, string> DefaultEventNotificationTypeMapping =
+        new()
+        {
+            { SinkEventType.TwinCreate, "Konnektr.DigitalTwins.Twin.Create" },
+            { SinkEventType.TwinUpdate, "Konnektr.DigitalTwins.Twin.Update" },
+            { SinkEventType.TwinDelete, "Konnektr.DigitalTwins.Twin.Delete" },
+            { SinkEventType.RelationshipCreate, "Konnektr.DigitalTwins.Relationship.Create" },
+            { SinkEventType.RelationshipUpdate, "Konnektr.DigitalTwins.Relationship.Update" },
+            { SinkEventType.RelationshipDelete, "Konnektr.DigitalTwins.Relationship.Delete" },
+        };
+
+    // Default CloudEvent type mappings for DataHistory
+    public static readonly Dictionary<SinkEventType, string> DefaultDataHistoryTypeMapping =
+        new()
+        {
+            { SinkEventType.PropertyEvent, "Konnektr.DigitalTwins.Property.Event" },
+            { SinkEventType.TwinLifecycle, "Konnektr.DigitalTwins.Twin.Lifecycle" },
+            { SinkEventType.RelationshipLifecycle, "Konnektr.DigitalTwins.Relationship.Lifecycle" },
+        };
+
     #region EventNotification
 
-    public static List<CloudEvent> CreateEventNotificationEvents(EventData eventData, Uri source)
+    public static List<CloudEvent> CreateEventNotificationEvents(
+        EventData eventData,
+        Uri source,
+        Dictionary<SinkEventType, string>? typeMapping = null
+    )
     {
+        var mapping = typeMapping ?? DefaultEventNotificationTypeMapping;
         return eventData.EventType switch
         {
-            EventType.TwinCreate => CreateDigitalTwinLifecycleNotificationEvents(eventData, source),
-            EventType.TwinUpdate => CreateDigitalTwinChangeNotificationEvents(eventData, source),
-            EventType.TwinDelete => CreateDigitalTwinLifecycleNotificationEvents(eventData, source),
+            EventType.TwinCreate => CreateDigitalTwinLifecycleNotificationEvents(
+                eventData,
+                source,
+                mapping
+            ),
+            EventType.TwinUpdate => CreateDigitalTwinChangeNotificationEvents(
+                eventData,
+                source,
+                mapping
+            ),
+            EventType.TwinDelete => CreateDigitalTwinLifecycleNotificationEvents(
+                eventData,
+                source,
+                mapping
+            ),
             EventType.RelationshipCreate => CreateRelationshipLifecycleNotificationEvents(
                 eventData,
-                source
+                source,
+                mapping
             ),
             EventType.RelationshipUpdate => CreateRelationshipChangeNotificationEvents(
                 eventData,
-                source
+                source,
+                mapping
             ),
             EventType.RelationshipDelete => CreateRelationshipLifecycleNotificationEvents(
                 eventData,
-                source
+                source,
+                mapping
             ),
             _ => throw new ArgumentException(
                 "EventType must be TwinCreate, TwinUpdate, TwinDelete, RelationshipCreate, RelationshipUpdate, or RelationshipDelete",
@@ -38,7 +78,8 @@ public static class CloudEventFactory
 
     public static List<CloudEvent> CreateDigitalTwinChangeNotificationEvents(
         EventData eventData,
-        Uri source
+        Uri source,
+        Dictionary<SinkEventType, string> typeMapping
     )
     {
         if (
@@ -73,19 +114,20 @@ public static class CloudEventFactory
                 Id = Guid.NewGuid().ToString(),
                 Source = source,
                 Data = body,
-                Type = "Konnektr.DigitalTwin.Twin.Update", // "Microsoft.DigitalTwin.Twin.Update",
+                Type = typeMapping.TryGetValue(SinkEventType.TwinUpdate, out var t)
+                    ? t
+                    : DefaultEventNotificationTypeMapping[SinkEventType.TwinUpdate],
                 DataContentType = "application/json",
                 Subject = twinIdNode.ToString(),
                 Time = eventData.Timestamp,
-                // TraceParent = null,
             };
-
         return [cloudEvent];
     }
 
     public static List<CloudEvent> CreateDigitalTwinLifecycleNotificationEvents(
         EventData eventData,
-        Uri source
+        Uri source,
+        Dictionary<SinkEventType, string> typeMapping
     )
     {
         ArgumentNullException.ThrowIfNull(eventData);
@@ -102,7 +144,9 @@ public static class CloudEventFactory
                 );
             }
             body = eventData.NewValue;
-            type = "Konnektr.DigitalTwin.Twin.Create"; // "Microsoft.DigitalTwin.Twin.Create";
+            type = typeMapping.TryGetValue(SinkEventType.TwinCreate, out var t)
+                ? t
+                : DefaultEventNotificationTypeMapping[SinkEventType.TwinCreate];
         }
         else if (eventData.EventType == EventType.TwinDelete)
         {
@@ -114,7 +158,9 @@ public static class CloudEventFactory
                 );
             }
             body = eventData.OldValue;
-            type = "Konnektr.DigitalTwin.Twin.Delete"; // "Microsoft.DigitalTwin.Twin.Delete";
+            type = typeMapping.TryGetValue(SinkEventType.TwinDelete, out var t)
+                ? t
+                : DefaultEventNotificationTypeMapping[SinkEventType.TwinDelete];
         }
         else
         {
@@ -142,7 +188,6 @@ public static class CloudEventFactory
                 DataContentType = "application/json",
                 Subject = twinIdNode.ToString(),
                 Time = eventData.Timestamp,
-                // TraceParent = null,
             };
 
         return [cloudEvent];
@@ -150,7 +195,8 @@ public static class CloudEventFactory
 
     public static List<CloudEvent> CreateRelationshipChangeNotificationEvents(
         EventData eventData,
-        Uri source
+        Uri source,
+        Dictionary<SinkEventType, string> typeMapping
     )
     {
         if (
@@ -190,7 +236,6 @@ public static class CloudEventFactory
         JsonObject body =
             new()
             {
-                // TODO: Figure out a way to retrieve the model id of the source twin, because this will be empty
                 ["modelId"] = eventData.NewValue["$metadata"]?["$model"]?.DeepClone(),
                 ["patch"] = JsonNode.Parse(jsonPatch.ToJsonDocument().RootElement.GetRawText()),
             };
@@ -200,11 +245,12 @@ public static class CloudEventFactory
                 Id = Guid.NewGuid().ToString(),
                 Source = source,
                 Data = body,
-                Type = "Konnektr.DigitalTwin.Relationship.Update", // "Microsoft.DigitalTwin.Relationship.Update",
+                Type = typeMapping.TryGetValue(SinkEventType.RelationshipUpdate, out var t)
+                    ? t
+                    : DefaultEventNotificationTypeMapping[SinkEventType.RelationshipUpdate],
                 DataContentType = "application/json",
                 Subject = $"{twinIdNode}/relationships/{relationshipIdNode}",
                 Time = eventData.Timestamp,
-                // TraceParent = null,
             };
 
         return [cloudEvent];
@@ -212,7 +258,8 @@ public static class CloudEventFactory
 
     public static List<CloudEvent> CreateRelationshipLifecycleNotificationEvents(
         EventData eventData,
-        Uri source
+        Uri source,
+        Dictionary<SinkEventType, string> typeMapping
     )
     {
         ArgumentNullException.ThrowIfNull(eventData);
@@ -229,7 +276,9 @@ public static class CloudEventFactory
                 );
             }
             body = eventData.NewValue;
-            type = "Konnektr.DigitalTwins.Relationship.Create"; // "Microsoft.DigitalTwin.Relationship.Create";
+            type = typeMapping.TryGetValue(SinkEventType.RelationshipCreate, out var t)
+                ? t
+                : DefaultEventNotificationTypeMapping[SinkEventType.RelationshipCreate];
         }
         else if (eventData.EventType == EventType.RelationshipDelete)
         {
@@ -241,7 +290,9 @@ public static class CloudEventFactory
                 );
             }
             body = eventData.OldValue;
-            type = "Konnektr.DigitalTwin.Relationship.Delete"; // "Microsoft.DigitalTwin.Relationship.Delete";
+            type = typeMapping.TryGetValue(SinkEventType.RelationshipDelete, out var t)
+                ? t
+                : DefaultEventNotificationTypeMapping[SinkEventType.RelationshipDelete];
         }
         else
         {
@@ -280,7 +331,6 @@ public static class CloudEventFactory
                 DataContentType = "application/json",
                 Subject = $"{twinIdNode}/relationships/{relationshipIdNode}",
                 Time = eventData.Timestamp,
-                // TraceParent = null,
             };
 
         return [cloudEvent];
@@ -290,19 +340,26 @@ public static class CloudEventFactory
 
     #region DataHistory
 
-    public static List<CloudEvent> CreateDataHistoryEvents(EventData eventData, Uri source)
+    public static List<CloudEvent> CreateDataHistoryEvents(
+        EventData eventData,
+        Uri source,
+        Dictionary<SinkEventType, string>? typeMapping = null
+    )
     {
+        var mapping = typeMapping ?? DefaultDataHistoryTypeMapping;
         return eventData.EventType switch
         {
             EventType.TwinCreate or EventType.TwinDelete => CreateTwinLifeCycleEvents(
                 eventData,
-                source
+                source,
+                mapping
             ),
             EventType.RelationshipCreate or EventType.RelationshipDelete =>
-                CreateRelationshipLifeCycleEvents(eventData, source),
+                CreateRelationshipLifeCycleEvents(eventData, source, mapping),
             EventType.TwinUpdate or EventType.RelationshipUpdate => CreatePropertyEvents(
                 eventData,
-                source
+                source,
+                mapping
             ),
             _ => throw new ArgumentException(
                 "EventType must be TwinCreate, TwinUpdate, TwinDelete, RelationshipCreate, RelationshipUpdate, or RelationshipDelete",
@@ -311,12 +368,14 @@ public static class CloudEventFactory
         };
     }
 
-    public static List<CloudEvent> CreateTwinLifeCycleEvents(EventData eventData, Uri source)
+    public static List<CloudEvent> CreateTwinLifeCycleEvents(
+        EventData eventData,
+        Uri source,
+        Dictionary<SinkEventType, string> typeMapping
+    )
     {
         ArgumentNullException.ThrowIfNull(eventData);
-
         List<CloudEvent> cloudEvents = [];
-
         JsonObject body =
             new()
             {
@@ -335,37 +394,33 @@ public static class CloudEventFactory
                     eventData.NewValue?["$metadata"]?["$model"]?.ToString()
                     ?? eventData.OldValue?["$metadata"]?["$model"]?.ToString(),
             };
-
+        var type = typeMapping.TryGetValue(SinkEventType.TwinLifecycle, out var t)
+            ? t
+            : DefaultDataHistoryTypeMapping[SinkEventType.TwinLifecycle];
         CloudEvent cloudEvent =
             new()
             {
                 Id = Guid.NewGuid().ToString(),
                 Source = source,
                 Data = body,
-                Type = "Konnektr.DigitalTwin.Twin.Lifecycle",
+                Type = type,
                 DataContentType = "application/json",
                 Subject = body["twinId"]?.ToString(),
                 Time = eventData.Timestamp,
-                // TraceParent = null,
             };
-
         cloudEvents.Add(cloudEvent);
-
-        // Generate property events from the empty old valeu and new values
-        cloudEvents.AddRange(CreateCloudEventsFromPatch(eventData, source));
-
+        cloudEvents.AddRange(CreateCloudEventsFromPatch(eventData, source, typeMapping));
         return cloudEvents;
     }
 
     public static List<CloudEvent> CreateRelationshipLifeCycleEvents(
         EventData eventData,
-        Uri source
+        Uri source,
+        Dictionary<SinkEventType, string> typeMapping
     )
     {
         ArgumentNullException.ThrowIfNull(eventData);
-
         List<CloudEvent> cloudEvents = [];
-
         JsonObject body =
             new()
             {
@@ -389,41 +444,35 @@ public static class CloudEventFactory
                 ["target"] =
                     eventData.NewValue?["$targetId"]?.ToString()
                     ?? eventData.OldValue?["$targetId"]?.ToString(),
-                // TODO: Figure out a way to retrieve the model id of the source twin
-                // ["modelId"] =
-                //     eventData.NewValue?["$metadata"]?["$model"]?.ToString()
-                //     ?? eventData.OldValue?["$metadata"]?["$model"]?.ToString(),
             };
-
+        var type = typeMapping.TryGetValue(SinkEventType.RelationshipLifecycle, out var t)
+            ? t
+            : DefaultDataHistoryTypeMapping[SinkEventType.RelationshipLifecycle];
         CloudEvent cloudEvent =
             new()
             {
                 Id = Guid.NewGuid().ToString(),
                 Source = source,
                 Data = body,
-                Type = "Konnektr.DigitalTwin.Relationship.Lifecycle",
+                Type = type,
                 DataContentType = "application/json",
                 Subject = $"{body["source"]}/relationships/{body["relationshipId"]}",
                 Time = eventData.Timestamp,
-                // TraceParent = null,
             };
-
         cloudEvents.Add(cloudEvent);
-
-        // Generate property events from the empty old valeu and new values
-        cloudEvents.AddRange(CreateCloudEventsFromPatch(eventData, source));
-
+        cloudEvents.AddRange(CreateCloudEventsFromPatch(eventData, source, typeMapping));
         return cloudEvents;
     }
 
-    public static List<CloudEvent> CreatePropertyEvents(EventData eventData, Uri source)
+    public static List<CloudEvent> CreatePropertyEvents(
+        EventData eventData,
+        Uri source,
+        Dictionary<SinkEventType, string> typeMapping
+    )
     {
         ArgumentNullException.ThrowIfNull(eventData);
-
         List<CloudEvent> cloudEvents = [];
-
-        // Check for model changes
-        // Create a lifecycle update event if the model has changed
+        // Data model changes generate lifecycle events, not property events.
         if (
             eventData.NewValue?["$metadata"]?["$model"]?.ToString()
             != eventData.OldValue?["$metadata"]?["$model"]?.ToString()
@@ -438,30 +487,31 @@ public static class CloudEventFactory
                     ["serviceId"] = source.ToString(),
                     ["modelId"] = eventData.NewValue?["modelId"]?.ToString(),
                 };
-
+            var type = typeMapping.TryGetValue(SinkEventType.TwinLifecycle, out var t)
+                ? t
+                : DefaultDataHistoryTypeMapping[SinkEventType.TwinLifecycle];
             CloudEvent cloudEvent =
                 new()
                 {
                     Id = Guid.NewGuid().ToString(),
                     Source = source,
                     Data = body,
-                    Type = "Konnektr.DigitalTwin.Twin.Lifecycle",
+                    Type = type,
                     DataContentType = "application/json",
                     Subject = body["twinId"]?.ToString(),
                     Time = eventData.Timestamp,
-                    // TraceParent = null,
                 };
-
             cloudEvents.Add(cloudEvent);
         }
-
-        // Generate property events from the old and new values
-        cloudEvents.AddRange(CreateCloudEventsFromPatch(eventData, source));
-
+        cloudEvents.AddRange(CreateCloudEventsFromPatch(eventData, source, typeMapping));
         return cloudEvents;
     }
 
-    private static List<CloudEvent> CreateCloudEventsFromPatch(EventData eventData, Uri source)
+    private static List<CloudEvent> CreateCloudEventsFromPatch(
+        EventData eventData,
+        Uri source,
+        Dictionary<SinkEventType, string> typeMapping
+    )
     {
         JsonPatch jsonPatch = eventData.OldValue.CreatePatch(eventData.NewValue);
         List<CloudEvent> cloudEvents = [];
@@ -469,6 +519,11 @@ public static class CloudEventFactory
         {
             if (op.Path.ToString().StartsWith("/$"))
             {
+                continue;
+            }
+            if (op.Path.Count == 0 && op.Value == null)
+            {
+                // Skip empty operations
                 continue;
             }
             string key = op.Path.ToString().Trim('/').Replace("/", "_");
@@ -493,7 +548,6 @@ public static class CloudEventFactory
                         _ => "unknown",
                     },
                 };
-            // Add source time
             PatchOperation? sourceTimeOperation = jsonPatch.Operations.FirstOrDefault(o =>
                 o.Path.ToString() == $"/$metadata/{key}/sourceTime"
             );
@@ -501,24 +555,22 @@ public static class CloudEventFactory
             {
                 body["sourceTimeStamp"] = sourceTimeOperation.Value;
             }
-
+            var type = typeMapping.TryGetValue(SinkEventType.PropertyEvent, out var t)
+                ? t
+                : DefaultDataHistoryTypeMapping[SinkEventType.PropertyEvent];
             CloudEvent cloudEvent =
                 new()
                 {
                     Id = Guid.NewGuid().ToString(),
                     Source = source,
                     Data = body,
-                    Type = "Konnektr.DigitalTwin.Property.Event",
+                    Type = type,
                     DataContentType = "application/json",
                     Subject = string.IsNullOrEmpty(body["relationshipId"]?.ToString())
-                        // Twin property update
                         ? $"{body["id"]}"
-                        // Relationship property update
                         : $"{body["id"]}/relationships/{body["relationshipId"]}",
                     Time = eventData.Timestamp,
-                    // TraceParent = null,
                 };
-
             cloudEvents.Add(cloudEvent);
         }
         return cloudEvents;
