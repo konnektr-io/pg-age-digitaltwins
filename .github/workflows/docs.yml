@@ -31,6 +31,8 @@ jobs:
           node-version: "20"
       - name: Install pnpm
         run: npm install -g pnpm
+      - name: Set up pnpm
+        run: pnpm setup
       - name: Install Nuxt globally
         run: pnpm add -g nuxt@^3.17.4
       - name: Install dependencies
