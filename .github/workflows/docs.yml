@@ -25,18 +25,17 @@ jobs:
         uses: actions/checkout@v4
       - name: Setup Pages
         uses: actions/configure-pages@v5
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - name: Install pnpm
-        run: npm install -g pnpm
-      - name: Set up pnpm
-        run: pnpm setup
-      - name: Install Nuxt globally
-        run: pnpm add -g nuxt@^3.17.4
+          cache: pnpm
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
         working-directory: docs
       - name: Generate static docs
         run: pnpm run generate
