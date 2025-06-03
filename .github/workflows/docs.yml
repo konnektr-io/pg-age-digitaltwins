@@ -33,10 +33,10 @@ jobs:
         run: npm install -g pnpm
       - name: Install dependencies
         run: pnpm install
-        working-directory: .docs
+        working-directory: docs
       - name: Generate static docs
         run: pnpm run generate
-        working-directory: .docs
+        working-directory: docs
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
