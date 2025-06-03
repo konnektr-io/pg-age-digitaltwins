@@ -11,10 +11,10 @@ export default defineAppConfig({
     header: {
       title: 'Digital Twins for Apache AGE',
       showTitle: true,
-      darkModeToggle: true,
+      // darkModeToggle: true,
       logo: {
-        light: '/logo.svg',
-        dark: '/logo-dark.svg',
+        light: '/konnektr.svg',
+        dark: '/konnektr.svg',
       },
       nav: [],
       links: [{
