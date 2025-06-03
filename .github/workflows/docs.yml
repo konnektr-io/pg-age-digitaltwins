@@ -31,11 +31,10 @@ jobs:
           node-version: "20"
       - name: Install pnpm
         run: npm install -g pnpm
+      - name: Install Nuxt globally
+        run: pnpm add -g nuxt@^3.17.4
       - name: Install dependencies
         run: pnpm install
-        working-directory: docs
-      - name: Prepare Nuxt
-        run: pnpm exec nuxt prepare
         working-directory: docs
       - name: Generate static docs
         run: pnpm run generate
