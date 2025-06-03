@@ -1,0 +1,6 @@
+title: Reference
+icon: lucide:book
+navigation.redirect: /reference/api-reference
+sidebar:
+  style: default
+collapse: false

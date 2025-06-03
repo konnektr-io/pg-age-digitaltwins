@@ -57,6 +57,25 @@ AgeDigitalTwins is an SDK and API designed to support Digital Twins applications
   - [x] Kusto sink (Azure Data Explorer / Fabric Real-Time)
   - [x] MQTT sink
 
+## Documentation
+
+The documentation for AgeDigitalTwins is available as a static website. Below are the key sections:
+
+- [Introduction](docs/introduction.md)
+- [Installation](docs/installation.md)
+- Concepts
+  - [Digital Twins Definition Language (DTDL)](docs/concepts-dtdl.md)
+  - [Data Model Validation](docs/concepts-validation.md)
+  - [Querying the Graph](docs/concepts-querying.md)
+- [Usage](docs/usage.md)
+- [Advanced Topics](docs/advanced-topics.md)
+- [Deployment](docs/deployment.md)
+- [API Reference](docs/api-reference.md)
+- [Contributing](docs/contributing.md)
+- [Acknowledgements](docs/acknowledgements.md)
+
+Refer to these sections for detailed guidance on using AgeDigitalTwins.
+
 ## Contributing
 
 Contributions are welcome! Please read our [contributing guidelines](CONTRIBUTING.md) for more information.
