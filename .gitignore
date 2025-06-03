@@ -28,3 +28,6 @@ logs
 .env
 .env.*
 !.env.example
+
+# Package lock files
+pnpm-lock.yaml
