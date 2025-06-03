@@ -31,7 +31,7 @@ jobs:
           run_install: false
           package_json_file: "docs/package.json"
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install
         working-directory: docs
       - name: Generate static docs
         run: pnpm run generate
