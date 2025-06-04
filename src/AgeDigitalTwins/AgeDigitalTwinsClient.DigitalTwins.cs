@@ -475,10 +475,13 @@ RETURN t";
                     );
                 }
 
-                // UpdateTime is set on the root of the property
-                updateTimeSetOperations.Add(
-                    $"SET t = {_graphName}.agtype_set(properties(t),['$metadata','{pathParts.First()}','lastUpdateTime'],'{now:o}')"
-                );
+                // UpdateTime metadata is set on the root of the property (not for $metadata updates)
+                if (pathParts.Length > 0 && pathParts.First() != "$metadata")
+                {
+                    updateTimeSetOperations.Add(
+                        $"SET t = {_graphName}.agtype_set(properties(t),['$metadata','{pathParts.First()}','lastUpdateTime'],'{now:o}')"
+                    );
+                }
             }
 
             string newEtag = ETagGenerator.GenerateEtag(digitalTwinId, now);
