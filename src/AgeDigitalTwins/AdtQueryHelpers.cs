@@ -404,7 +404,7 @@ public static partial class AdtQueryHelpers
     }
 
     [GeneratedRegex(
-        @"SELECT\s*(?:TOP\(\s*(?<limit>\d+)\s*\)\s*)?(?<projections>.*?)\s+FROM",
+        @"SELECT\s*(?:TOP\s*\(\s*(?<limit>\d+)\s*\)\s*)?(?<projections>.*?)\s+FROM",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
     )]
     private static partial Regex SelectRegex();

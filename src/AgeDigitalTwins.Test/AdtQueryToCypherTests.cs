@@ -123,6 +123,10 @@ public class AdtQueryToCypherTests
         "SELECT TOP(50) FROM DIGITALTWINS WHERE (CONTAINS(email,'test') OR CONTAINS(name,'test') OR CONTAINS($dtId,'test')) AND (IS_OF_MODEL('dtmi:com:example:identity:User;1') OR IS_OF_MODEL('dtmi:com:example:identity:Invite;1'))",
         "MATCH (T:Twin) WHERE (T.email CONTAINS 'test' OR T.name CONTAINS 'test' OR T['$dtId'] CONTAINS 'test') AND (testgraph.is_of_model(T,'dtmi:com:example:identity:User;1') OR testgraph.is_of_model(T,'dtmi:com:example:identity:Invite;1')) RETURN * LIMIT 50"
     )]
+    [InlineData(
+        "SELECT TOP (50) twin FROM DIGITALTWINS twin WHERE CONTAINS(twin.$dtId,'test') OR CONTAINS(twin.name,'test') OR CONTAINS(twin.displayName,'test') OR CONTAINS(twin.tag,'test') OR CONTAINS(twin.label,'test')",
+        "MATCH (twin:Twin) WHERE twin['$dtId'] CONTAINS 'test' OR twin.name CONTAINS 'test' OR twin.displayName CONTAINS 'test' OR twin.tag CONTAINS 'test' OR twin.label CONTAINS 'test' RETURN twin LIMIT 50"
+    )]
     public void ConvertAdtQueryToCypher_ReturnsExpectedCypher(
         string adtQuery,
         string expectedCypher
