@@ -3,7 +3,7 @@ export default defineNuxtConfig({
   devtools: { enabled: true },
   extends: ['shadcn-docs-nuxt'],
   site: {
-    url: 'https://konnektr-io.github.io/pg-age-digitaltwins/',
+    url: 'https://digitaltwins.docs.konnektr.io/',
   },
   i18n: { 
     defaultLocale: 'en', 
