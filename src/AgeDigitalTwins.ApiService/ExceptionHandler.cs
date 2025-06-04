@@ -17,6 +17,13 @@ public class ExceptionHandler : Microsoft.AspNetCore.Diagnostics.IExceptionHandl
         {
             httpContext.Response.StatusCode = (int)ageException.StatusCode;
         }
+        else if (
+            exception is NpgsqlException npgsqlEx
+            && npgsqlEx.Message.Contains("No suitable host was found")
+        )
+        {
+            httpContext.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+        }
         else if (exception is ResolutionException or PostgresException)
         {
             httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
@@ -38,25 +45,4 @@ public class ExceptionHandler : Microsoft.AspNetCore.Diagnostics.IExceptionHandl
 
         return true;
     }
-}
-
-public class ExceptionResponses
-{
-    /* public Dictionary<Type, ProblemDetails> ExceptionResponsesMap { get; } = new Dictionary<Type, ProblemDetails>
-        {
-            { typeof(ModelNotFoundException), new ProblemDetails
-                {
-                    Title = "An error occurred",
-                    Detail = exception.Message,
-                    Type = exception.GetType().Name,
-                    Status = StatusCodes.Status400BadRequest
-                }
-
-
-
-            Results.BadRequest("Model not found") },
-            { typeof(DigitalTwinNotFoundException), Results.NotFound("Digital twin not found") },
-            { typeof(ValidationFailedException), Results.BadRequest("Validation failed") },
-            { typeof(InvalidAdtQueryException), Results.BadRequest("Invalid ADT query") }
-        }; */
 }
