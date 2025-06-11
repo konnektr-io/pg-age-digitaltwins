@@ -216,7 +216,16 @@ public class CloudEventFactoryTests
         var result = CloudEventFactory.CreateDataHistoryEvents(eventData, source, mapping);
 
         // Assert
-        Assert.Contains(result, ce => ce.Type == "Custom.DataHistory.TwinLifecycle");
+        var twinLifeCycleEvent = result.FirstOrDefault(ce =>
+            ce.Type == "Custom.DataHistory.TwinLifecycle"
+        );
+        Assert.NotNull(twinLifeCycleEvent);
+        Assert.Equal("application/json", twinLifeCycleEvent.DataContentType);
+        Assert.Equal("twin1", twinLifeCycleEvent.Subject);
+        Assert.Equal(source, twinLifeCycleEvent.Source);
+        var data = twinLifeCycleEvent.Data as JsonObject;
+        Assert.NotNull(data);
+        Assert.Equal("model1", data["modelId"]?.ToString());
     }
 
     [Fact]

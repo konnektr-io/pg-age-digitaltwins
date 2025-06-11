@@ -485,7 +485,7 @@ public static class CloudEventFactory
                     ["action"] = "Update",
                     ["timeStamp"] = eventData.Timestamp,
                     ["serviceId"] = source.ToString(),
-                    ["modelId"] = eventData.NewValue?["modelId"]?.ToString(),
+                    ["modelId"] = eventData.NewValue?["$metadata"]?["$model"]?.ToString(),
                 };
             var type = typeMapping.TryGetValue(SinkEventType.TwinLifecycle, out var t)
                 ? t
