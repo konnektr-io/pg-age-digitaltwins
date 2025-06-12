@@ -402,95 +402,163 @@ RETURN t";
                 }
             }
 
-            List<string> violations = new();
+            // 1. Retrieve the current twin
+            var currentTwin =
+                await GetDigitalTwinAsync<JsonObject>(digitalTwinId, cancellationToken)
+                ?? throw new DigitalTwinNotFoundException(
+                    $"Digital Twin with ID {digitalTwinId} not found"
+                );
 
-            List<string> updateTimeSetOperations =
-                new()
-                {
-                    $"SET t = {_graphName}.agtype_set(properties(t),['$metadata','$lastUpdateTime'],'{now:o}')",
-                };
-            List<string> patchOperations = new();
-
-            foreach (var op in patch.Operations)
+            JsonNode patchedTwinNode = currentTwin.DeepClone();
+            try
             {
-                var path = op.Path.ToString().TrimStart('/').Replace("/", ".");
-                if (path == "$dtId")
+                var patchResult = patch.Apply(patchedTwinNode);
+                if (patchResult.Result is null)
                 {
-                    violations.Add("Cannot update the $dtId property");
+                    throw new ValidationFailedException("Failed to apply patch: result is null");
                 }
-                var pathParts = path.Split('.');
+                patchedTwinNode = patchResult.Result;
+            }
+            catch (Exception ex)
+            {
+                throw new ValidationFailedException($"Failed to apply patch: {ex.Message}");
+            }
+            if (patchedTwinNode is not JsonObject patchedTwin)
+            {
+                throw new ValidationFailedException("Patched twin is not a valid object");
+            }
+
+            if (
+                !patchedTwin.TryGetPropertyValue("$dtId", out JsonNode? dtIdNode)
+                || dtIdNode is not JsonValue
+            )
+            {
+                patchedTwin["$dtId"] = digitalTwinId;
+            }
+
+            if (
+                !patchedTwin.TryGetPropertyValue("$metadata", out JsonNode? metaNode)
+                || metaNode is not JsonObject metadataObject
+            )
+            {
+                throw new ValidationFailedException(
+                    "Digital Twin must have a $metadata property of type object"
+                );
+            }
+            if (
+                !metadataObject.TryGetPropertyValue("$model", out JsonNode? modelNode2)
+                || modelNode2 is not JsonValue modelValue
+                || modelValue.GetValueKind() != JsonValueKind.String
+            )
+            {
+                throw new ValidationFailedException(
+                    "Digital Twin's $metadata must contain a $model property of type string"
+                );
+            }
+            string modelId =
+                modelValue.ToString()
+                ?? throw new ValidationFailedException(
+                    "Digital Twin's $model property cannot be null or empty"
+                );
+            DigitalTwinsModelData modelData = await GetModelAsync(modelId, cancellationToken);
+            IReadOnlyDictionary<Dtmi, DTEntityInfo> parsedModelEntities =
+                await _modelParser.ParseAsync(
+                    modelData.DtdlModel,
+                    cancellationToken: cancellationToken
+                );
+            DTInterfaceInfo dtInterfaceInfo =
+                (DTInterfaceInfo)
+                    parsedModelEntities.FirstOrDefault(e => e.Value is DTInterfaceInfo).Value
+                ?? throw new ValidationFailedException(
+                    $"{modelId} or one of its dependencies does not exist."
+                );
+            List<string> violations = new();
+            // Track which properties were changed by the patch
+            var changedProperties = new HashSet<string>(
+                patch
+                    .Operations.Where(op =>
+                        op.Op == OperationType.Add
+                        || op.Op == OperationType.Replace
+                        || op.Op == OperationType.Remove
+                    )
+                    .Select(op => op.Path.ToString().TrimStart('/').Split('/')[0])
+            );
+            foreach (KeyValuePair<string, JsonNode?> kv in patchedTwin)
+            {
+                string property = kv.Key;
                 if (
-                    op.Value != null
-                    && (op.Op == OperationType.Add || op.Op == OperationType.Replace)
+                    property == "$metadata"
+                    || property == "$dtId"
+                    || property == "$etag"
+                    || property == "$lastUpdateTime"
                 )
                 {
-                    string? propertyValue = null;
-                    if (
-                        op.Value.GetValueKind() == JsonValueKind.Object
-                        || op.Value.GetValueKind() == JsonValueKind.Array
-                    )
+                    continue;
+                }
+                if (!dtInterfaceInfo.Contents.TryGetValue(property, out DTContentInfo? contentInfo))
+                {
+                    violations.Add($"Property '{property}' is not defined in the model");
+                    continue;
+                }
+                JsonElement value = kv.Value.ToJsonDocument().RootElement;
+                if (contentInfo is DTPropertyInfo propertyDef)
+                {
+                    IReadOnlyCollection<string> validationFailures =
+                        propertyDef.Schema.ValidateInstance(value);
+                    if (validationFailures.Count != 0)
                     {
-                        propertyValue =
-                            $"'{JsonSerializer.Serialize(op.Value, serializerOptions).Replace("'", "\\'")}'::agtype";
-                    }
-                    else if (op.Value.GetValueKind() == JsonValueKind.String)
-                    {
-                        propertyValue = $"'{op.Value.ToString().Replace("'", "\\'")}'";
+                        violations.AddRange(
+                            validationFailures.Select(v => $"Property '{property}': {v}")
+                        );
                     }
                     else
                     {
-                        propertyValue = op.Value.ToString();
-                    }
-
-                    // Set the property value directly (doesn't support nested properties)
-                    if (pathParts.Length == 1)
-                    {
-                        patchOperations.Add($"SET t.{pathParts.First()} = {propertyValue}");
-                    }
-                    // Use custom function to set the property value on nested properties
-                    else if (pathParts.Length > 1)
-                    {
-                        patchOperations.Add(
-                            $"SET t = {_graphName}.agtype_set(properties(t), ['{string.Join("','", pathParts)}'], {propertyValue})"
-                        );
-                    }
-                }
-                else if (op.Op == OperationType.Remove)
-                {
-                    if (pathParts.Length == 1)
-                    {
-                        patchOperations.Add($"REMOVE t.{pathParts.First()}");
-                    }
-                    else if (pathParts.Length > 1)
-                    {
-                        patchOperations.Add(
-                            $"SET t = {_graphName}.agtype_delete_key(properties(t),['{string.Join("','", pathParts)}'])"
-                        );
+                        // Only update lastUpdateTime if property was changed by the patch
+                        if (changedProperties.Contains(property))
+                        {
+                            if (
+                                metadataObject.TryGetPropertyValue(
+                                    property,
+                                    out JsonNode? metadataPropertyNode
+                                ) && metadataPropertyNode is JsonObject metadataPropertyObject
+                            )
+                            {
+                                metadataPropertyObject["lastUpdateTime"] = now.ToString("o");
+                            }
+                            else
+                            {
+                                metadataObject[property] = new JsonObject
+                                {
+                                    ["lastUpdateTime"] = now.ToString("o"),
+                                };
+                            }
+                        }
                     }
                 }
                 else
                 {
-                    throw new Exceptions.NotSupportedException(
-                        $"Operation '{op.Op}' with value '{op.Value}' is not supported"
-                    );
-                }
-
-                // UpdateTime metadata is set on the root of the property (not for $metadata updates)
-                if (pathParts.Length > 0 && pathParts.First() != "$metadata")
-                {
-                    updateTimeSetOperations.Add(
-                        $"SET t = {_graphName}.agtype_set(properties(t),['$metadata','{pathParts.First()}','lastUpdateTime'],'{now:o}')"
+                    violations.Add(
+                        $"Property '{property}' is a {contentInfo.GetType()} and is not supported"
                     );
                 }
             }
-
+            if (violations.Count != 0)
+            {
+                throw new ValidationFailedException(string.Join(" AND ", violations));
+            }
+            // Set global last update time
+            metadataObject["$lastUpdateTime"] = now.ToString("o");
+            // Set new etag
             string newEtag = ETagGenerator.GenerateEtag(digitalTwinId, now);
-            patchOperations.Add($"SET t.`$etag` = '{newEtag}'");
-
+            patchedTwin["$etag"] = newEtag;
+            // 5. Replace the entire twin in the database
+            string updatedDigitalTwinJson = JsonSerializer
+                .Serialize(patchedTwin, serializerOptions)
+                .Replace("'", "\\'");
             string cypher =
-                $@"MATCH (t:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})
-{string.Join("\n", updateTimeSetOperations)}
-{string.Join("\n", patchOperations)}
+                $@"WITH '{updatedDigitalTwinJson}'::agtype as twin
+MERGE (t: Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})
+SET t = twin
 RETURN t";
             await using var connection = await _dataSource.OpenConnectionAsync(
                 Npgsql.TargetSessionAttributes.ReadWrite,
@@ -498,13 +566,16 @@ RETURN t";
             );
             await using var command = connection.CreateCypherCommand(_graphName, cypher);
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-
             if (!await reader.ReadAsync(cancellationToken))
             {
                 throw new DigitalTwinNotFoundException(
                     $"Digital Twin with ID {digitalTwinId} not found"
                 );
             }
+        }
+        catch (ModelNotFoundException ex)
+        {
+            throw new ValidationFailedException(ex.Message);
         }
         catch (Exception ex)
         {
