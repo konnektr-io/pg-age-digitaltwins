@@ -382,4 +382,40 @@ public class DigitalTwinsTests : TestBase
 
         Assert.Contains("invalidProperty", exception.Message);
     } */
+
+    [Fact]
+    public async Task Benchmark_UpdateDigitalTwinAsync()
+    {
+        // Load required models
+        string[] models = [SampleData.DtdlCrater];
+        await Client.CreateModelsAsync(models);
+
+        // Create digital twin
+        var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinCrater);
+        var createdTwin = await Client.CreateOrReplaceDigitalTwinAsync(
+            digitalTwin!.Id,
+            digitalTwin
+        );
+
+        JsonPatch jsonPatch = JsonSerializer.Deserialize<JsonPatch>(
+            @"[{""op"": ""replace"", ""path"": ""/diameter"", ""value"": 123.45}]"
+        )!;
+
+        var stopwatch = new System.Diagnostics.Stopwatch();
+        int iterations = 20;
+        long totalMs = 0;
+
+        for (int i = 0; i < iterations; i++)
+        {
+            stopwatch.Restart();
+            await Client.UpdateDigitalTwinAsync(digitalTwin!.Id, jsonPatch);
+            stopwatch.Stop();
+            totalMs += stopwatch.ElapsedMilliseconds;
+        }
+
+        var avgMs = totalMs / (double)iterations;
+        Console.WriteLine(
+            $"Average UpdateDigitalTwinAsync time: {avgMs} ms over {iterations} runs"
+        );
+    }
 }
