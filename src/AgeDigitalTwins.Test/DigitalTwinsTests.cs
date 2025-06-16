@@ -4,12 +4,20 @@ using Azure.DigitalTwins.Core;
 using Json.More;
 using Json.Patch;
 using Json.Pointer;
+using Xunit.Abstractions;
 
 namespace AgeDigitalTwins.Test;
 
 [Trait("Category", "Integration")]
 public class DigitalTwinsTests : TestBase
 {
+    private readonly ITestOutputHelper _output;
+
+    public DigitalTwinsTests(ITestOutputHelper output)
+    {
+        _output = output;
+    }
+
     [Fact]
     public async Task CreateOrReplaceDigitalTwinAsync_BasicDigitalTwin_CreatedAndReadable()
     {
@@ -420,7 +428,7 @@ public class DigitalTwinsTests : TestBase
         }
 
         var avgMs = totalMs / (double)iterations;
-        Console.WriteLine(
+        _output.WriteLine(
             $"Average UpdateDigitalTwinAsync time: {avgMs} ms over {iterations} runs"
         );
     }
