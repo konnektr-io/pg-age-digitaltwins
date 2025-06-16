@@ -60,11 +60,9 @@ jobs:
       - name: Test
         run: |
           if [ "${{ github.event.inputs.test_project }}" == "All" ]; then
-            dotnet test './src' --logger 'GitHubActions;summary.includePassedTests=true' --
-          RunConfiguration.CollectSourceInformation=true --blame-hang --blame-hang-timeout 5m
+            dotnet test './src' --logger 'GitHubActions;summary.includePassedTests=true' --blame-hang --blame-hang-timeout 5m
           else
-            dotnet test './src/${{ github.event.inputs.test_project }}' --logger 'GitHubActions;summary.includePassedTests=true' --
-          RunConfiguration.CollectSourceInformation=true --blame-hang --blame-hang-timeout 5m
+            dotnet test './src/${{ github.event.inputs.test_project }}' --logger 'GitHubActions;summary.includePassedTests=true' --blame-hang --blame-hang-timeout 5m
           fi
 
       - name: Stop PostgreSQL container
