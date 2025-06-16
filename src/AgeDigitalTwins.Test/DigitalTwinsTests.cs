@@ -372,7 +372,7 @@ public class DigitalTwinsTests : TestBase
         );
     } */
 
-    /* [Fact]
+    [Fact]
     public async Task UpdateDigitalTwinAsync_AddOperationInvalidProperty_ThrowsValidationException()
     {
         // Load required models
@@ -381,15 +381,21 @@ public class DigitalTwinsTests : TestBase
 
         // Create digital twin
         var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinCrater);
-        var createdTwin = await Client.CreateOrReplaceDigitalTwinAsync(digitalTwin!.Id, digitalTwin);
+        var createdTwin = await Client.CreateOrReplaceDigitalTwinAsync(
+            digitalTwin!.Id,
+            digitalTwin
+        );
 
-        JsonPatch jsonPatch = JsonSerializer.Deserialize<JsonPatch>(@"[{""op"": ""add"", ""path"": ""/invalidProperty"", ""value"": ""foo""}]")!;
+        JsonPatch jsonPatch = JsonSerializer.Deserialize<JsonPatch>(
+            @"[{""op"": ""add"", ""path"": ""/invalidProperty"", ""value"": ""foo""}]"
+        )!;
 
-        var exception = await Assert.ThrowsAsync<ValidationFailedException>(() =>
-            Client.UpdateDigitalTwinAsync(digitalTwin!.Id, jsonPatch));
+        var exception = await Assert.ThrowsAsync<ValidationFailedException>(
+            () => Client.UpdateDigitalTwinAsync(digitalTwin!.Id, jsonPatch)
+        );
 
         Assert.Contains("invalidProperty", exception.Message);
-    } */
+    }
 
     [Fact]
     public async Task Benchmark_UpdateDigitalTwinAsync()
