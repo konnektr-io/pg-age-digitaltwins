@@ -451,6 +451,11 @@ RETURN COUNT(m) AS deletedCount";
         CancellationToken cancellationToken = default
     )
     {
+        if (_modelCacheExpiration == TimeSpan.Zero)
+        {
+            // If cache expiration is set to zero, do not use the cache
+            return await GetModelAsync(modelId, cancellationToken);
+        }
         return await _modelCache.GetOrCreateAsync(
             modelId,
             async entry =>
