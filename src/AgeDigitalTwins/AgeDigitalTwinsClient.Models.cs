@@ -458,10 +458,7 @@ RETURN COUNT(m) AS deletedCount";
                 entry.SetOptions(
                     new MemoryCacheEntryOptions
                     {
-                        AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(
-                            10
-                        ) // Adjust expiration as needed
-                        ,
+                        AbsoluteExpirationRelativeToNow = _modelCacheExpiration,
                     }
                 );
 

@@ -18,6 +18,8 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
 
     private readonly MemoryCache _modelCache = new MemoryCache(new MemoryCacheOptions());
 
+    private readonly TimeSpan _modelCacheExpiration;
+
     private readonly ModelParser _modelParser;
 
     private readonly JsonSerializerOptions serializerOptions =
@@ -33,11 +35,13 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
     /// <param name="noInitialization">If true, skips the initialization of the database and graph.</param>
     public AgeDigitalTwinsClient(
         NpgsqlMultiHostDataSource dataSource,
-        string graphName = "digitaltwins"
+        AgeDigitalTwinsClientOptions? options = null
     )
     {
-        _graphName = graphName;
         _dataSource = dataSource;
+        options ??= new AgeDigitalTwinsClientOptions();
+        _graphName = options.GraphName;
+        _modelCacheExpiration = options.ModelCacheExpiration;
         _modelParser = new(
             new ParsingOptions()
             {
@@ -50,24 +54,16 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
     }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="AgeDigitalTwinsClient"/> class with a connection string and graph name.
+    /// Initializes a new instance of the <see cref="AgeDigitalTwinsClient"/> class with a data source and graph name.
     /// </summary>
-    /// <param name="connectionString">The connection string for the database.</param>
+    /// <param name="dataSource">The data source for connecting to the database.</param>
     /// <param name="graphName">The name of the graph to use. Defaults to "digitaltwins".</param>
-    /// <param name="loadAgeFromPlugins">If true, loads the Age extension from plugins.</param>
     /// <param name="noInitialization">If true, skips the initialization of the database and graph.</param>
-    public AgeDigitalTwinsClient(
-        string connectionString,
-        string graphName = "digitaltwins",
-        bool loadAgeFromPlugins = false
-    )
+    public AgeDigitalTwinsClient(NpgsqlMultiHostDataSource dataSource, string graphName)
     {
-        NpgsqlConnectionStringBuilder connectionStringBuilder =
-            new(connectionString) { SearchPath = "ag_catalog, \"$user\", public" };
-        NpgsqlDataSourceBuilder dataSourceBuilder = new(connectionStringBuilder.ConnectionString);
-        _dataSource = dataSourceBuilder.UseAge(loadAgeFromPlugins).BuildMultiHost();
-
+        _dataSource = dataSource;
         _graphName = graphName;
+        _modelCacheExpiration = TimeSpan.FromSeconds(10); // Default to 10 seconds if not set
         _modelParser = new(
             new ParsingOptions()
             {
@@ -88,4 +84,17 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
         await _dataSource.DisposeAsync();
         GC.SuppressFinalize(this);
     }
+}
+
+public class AgeDigitalTwinsClientOptions
+{
+    /// <summary>
+    /// Gets or sets the name of the graph to use.
+    /// </summary>
+    public string GraphName { get; set; } = "digitaltwins";
+
+    /// <summary>
+    /// Gets or sets the expiration time for the model cache.
+    /// </summary>
+    public TimeSpan ModelCacheExpiration { get; set; } = TimeSpan.FromSeconds(10); // Default to 10 seconds if not set
 }

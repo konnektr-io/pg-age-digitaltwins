@@ -1,4 +1,6 @@
 using Microsoft.Extensions.Configuration;
+using Npgsql;
+using Npgsql.Age;
 
 namespace AgeDigitalTwins.Test;
 
@@ -17,7 +19,23 @@ public class TestBase : IAsyncDisposable
             configuration.GetConnectionString("agedb") ?? throw new ArgumentNullException("agedb");
 
         var graphName = "temp_graph_" + Guid.NewGuid().ToString("N");
-        _client = new AgeDigitalTwinsClient(connectionString, graphName, true);
+
+        NpgsqlConnectionStringBuilder connectionStringBuilder =
+            new(connectionString) { SearchPath = "ag_catalog, \"$user\", public" };
+        NpgsqlDataSourceBuilder dataSourceBuilder = new(connectionStringBuilder.ConnectionString);
+
+        var _dataSource = dataSourceBuilder.UseAge(true).BuildMultiHost();
+
+        _client = new AgeDigitalTwinsClient(
+            _dataSource,
+            new AgeDigitalTwinsClientOptions()
+            {
+                GraphName = graphName,
+                ModelCacheExpiration =
+                    TimeSpan.Zero // Disable model cache for tests
+                ,
+            }
+        );
     }
 
     public AgeDigitalTwinsClient Client => _client!;
