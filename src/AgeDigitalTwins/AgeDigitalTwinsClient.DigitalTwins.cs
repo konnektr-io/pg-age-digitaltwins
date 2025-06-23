@@ -220,7 +220,9 @@ public partial class AgeDigitalTwinsClient
                 );
 
             // Get the model and parse it
-            DigitalTwinsModelData modelData = await GetModelAsync(modelId, cancellationToken);
+            DigitalTwinsModelData modelData =
+                await GetModelWithCacheAsync(modelId, cancellationToken)
+                ?? throw new ValidationFailedException($"{modelId} does not exist.");
             IReadOnlyDictionary<Dtmi, DTEntityInfo> parsedModelEntities =
                 await _modelParser.ParseAsync(
                     modelData.DtdlModel,
@@ -391,23 +393,28 @@ RETURN t";
         {
             DateTime now = DateTime.UtcNow;
 
-            // Check etag if defined
+            // Retrieve the current twin
+            var currentTwin =
+                await GetDigitalTwinAsync<JsonObject>(digitalTwinId, cancellationToken)
+                ?? throw new DigitalTwinNotFoundException(
+                    $"Digital Twin with ID {digitalTwinId} not found"
+                );
+
+            // Check if etag matches if If-Match header is provided
             if (!string.IsNullOrEmpty(ifMatch) && !ifMatch.Equals("*"))
             {
-                if (!await DigitalTwinEtagMatchesAsync(digitalTwinId, ifMatch, cancellationToken))
+                if (
+                    currentTwin.TryGetPropertyValue("$etag", out JsonNode? etagNode)
+                    && etagNode is JsonValue etagValue
+                    && etagValue.GetValueKind() == JsonValueKind.String
+                    && !etagValue.ToString().Equals(ifMatch, StringComparison.Ordinal)
+                )
                 {
                     throw new PreconditionFailedException(
                         $"If-Match: {ifMatch} header value does not match the current ETag value of the digital twin with id {digitalTwinId}"
                     );
                 }
             }
-
-            // 1. Retrieve the current twin
-            var currentTwin =
-                await GetDigitalTwinAsync<JsonObject>(digitalTwinId, cancellationToken)
-                ?? throw new DigitalTwinNotFoundException(
-                    $"Digital Twin with ID {digitalTwinId} not found"
-                );
 
             JsonNode patchedTwinNode = currentTwin.DeepClone();
             try
@@ -460,7 +467,9 @@ RETURN t";
                 ?? throw new ValidationFailedException(
                     "Digital Twin's $model property cannot be null or empty"
                 );
-            DigitalTwinsModelData modelData = await GetModelAsync(modelId, cancellationToken);
+            DigitalTwinsModelData modelData =
+                await GetModelWithCacheAsync(modelId, cancellationToken)
+                ?? throw new ValidationFailedException($"{modelId} does not exist.");
             IReadOnlyDictionary<Dtmi, DTEntityInfo> parsedModelEntities =
                 await _modelParser.ParseAsync(
                     modelData.DtdlModel,

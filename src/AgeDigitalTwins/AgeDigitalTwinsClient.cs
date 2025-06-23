@@ -1,10 +1,10 @@
 using System;
 using System.Diagnostics;
 using System.Text.Json;
-using System.Threading;
 using System.Threading.Tasks;
 using AgeDigitalTwins.Validation;
 using DTDLParser;
+using Microsoft.Extensions.Caching.Memory;
 using Npgsql;
 using Npgsql.Age;
 
@@ -15,6 +15,8 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
     private readonly NpgsqlMultiHostDataSource _dataSource;
 
     private readonly string _graphName;
+
+    private readonly MemoryCache _modelCache = new MemoryCache(new MemoryCacheOptions());
 
     private readonly ModelParser _modelParser;
 
@@ -41,7 +43,7 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
             {
                 MaxDtdlVersion = 4,
                 DtmiResolverAsync = (dtmis, ct) =>
-                    _dataSource.ParserDtmiResolverAsync(_graphName, dtmis, ct),
+                    _dataSource.ParserDtmiResolverAsync(_graphName, _modelCache, dtmis, ct),
             }
         );
         InitializeAsync().GetAwaiter().GetResult();
@@ -71,7 +73,7 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
             {
                 MaxDtdlVersion = 4,
                 DtmiResolverAsync = (dtmis, ct) =>
-                    _dataSource.ParserDtmiResolverAsync(_graphName, dtmis, ct),
+                    _dataSource.ParserDtmiResolverAsync(_graphName, _modelCache, dtmis, ct),
             }
         );
         InitializeAsync().GetAwaiter().GetResult();
