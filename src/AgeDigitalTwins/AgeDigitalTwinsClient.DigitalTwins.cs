@@ -222,7 +222,7 @@ public partial class AgeDigitalTwinsClient
             // Get the model and parse it
             DigitalTwinsModelData modelData =
                 await GetModelWithCacheAsync(modelId, cancellationToken)
-                ?? throw new ValidationFailedException($"{modelId} does not exist.");
+                ?? throw new ModelNotFoundException($"{modelId} does not exist.");
             IReadOnlyDictionary<Dtmi, DTEntityInfo> parsedModelEntities =
                 await _modelParser.ParseAsync(
                     modelData.DtdlModel,
@@ -231,7 +231,7 @@ public partial class AgeDigitalTwinsClient
             DTInterfaceInfo dtInterfaceInfo =
                 (DTInterfaceInfo)
                     parsedModelEntities.FirstOrDefault(e => e.Value is DTInterfaceInfo).Value
-                ?? throw new ValidationFailedException(
+                ?? throw new ModelNotFoundException(
                     $"{modelId} or one of its dependencies does not exist."
                 );
             List<string> violations = new();
@@ -469,7 +469,7 @@ RETURN t";
                 );
             DigitalTwinsModelData modelData =
                 await GetModelWithCacheAsync(modelId, cancellationToken)
-                ?? throw new ValidationFailedException($"{modelId} does not exist.");
+                ?? throw new ModelNotFoundException($"{modelId} does not exist.");
             IReadOnlyDictionary<Dtmi, DTEntityInfo> parsedModelEntities =
                 await _modelParser.ParseAsync(
                     modelData.DtdlModel,
@@ -478,7 +478,7 @@ RETURN t";
             DTInterfaceInfo dtInterfaceInfo =
                 (DTInterfaceInfo)
                     parsedModelEntities.FirstOrDefault(e => e.Value is DTInterfaceInfo).Value
-                ?? throw new ValidationFailedException(
+                ?? throw new ModelNotFoundException(
                     $"{modelId} or one of its dependencies does not exist."
                 );
             List<string> violations = new();
@@ -567,8 +567,7 @@ RETURN t";
             string cypher =
                 $@"WITH '{updatedDigitalTwinJson}'::agtype as twin
 MERGE (t: Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})
-SET t = twin
-RETURN t";
+SET t = twin";
             await using var connection = await _dataSource.OpenConnectionAsync(
                 Npgsql.TargetSessionAttributes.ReadWrite,
                 cancellationToken
