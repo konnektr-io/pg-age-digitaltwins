@@ -567,20 +567,13 @@ RETURN t";
             string cypher =
                 $@"WITH '{updatedDigitalTwinJson}'::agtype as twin
 MERGE (t: Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})
-SET t = twin
-RETURN t";
+SET t = twin";
             await using var connection = await _dataSource.OpenConnectionAsync(
                 Npgsql.TargetSessionAttributes.ReadWrite,
                 cancellationToken
             );
             await using var command = connection.CreateCypherCommand(_graphName, cypher);
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-            if (!await reader.ReadAsync(cancellationToken))
-            {
-                throw new DigitalTwinNotFoundException(
-                    $"Digital Twin with ID {digitalTwinId} not found"
-                );
-            }
+            await command.ExecuteNonQueryAsync(cancellationToken);
         }
         catch (ModelNotFoundException ex)
         {
