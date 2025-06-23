@@ -220,7 +220,9 @@ public partial class AgeDigitalTwinsClient
                 );
 
             // Get the model and parse it
-            DigitalTwinsModelData modelData = await GetModelAsync(modelId, cancellationToken);
+            DigitalTwinsModelData modelData =
+                await GetModelWithCacheAsync(modelId, cancellationToken)
+                ?? throw new ModelNotFoundException($"{modelId} does not exist.");
             IReadOnlyDictionary<Dtmi, DTEntityInfo> parsedModelEntities =
                 await _modelParser.ParseAsync(
                     modelData.DtdlModel,
@@ -229,7 +231,7 @@ public partial class AgeDigitalTwinsClient
             DTInterfaceInfo dtInterfaceInfo =
                 (DTInterfaceInfo)
                     parsedModelEntities.FirstOrDefault(e => e.Value is DTInterfaceInfo).Value
-                ?? throw new ValidationFailedException(
+                ?? throw new ModelNotFoundException(
                     $"{modelId} or one of its dependencies does not exist."
                 );
             List<string> violations = new();
@@ -391,23 +393,28 @@ RETURN t";
         {
             DateTime now = DateTime.UtcNow;
 
-            // Check etag if defined
+            // Retrieve the current twin
+            var currentTwin =
+                await GetDigitalTwinAsync<JsonObject>(digitalTwinId, cancellationToken)
+                ?? throw new DigitalTwinNotFoundException(
+                    $"Digital Twin with ID {digitalTwinId} not found"
+                );
+
+            // Check if etag matches if If-Match header is provided
             if (!string.IsNullOrEmpty(ifMatch) && !ifMatch.Equals("*"))
             {
-                if (!await DigitalTwinEtagMatchesAsync(digitalTwinId, ifMatch, cancellationToken))
+                if (
+                    currentTwin.TryGetPropertyValue("$etag", out JsonNode? etagNode)
+                    && etagNode is JsonValue etagValue
+                    && etagValue.GetValueKind() == JsonValueKind.String
+                    && !etagValue.ToString().Equals(ifMatch, StringComparison.Ordinal)
+                )
                 {
                     throw new PreconditionFailedException(
                         $"If-Match: {ifMatch} header value does not match the current ETag value of the digital twin with id {digitalTwinId}"
                     );
                 }
             }
-
-            // 1. Retrieve the current twin
-            var currentTwin =
-                await GetDigitalTwinAsync<JsonObject>(digitalTwinId, cancellationToken)
-                ?? throw new DigitalTwinNotFoundException(
-                    $"Digital Twin with ID {digitalTwinId} not found"
-                );
 
             JsonNode patchedTwinNode = currentTwin.DeepClone();
             try
@@ -460,7 +467,9 @@ RETURN t";
                 ?? throw new ValidationFailedException(
                     "Digital Twin's $model property cannot be null or empty"
                 );
-            DigitalTwinsModelData modelData = await GetModelAsync(modelId, cancellationToken);
+            DigitalTwinsModelData modelData =
+                await GetModelWithCacheAsync(modelId, cancellationToken)
+                ?? throw new ModelNotFoundException($"{modelId} does not exist.");
             IReadOnlyDictionary<Dtmi, DTEntityInfo> parsedModelEntities =
                 await _modelParser.ParseAsync(
                     modelData.DtdlModel,
@@ -469,7 +478,7 @@ RETURN t";
             DTInterfaceInfo dtInterfaceInfo =
                 (DTInterfaceInfo)
                     parsedModelEntities.FirstOrDefault(e => e.Value is DTInterfaceInfo).Value
-                ?? throw new ValidationFailedException(
+                ?? throw new ModelNotFoundException(
                     $"{modelId} or one of its dependencies does not exist."
                 );
             List<string> violations = new();
@@ -551,27 +560,20 @@ RETURN t";
             // Set new etag
             string newEtag = ETagGenerator.GenerateEtag(digitalTwinId, now);
             patchedTwin["$etag"] = newEtag;
-            // 5. Replace the entire twin in the database
+            // Replace the entire twin in the database
             string updatedDigitalTwinJson = JsonSerializer
                 .Serialize(patchedTwin, serializerOptions)
                 .Replace("'", "\\'");
             string cypher =
                 $@"WITH '{updatedDigitalTwinJson}'::agtype as twin
 MERGE (t: Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})
-SET t = twin
-RETURN t";
+SET t = twin";
             await using var connection = await _dataSource.OpenConnectionAsync(
                 Npgsql.TargetSessionAttributes.ReadWrite,
                 cancellationToken
             );
             await using var command = connection.CreateCypherCommand(_graphName, cypher);
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-            if (!await reader.ReadAsync(cancellationToken))
-            {
-                throw new DigitalTwinNotFoundException(
-                    $"Digital Twin with ID {digitalTwinId} not found"
-                );
-            }
+            await command.ExecuteNonQueryAsync(cancellationToken);
         }
         catch (ModelNotFoundException ex)
         {

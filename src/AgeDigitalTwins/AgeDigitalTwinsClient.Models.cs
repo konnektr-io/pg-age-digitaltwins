@@ -10,6 +10,7 @@ using AgeDigitalTwins.Exceptions;
 using AgeDigitalTwins.Models;
 using DTDLParser;
 using DTDLParser.Models;
+using Microsoft.Extensions.Caching.Memory;
 using Npgsql;
 using Npgsql.Age;
 using Npgsql.Age.Types;
@@ -443,5 +444,31 @@ RETURN COUNT(m) AS deletedCount";
             );
             throw;
         }
+    }
+
+    private async Task<DigitalTwinsModelData?> GetModelWithCacheAsync(
+        string modelId,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (_modelCacheExpiration == TimeSpan.Zero)
+        {
+            // If cache expiration is set to zero, do not use the cache
+            return await GetModelAsync(modelId, cancellationToken);
+        }
+        return await _modelCache.GetOrCreateAsync(
+            modelId,
+            async entry =>
+            {
+                entry.SetOptions(
+                    new MemoryCacheEntryOptions
+                    {
+                        AbsoluteExpirationRelativeToNow = _modelCacheExpiration,
+                    }
+                );
+
+                return await GetModelAsync(modelId, cancellationToken);
+            }
+        );
     }
 }

@@ -56,7 +56,16 @@ builder.Services.AddSingleton(sp =>
         ?? builder.Configuration["AgeGraphName"]
         ?? "digitaltwins";
     logger.LogInformation("Using graph: {GraphName}", graphName);
-    return new AgeDigitalTwinsClient(dataSource, graphName);
+    int modelCacheExpiration = builder.Configuration.GetValue<int>(
+        "Parameters:ModelCacheExpirationSeconds",
+        10
+    );
+    var options = new AgeDigitalTwinsClientOptions
+    {
+        GraphName = graphName,
+        ModelCacheExpiration = TimeSpan.FromSeconds(modelCacheExpiration),
+    };
+    return new AgeDigitalTwinsClient(dataSource, options);
 });
 
 // Add services to the container.
