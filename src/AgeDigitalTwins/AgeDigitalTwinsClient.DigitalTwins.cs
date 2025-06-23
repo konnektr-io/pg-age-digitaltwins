@@ -560,14 +560,15 @@ RETURN t";
             // Set new etag
             string newEtag = ETagGenerator.GenerateEtag(digitalTwinId, now);
             patchedTwin["$etag"] = newEtag;
-            // 5. Replace the entire twin in the database
+            // Replace the entire twin in the database
             string updatedDigitalTwinJson = JsonSerializer
                 .Serialize(patchedTwin, serializerOptions)
                 .Replace("'", "\\'");
             string cypher =
                 $@"WITH '{updatedDigitalTwinJson}'::agtype as twin
 MERGE (t: Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})
-SET t = twin";
+SET t = twin
+RETURN t";
             await using var connection = await _dataSource.OpenConnectionAsync(
                 Npgsql.TargetSessionAttributes.ReadWrite,
                 cancellationToken
