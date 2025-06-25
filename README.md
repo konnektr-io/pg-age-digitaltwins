@@ -18,7 +18,7 @@ AgeDigitalTwins is an SDK and API designed to support Digital Twins applications
   - [x] Relationships CRUD operations
   - [x] Model Validation with DTDLParser
   - [x] Twin Validation with DTDLParser
-  - [ ] Update Validation with DTDLParser
+  - [x] Update Validation with DTDLParser
   - [ ] Relationship Validation with DTDLParser
   - [x] ADT Query Conversion (to Cypher)
     - [x] WHERE
