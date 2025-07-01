@@ -127,6 +127,18 @@ public class AdtQueryToCypherTests
         "SELECT TOP (50) twin FROM DIGITALTWINS twin WHERE CONTAINS(twin.$dtId,'test') OR CONTAINS(twin.name,'test') OR CONTAINS(twin.displayName,'test') OR CONTAINS(twin.tag,'test') OR CONTAINS(twin.label,'test')",
         "MATCH (twin:Twin) WHERE twin['$dtId'] CONTAINS 'test' OR twin.name CONTAINS 'test' OR twin.displayName CONTAINS 'test' OR twin.tag CONTAINS 'test' OR twin.label CONTAINS 'test' RETURN twin LIMIT 50"
     )]
+    [InlineData(
+        "SELECT * FROM DIGITALTWINS WHERE IS_NUMBER(Capacity)",
+        "MATCH (T:Twin) WHERE ((toFloat(T.Capacity) IS NOT NULL OR toInteger(T.Capacity) IS NOT NULL) AND NOT (toString(T.Capacity) = T.Capacity)) RETURN *"
+    )]
+    [InlineData(
+        "SELECT * FROM DIGITALTWINS WHERE IS_NUMBER(Capacity) AND Capacity != 0",
+        "MATCH (T:Twin) WHERE ((toFloat(T.Capacity) IS NOT NULL OR toInteger(T.Capacity) IS NOT NULL) AND NOT (toString(T.Capacity) = T.Capacity)) AND NOT (T.Capacity = 0) RETURN *"
+    )]
+    [InlineData(
+        "SELECT T FROM DIGITALTWINS T WHERE IS_NUMBER(T.temperature) AND T.temperature > 20.5",
+        "MATCH (T:Twin) WHERE ((toFloat(T.temperature) IS NOT NULL OR toInteger(T.temperature) IS NOT NULL) AND NOT (toString(T.temperature) = T.temperature)) AND T.temperature > 20.5 RETURN T"
+    )]
     public void ConvertAdtQueryToCypher_ReturnsExpectedCypher(
         string adtQuery,
         string expectedCypher

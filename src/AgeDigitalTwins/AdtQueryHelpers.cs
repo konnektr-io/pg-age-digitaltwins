@@ -374,12 +374,23 @@ public static partial class AdtQueryHelpers
             );
 
         // Process IS_DEFINED function
-        whereClause = IsNotNullRegex()
+        whereClause = IsDefinedRegex()
             .Replace(
                 whereClause,
                 m =>
                 {
                     return $"{m.Groups[1].Value} IS NOT NULL";
+                }
+            );
+
+        // Process IS_NUMBER function
+        whereClause = IsNumberRegex()
+            .Replace(
+                whereClause,
+                m =>
+                {
+                    var property = m.Groups[1].Value;
+                    return $"((toFloat({property}) IS NOT NULL OR toInteger({property}) IS NOT NULL) AND NOT (toString({property}) = {property}))";
                 }
             );
 
@@ -488,7 +499,13 @@ public static partial class AdtQueryHelpers
         @"IS_DEFINED\(([^)]+)\)",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
     )]
-    private static partial Regex IsNotNullRegex();
+    private static partial Regex IsDefinedRegex();
+
+    [GeneratedRegex(
+        @"IS_NUMBER\(([^)]+)\)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+    )]
+    private static partial Regex IsNumberRegex();
 
     [GeneratedRegex(@"(\.\$[\w]+)")]
     private static partial Regex DollarSignPropertyRegex();
