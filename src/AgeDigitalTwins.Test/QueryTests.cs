@@ -302,6 +302,18 @@ public class QueryTests : TestBase
             count++;
         }
         Assert.Equal(1, count);
+
+        int count1 = 0;
+        await foreach (
+            var line in Client.QueryAsync<JsonDocument>(
+                @"SELECT T FROM DIGITALTWINS T WHERE IS_NUMBER(T.name)"
+            )
+        )
+        {
+            Assert.NotNull(line);
+            count1++;
+        }
+        Assert.Equal(0, count1);
     }
 
     [Fact]
