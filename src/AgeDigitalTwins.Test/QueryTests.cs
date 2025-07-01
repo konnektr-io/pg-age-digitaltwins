@@ -298,6 +298,7 @@ public class QueryTests : TestBase
         {
             Assert.NotNull(line);
             var id = line.RootElement.GetProperty("T").GetProperty("$dtId").GetString();
+            Assert.Equal("tempsensor1", id);
             count++;
         }
         Assert.Equal(1, count);
