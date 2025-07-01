@@ -275,11 +275,11 @@ public class QueryTests : TestBase
             new()
             {
                 {
-                    "room1",
+                    "tempsensor1",
                     @"{""$dtId"": ""tempsensor1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:tempsensor;1""}, ""name"": ""Temperature Sensor 1"", ""temperature"": 22.5}"
                 },
                 {
-                    "room2",
+                    "tempsensor2",
                     @"{""$dtId"": ""tempsensor2"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:tempsensor;1""}, ""name"": ""Temperature Sensor 2""}"
                 },
             };
