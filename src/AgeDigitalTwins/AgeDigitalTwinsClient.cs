@@ -47,7 +47,13 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
             {
                 MaxDtdlVersion = 4,
                 DtmiResolverAsync = (dtmis, ct) =>
-                    _dataSource.ParserDtmiResolverAsync(_graphName, _modelCache, dtmis, ct),
+                    _dataSource.ParserDtmiResolverAsync(
+                        _graphName,
+                        _modelCache,
+                        _modelCacheExpiration,
+                        dtmis,
+                        ct
+                    ),
             }
         );
         InitializeAsync().GetAwaiter().GetResult();
@@ -69,7 +75,13 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
             {
                 MaxDtdlVersion = 4,
                 DtmiResolverAsync = (dtmis, ct) =>
-                    _dataSource.ParserDtmiResolverAsync(_graphName, _modelCache, dtmis, ct),
+                    _dataSource.ParserDtmiResolverAsync(
+                        _graphName,
+                        _modelCache,
+                        _modelCacheExpiration,
+                        dtmis,
+                        ct
+                    ),
             }
         );
         InitializeAsync().GetAwaiter().GetResult();

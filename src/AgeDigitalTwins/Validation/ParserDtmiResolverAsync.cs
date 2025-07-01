@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -11,12 +12,13 @@ using Npgsql.Age.Types;
 
 namespace AgeDigitalTwins.Validation;
 
-internal static class ModelsRepositoryClientExtensions
+internal static class NpgsqlDataSourceExtensions
 {
     public static async IAsyncEnumerable<string> ParserDtmiResolverAsync(
         this NpgsqlDataSource dataSource,
         string graphName,
         MemoryCache modelCache,
+        TimeSpan modelCacheExpiration,
         IReadOnlyCollection<Dtmi> dtmis,
         [EnumeratorCancellation] CancellationToken cancellationToken = default
     )
@@ -26,7 +28,7 @@ internal static class ModelsRepositoryClientExtensions
         foreach (var dtmi in dtmis)
         {
             if (
-                modelCache.TryGetValue(dtmi, out DigitalTwinsModelData? modelData)
+                modelCache.TryGetValue(dtmi.AbsoluteUri, out DigitalTwinsModelData? modelData)
                 && modelData?.DtdlModel is not null
             )
             {
@@ -50,6 +52,18 @@ internal static class ModelsRepositoryClientExtensions
             var agResult = await reader.GetFieldValueAsync<Agtype>(0).ConfigureAwait(false);
             var vertex = agResult.GetVertex();
             var modelData = new DigitalTwinsModelData(vertex.Properties);
+            if (modelCacheExpiration != TimeSpan.Zero && modelData.DtdlModel is not null)
+            {
+                // Store the model in the cache with the specified expiration
+                modelCache.Set(
+                    modelData.Id,
+                    modelData,
+                    new MemoryCacheEntryOptions
+                    {
+                        AbsoluteExpirationRelativeToNow = modelCacheExpiration,
+                    }
+                );
+            }
             yield return modelData.DtdlModel!;
         }
     }
