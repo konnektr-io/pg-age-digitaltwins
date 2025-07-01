@@ -41,6 +41,12 @@ internal static class NpgsqlDataSourceExtensions
             }
         }
 
+        if (dtmisToFetch.Count == 0)
+        {
+            // If all models were found in the cache, exit early
+            yield break;
+        }
+
         string dtmiList = string.Join(",", dtmisToFetch.Select(d => $"'{d}'"));
         string cypher = $"MATCH (m:Model) WHERE m.id IN [{dtmiList}] RETURN m";
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
