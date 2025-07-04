@@ -142,12 +142,14 @@ internal class ImportJob
 
         int lineNumber = 0;
         ImportSection? currentSection = null;
+        bool hasAnyContent = false;
 
         string? line;
         while ((line = await reader.ReadLineAsync()) != null)
         {
             cancellationToken.ThrowIfCancellationRequested();
             lineNumber++;
+            hasAnyContent = true;
 
             if (string.IsNullOrWhiteSpace(line))
                 continue;
@@ -179,6 +181,12 @@ internal class ImportJob
             {
                 throw new ArgumentException($"Invalid JSON on line {lineNumber}: {ex.Message}", ex);
             }
+        }
+
+        // Additional check for completely empty stream
+        if (!hasAnyContent)
+        {
+            throw new ArgumentException("Empty input stream");
         }
 
         return lines;
