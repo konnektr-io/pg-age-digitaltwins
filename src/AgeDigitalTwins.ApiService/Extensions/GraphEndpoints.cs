@@ -1,4 +1,3 @@
-using AgeDigitalTwins;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AgeDigitalTwins.ApiService.Extensions;
