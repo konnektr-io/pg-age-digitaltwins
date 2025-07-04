@@ -57,8 +57,14 @@ internal class ImportJob
 
             var lines = await ParseNdJsonAsync(inputStream, cancellationToken);
 
+            // Validate input early
+            ValidateInput(lines);
+
             // Process header
             var header = await ProcessHeaderAsync(lines, jobId, cancellationToken);
+
+            // Validate header content
+            ValidateHeader(header);
 
             // Process models
             await ProcessModelsAsync(lines, result, jobId, cancellationToken);
@@ -458,5 +464,58 @@ internal class ImportJob
             new { section = "Relationships", status = "Succeeded" },
             cancellationToken
         );
+    }
+
+    /// <summary>
+    /// Validates the input lines for basic requirements.
+    /// </summary>
+    /// <param name="lines">The parsed lines from the input stream.</param>
+    /// <exception cref="ArgumentException">Thrown when input validation fails.</exception>
+    private static void ValidateInput(List<ImportLine> lines)
+    {
+        // Check if input is empty
+        if (lines == null || !lines.Any())
+        {
+            throw new ArgumentException("Empty input stream");
+        }
+
+        // Check if we have any sections defined
+        var linesWithSections = lines.Where(l => l.Section.HasValue).ToList();
+        if (!linesWithSections.Any())
+        {
+            throw new ArgumentException("No valid sections found in input stream");
+        }
+
+        // Check if first section is Header
+        var firstSection = linesWithSections.First().Section!.Value;
+        if (firstSection != ImportSection.Header)
+        {
+            throw new ArgumentException("First section must be 'Header'");
+        }
+    }
+
+    /// <summary>
+    /// Validates the header content for supported version.
+    /// </summary>
+    /// <param name="header">The parsed header.</param>
+    /// <exception cref="ArgumentException">Thrown when header validation fails.</exception>
+    private static void ValidateHeader(ImportHeader? header)
+    {
+        if (header == null)
+        {
+            throw new ArgumentException("Header section is required but was not found or could not be parsed");
+        }
+
+        // Validate file version
+        if (string.IsNullOrEmpty(header.FileVersion))
+        {
+            throw new ArgumentException("File version is required in header");
+        }
+
+        // Check if version is supported (currently only 1.0.0)
+        if (!header.FileVersion.Equals("1.0.0", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException($"Unsupported file version: {header.FileVersion}. Supported versions: 1.0.0");
+        }
     }
 }
