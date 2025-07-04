@@ -5,6 +5,8 @@ namespace AgeDigitalTwins.ApiService.Helpers;
 
 public static class RequestHelper
 {
+    private const int DefaultMaxItemsPerPage = 2000;
+
     /// <summary>
     /// Parses pagination parameters from HTTP headers and query string.
     /// </summary>
@@ -14,7 +16,7 @@ public static class RequestHelper
         HttpContext httpContext
     )
     {
-        int? maxItemsPerPage = DefaultMaxItemsPerPage; // Default value
+        int? maxItemsPerPage = DefaultMaxItemsPerPage;
         if (httpContext.Request.Headers.TryGetValue("max-items-per-page", out var maxItemsHeader))
         {
             if (int.TryParse(maxItemsHeader, out var maxItems))
@@ -48,7 +50,7 @@ public static class RequestHelper
         JsonElement requestBody
     )
     {
-        int? maxItemsPerPage = 2000; // Default value
+        int? maxItemsPerPage = DefaultMaxItemsPerPage;
         if (httpContext.Request.Headers.TryGetValue("max-items-per-page", out var maxItemsHeader))
         {
             if (int.TryParse(maxItemsHeader, out var maxItems))
