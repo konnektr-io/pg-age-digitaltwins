@@ -14,7 +14,7 @@ public static class RequestHelper
         HttpContext httpContext
     )
     {
-        int? maxItemsPerPage = 2000; // Default value
+        int? maxItemsPerPage = DefaultMaxItemsPerPage; // Default value
         if (httpContext.Request.Headers.TryGetValue("max-items-per-page", out var maxItemsHeader))
         {
             if (int.TryParse(maxItemsHeader, out var maxItems))
