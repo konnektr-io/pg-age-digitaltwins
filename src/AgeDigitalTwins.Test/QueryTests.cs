@@ -268,6 +268,55 @@ public class QueryTests : TestBase
     }
 
     [Fact]
+    public async Task QueryAsync_AdtQueryWithTypeCheckFunctions_ReturnsTwins()
+    {
+        await IntializeAsync();
+        Dictionary<string, string> twins =
+            new()
+            {
+                {
+                    "tempsensor1",
+                    @"{""$dtId"": ""tempsensor1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:tempsensor;1""}, ""name"": ""Temperature Sensor 1"", ""temperature"": 22.5}"
+                },
+                {
+                    "tempsensor2",
+                    @"{""$dtId"": ""tempsensor2"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:tempsensor;1""}, ""name"": ""Temperature Sensor 2""}"
+                },
+            };
+
+        foreach (var twin in twins)
+        {
+            await Client.CreateOrReplaceDigitalTwinAsync(twin.Key, twin.Value);
+        }
+
+        int count = 0;
+        await foreach (
+            var line in Client.QueryAsync<JsonDocument>(
+                @"SELECT T FROM DIGITALTWINS T WHERE IS_NUMBER(T.temperature)"
+            )
+        )
+        {
+            Assert.NotNull(line);
+            var id = line.RootElement.GetProperty("T").GetProperty("$dtId").GetString();
+            Assert.Equal("tempsensor1", id);
+            count++;
+        }
+        Assert.Equal(1, count);
+
+        int count1 = 0;
+        await foreach (
+            var line in Client.QueryAsync<JsonDocument>(
+                @"SELECT T FROM DIGITALTWINS T WHERE IS_NUMBER(T.name)"
+            )
+        )
+        {
+            Assert.NotNull(line);
+            count1++;
+        }
+        Assert.Equal(0, count1);
+    }
+
+    [Fact]
     public async Task QueryAsync_AdtQueryWithTop_ReturnsTwins()
     {
         await IntializeAsync();
