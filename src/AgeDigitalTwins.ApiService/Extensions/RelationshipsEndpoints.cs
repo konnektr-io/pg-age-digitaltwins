@@ -1,9 +1,9 @@
 using System.Text.Json;
+using AgeDigitalTwins.ApiService.Helpers;
 using AgeDigitalTwins.ApiService.Models;
 using Json.Patch;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Primitives;
 
 namespace AgeDigitalTwins.ApiService.Extensions;
 
@@ -23,33 +23,9 @@ public static class RelationshipsEndpoints
                 {
                     string? relationshipName = httpContext.Request.Query["relationshipName"];
 
-                    int? maxItemsPerPage = 2000; // Default value
-
-                    // Parse max-items-per-page header
-                    if (
-                        httpContext.Request.Headers.TryGetValue(
-                            "max-items-per-page",
-                            out var maxItemsHeader
-                        )
-                    )
-                    {
-                        if (int.TryParse(maxItemsHeader, out var maxItems))
-                        {
-                            maxItemsPerPage = maxItems;
-                        }
-                    }
-
-                    // Get continuation token from query string
-                    string? continuationToken = null;
-                    if (
-                        httpContext.Request.Query.TryGetValue(
-                            "continuationToken",
-                            out var continuationTokenStringValues
-                        )
-                    )
-                    {
-                        continuationToken = continuationTokenStringValues.ToString();
-                    }
+                    var (maxItemsPerPage, continuationToken) = RequestHelper.ParsePagination(
+                        httpContext
+                    );
 
                     var page = await client
                         .GetIncomingRelationshipsAsync<JsonDocument>(id, cancellationToken)
@@ -77,33 +53,9 @@ public static class RelationshipsEndpoints
                 {
                     string? relationshipName = httpContext.Request.Query["relationshipName"];
 
-                    int? maxItemsPerPage = 2000; // Default value
-
-                    // Parse max-items-per-page header
-                    if (
-                        httpContext.Request.Headers.TryGetValue(
-                            "max-items-per-page",
-                            out var maxItemsHeader
-                        )
-                    )
-                    {
-                        if (int.TryParse(maxItemsHeader, out var maxItems))
-                        {
-                            maxItemsPerPage = maxItems;
-                        }
-                    }
-
-                    // Get continuation token from query string
-                    string? continuationToken = null;
-                    if (
-                        httpContext.Request.Query.TryGetValue(
-                            "continuationToken",
-                            out var continuationTokenStringValues
-                        )
-                    )
-                    {
-                        continuationToken = continuationTokenStringValues.ToString();
-                    }
+                    var (maxItemsPerPage, continuationToken) = RequestHelper.ParsePagination(
+                        httpContext
+                    );
 
                     var page = await client
                         .GetRelationshipsAsync<JsonDocument>(
@@ -156,17 +108,7 @@ public static class RelationshipsEndpoints
                     CancellationToken cancellationToken
                 ) =>
                 {
-                    string? etag = null;
-                    if (
-                        httpContext.Request.Headers.TryGetValue(
-                            "If-None-Match",
-                            out StringValues etagValues
-                        )
-                        && etagValues.Count > 0
-                    )
-                    {
-                        etag = etagValues[0];
-                    }
+                    string? etag = RequestHelper.ParseETag(httpContext, "If-None-Match");
                     return client.CreateOrReplaceRelationshipAsync(
                         id,
                         relationshipId,
@@ -192,17 +134,7 @@ public static class RelationshipsEndpoints
                     CancellationToken cancellationToken
                 ) =>
                 {
-                    string? etag = null;
-                    if (
-                        httpContext.Request.Headers.TryGetValue(
-                            "If-Match",
-                            out StringValues etagValues
-                        )
-                        && etagValues.Count > 0
-                    )
-                    {
-                        etag = etagValues[0];
-                    }
+                    string? etag = RequestHelper.ParseETag(httpContext, "If-Match");
                     await client.UpdateRelationshipAsync(
                         id,
                         relationshipId,

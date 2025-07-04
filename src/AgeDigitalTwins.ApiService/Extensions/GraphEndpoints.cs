@@ -11,7 +11,7 @@ public static class GraphEndpoints
         if (app.Environment.IsDevelopment())
         {
             app.MapPut(
-                "graph/create",
+                "/graph/create",
                 (
                     [FromServices] AgeDigitalTwinsClient client,
                     CancellationToken cancellationToken
@@ -22,7 +22,7 @@ public static class GraphEndpoints
             );
             // This endpoint is only used for cleanup in tests
             app.MapDelete(
-                "graph/delete",
+                "/graph/delete",
                 (
                     [FromServices] AgeDigitalTwinsClient client,
                     CancellationToken cancellationToken

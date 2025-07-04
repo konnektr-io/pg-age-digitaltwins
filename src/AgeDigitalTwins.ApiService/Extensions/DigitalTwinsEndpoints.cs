@@ -1,8 +1,9 @@
 using System.Text.Json;
+using AgeDigitalTwins;
+using AgeDigitalTwins.ApiService.Helpers;
 using Json.Patch;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Primitives;
 
 namespace AgeDigitalTwins.ApiService.Extensions;
 
@@ -37,17 +38,7 @@ public static class DigitalTwinsEndpoints
                     CancellationToken cancellationToken
                 ) =>
                 {
-                    string? etag = null;
-                    if (
-                        httpContext.Request.Headers.TryGetValue(
-                            "If-None-Match",
-                            out StringValues etagValues
-                        )
-                        && etagValues.Count > 0
-                    )
-                    {
-                        etag = etagValues[0];
-                    }
+                    string? etag = RequestHelper.ParseETag(httpContext, "If-None-Match");
                     return client.CreateOrReplaceDigitalTwinAsync(
                         id,
                         digitalTwin,
@@ -61,7 +52,7 @@ public static class DigitalTwinsEndpoints
             .WithSummary("Creates or replaces a digital twin by its ID.");
 
         app.MapPatch(
-                "digitaltwins/{id}",
+                "/digitaltwins/{id}",
                 [Authorize]
                 async (
                     string id,
@@ -71,17 +62,7 @@ public static class DigitalTwinsEndpoints
                     CancellationToken cancellationToken
                 ) =>
                 {
-                    string? etag = null;
-                    if (
-                        httpContext.Request.Headers.TryGetValue(
-                            "If-Match",
-                            out StringValues etagValues
-                        )
-                        && etagValues.Count > 0
-                    )
-                    {
-                        etag = etagValues[0];
-                    }
+                    string? etag = RequestHelper.ParseETag(httpContext, "If-Match");
                     await client.UpdateDigitalTwinAsync(id, patch, etag, cancellationToken);
                     return Results.NoContent();
                 }

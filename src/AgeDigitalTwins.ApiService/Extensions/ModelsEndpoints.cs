@@ -1,4 +1,5 @@
 using System.Text.Json;
+using AgeDigitalTwins.ApiService.Helpers;
 using AgeDigitalTwins.ApiService.Models;
 using AgeDigitalTwins.Models;
 using Microsoft.AspNetCore.Authorization;
@@ -37,33 +38,9 @@ public static class ModelsEndpoints
                         IncludeModelDefinition = includeModelDefinition,
                     };
 
-                    int? maxItemsPerPage = 2000; // Default value
-
-                    // Parse max-items-per-page header
-                    if (
-                        httpContext.Request.Headers.TryGetValue(
-                            "max-items-per-page",
-                            out var maxItemsHeader
-                        )
-                    )
-                    {
-                        if (int.TryParse(maxItemsHeader, out var maxItems))
-                        {
-                            maxItemsPerPage = maxItems;
-                        }
-                    }
-
-                    // Get continuation token from query string
-                    string? continuationToken = null;
-                    if (
-                        httpContext.Request.Query.TryGetValue(
-                            "continuationToken",
-                            out var continuationTokenStringValues
-                        )
-                    )
-                    {
-                        continuationToken = continuationTokenStringValues.ToString();
-                    }
+                    var (maxItemsPerPage, continuationToken) = RequestHelper.ParsePagination(
+                        httpContext
+                    );
 
                     var page = await client
                         .GetModelsAsync(options, cancellationToken)

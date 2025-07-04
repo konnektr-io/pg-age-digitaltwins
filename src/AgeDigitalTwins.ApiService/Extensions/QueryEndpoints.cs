@@ -1,5 +1,5 @@
 using System.Text.Json;
-using AgeDigitalTwins;
+using AgeDigitalTwins.ApiService.Helpers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -19,34 +19,8 @@ public static class QueryEndpoints
                     CancellationToken cancellationToken
                 ) =>
                 {
-                    int? maxItemsPerPage = 2000; // Default value
-
-                    // Parse max-items-per-page header
-                    if (
-                        httpContext.Request.Headers.TryGetValue(
-                            "max-items-per-page",
-                            out var maxItemsHeader
-                        )
-                    )
-                    {
-                        if (int.TryParse(maxItemsHeader, out var maxItems))
-                        {
-                            maxItemsPerPage = maxItems;
-                        }
-                    }
-
-                    // Get continuation token from request body
-                    string? continuationToken = null;
-                    if (
-                        requestBody.TryGetProperty(
-                            "continuationToken",
-                            out JsonElement continuationTokenElement
-                        )
-                        && continuationTokenElement.ValueKind == JsonValueKind.String
-                    )
-                    {
-                        continuationToken = continuationTokenElement.GetString();
-                    }
+                    var (maxItemsPerPage, continuationToken) =
+                        RequestHelper.ParsePaginationFromBody(httpContext, requestBody);
 
                     string? query = null;
                     if (
