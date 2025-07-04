@@ -36,7 +36,7 @@ public static class QueryEndpoints
                         return Results.BadRequest(
                             new
                             {
-                                error = "Invalid request body. Expected a JSON object with a 'query' property.",
+                                error = "Invalid request body. Expected a JSON object with at least one of 'query' or 'continuationToken' properties.",
                             }
                         );
                     }
