@@ -19,12 +19,13 @@ public class ImportJobValidationTests
     {
         // Arrange
         using var inputStream = new MemoryStream();
-        var logger = new ImportJobLogger();
+        using var outputStream = new MemoryStream();
+        var logger = new StreamImportJobLogger(outputStream);
         var options = new ImportJobOptions();
-        
+
         // Create a mock client (we won't use it since validation should happen before any client operations)
         AgeDigitalTwinsClient? client = null;
-        
+
         var importJob = new ImportJob(client!, logger, options);
 
         // Act & Assert
@@ -44,12 +45,13 @@ public class ImportJobValidationTests
 {""@id"":""dtmi:com:test;1"",""@type"":""Interface"",""@context"":""dtmi:dtdl:context;2""}";
 
         using var inputStream = new MemoryStream(Encoding.UTF8.GetBytes(invalidData));
-        var logger = new ImportJobLogger();
+        using var outputStream = new MemoryStream();
+        var logger = new StreamImportJobLogger(outputStream);
         var options = new ImportJobOptions();
-        
+
         // Create a mock client
         AgeDigitalTwinsClient? client = null;
-        
+
         var importJob = new ImportJob(client!, logger, options);
 
         // Act & Assert
@@ -69,12 +71,13 @@ public class ImportJobValidationTests
 {""fileVersion"": ""2.0.0"", ""author"": ""test"", ""organization"": ""contoso""}";
 
         using var inputStream = new MemoryStream(Encoding.UTF8.GetBytes(invalidData));
-        var logger = new ImportJobLogger();
+        using var outputStream = new MemoryStream();
+        var logger = new StreamImportJobLogger(outputStream);
         var options = new ImportJobOptions();
-        
+
         // Create a mock client
         AgeDigitalTwinsClient? client = null;
-        
+
         var importJob = new ImportJob(client!, logger, options);
 
         // Act & Assert
