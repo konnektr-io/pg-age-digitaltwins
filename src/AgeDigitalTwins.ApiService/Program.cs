@@ -68,6 +68,20 @@ builder.Services.AddSingleton(sp =>
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<ExceptionHandler>();
 
+// Add memory cache for import job management
+builder.Services.AddMemoryCache();
+
+// Add blob storage service
+// Use Azure Blob Storage for production, fallback to default for testing/development
+if (builder.Environment.IsDevelopment())
+{
+    builder.Services.AddSingleton<AgeDigitalTwins.ApiService.Services.IBlobStorageService, AgeDigitalTwins.ApiService.Services.DefaultBlobStorageService>();
+}
+else
+{
+    builder.Services.AddSingleton<AgeDigitalTwins.ApiService.Services.IBlobStorageService, AgeDigitalTwins.ApiService.Services.AzureBlobStorageService>();
+}
+
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
@@ -138,6 +152,7 @@ app.MapDigitalTwinsEndpoints();
 app.MapRelationshipsEndpoints();
 app.MapQueryEndpoints();
 app.MapModelsEndpoints();
+app.MapImportJobEndpoints();
 
 // When the client is initiated, a new graph will automatically be created if the specified graph doesn't exist
 // Creating and dropping graphs should be done in the control plane
