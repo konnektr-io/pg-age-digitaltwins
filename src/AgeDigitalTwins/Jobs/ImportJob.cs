@@ -33,8 +33,8 @@ public static class StreamingImportJob
     {
         var result = new ImportJobResult
         {
-            JobId = jobId,
-            StartTime = DateTime.UtcNow,
+            Id = jobId,
+            CreatedDateTime = DateTime.UtcNow,
             Status = ImportJobStatus.Running,
         };
 
@@ -79,7 +79,7 @@ public static class StreamingImportJob
                 result.Status = ImportJobStatus.Failed;
             }
 
-            result.EndTime = DateTime.UtcNow;
+            result.FinishedDateTime = DateTime.UtcNow;
             await LogAsync(
                 outputStream,
                 jobId,
@@ -98,7 +98,7 @@ public static class StreamingImportJob
         catch (Exception ex)
         {
             result.Status = ImportJobStatus.Failed;
-            result.EndTime = DateTime.UtcNow;
+            result.FinishedDateTime = DateTime.UtcNow;
             result.ErrorCount++;
 
             await LogAsync(

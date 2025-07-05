@@ -1,7 +1,10 @@
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
+using AgeDigitalTwins.Jobs;
 using AgeDigitalTwins.Jobs.Models;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit.Abstractions;
 
 namespace AgeDigitalTwins.Test;
@@ -46,7 +49,7 @@ public class ImportJobTests : TestBase
 
         // Assert
         Assert.NotNull(result);
-        Assert.NotEmpty(result.JobId);
+        Assert.NotEmpty(result.Id);
         Assert.Equal(ImportJobStatus.Succeeded, result.Status);
 
         // Verify models were created
@@ -68,10 +71,10 @@ public class ImportJobTests : TestBase
         Assert.NotEmpty(logOutput);
 
         _output.WriteLine("Import Job Result:");
-        _output.WriteLine($"Job ID: {result.JobId}");
+        _output.WriteLine($"Job ID: {result.Id}");
         _output.WriteLine($"Status: {result.Status}");
-        _output.WriteLine($"Start Time: {result.StartTime}");
-        _output.WriteLine($"End Time: {result.EndTime}");
+        _output.WriteLine($"Start Time: {result.CreatedDateTime}");
+        _output.WriteLine($"End Time: {result.FinishedDateTime}");
         _output.WriteLine($"Models Created: {result.ModelsCreated}");
         _output.WriteLine($"Twins Created: {result.TwinsCreated}");
         _output.WriteLine($"Relationships Created: {result.RelationshipsCreated}");
@@ -205,5 +208,187 @@ public class ImportJobTests : TestBase
         Assert.Equal(0, result.TwinsCreated);
         Assert.Equal(0, result.RelationshipsCreated);
         Assert.Equal(0, result.ErrorCount);
+    }
+
+    // ===== REFACTORED IMPORT JOB MANAGER TESTS =====
+    // Tests for the refactored import job system to ensure the SDK is cloud-agnostic
+    // and only accepts streams, while the API service handles blob URI resolution.
+
+    [Fact]
+    public async Task ImportJobManager_CreateImportJobAsync_WithStreams_ShouldSucceed()
+    {
+        // Arrange
+        var cache = new MemoryCache(new MemoryCacheOptions());
+        var logger = NullLogger<ImportJobManager>.Instance;
+        var jobManager = new ImportJobManager(Client, cache, logger);
+
+        var jobId = "test-job-" + Guid.NewGuid().ToString("N")[..8];
+        using var inputStream = new MemoryStream();
+        using var outputStream = new MemoryStream();
+
+        // Add some test data to input stream
+        var testData = """
+                      {"$dtId": "test-twin-1", "$metadata": {"$model": "dtmi:example:Model;1"}}
+                      """u8.ToArray();
+        inputStream.Write(testData);
+        inputStream.Position = 0;
+
+        // Act
+        var result = await jobManager.CreateImportJobAsync(jobId, inputStream, outputStream);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(jobId, result.Id);
+        Assert.Equal(ImportJobStatus.NotStarted, result.Status);
+        Assert.Null(result.InputBlobUri); // Should be null since no blob URI was provided
+        Assert.Null(result.OutputBlobUri); // Should be null since no blob URI was provided
+        Assert.True(result.CreatedDateTime > DateTime.MinValue);
+        Assert.True(result.LastActionDateTime > DateTime.MinValue);
+
+        _output.WriteLine($"Created import job with ID: {result.Id}");
+        _output.WriteLine($"Job status: {result.Status}");
+        _output.WriteLine($"InputBlobUri: {result.InputBlobUri ?? "null"}");
+        _output.WriteLine($"OutputBlobUri: {result.OutputBlobUri ?? "null"}");
+    }
+
+    [Fact]
+    public async Task ImportJobManager_CreateImportJobAsync_WithNullInputStream_ShouldThrow()
+    {
+        // Arrange
+        var cache = new MemoryCache(new MemoryCacheOptions());
+        var logger = NullLogger<ImportJobManager>.Instance;
+        var jobManager = new ImportJobManager(Client, cache, logger);
+
+        var jobId = "test-job-" + Guid.NewGuid().ToString("N")[..8];
+        using var outputStream = new MemoryStream();
+
+        // Act & Assert
+        var exception = await Assert.ThrowsAsync<ArgumentNullException>(
+            () => jobManager.CreateImportJobAsync(jobId, null!, outputStream)
+        );
+
+        Assert.Equal("inputStream", exception.ParamName);
+        _output.WriteLine($"Expected ArgumentNullException thrown: {exception.Message}");
+    }
+
+    [Fact]
+    public async Task ImportJobManager_CreateImportJobAsync_WithNullOutputStream_ShouldThrow()
+    {
+        // Arrange
+        var cache = new MemoryCache(new MemoryCacheOptions());
+        var logger = NullLogger<ImportJobManager>.Instance;
+        var jobManager = new ImportJobManager(Client, cache, logger);
+
+        var jobId = "test-job-" + Guid.NewGuid().ToString("N")[..8];
+        using var inputStream = new MemoryStream();
+
+        // Act & Assert
+        var exception = await Assert.ThrowsAsync<ArgumentNullException>(
+            () => jobManager.CreateImportJobAsync(jobId, inputStream, null!)
+        );
+
+        Assert.Equal("outputStream", exception.ParamName);
+        _output.WriteLine($"Expected ArgumentNullException thrown: {exception.Message}");
+    }
+
+    [Fact]
+    public async Task ImportJobManager_CreateImportJobAsync_WithDuplicateJobId_ShouldThrow()
+    {
+        // Arrange
+        var cache = new MemoryCache(new MemoryCacheOptions());
+        var logger = NullLogger<ImportJobManager>.Instance;
+        var jobManager = new ImportJobManager(Client, cache, logger);
+
+        var jobId = "test-job-" + Guid.NewGuid().ToString("N")[..8];
+        using var inputStream1 = new MemoryStream();
+        using var outputStream1 = new MemoryStream();
+        using var inputStream2 = new MemoryStream();
+        using var outputStream2 = new MemoryStream();
+
+        // Act
+        var result1 = await jobManager.CreateImportJobAsync(jobId, inputStream1, outputStream1);
+        _output.WriteLine($"First job created with ID: {result1.Id}");
+
+        // Assert
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => jobManager.CreateImportJobAsync(jobId, inputStream2, outputStream2)
+        );
+
+        Assert.Contains($"Import job with ID '{jobId}' already exists", exception.Message);
+        _output.WriteLine($"Expected InvalidOperationException thrown: {exception.Message}");
+    }
+
+    [Fact]
+    public async Task ImportJobManager_GetImportJob_ShouldReturnCorrectJob()
+    {
+        // Arrange
+        var cache = new MemoryCache(new MemoryCacheOptions());
+        var logger = NullLogger<ImportJobManager>.Instance;
+        var jobManager = new ImportJobManager(Client, cache, logger);
+
+        var jobId = "test-job-" + Guid.NewGuid().ToString("N")[..8];
+        using var inputStream = new MemoryStream();
+        using var outputStream = new MemoryStream();
+
+        // Act
+        var createdJob = await jobManager.CreateImportJobAsync(jobId, inputStream, outputStream);
+        var retrievedJob = jobManager.GetImportJob(jobId);
+
+        // Assert
+        Assert.NotNull(retrievedJob);
+        Assert.Equal(createdJob.Id, retrievedJob.Id);
+        Assert.Equal(createdJob.Status, retrievedJob.Status);
+        Assert.Equal(createdJob.CreatedDateTime, retrievedJob.CreatedDateTime);
+
+        _output.WriteLine($"Retrieved job: {retrievedJob.Id} with status: {retrievedJob.Status}");
+    }
+
+    [Fact]
+    public void ImportJobManager_GetImportJob_WithInvalidId_ShouldReturnNull()
+    {
+        // Arrange
+        var cache = new MemoryCache(new MemoryCacheOptions());
+        var logger = NullLogger<ImportJobManager>.Instance;
+        var jobManager = new ImportJobManager(Client, cache, logger);
+
+        // Act
+        var result = jobManager.GetImportJob("non-existent-job-id");
+
+        // Assert
+        Assert.Null(result);
+        _output.WriteLine("GetImportJob returned null for non-existent job ID as expected");
+    }
+
+    [Fact]
+    public async Task ImportJobManager_ListImportJobs_ShouldReturnAllJobs()
+    {
+        // Arrange
+        var cache = new MemoryCache(new MemoryCacheOptions());
+        var logger = NullLogger<ImportJobManager>.Instance;
+        var jobManager = new ImportJobManager(Client, cache, logger);
+
+        var jobId1 = "test-job-1-" + Guid.NewGuid().ToString("N")[..8];
+        var jobId2 = "test-job-2-" + Guid.NewGuid().ToString("N")[..8];
+
+        using var inputStream1 = new MemoryStream();
+        using var outputStream1 = new MemoryStream();
+        using var inputStream2 = new MemoryStream();
+        using var outputStream2 = new MemoryStream();
+
+        // Act
+        await jobManager.CreateImportJobAsync(jobId1, inputStream1, outputStream1);
+        await jobManager.CreateImportJobAsync(jobId2, inputStream2, outputStream2);
+        var jobs = jobManager.ListImportJobs().ToList();
+
+        // Assert
+        Assert.Contains(jobs, j => j.Id == jobId1);
+        Assert.Contains(jobs, j => j.Id == jobId2);
+        Assert.True(jobs.Count >= 2);
+
+        _output.WriteLine($"Listed {jobs.Count} import jobs");
+        foreach (var job in jobs)
+        {
+            _output.WriteLine($"  - Job ID: {job.Id}, Status: {job.Status}");
+        }
     }
 }

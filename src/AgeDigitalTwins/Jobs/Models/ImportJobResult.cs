@@ -3,14 +3,24 @@ using System;
 namespace AgeDigitalTwins.Jobs.Models;
 
 /// <summary>
-/// Result information for import jobs.
+/// Result information for import jobs, compatible with Azure Digital Twins API.
 /// </summary>
 public class ImportJobResult
 {
     /// <summary>
     /// Gets or sets the job ID.
     /// </summary>
-    public string JobId { get; set; } = string.Empty;
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the path to the input Azure storage blob that contains file(s) describing the operations to perform in the job.
+    /// </summary>
+    public string? InputBlobUri { get; set; }
+
+    /// <summary>
+    /// Gets or sets the path to the output Azure storage blob that will contain the errors and progress logs of import job.
+    /// </summary>
+    public string? OutputBlobUri { get; set; }
 
     /// <summary>
     /// Gets or sets the overall job status.
@@ -18,15 +28,31 @@ public class ImportJobResult
     public ImportJobStatus Status { get; set; }
 
     /// <summary>
-    /// Gets or sets the job start time.
+    /// Gets or sets the job creation time (RFC3339 format).
     /// </summary>
-    public DateTime StartTime { get; set; }
+    public DateTime CreatedDateTime { get; set; }
 
     /// <summary>
-    /// Gets or sets the job end time.
+    /// Gets or sets the last action time (RFC3339 format).
     /// </summary>
-    public DateTime? EndTime { get; set; }
+    public DateTime LastActionDateTime { get; set; }
 
+    /// <summary>
+    /// Gets or sets the job completion time (RFC3339 format).
+    /// </summary>
+    public DateTime? FinishedDateTime { get; set; }
+
+    /// <summary>
+    /// Gets or sets the time at which job will be purged by the service from the system (RFC3339 format).
+    /// </summary>
+    public DateTime PurgeDateTime { get; set; }
+
+    /// <summary>
+    /// Gets or sets details of the error(s) that occurred executing the import job.
+    /// </summary>
+    public ImportJobError? Error { get; set; }
+
+    // Extended properties for detailed progress tracking (not part of Azure API but useful for internal tracking)
     /// <summary>
     /// Gets or sets the number of models successfully created.
     /// </summary>
@@ -48,41 +74,62 @@ public class ImportJobResult
     public int ErrorCount { get; set; }
 
     /// <summary>
-    /// Gets or sets any error message if the job failed.
+    /// Gets or sets the cancellation token source for this job.
     /// </summary>
-    public string? ErrorMessage { get; set; }
+    public System.Threading.CancellationTokenSource? CancellationTokenSource { get; set; }
 }
 
 /// <summary>
-/// Statistics for a section of the import job.
+/// Error details for import jobs.
 /// </summary>
-public class ImportSectionStats
+public class ImportJobError
 {
     /// <summary>
-    /// Gets or sets the total number of items processed.
+    /// Gets or sets the service specific error code which serves as the substatus for the HTTP error code.
     /// </summary>
-    public int TotalProcessed { get; set; }
+    public string? Code { get; set; }
 
     /// <summary>
-    /// Gets or sets the number of items that succeeded.
+    /// Gets or sets a human-readable representation of the error.
     /// </summary>
-    public int Succeeded { get; set; }
+    public string? Message { get; set; }
 
     /// <summary>
-    /// Gets or sets the number of items that failed.
+    /// Gets or sets internal error details.
     /// </summary>
-    public int Failed { get; set; }
+    public ImportJobError[]? Details { get; set; }
+
+    /// <summary>
+    /// Gets or sets an object containing more specific information than the current object about the error.
+    /// </summary>
+    public ImportJobInnerError? InnerError { get; set; }
 }
 
 /// <summary>
-/// Status of an import job.
+/// Inner error details for import jobs.
+/// </summary>
+public class ImportJobInnerError
+{
+    /// <summary>
+    /// Gets or sets a more specific error code than was provided by the containing error.
+    /// </summary>
+    public string? Code { get; set; }
+
+    /// <summary>
+    /// Gets or sets an object containing more specific information than the current object about the error.
+    /// </summary>
+    public ImportJobInnerError? InnerError { get; set; }
+}
+
+/// <summary>
+/// Status of an import job, compatible with Azure Digital Twins API.
 /// </summary>
 public enum ImportJobStatus
 {
     /// <summary>
-    /// The job is starting.
+    /// The job has not started yet.
     /// </summary>
-    Started,
+    NotStarted,
 
     /// <summary>
     /// The job is running.
@@ -100,12 +147,17 @@ public enum ImportJobStatus
     Failed,
 
     /// <summary>
-    /// The job completed with some failures.
+    /// The job is being cancelled.
     /// </summary>
-    PartiallySucceeded,
+    Cancelling,
 
     /// <summary>
     /// The job was cancelled.
     /// </summary>
     Cancelled,
+
+    /// <summary>
+    /// The job completed partially with some errors.
+    /// </summary>
+    PartiallySucceeded,
 }
