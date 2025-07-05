@@ -64,9 +64,13 @@ public partial class AgeDigitalTwinsClient
         options ??= new ImportJobOptions();
         var jobId = Guid.NewGuid().ToString("N")[..8]; // Use first 8 characters for shorter job ID
 
-        using var logger = new StreamImportJobLogger(outputStream);
-        var importJob = new ImportJob(this, logger, options);
-
-        return await importJob.ExecuteAsync(inputStream, jobId, cancellationToken);
+        return await StreamingImportJob.ExecuteAsync(
+            this,
+            inputStream,
+            outputStream,
+            jobId,
+            options,
+            cancellationToken
+        );
     }
 }

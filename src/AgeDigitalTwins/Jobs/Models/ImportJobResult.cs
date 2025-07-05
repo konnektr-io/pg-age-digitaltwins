@@ -28,19 +28,24 @@ public class ImportJobResult
     public DateTime? EndTime { get; set; }
 
     /// <summary>
-    /// Gets or sets the statistics for models processing.
+    /// Gets or sets the number of models successfully created.
     /// </summary>
-    public ImportSectionStats ModelsStats { get; set; } = new();
+    public int ModelsCreated { get; set; }
 
     /// <summary>
-    /// Gets or sets the statistics for twins processing.
+    /// Gets or sets the number of twins successfully created.
     /// </summary>
-    public ImportSectionStats TwinsStats { get; set; } = new();
+    public int TwinsCreated { get; set; }
 
     /// <summary>
-    /// Gets or sets the statistics for relationships processing.
+    /// Gets or sets the number of relationships successfully created.
     /// </summary>
-    public ImportSectionStats RelationshipsStats { get; set; } = new();
+    public int RelationshipsCreated { get; set; }
+
+    /// <summary>
+    /// Gets or sets the total number of errors encountered.
+    /// </summary>
+    public int ErrorCount { get; set; }
 
     /// <summary>
     /// Gets or sets any error message if the job failed.

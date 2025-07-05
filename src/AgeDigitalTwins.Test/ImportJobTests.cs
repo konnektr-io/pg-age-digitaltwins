@@ -37,7 +37,6 @@ public class ImportJobTests : TestBase
 
         var options = new ImportJobOptions
         {
-            ModelBatchSize = 50,
             ContinueOnFailure = true,
             OperationTimeout = TimeSpan.FromSeconds(30),
         };
@@ -51,19 +50,16 @@ public class ImportJobTests : TestBase
         Assert.Equal(ImportJobStatus.Succeeded, result.Status);
 
         // Verify models were created
-        Assert.Equal(2, result.ModelsStats.TotalProcessed);
-        Assert.Equal(2, result.ModelsStats.Succeeded);
-        Assert.Equal(0, result.ModelsStats.Failed);
+        Assert.Equal(2, result.ModelsCreated);
 
         // Verify twins were created
-        Assert.Equal(2, result.TwinsStats.TotalProcessed);
-        Assert.Equal(2, result.TwinsStats.Succeeded);
-        Assert.Equal(0, result.TwinsStats.Failed);
+        Assert.Equal(2, result.TwinsCreated);
 
         // Verify relationships were created
-        Assert.Equal(1, result.RelationshipsStats.TotalProcessed);
-        Assert.Equal(1, result.RelationshipsStats.Succeeded);
-        Assert.Equal(0, result.RelationshipsStats.Failed);
+        Assert.Equal(1, result.RelationshipsCreated);
+
+        // Verify no errors
+        Assert.Equal(0, result.ErrorCount);
 
         // Verify log output was generated
         outputStream.Position = 0;
@@ -76,15 +72,10 @@ public class ImportJobTests : TestBase
         _output.WriteLine($"Status: {result.Status}");
         _output.WriteLine($"Start Time: {result.StartTime}");
         _output.WriteLine($"End Time: {result.EndTime}");
-        _output.WriteLine(
-            $"Models - Total: {result.ModelsStats.TotalProcessed}, Succeeded: {result.ModelsStats.Succeeded}, Failed: {result.ModelsStats.Failed}"
-        );
-        _output.WriteLine(
-            $"Twins - Total: {result.TwinsStats.TotalProcessed}, Succeeded: {result.TwinsStats.Succeeded}, Failed: {result.TwinsStats.Failed}"
-        );
-        _output.WriteLine(
-            $"Relationships - Total: {result.RelationshipsStats.TotalProcessed}, Succeeded: {result.RelationshipsStats.Succeeded}, Failed: {result.RelationshipsStats.Failed}"
-        );
+        _output.WriteLine($"Models Created: {result.ModelsCreated}");
+        _output.WriteLine($"Twins Created: {result.TwinsCreated}");
+        _output.WriteLine($"Relationships Created: {result.RelationshipsCreated}");
+        _output.WriteLine($"Error Count: {result.ErrorCount}");
         _output.WriteLine("Log Output:");
         _output.WriteLine(logOutput);
     }
@@ -174,17 +165,14 @@ public class ImportJobTests : TestBase
         Assert.Equal(ImportJobStatus.PartiallySucceeded, result.Status);
 
         // Verify models were created successfully
-        Assert.Equal(1, result.ModelsStats.Succeeded);
+        Assert.Equal(1, result.ModelsCreated);
 
-        // Verify one twin succeeded and one failed
-        Assert.Equal(2, result.TwinsStats.TotalProcessed);
-        Assert.Equal(1, result.TwinsStats.Succeeded);
-        Assert.Equal(1, result.TwinsStats.Failed);
+        // Verify one twin succeeded and one failed (only 1 twin created due to the failure)
+        Assert.Equal(1, result.TwinsCreated);
+        Assert.True(result.ErrorCount > 0);
 
         _output.WriteLine($"Import completed with status: {result.Status}");
-        _output.WriteLine(
-            $"Twins - Succeeded: {result.TwinsStats.Succeeded}, Failed: {result.TwinsStats.Failed}"
-        );
+        _output.WriteLine($"Twins Created: {result.TwinsCreated}, Errors: {result.ErrorCount}");
     }
 
     [Fact]
@@ -211,12 +199,11 @@ public class ImportJobTests : TestBase
         Assert.Equal(ImportJobStatus.Succeeded, result.Status);
 
         // Verify models were created
-        Assert.Equal(2, result.ModelsStats.TotalProcessed);
-        Assert.Equal(2, result.ModelsStats.Succeeded);
-        Assert.Equal(0, result.ModelsStats.Failed);
+        Assert.Equal(2, result.ModelsCreated);
 
         // Verify no twins or relationships were processed
-        Assert.Equal(0, result.TwinsStats.TotalProcessed);
-        Assert.Equal(0, result.RelationshipsStats.TotalProcessed);
+        Assert.Equal(0, result.TwinsCreated);
+        Assert.Equal(0, result.RelationshipsCreated);
+        Assert.Equal(0, result.ErrorCount);
     }
 }

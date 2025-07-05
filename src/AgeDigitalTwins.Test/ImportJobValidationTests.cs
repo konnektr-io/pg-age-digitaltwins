@@ -10,34 +10,38 @@ using Xunit;
 namespace AgeDigitalTwins.Test;
 
 /// <summary>
-/// Unit tests for ImportJob input validation that don't require database connectivity.
+/// Unit tests for StreamingImportJob input validation that don't require database connectivity.
 /// </summary>
 public class ImportJobValidationTests
 {
     [Fact]
-    public async Task ImportJob_WithEmptyStream_ShouldThrowArgumentException()
+    public async Task StreamingImportJob_WithEmptyStream_ShouldThrowArgumentException()
     {
         // Arrange
         using var inputStream = new MemoryStream();
         using var outputStream = new MemoryStream();
-        var logger = new StreamImportJobLogger(outputStream);
         var options = new ImportJobOptions();
 
         // Create a mock client (we won't use it since validation should happen before any client operations)
         AgeDigitalTwinsClient? client = null;
 
-        var importJob = new ImportJob(client!, logger, options);
-
         // Act & Assert
         var exception = await Assert.ThrowsAsync<ArgumentException>(
-            async () => await importJob.ExecuteAsync(inputStream, "test-job-id")
+            async () =>
+                await StreamingImportJob.ExecuteAsync(
+                    client!,
+                    inputStream,
+                    outputStream,
+                    "test-job-id",
+                    options
+                )
         );
 
         Assert.Contains("Empty input stream", exception.Message);
     }
 
     [Fact]
-    public async Task ImportJob_WithMissingHeader_ShouldThrowArgumentException()
+    public async Task StreamingImportJob_WithMissingHeader_ShouldThrowArgumentException()
     {
         // Arrange - Missing header section
         var invalidData =
@@ -46,24 +50,28 @@ public class ImportJobValidationTests
 
         using var inputStream = new MemoryStream(Encoding.UTF8.GetBytes(invalidData));
         using var outputStream = new MemoryStream();
-        var logger = new StreamImportJobLogger(outputStream);
         var options = new ImportJobOptions();
 
         // Create a mock client
         AgeDigitalTwinsClient? client = null;
 
-        var importJob = new ImportJob(client!, logger, options);
-
         // Act & Assert
         var exception = await Assert.ThrowsAsync<ArgumentException>(
-            async () => await importJob.ExecuteAsync(inputStream, "test-job-id")
+            async () =>
+                await StreamingImportJob.ExecuteAsync(
+                    client!,
+                    inputStream,
+                    outputStream,
+                    "test-job-id",
+                    options
+                )
         );
 
         Assert.Contains("First section must be 'Header'", exception.Message);
     }
 
     [Fact]
-    public async Task ImportJob_WithInvalidFileVersion_ShouldThrowArgumentException()
+    public async Task StreamingImportJob_WithInvalidFileVersion_ShouldThrowArgumentException()
     {
         // Arrange - Invalid file version
         var invalidData =
@@ -72,17 +80,21 @@ public class ImportJobValidationTests
 
         using var inputStream = new MemoryStream(Encoding.UTF8.GetBytes(invalidData));
         using var outputStream = new MemoryStream();
-        var logger = new StreamImportJobLogger(outputStream);
         var options = new ImportJobOptions();
 
         // Create a mock client
         AgeDigitalTwinsClient? client = null;
 
-        var importJob = new ImportJob(client!, logger, options);
-
         // Act & Assert
         var exception = await Assert.ThrowsAsync<ArgumentException>(
-            async () => await importJob.ExecuteAsync(inputStream, "test-job-id")
+            async () =>
+                await StreamingImportJob.ExecuteAsync(
+                    client!,
+                    inputStream,
+                    outputStream,
+                    "test-job-id",
+                    options
+                )
         );
 
         Assert.Contains("Unsupported file version", exception.Message);

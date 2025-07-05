@@ -8,12 +8,6 @@ namespace AgeDigitalTwins.Jobs.Models;
 public class ImportJobOptions
 {
     /// <summary>
-    /// Gets or sets the maximum number of items to process in a single batch for models.
-    /// Default is 100.
-    /// </summary>
-    public int ModelBatchSize { get; set; } = 100;
-
-    /// <summary>
     /// Gets or sets whether to continue processing on individual item failures.
     /// Default is true.
     /// </summary>

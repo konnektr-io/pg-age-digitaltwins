@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using AgeDigitalTwins.Jobs.Models;
@@ -11,35 +11,23 @@ using AgeDigitalTwins.Jobs.Models;
 namespace AgeDigitalTwins.Jobs;
 
 /// <summary>
-/// Handles importing models, twins, and relationships from ND-JSON streams.
+/// Static class for handling streaming import operations from ND-JSON format.
+/// Processes data line-by-line without loading everything into memory.
 /// </summary>
-internal class ImportJob
+public static class StreamingImportJob
 {
-    private readonly AgeDigitalTwinsClient _client;
-    private readonly IImportJobLogger _logger;
-    private readonly ImportJobOptions _options;
-
-    public ImportJob(
-        AgeDigitalTwinsClient client,
-        IImportJobLogger logger,
-        ImportJobOptions options
-    )
-    {
-        _client = client ?? throw new ArgumentNullException(nameof(client));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _options = options ?? throw new ArgumentNullException(nameof(options));
-    }
+    private static readonly JsonSerializerOptions JsonOptions =
+        new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = false };
 
     /// <summary>
-    /// Executes the import job from the provided input stream.
+    /// Executes a streaming import job that processes ND-JSON line by line.
     /// </summary>
-    /// <param name="inputStream">The ND-JSON input stream to process.</param>
-    /// <param name="jobId">The unique job identifier.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The import job result.</returns>
-    public async Task<ImportJobResult> ExecuteAsync(
+    public static async Task<ImportJobResult> ExecuteAsync(
+        AgeDigitalTwinsClient client,
         Stream inputStream,
+        Stream outputStream,
         string jobId,
+        ImportJobOptions options,
         CancellationToken cancellationToken = default
     )
     {
@@ -47,483 +35,430 @@ internal class ImportJob
         {
             JobId = jobId,
             StartTime = DateTime.UtcNow,
-            Status = ImportJobStatus.Started,
+            Status = ImportJobStatus.Running,
         };
 
         try
         {
-            await _logger.LogInfoAsync(jobId, new { status = "Started" }, cancellationToken);
-            result.Status = ImportJobStatus.Running;
+            await LogAsync(
+                outputStream,
+                jobId,
+                "Info",
+                new { status = "Started" },
+                cancellationToken
+            );
 
-            var lines = await ParseNdJsonAsync(inputStream, cancellationToken);
+            await ProcessStreamAsync(
+                client,
+                inputStream,
+                outputStream,
+                jobId,
+                options,
+                result,
+                cancellationToken
+            );
 
-            // Validate input early
-            ValidateInput(lines);
-
-            // Process header
-            var header = await ProcessHeaderAsync(lines, jobId, cancellationToken);
-
-            // Validate header content
-            ValidateHeader(header);
-
-            // Process models
-            await ProcessModelsAsync(lines, result, jobId, cancellationToken);
-
-            // Process twins
-            await ProcessTwinsAsync(lines, result, jobId, cancellationToken);
-
-            // Process relationships
-            await ProcessRelationshipsAsync(lines, result, jobId, cancellationToken);
-
-            // Determine final status based on failures
-            bool hasFailures =
-                result.ModelsStats.Failed > 0
-                || result.TwinsStats.Failed > 0
-                || result.RelationshipsStats.Failed > 0;
-            bool hasSuccesses =
-                result.ModelsStats.Succeeded > 0
-                || result.TwinsStats.Succeeded > 0
-                || result.RelationshipsStats.Succeeded > 0;
-
-            if (hasFailures && hasSuccesses)
-            {
-                result.Status = ImportJobStatus.PartiallySucceeded;
-                await _logger.LogInfoAsync(
-                    jobId,
-                    new { status = "PartiallySucceeded" },
-                    cancellationToken
-                );
-            }
-            else if (hasSuccesses)
+            // Determine final status
+            if (result.ErrorCount == 0)
             {
                 result.Status = ImportJobStatus.Succeeded;
-                await _logger.LogInfoAsync(jobId, new { status = "Succeeded" }, cancellationToken);
+            }
+            else if (
+                result.ErrorCount > 0
+                && (
+                    result.ModelsCreated > 0
+                    || result.TwinsCreated > 0
+                    || result.RelationshipsCreated > 0
+                )
+            )
+            {
+                result.Status = ImportJobStatus.PartiallySucceeded;
             }
             else
             {
                 result.Status = ImportJobStatus.Failed;
-                await _logger.LogInfoAsync(
-                    jobId,
-                    new { status = "Failed", reason = "No items processed successfully" },
-                    cancellationToken
-                );
             }
 
             result.EndTime = DateTime.UtcNow;
-        }
-        catch (OperationCanceledException)
-        {
-            result.Status = ImportJobStatus.Cancelled;
-            result.EndTime = DateTime.UtcNow;
-            await _logger.LogInfoAsync(jobId, new { status = "Cancelled" }, cancellationToken);
+            await LogAsync(
+                outputStream,
+                jobId,
+                "Info",
+                new { status = result.Status.ToString() },
+                cancellationToken
+            );
+
+            return result;
         }
         catch (Exception ex)
         {
             result.Status = ImportJobStatus.Failed;
             result.EndTime = DateTime.UtcNow;
-            result.ErrorMessage = ex.Message;
-            await _logger.LogErrorAsync(
+            result.ErrorCount++;
+
+            await LogAsync(
+                outputStream,
                 jobId,
-                new { status = "Failed", error = ex.Message },
+                "Error",
+                new { error = ex.Message },
                 cancellationToken
             );
-        }
 
-        return result;
+            if (!options.ContinueOnFailure)
+            {
+                throw;
+            }
+
+            return result;
+        }
     }
 
-    private async Task<List<ImportLine>> ParseNdJsonAsync(
+    private static async Task ProcessStreamAsync(
+        AgeDigitalTwinsClient client,
         Stream inputStream,
+        Stream outputStream,
+        string jobId,
+        ImportJobOptions options,
+        ImportJobResult result,
         CancellationToken cancellationToken
     )
     {
-        var lines = new List<ImportLine>();
-        using var reader = new StreamReader(inputStream, Encoding.UTF8, leaveOpen: true);
+        using var reader = new StreamReader(inputStream, Encoding.UTF8);
 
-        int lineNumber = 0;
-        ImportSection? currentSection = null;
-        bool hasAnyContent = false;
+        string? firstLine = await reader.ReadLineAsync();
+        if (firstLine == null)
+        {
+            throw new ArgumentException("Empty input stream");
+        }
+
+        // Validate first line is header section
+        var firstLineJson = JsonNode.Parse(firstLine);
+        if (firstLineJson?["Section"]?.ToString() != "Header")
+        {
+            throw new ArgumentException("First section must be 'Header'");
+        }
+
+        // Read header data
+        string? headerLine = await reader.ReadLineAsync();
+        if (headerLine != null)
+        {
+            var headerData = JsonNode.Parse(headerLine);
+            var fileVersion = headerData?["fileVersion"]?.ToString();
+            if (fileVersion != "1.0.0")
+            {
+                throw new ArgumentException($"Unsupported file version: {fileVersion}");
+            }
+        }
+
+        // Process remaining sections in streaming fashion
+        CurrentSection currentSection = CurrentSection.None;
+        List<string> allModels = new(); // Collect all models to process at once due to dependencies
 
         string? line;
         while ((line = await reader.ReadLineAsync()) != null)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            lineNumber++;
-            hasAnyContent = true;
 
             if (string.IsNullOrWhiteSpace(line))
                 continue;
 
             try
             {
-                var jsonElement = JsonSerializer.Deserialize<JsonElement>(line);
+                var jsonNode = JsonNode.Parse(line);
 
                 // Check if this is a section header
-                if (jsonElement.TryGetProperty("Section", out var sectionProperty))
+                if (jsonNode?["Section"] != null)
                 {
-                    if (Enum.TryParse<ImportSection>(sectionProperty.GetString(), out var section))
+                    // Process all models when leaving the Models section
+                    if (currentSection == CurrentSection.Models && allModels.Count > 0)
                     {
-                        currentSection = section;
-                        continue;
+                        await ProcessAllModelsAsync(
+                            client,
+                            outputStream,
+                            jobId,
+                            allModels,
+                            result,
+                            options,
+                            cancellationToken
+                        );
+                        allModels.Clear();
                     }
+
+                    var sectionName = jsonNode["Section"]!.ToString();
+                    currentSection = sectionName switch
+                    {
+                        "Models" => CurrentSection.Models,
+                        "Twins" => CurrentSection.Twins,
+                        "Relationships" => CurrentSection.Relationships,
+                        _ => CurrentSection.None,
+                    };
+
+                    if (currentSection != CurrentSection.None)
+                    {
+                        await LogAsync(
+                            outputStream,
+                            jobId,
+                            "Info",
+                            new { section = sectionName, status = "Started" },
+                            cancellationToken
+                        );
+                    }
+                    continue;
                 }
 
-                lines.Add(
-                    new ImportLine
-                    {
-                        Section = currentSection,
-                        Content = jsonElement,
-                        LineNumber = lineNumber,
-                    }
-                );
+                // Process data based on current section
+                switch (currentSection)
+                {
+                    case CurrentSection.Models:
+                        // Collect all models to process at once due to potential dependencies
+                        allModels.Add(line);
+                        break;
+
+                    case CurrentSection.Twins:
+                        await ProcessTwinAsync(
+                            client,
+                            outputStream,
+                            jobId,
+                            line,
+                            result,
+                            options,
+                            cancellationToken
+                        );
+                        break;
+
+                    case CurrentSection.Relationships:
+                        await ProcessRelationshipAsync(
+                            client,
+                            outputStream,
+                            jobId,
+                            line,
+                            result,
+                            options,
+                            cancellationToken
+                        );
+                        break;
+                }
             }
-            catch (JsonException ex)
+            catch (Exception ex)
             {
-                throw new ArgumentException($"Invalid JSON on line {lineNumber}: {ex.Message}", ex);
+                result.ErrorCount++;
+                await LogAsync(
+                    outputStream,
+                    jobId,
+                    "Error",
+                    new
+                    {
+                        section = currentSection.ToString(),
+                        error = ex.Message,
+                        line,
+                    },
+                    cancellationToken
+                );
+
+                if (!options.ContinueOnFailure)
+                {
+                    throw;
+                }
             }
         }
 
-        // Additional check for completely empty stream
-        if (!hasAnyContent)
+        // Process any remaining models if we ended in the Models section
+        if (currentSection == CurrentSection.Models && allModels.Count > 0)
         {
-            throw new ArgumentException("Empty input stream");
+            await ProcessAllModelsAsync(
+                client,
+                outputStream,
+                jobId,
+                allModels,
+                result,
+                options,
+                cancellationToken
+            );
         }
-
-        return lines;
     }
 
-    private async Task<ImportHeader?> ProcessHeaderAsync(
-        List<ImportLine> lines,
+    private static async Task ProcessAllModelsAsync(
+        AgeDigitalTwinsClient client,
+        Stream outputStream,
         string jobId,
+        List<string> allModels,
+        ImportJobResult result,
+        ImportJobOptions options,
         CancellationToken cancellationToken
     )
     {
-        var headerLines = lines.Where(l => l.Section == ImportSection.Header).ToList();
-        if (!headerLines.Any())
-            return null;
-
-        // Expect the first header line to contain metadata
-        var headerData = headerLines.FirstOrDefault();
-        if (headerData == null)
-            return null;
-
         try
         {
-            var header = JsonSerializer.Deserialize<ImportHeader>(headerData.Content.GetRawText());
-            await _logger.LogInfoAsync(
+            await LogAsync(
+                outputStream,
                 jobId,
-                new { section = "Header", fileVersion = header?.FileVersion },
+                "Info",
+                new
+                {
+                    section = "Models",
+                    status = "Processing",
+                    totalModels = allModels.Count,
+                },
                 cancellationToken
             );
-            return header;
-        }
-        catch (JsonException ex)
-        {
-            await _logger.LogWarningAsync(
+
+            var models = await client.CreateModelsAsync(allModels, cancellationToken);
+            result.ModelsCreated += models.Count;
+
+            await LogAsync(
+                outputStream,
                 jobId,
-                new { section = "Header", warning = $"Failed to parse header: {ex.Message}" },
+                "Info",
+                new
+                {
+                    section = "Models",
+                    status = "Succeeded",
+                    modelsCreated = models.Count,
+                },
                 cancellationToken
             );
-            return null;
+        }
+        catch (Exception ex)
+        {
+            result.ErrorCount++;
+            await LogAsync(
+                outputStream,
+                jobId,
+                "Error",
+                new { section = "Models", error = ex.Message },
+                cancellationToken
+            );
+
+            if (!options.ContinueOnFailure)
+            {
+                throw;
+            }
         }
     }
 
-    private async Task ProcessModelsAsync(
-        List<ImportLine> lines,
-        ImportJobResult result,
+    private static async Task ProcessTwinAsync(
+        AgeDigitalTwinsClient client,
+        Stream outputStream,
         string jobId,
+        string twinJson,
+        ImportJobResult result,
+        ImportJobOptions options,
         CancellationToken cancellationToken
     )
     {
-        var modelLines = lines.Where(l => l.Section == ImportSection.Models).ToList();
-        if (!modelLines.Any())
-            return;
-
-        await _logger.LogInfoAsync(
-            jobId,
-            new { section = "Models", status = "Started" },
-            cancellationToken
-        );
-
-        var models = new List<string>();
-        foreach (var line in modelLines)
+        try
         {
-            try
-            {
-                models.Add(line.Content.GetRawText());
-                result.ModelsStats.TotalProcessed++;
-            }
-            catch (Exception ex)
-            {
-                result.ModelsStats.Failed++;
-                await _logger.LogErrorAsync(
-                    jobId,
-                    new
-                    {
-                        section = "Models",
-                        line = line.LineNumber,
-                        error = ex.Message,
-                    },
-                    cancellationToken
-                );
+            var twinData = JsonNode.Parse(twinJson);
+            var twinId = twinData?["$dtId"]?.ToString();
 
-                if (!_options.ContinueOnFailure)
-                    throw;
+            if (string.IsNullOrEmpty(twinId))
+            {
+                throw new ArgumentException("Twin missing $dtId property");
             }
+
+            await client.CreateOrReplaceDigitalTwinAsync(
+                twinId,
+                twinJson,
+                cancellationToken: cancellationToken
+            );
+            result.TwinsCreated++;
         }
-
-        // Batch create models
-        if (models.Any())
+        catch (Exception ex)
         {
-            try
-            {
-                await _client.CreateModelsAsync(models, cancellationToken);
-                result.ModelsStats.Succeeded = models.Count;
-                await _logger.LogInfoAsync(
-                    jobId,
-                    new { section = "Models", status = "Succeeded" },
-                    cancellationToken
-                );
-            }
-            catch (Exception ex)
-            {
-                result.ModelsStats.Failed = models.Count;
-                await _logger.LogErrorAsync(
-                    jobId,
-                    new
-                    {
-                        section = "Models",
-                        status = "Failed",
-                        error = ex.Message,
-                    },
-                    cancellationToken
-                );
+            result.ErrorCount++;
+            await LogAsync(
+                outputStream,
+                jobId,
+                "Error",
+                new { section = "Twins", error = ex.Message },
+                cancellationToken
+            );
 
-                if (!_options.ContinueOnFailure)
-                    throw;
+            if (!options.ContinueOnFailure)
+            {
+                throw;
             }
         }
     }
 
-    private async Task ProcessTwinsAsync(
-        List<ImportLine> lines,
-        ImportJobResult result,
+    private static async Task ProcessRelationshipAsync(
+        AgeDigitalTwinsClient client,
+        Stream outputStream,
         string jobId,
+        string relationshipJson,
+        ImportJobResult result,
+        ImportJobOptions options,
         CancellationToken cancellationToken
     )
     {
-        var twinLines = lines.Where(l => l.Section == ImportSection.Twins).ToList();
-        if (!twinLines.Any())
-            return;
-
-        await _logger.LogInfoAsync(
-            jobId,
-            new { section = "Twins", status = "Started" },
-            cancellationToken
-        );
-
-        foreach (var line in twinLines)
+        try
         {
-            try
+            var relData = JsonNode.Parse(relationshipJson);
+            var sourceId = relData?["$dtId"]?.ToString();
+            var relationshipId = relData?["$relationshipId"]?.ToString();
+
+            if (string.IsNullOrEmpty(sourceId) || string.IsNullOrEmpty(relationshipId))
             {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                var twinJson = line.Content.GetRawText();
-                var twinElement = JsonSerializer.Deserialize<JsonElement>(twinJson);
-
-                if (!twinElement.TryGetProperty("$dtId", out var dtIdProperty))
-                {
-                    throw new ArgumentException("Twin missing required $dtId property");
-                }
-
-                var twinId = dtIdProperty.GetString();
-                if (string.IsNullOrEmpty(twinId))
-                {
-                    throw new ArgumentException("Twin $dtId cannot be null or empty");
-                }
-
-                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(
-                    cancellationToken
+                throw new ArgumentException(
+                    "Relationship missing $dtId or $relationshipId property"
                 );
-                timeoutCts.CancelAfter(_options.OperationTimeout);
-
-                await _client.CreateOrReplaceDigitalTwinAsync<string>(
-                    twinId,
-                    twinJson,
-                    cancellationToken: timeoutCts.Token
-                );
-
-                result.TwinsStats.TotalProcessed++;
-                result.TwinsStats.Succeeded++;
             }
-            catch (Exception ex)
-            {
-                result.TwinsStats.TotalProcessed++;
-                result.TwinsStats.Failed++;
-                await _logger.LogErrorAsync(
-                    jobId,
-                    new
-                    {
-                        section = "Twins",
-                        line = line.LineNumber,
-                        error = ex.Message,
-                    },
-                    cancellationToken
-                );
 
-                if (!_options.ContinueOnFailure)
-                    throw;
+            await client.CreateOrReplaceRelationshipAsync(
+                sourceId,
+                relationshipId,
+                relationshipJson,
+                cancellationToken: cancellationToken
+            );
+            result.RelationshipsCreated++;
+        }
+        catch (Exception ex)
+        {
+            result.ErrorCount++;
+            await LogAsync(
+                outputStream,
+                jobId,
+                "Error",
+                new { section = "Relationships", error = ex.Message },
+                cancellationToken
+            );
+
+            if (!options.ContinueOnFailure)
+            {
+                throw;
             }
         }
-
-        await _logger.LogInfoAsync(
-            jobId,
-            new { section = "Twins", status = "Succeeded" },
-            cancellationToken
-        );
     }
 
-    private async Task ProcessRelationshipsAsync(
-        List<ImportLine> lines,
-        ImportJobResult result,
+    private static async Task LogAsync(
+        Stream outputStream,
         string jobId,
+        string logType,
+        object details,
         CancellationToken cancellationToken
     )
     {
-        var relationshipLines = lines.Where(l => l.Section == ImportSection.Relationships).ToList();
-        if (!relationshipLines.Any())
-            return;
-
-        await _logger.LogInfoAsync(
-            jobId,
-            new { section = "Relationships", status = "Started" },
-            cancellationToken
-        );
-
-        foreach (var line in relationshipLines)
+        var logEntry = new
         {
-            try
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                var relationshipJson = line.Content.GetRawText();
-                var relationshipElement = JsonSerializer.Deserialize<JsonElement>(relationshipJson);
-
-                if (
-                    !relationshipElement.TryGetProperty("$dtId", out var sourceIdProperty)
-                    || !relationshipElement.TryGetProperty(
-                        "$relationshipId",
-                        out var relationshipIdProperty
-                    )
-                )
-                {
-                    throw new ArgumentException(
-                        "Relationship missing required $dtId or $relationshipId property"
-                    );
-                }
-
-                var sourceId = sourceIdProperty.GetString();
-                var relationshipId = relationshipIdProperty.GetString();
-
-                if (string.IsNullOrEmpty(sourceId) || string.IsNullOrEmpty(relationshipId))
-                {
-                    throw new ArgumentException(
-                        "Relationship $dtId and $relationshipId cannot be null or empty"
-                    );
-                }
-
-                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(
-                    cancellationToken
-                );
-                timeoutCts.CancelAfter(_options.OperationTimeout);
-
-                await _client.CreateOrReplaceRelationshipAsync<string>(
-                    sourceId,
-                    relationshipId,
-                    relationshipJson,
-                    cancellationToken: timeoutCts.Token
-                );
-
-                result.RelationshipsStats.TotalProcessed++;
-                result.RelationshipsStats.Succeeded++;
-            }
-            catch (Exception ex)
-            {
-                result.RelationshipsStats.TotalProcessed++;
-                result.RelationshipsStats.Failed++;
-                await _logger.LogErrorAsync(
-                    jobId,
-                    new
-                    {
-                        section = "Relationships",
-                        line = line.LineNumber,
-                        error = ex.Message,
-                    },
-                    cancellationToken
-                );
-
-                if (!_options.ContinueOnFailure)
-                    throw;
-            }
-        }
-
-        await _logger.LogInfoAsync(
+            timestamp = DateTime.UtcNow.ToString("o"),
             jobId,
-            new { section = "Relationships", status = "Succeeded" },
-            cancellationToken
-        );
+            jobType = "Import",
+            logType,
+            details,
+        };
+
+        var logJson = JsonSerializer.Serialize(logEntry, JsonOptions);
+        var logBytes = Encoding.UTF8.GetBytes(logJson + Environment.NewLine);
+
+        await outputStream.WriteAsync(logBytes, cancellationToken);
+        await outputStream.FlushAsync(cancellationToken);
     }
 
-    /// <summary>
-    /// Validates the input lines for basic requirements.
-    /// </summary>
-    /// <param name="lines">The parsed lines from the input stream.</param>
-    /// <exception cref="ArgumentException">Thrown when input validation fails.</exception>
-    private static void ValidateInput(List<ImportLine> lines)
+    private enum CurrentSection
     {
-        // Check if input is empty
-        if (lines == null || !lines.Any())
-        {
-            throw new ArgumentException("Empty input stream");
-        }
-
-        // Check if we have any sections defined
-        var linesWithSections = lines.Where(l => l.Section.HasValue).ToList();
-        if (!linesWithSections.Any())
-        {
-            throw new ArgumentException("No valid sections found in input stream");
-        }
-
-        // Check if first section is Header
-        var firstSection = linesWithSections.First().Section!.Value;
-        if (firstSection != ImportSection.Header)
-        {
-            throw new ArgumentException("First section must be 'Header'");
-        }
-    }
-
-    /// <summary>
-    /// Validates the header content for supported version.
-    /// </summary>
-    /// <param name="header">The parsed header.</param>
-    /// <exception cref="ArgumentException">Thrown when header validation fails.</exception>
-    private static void ValidateHeader(ImportHeader? header)
-    {
-        if (header == null)
-        {
-            throw new ArgumentException("Header section is required but was not found or could not be parsed");
-        }
-
-        // Validate file version
-        if (string.IsNullOrEmpty(header.FileVersion))
-        {
-            throw new ArgumentException("File version is required in header");
-        }
-
-        // Check if version is supported (currently only 1.0.0)
-        if (!header.FileVersion.Equals("1.0.0", StringComparison.OrdinalIgnoreCase))
-        {
-            throw new ArgumentException($"Unsupported file version: {header.FileVersion}. Supported versions: 1.0.0");
-        }
+        None,
+        Models,
+        Twins,
+        Relationships,
     }
 }
