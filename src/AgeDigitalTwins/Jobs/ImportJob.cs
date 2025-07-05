@@ -90,6 +90,11 @@ public static class StreamingImportJob
 
             return result;
         }
+        catch (ArgumentException)
+        {
+            // Always re-throw validation exceptions regardless of ContinueOnFailure
+            throw;
+        }
         catch (Exception ex)
         {
             result.Status = ImportJobStatus.Failed;
