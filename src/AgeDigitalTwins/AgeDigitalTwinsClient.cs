@@ -2,9 +2,11 @@ using System;
 using System.Diagnostics;
 using System.Text.Json;
 using System.Threading.Tasks;
+using AgeDigitalTwins.Jobs;
 using AgeDigitalTwins.Validation;
 using DTDLParser;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
 using Npgsql;
 using Npgsql.Age;
 
@@ -56,6 +58,7 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
                     ),
             }
         );
+        JobService = new JobService(_dataSource);
         InitializeAsync().GetAwaiter().GetResult();
     }
 
@@ -84,6 +87,7 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
                     ),
             }
         );
+        JobService = new JobService(_dataSource);
         InitializeAsync().GetAwaiter().GetResult();
     }
 
@@ -114,6 +118,11 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
         await _dataSource.DisposeAsync();
         GC.SuppressFinalize(this);
     }
+
+    /// <summary>
+    /// Gets the job service for managing import and other jobs.
+    /// </summary>
+    public JobService JobService { get; }
 }
 
 public class AgeDigitalTwinsClientOptions

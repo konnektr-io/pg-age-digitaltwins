@@ -5,7 +5,6 @@ using AgeDigitalTwins.Jobs;
 using AgeDigitalTwins.Jobs.Models;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Caching.Memory;
 
 namespace AgeDigitalTwins.ApiService.Extensions;
 
@@ -33,7 +32,7 @@ public static class ImportJobEndpoints
             .WithDescription(
                 "Creates and starts a new import job. The job will run in the background and can be monitored using the GetImportJob endpoint."
             )
-            .Produces<ImportJobResult>(StatusCodes.Status201Created)
+            .Produces<JobRecord>(StatusCodes.Status201Created)
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status409Conflict);
@@ -43,7 +42,7 @@ public static class ImportJobEndpoints
             .WithName("GetImportJob")
             .WithSummary("Get import job by ID")
             .WithDescription("Retrieves the status and details of an import job by its ID.")
-            .Produces<ImportJobResult>()
+            .Produces<JobRecord>()
             .ProducesProblem(StatusCodes.Status404NotFound);
 
         // List Import Jobs
@@ -60,7 +59,7 @@ public static class ImportJobEndpoints
             .WithDescription(
                 "Cancels a running import job. Note that this will leave your instance in an unknown state as there won't be any rollback operation."
             )
-            .Produces<ImportJobResult>()
+            .Produces<JobRecord>()
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status404NotFound);
 
@@ -76,13 +75,11 @@ public static class ImportJobEndpoints
     }
 
     private static async Task<
-        Results<Created<ImportJobResult>, ValidationProblem, ProblemHttpResult, Conflict>
+        Results<Created<JobRecord>, ValidationProblem, ProblemHttpResult, Conflict>
     > CreateImportJobAsync(
         [Required] string id,
         [FromBody] ImportJobRequest request,
         [FromServices] AgeDigitalTwinsClient client,
-        [FromServices] IMemoryCache cache,
-        [FromServices] ILogger<ImportJobManager> logger,
         [FromServices] IBlobStorageService blobStorageService,
         [FromQuery] string? apiVersion = "2023-10-31"
     )
@@ -151,9 +148,9 @@ public static class ImportJobEndpoints
                 title: "Validation Failed"
             );
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            logger.LogError(ex, "Failed to create import job {JobId}", id);
+            // Log error - could inject ILogger if needed, but for now just return the error response
             return TypedResults.Problem(
                 detail: "An unexpected error occurred while creating the import job.",
                 statusCode: StatusCodes.Status500InternalServerError,
@@ -162,11 +159,9 @@ public static class ImportJobEndpoints
         }
     }
 
-    private static Results<Ok<ImportJobResult>, NotFound> GetImportJobAsync(
+    private static Results<Ok<JobRecord>, NotFound> GetImportJobAsync(
         [Required] string id,
         [FromServices] AgeDigitalTwinsClient client,
-        [FromServices] IMemoryCache cache,
-        [FromServices] ILogger<ImportJobManager> logger,
         [FromQuery] string? apiVersion = "2023-10-31"
     )
     {
@@ -183,8 +178,6 @@ public static class ImportJobEndpoints
 
     private static Ok<ImportJobCollection> ListImportJobsAsync(
         [FromServices] AgeDigitalTwinsClient client,
-        [FromServices] IMemoryCache cache,
-        [FromServices] ILogger<ImportJobManager> logger,
         [FromQuery] int? maxItemsPerPage = null,
         [FromQuery] string? apiVersion = "2023-10-31"
     )
@@ -208,11 +201,9 @@ public static class ImportJobEndpoints
         return TypedResults.Ok(collection);
     }
 
-    private static Results<Ok<ImportJobResult>, NotFound, ProblemHttpResult> CancelImportJobAsync(
+    private static Results<Ok<JobRecord>, NotFound, ProblemHttpResult> CancelImportJobAsync(
         [Required] string id,
         [FromServices] AgeDigitalTwinsClient client,
-        [FromServices] IMemoryCache cache,
-        [FromServices] ILogger<ImportJobManager> logger,
         [FromQuery] string? apiVersion = "2023-10-31"
     )
     {
@@ -224,7 +215,7 @@ public static class ImportJobEndpoints
         if (job == null)
             return TypedResults.NotFound();
 
-        if (job.Status != ImportJobStatus.Running && job.Status != ImportJobStatus.NotStarted)
+        if (job.Status != JobStatus.Running && job.Status != JobStatus.NotStarted)
         {
             return TypedResults.Problem(
                 detail: $"Cannot cancel job in status '{job.Status}'. Only running or not started jobs can be cancelled.",
@@ -251,8 +242,6 @@ public static class ImportJobEndpoints
     private static Results<NoContent, NotFound> DeleteImportJobAsync(
         [Required] string id,
         [FromServices] AgeDigitalTwinsClient client,
-        [FromServices] IMemoryCache cache,
-        [FromServices] ILogger<ImportJobManager> logger,
         [FromQuery] string? apiVersion = "2023-10-31"
     )
     {

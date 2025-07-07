@@ -1,0 +1,321 @@
+using System;
+using System.Collections.Generic;
+using System.Text.Json;
+
+namespace AgeDigitalTwins.Jobs;
+
+/// <summary>
+/// Job record for storing job information in the database.
+/// Compatible with Azure Digital Twins API for import jobs.
+/// </summary>
+public class JobRecord
+{
+    /// <summary>
+    /// Gets or sets the unique job identifier.
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the job type (e.g., "import", "delete").
+    /// </summary>
+    public string JobType { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the current job status.
+    /// </summary>
+    public JobStatus Status { get; set; }
+
+    /// <summary>
+    /// Gets or sets the job creation timestamp.
+    /// </summary>
+    public DateTime CreatedAt { get; set; }
+
+    /// <summary>
+    /// Gets or sets the last update timestamp.
+    /// </summary>
+    public DateTime UpdatedAt { get; set; }
+
+    /// <summary>
+    /// Gets or sets the job completion timestamp (nullable).
+    /// </summary>
+    public DateTime? FinishedAt { get; set; }
+
+    /// <summary>
+    /// Gets or sets when the job will be purged from the system.
+    /// </summary>
+    public DateTime PurgeAt { get; set; }
+
+    /// <summary>
+    /// Gets or sets job-specific request parameters as JSON.
+    /// For import jobs: {"inputBlobUri": "...", "outputBlobUri": "..."}
+    /// </summary>
+    public JsonDocument? RequestData { get; set; }
+
+    /// <summary>
+    /// Gets or sets job-specific result data as JSON.
+    /// For import jobs: statistics, blob URIs, etc.
+    /// </summary>
+    public JsonDocument? ResultData { get; set; }
+
+    /// <summary>
+    /// Gets or sets simple error information as JSON.
+    /// Contains error code and message, not detailed logs.
+    /// </summary>
+    public JsonDocument? ErrorData { get; set; }
+
+    // Helper properties for Azure Digital Twins API compatibility
+    /// <summary>
+    /// Gets or sets the job creation time (Azure Digital Twins API compatibility).
+    /// </summary>
+    public DateTime CreatedDateTime
+    {
+        get => CreatedAt;
+        set => CreatedAt = value;
+    }
+
+    /// <summary>
+    /// Gets or sets the last action time (Azure Digital Twins API compatibility).
+    /// </summary>
+    public DateTime LastActionDateTime
+    {
+        get => UpdatedAt;
+        set => UpdatedAt = value;
+    }
+
+    /// <summary>
+    /// Gets or sets the job completion time (Azure Digital Twins API compatibility).
+    /// </summary>
+    public DateTime? FinishedDateTime
+    {
+        get => FinishedAt;
+        set => FinishedAt = value;
+    }
+
+    /// <summary>
+    /// Gets or sets the time at which job will be purged by the service from the system (Azure Digital Twins API compatibility).
+    /// </summary>
+    public DateTime PurgeDateTime
+    {
+        get => PurgeAt;
+        set => PurgeAt = value;
+    }
+
+    /// <summary>
+    /// Gets or sets the path to the input Azure storage blob (for import jobs).
+    /// </summary>
+    public string? InputBlobUri
+    {
+        get => GetRequestProperty<string>("inputBlobUri");
+        set => SetRequestProperty("inputBlobUri", value);
+    }
+
+    /// <summary>
+    /// Gets or sets the path to the output Azure storage blob (for import jobs).
+    /// </summary>
+    public string? OutputBlobUri
+    {
+        get => GetRequestProperty<string>("outputBlobUri");
+        set => SetRequestProperty("outputBlobUri", value);
+    }
+
+    /// <summary>
+    /// Gets or sets details of the error(s) that occurred executing the import job.
+    /// </summary>
+    public ImportJobError? Error
+    {
+        get => GetErrorProperty<ImportJobError>("error");
+        set => SetErrorProperty("error", value);
+    }
+
+    /// <summary>
+    /// Gets or sets the number of models successfully created (import jobs).
+    /// </summary>
+    public int ModelsCreated
+    {
+        get => GetResultProperty<int>("modelsCreated");
+        set => SetResultProperty("modelsCreated", value);
+    }
+
+    /// <summary>
+    /// Gets or sets the number of twins successfully created (import jobs).
+    /// </summary>
+    public int TwinsCreated
+    {
+        get => GetResultProperty<int>("twinsCreated");
+        set => SetResultProperty("twinsCreated", value);
+    }
+
+    /// <summary>
+    /// Gets or sets the number of relationships successfully created (import jobs).
+    /// </summary>
+    public int RelationshipsCreated
+    {
+        get => GetResultProperty<int>("relationshipsCreated");
+        set => SetResultProperty("relationshipsCreated", value);
+    }
+
+    /// <summary>
+    /// Gets or sets the total number of errors encountered (import jobs).
+    /// </summary>
+    public int ErrorCount
+    {
+        get => GetResultProperty<int>("errorCount");
+        set => SetResultProperty("errorCount", value);
+    }
+
+    // Helper methods for JSON property access
+    private T? GetRequestProperty<T>(string propertyName)
+    {
+        if (RequestData?.RootElement.TryGetProperty(propertyName, out var element) == true)
+        {
+            return JsonSerializer.Deserialize<T>(element.GetRawText());
+        }
+        return default;
+    }
+
+    private void SetRequestProperty<T>(string propertyName, T value)
+    {
+        var json = RequestData?.RootElement.Clone() ?? new JsonElement();
+        var dict =
+            JsonSerializer.Deserialize<Dictionary<string, object>>(json.GetRawText() ?? "{}")
+            ?? new Dictionary<string, object>();
+
+        if (value != null)
+            dict[propertyName] = value;
+        else
+            dict.Remove(propertyName);
+
+        RequestData = JsonSerializer.SerializeToDocument(dict);
+    }
+
+    private T? GetResultProperty<T>(string propertyName)
+    {
+        if (ResultData?.RootElement.TryGetProperty(propertyName, out var element) == true)
+        {
+            return JsonSerializer.Deserialize<T>(element.GetRawText());
+        }
+        return default;
+    }
+
+    private void SetResultProperty<T>(string propertyName, T value)
+    {
+        var json = ResultData?.RootElement.Clone() ?? new JsonElement();
+        var dict =
+            JsonSerializer.Deserialize<Dictionary<string, object>>(json.GetRawText() ?? "{}")
+            ?? new Dictionary<string, object>();
+
+        if (value != null)
+            dict[propertyName] = value;
+        else
+            dict.Remove(propertyName);
+
+        ResultData = JsonSerializer.SerializeToDocument(dict);
+    }
+
+    private T? GetErrorProperty<T>(string propertyName)
+    {
+        if (ErrorData?.RootElement.TryGetProperty(propertyName, out var element) == true)
+        {
+            return JsonSerializer.Deserialize<T>(element.GetRawText());
+        }
+        return default;
+    }
+
+    private void SetErrorProperty<T>(string propertyName, T value)
+    {
+        var json = ErrorData?.RootElement.Clone() ?? new JsonElement();
+        var dict =
+            JsonSerializer.Deserialize<Dictionary<string, object>>(json.GetRawText() ?? "{}")
+            ?? new Dictionary<string, object>();
+
+        if (value != null)
+            dict[propertyName] = value;
+        else
+            dict.Remove(propertyName);
+
+        ErrorData = JsonSerializer.SerializeToDocument(dict);
+    }
+}
+
+/// <summary>
+/// Job status enumeration.
+/// </summary>
+public enum JobStatus
+{
+    /// <summary>
+    /// Job has been created but not yet started.
+    /// </summary>
+    NotStarted,
+
+    /// <summary>
+    /// Job is currently running.
+    /// </summary>
+    Running,
+
+    /// <summary>
+    /// Job completed successfully.
+    /// </summary>
+    Succeeded,
+
+    /// <summary>
+    /// Job completed partially with some errors.
+    /// </summary>
+    PartiallySucceeded,
+
+    /// <summary>
+    /// Job failed to complete.
+    /// </summary>
+    Failed,
+
+    /// <summary>
+    /// Job was cancelled.
+    /// </summary>
+    Cancelled,
+
+    /// <summary>
+    /// Job cancellation was requested.
+    /// </summary>
+    Cancelling,
+}
+
+/// <summary>
+/// Error details for import jobs.
+/// </summary>
+public class ImportJobError
+{
+    /// <summary>
+    /// Gets or sets the service specific error code which serves as the substatus for the HTTP error code.
+    /// </summary>
+    public string? Code { get; set; }
+
+    /// <summary>
+    /// Gets or sets a human-readable representation of the error.
+    /// </summary>
+    public string? Message { get; set; }
+
+    /// <summary>
+    /// Gets or sets internal error details.
+    /// </summary>
+    public ImportJobError[]? Details { get; set; }
+
+    /// <summary>
+    /// Gets or sets an object containing more specific information than the current object about the error.
+    /// </summary>
+    public ImportJobInnerError? InnerError { get; set; }
+}
+
+/// <summary>
+/// Inner error details for import jobs.
+/// </summary>
+public class ImportJobInnerError
+{
+    /// <summary>
+    /// Gets or sets a more specific error code than was provided by the containing error.
+    /// </summary>
+    public string? Code { get; set; }
+
+    /// <summary>
+    /// Gets or sets an object containing more specific information than the current object about the error.
+    /// </summary>
+    public ImportJobInnerError? InnerError { get; set; }
+}

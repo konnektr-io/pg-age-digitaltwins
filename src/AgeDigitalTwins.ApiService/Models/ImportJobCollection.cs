@@ -1,4 +1,4 @@
-using AgeDigitalTwins.Jobs.Models;
+using AgeDigitalTwins.Jobs;
 
 namespace AgeDigitalTwins.ApiService.Models;
 
@@ -10,7 +10,7 @@ public class ImportJobCollection
     /// <summary>
     /// Gets or sets the list of import job objects.
     /// </summary>
-    public IList<ImportJobResult> Value { get; set; } = new List<ImportJobResult>();
+    public IList<JobRecord> Value { get; set; } = new List<JobRecord>();
 
     /// <summary>
     /// Gets or sets a URI to retrieve the next page of results.

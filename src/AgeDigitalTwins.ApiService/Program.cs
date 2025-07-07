@@ -61,15 +61,14 @@ builder.Services.AddSingleton(sp =>
         GraphName = graphName,
         ModelCacheExpiration = TimeSpan.FromSeconds(modelCacheExpiration),
     };
-    return new AgeDigitalTwinsClient(dataSource, options);
+    var client = new AgeDigitalTwinsClient(dataSource, options);
+
+    return client;
 });
 
 // Add services to the container.
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<ExceptionHandler>();
-
-// Add memory cache for import job management
-builder.Services.AddMemoryCache();
 
 // Add blob storage service
 // Use Azure Blob Storage for production, fallback to default for testing/development

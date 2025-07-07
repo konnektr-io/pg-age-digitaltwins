@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
+using AgeDigitalTwins.Jobs;
 using AgeDigitalTwins.Jobs.Models;
 using Npgsql;
 
@@ -23,7 +24,7 @@ public static class StreamingImportJob
     /// <summary>
     /// Executes a streaming import job that processes ND-JSON line by line.
     /// </summary>
-    public static async Task<ImportJobResult> ExecuteAsync(
+    public static async Task<JobRecord> ExecuteAsync(
         AgeDigitalTwinsClient client,
         Stream inputStream,
         Stream outputStream,
@@ -32,11 +33,11 @@ public static class StreamingImportJob
         CancellationToken cancellationToken = default
     )
     {
-        var result = new ImportJobResult
+        var result = new JobRecord
         {
             Id = jobId,
             CreatedDateTime = DateTime.UtcNow,
-            Status = ImportJobStatus.Running,
+            Status = JobStatus.Running,
         };
 
         try
@@ -74,7 +75,7 @@ public static class StreamingImportJob
             // Determine final status
             if (result.ErrorCount == 0)
             {
-                result.Status = ImportJobStatus.Succeeded;
+                result.Status = JobStatus.Succeeded;
             }
             else if (
                 result.ErrorCount > 0
@@ -85,11 +86,11 @@ public static class StreamingImportJob
                 )
             )
             {
-                result.Status = ImportJobStatus.PartiallySucceeded;
+                result.Status = JobStatus.Failed;
             }
             else
             {
-                result.Status = ImportJobStatus.Failed;
+                result.Status = JobStatus.Failed;
             }
 
             result.FinishedDateTime = DateTime.UtcNow;
@@ -110,7 +111,7 @@ public static class StreamingImportJob
         }
         catch (Exception ex)
         {
-            result.Status = ImportJobStatus.Failed;
+            result.Status = JobStatus.Failed;
             result.FinishedDateTime = DateTime.UtcNow;
             result.ErrorCount++;
 
@@ -177,7 +178,7 @@ public static class StreamingImportJob
         Stream outputStream,
         string jobId,
         ImportJobOptions options,
-        ImportJobResult result,
+        JobRecord result,
         CancellationToken cancellationToken
     )
     {
@@ -322,7 +323,7 @@ public static class StreamingImportJob
         Stream outputStream,
         string jobId,
         List<string> allModels,
-        ImportJobResult result,
+        JobRecord result,
         ImportJobOptions options,
         CancellationToken cancellationToken
     )
@@ -382,7 +383,7 @@ public static class StreamingImportJob
         Stream outputStream,
         string jobId,
         string twinJson,
-        ImportJobResult result,
+        JobRecord result,
         ImportJobOptions options,
         CancellationToken cancellationToken
     )
@@ -429,7 +430,7 @@ public static class StreamingImportJob
         Stream outputStream,
         string jobId,
         string relationshipJson,
-        ImportJobResult result,
+        JobRecord result,
         ImportJobOptions options,
         CancellationToken cancellationToken
     )

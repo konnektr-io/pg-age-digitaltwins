@@ -6,49 +6,12 @@ using System.Threading;
 using System.Threading.Tasks;
 using AgeDigitalTwins.Jobs;
 using AgeDigitalTwins.Jobs.Models;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 
 namespace AgeDigitalTwins;
 
 public partial class AgeDigitalTwinsClient
 {
-    private ImportJobManager? _jobManager;
-    private IMemoryCache? _memoryCache;
-    private ILogger<ImportJobManager>? _importJobLogger;
-
-    /// <summary>
-    /// Gets or sets the memory cache instance used for job management.
-    /// </summary>
-    public IMemoryCache? MemoryCache
-    {
-        get => _memoryCache;
-        set
-        {
-            _memoryCache = value;
-            if (value != null && _importJobLogger != null)
-            {
-                _jobManager = new ImportJobManager(this, value, _importJobLogger);
-            }
-        }
-    }
-
-    /// <summary>
-    /// Gets or sets the logger instance used for import job management.
-    /// </summary>
-    public ILogger<ImportJobManager>? ImportJobLogger
-    {
-        get => _importJobLogger;
-        set
-        {
-            _importJobLogger = value;
-            if (value != null && _memoryCache != null)
-            {
-                _jobManager = new ImportJobManager(this, _memoryCache, value);
-            }
-        }
-    }
-
     /// <summary>
     /// Imports models, twins, and relationships from an ND-JSON stream synchronously.
     /// </summary>
@@ -93,7 +56,7 @@ public partial class AgeDigitalTwinsClient
     /// The output stream will receive structured log entries in JSON format documenting the progress and results of the import operation.
     /// </para>
     /// </remarks>
-    public virtual async Task<ImportJobResult> ImportAsync(
+    public virtual async Task<JobRecord> ImportAsync(
         Stream inputStream,
         Stream outputStream,
         ImportJobOptions? options = null,
@@ -127,9 +90,9 @@ public partial class AgeDigitalTwinsClient
     /// <param name="options">Optional import job options.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The import job result with initial status (NotStarted or Running).</returns>
-    /// <exception cref="InvalidOperationException">Thrown when job manager is not configured or job ID already exists.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when job service is not configured or job ID already exists.</exception>
     /// <exception cref="ArgumentNullException">Thrown when input or output stream is null.</exception>
-    public virtual async Task<ImportJobResult> CreateImportJobAsync(
+    public virtual async Task<JobRecord> CreateImportJobAsync(
         string jobId,
         Stream inputStream,
         Stream outputStream,
@@ -137,10 +100,8 @@ public partial class AgeDigitalTwinsClient
         CancellationToken cancellationToken = default
     )
     {
-        if (_jobManager == null)
-            throw new InvalidOperationException(
-                "Job manager is not configured. Please set both MemoryCache and ImportJobLogger properties."
-            );
+        if (string.IsNullOrEmpty(jobId))
+            throw new ArgumentException("Job ID cannot be null or empty.", nameof(jobId));
 
         if (inputStream == null)
             throw new ArgumentNullException(nameof(inputStream));
@@ -148,44 +109,94 @@ public partial class AgeDigitalTwinsClient
         if (outputStream == null)
             throw new ArgumentNullException(nameof(outputStream));
 
-        return await _jobManager.CreateImportJobAsync(
-            jobId,
-            inputStream,
-            outputStream,
-            options,
+        // Create the job request with blob URIs (will be set by API service)
+        var request = new ImportJobRequest
+        {
+            InputBlobUri = null, // Will be set by API service
+            OutputBlobUri = null, // Will be set by API service
+            Options = options,
+        };
+
+        // Create the job record
+        var jobRecord = await JobService.CreateJobAsync(jobId, "import", request, cancellationToken);
+
+        // Start the import job in the background
+        _ = Task.Run(
+            async () =>
+            {
+                try
+                {
+                    await JobService.UpdateJobStatusAsync(
+                        jobId,
+                        JobStatus.Running,
+                        cancellationToken: cancellationToken
+                    );
+
+                    // Execute the streaming import job
+                    var result = await StreamingImportJob.ExecuteAsync(
+                        this,
+                        inputStream,
+                        outputStream,
+                        jobId,
+                        options ?? new ImportJobOptions(),
+                        cancellationToken
+                    );
+
+                    // Update job with results
+                    var resultData = new
+                    {
+                        ModelsCreated = result.ModelsCreated,
+                        TwinsCreated = result.TwinsCreated,
+                        RelationshipsCreated = result.RelationshipsCreated,
+                        ErrorCount = result.ErrorCount,
+                        Status = result.Status.ToString(),
+                        FinishedDateTime = result.FinishedDateTime,
+                    };
+
+                    await JobService.CompleteJobAsync(
+                        jobId,
+                        resultData,
+                        cancellationToken: cancellationToken
+                    );
+                }
+                catch (Exception ex)
+                {
+                    var errorData = new
+                    {
+                        Code = "UnexpectedError",
+                        Message = ex.Message,
+                        StackTrace = ex.StackTrace,
+                    };
+
+                    await JobService.FailJobAsync(jobId, errorData, cancellationToken: cancellationToken);
+                }
+            },
             cancellationToken
         );
+
+        // Return the job record directly
+        return jobRecord;
     }
 
     /// <summary>
     /// Gets an import job by ID.
     /// </summary>
     /// <param name="jobId">The job identifier.</param>
-    /// <returns>The import job result if found; otherwise null.</returns>
-    /// <exception cref="InvalidOperationException">Thrown when job manager is not configured.</exception>
-    public virtual ImportJobResult? GetImportJob(string jobId)
+    /// <returns>The job record if found; otherwise null.</returns>
+    public virtual JobRecord? GetImportJob(string jobId)
     {
-        if (_jobManager == null)
-            throw new InvalidOperationException(
-                "Job manager is not configured. Please set both MemoryCache and ImportJobLogger properties."
-            );
-
-        return _jobManager.GetImportJob(jobId);
+        var jobRecord = JobService.GetJobAsync(jobId).GetAwaiter().GetResult();
+        return jobRecord;
     }
 
     /// <summary>
     /// Lists all import jobs.
     /// </summary>
     /// <returns>A collection of all import jobs.</returns>
-    /// <exception cref="InvalidOperationException">Thrown when job manager is not configured.</exception>
-    public virtual IEnumerable<ImportJobResult> ListImportJobs()
+    public virtual IEnumerable<JobRecord> ListImportJobs()
     {
-        if (_jobManager == null)
-            throw new InvalidOperationException(
-                "Job manager is not configured. Please set both MemoryCache and ImportJobLogger properties."
-            );
-
-        return _jobManager.ListImportJobs();
+        var jobRecords = JobService.ListJobsAsync("import").GetAwaiter().GetResult();
+        return jobRecords;
     }
 
     /// <summary>
@@ -193,30 +204,35 @@ public partial class AgeDigitalTwinsClient
     /// </summary>
     /// <param name="jobId">The job identifier.</param>
     /// <returns>True if the job was found and cancellation was requested; otherwise false.</returns>
-    /// <exception cref="InvalidOperationException">Thrown when job manager is not configured.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when job service is not configured.</exception>
     public virtual bool CancelImportJob(string jobId)
     {
-        if (_jobManager == null)
-            throw new InvalidOperationException(
-                "Job manager is not configured. Please set both MemoryCache and ImportJobLogger properties."
-            );
-
-        return _jobManager.CancelImportJob(jobId);
+        try
+        {
+            JobService.UpdateJobStatusAsync(jobId, JobStatus.Cancelled).GetAwaiter().GetResult();
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     /// <summary>
-    /// Deletes an import job from the cache.
+    /// Deletes an import job from the job store.
     /// </summary>
     /// <param name="jobId">The job identifier.</param>
     /// <returns>True if the job was found and deleted; otherwise false.</returns>
-    /// <exception cref="InvalidOperationException">Thrown when job manager is not configured.</exception>
     public virtual bool DeleteImportJob(string jobId)
     {
-        if (_jobManager == null)
-            throw new InvalidOperationException(
-                "Job manager is not configured. Please set both MemoryCache and ImportJobLogger properties."
-            );
-
-        return _jobManager.DeleteImportJob(jobId);
+        try
+        {
+            JobService.DeleteJobAsync(jobId).GetAwaiter().GetResult();
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 }
