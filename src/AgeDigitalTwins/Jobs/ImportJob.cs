@@ -141,7 +141,7 @@ public static class StreamingImportJob
     {
         using var reader = new StreamReader(inputStream, Encoding.UTF8, leaveOpen: true);
 
-        string? firstLine = await reader.ReadLineAsync();
+        string? firstLine = await reader.ReadLineAsync(cancellationToken);
         if (firstLine == null)
         {
             throw new ArgumentException("Empty input stream");
@@ -155,7 +155,7 @@ public static class StreamingImportJob
         }
 
         // Read header data
-        string? headerLine = await reader.ReadLineAsync();
+        string? headerLine = await reader.ReadLineAsync(cancellationToken);
         if (headerLine != null)
         {
             var headerData = JsonNode.Parse(headerLine);
@@ -185,15 +185,15 @@ public static class StreamingImportJob
 
         // Skip header validation since it's already done
         // Read and skip header section line
-        await reader.ReadLineAsync(); // Header section marker
-        await reader.ReadLineAsync(); // Header data
+        await reader.ReadLineAsync(cancellationToken); // Header section marker
+        await reader.ReadLineAsync(cancellationToken); // Header data
 
         // Process remaining sections in streaming fashion
         CurrentSection currentSection = CurrentSection.None;
         List<string> allModels = new(); // Collect all models to process at once due to dependencies
 
         string? line;
-        while ((line = await reader.ReadLineAsync()) != null)
+        while ((line = await reader.ReadLineAsync(cancellationToken)) != null)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
