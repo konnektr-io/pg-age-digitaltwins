@@ -175,10 +175,26 @@ public class JobRecord
 
     private void SetRequestProperty<T>(string propertyName, T value)
     {
-        var json = RequestData?.RootElement.Clone() ?? new JsonElement();
-        var dict =
-            JsonSerializer.Deserialize<Dictionary<string, object>>(json.GetRawText() ?? "{}")
-            ?? new Dictionary<string, object>();
+        Dictionary<string, object> dict;
+
+        if (RequestData?.RootElement.ValueKind == JsonValueKind.Object)
+        {
+            try
+            {
+                dict =
+                    JsonSerializer.Deserialize<Dictionary<string, object>>(
+                        RequestData.RootElement.GetRawText()
+                    ) ?? new Dictionary<string, object>();
+            }
+            catch
+            {
+                dict = new Dictionary<string, object>();
+            }
+        }
+        else
+        {
+            dict = new Dictionary<string, object>();
+        }
 
         if (value != null)
             dict[propertyName] = value;
@@ -199,10 +215,26 @@ public class JobRecord
 
     private void SetResultProperty<T>(string propertyName, T value)
     {
-        var json = ResultData?.RootElement.Clone() ?? new JsonElement();
-        var dict =
-            JsonSerializer.Deserialize<Dictionary<string, object>>(json.GetRawText() ?? "{}")
-            ?? new Dictionary<string, object>();
+        Dictionary<string, object> dict;
+
+        if (ResultData?.RootElement.ValueKind == JsonValueKind.Object)
+        {
+            try
+            {
+                dict =
+                    JsonSerializer.Deserialize<Dictionary<string, object>>(
+                        ResultData.RootElement.GetRawText()
+                    ) ?? new Dictionary<string, object>();
+            }
+            catch
+            {
+                dict = new Dictionary<string, object>();
+            }
+        }
+        else
+        {
+            dict = new Dictionary<string, object>();
+        }
 
         if (value != null)
             dict[propertyName] = value;

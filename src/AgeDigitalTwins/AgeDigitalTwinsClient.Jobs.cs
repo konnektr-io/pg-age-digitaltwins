@@ -125,65 +125,8 @@ public partial class AgeDigitalTwinsClient
             cancellationToken
         );
 
-        // Start the import job in the background
-        _ = Task.Run(
-            async () =>
-            {
-                try
-                {
-                    await JobService.UpdateJobStatusAsync(
-                        jobId,
-                        JobStatus.Running,
-                        cancellationToken: cancellationToken
-                    );
-
-                    // Execute the streaming import job
-                    var result = await StreamingImportJob.ExecuteAsync(
-                        this,
-                        inputStream,
-                        outputStream,
-                        jobId,
-                        options ?? new ImportJobOptions(),
-                        cancellationToken
-                    );
-
-                    // Update job with results
-                    var resultData = new
-                    {
-                        ModelsCreated = result.ModelsCreated,
-                        TwinsCreated = result.TwinsCreated,
-                        RelationshipsCreated = result.RelationshipsCreated,
-                        ErrorCount = result.ErrorCount,
-                        Status = result.Status.ToString(),
-                        FinishedDateTime = result.FinishedDateTime,
-                    };
-
-                    await JobService.CompleteJobAsync(
-                        jobId,
-                        resultData,
-                        cancellationToken: cancellationToken
-                    );
-                }
-                catch (Exception ex)
-                {
-                    var errorData = new
-                    {
-                        Code = "UnexpectedError",
-                        Message = ex.Message,
-                        StackTrace = ex.StackTrace,
-                    };
-
-                    await JobService.FailJobAsync(
-                        jobId,
-                        errorData,
-                        cancellationToken: cancellationToken
-                    );
-                }
-            },
-            cancellationToken
-        );
-
-        // Return the job record directly
+        // Return the job record without starting execution
+        // Job execution can be started separately if needed
         return jobRecord;
     }
 
