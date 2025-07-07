@@ -43,30 +43,6 @@ public partial class AgeDigitalTwinsClient
     }
 
     /// <summary>
-    /// Checks if a digital twin's ETag matches asynchronously.
-    /// </summary>
-    /// <param name="digitalTwinId">The ID of the digital twin to check.</param>
-    /// <param name="etag">The ETag to compare.</param>
-    /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
-    /// <returns>A task that represents the asynchronous operation. The task result contains a boolean indicating whether the ETag matches.</returns>
-    private async Task<bool> DigitalTwinEtagMatchesAsync(
-        string digitalTwinId,
-        string etag,
-        CancellationToken cancellationToken = default
-    )
-    {
-        string cypher =
-            $"MATCH (t:Twin {{ `$dtId`: '{digitalTwinId.Replace("'", "\\'")}', `$etag`: '{etag}'}}) RETURN t";
-        await using var connection = await _dataSource.OpenConnectionAsync(
-            Npgsql.TargetSessionAttributes.PreferStandby,
-            cancellationToken
-        );
-        await using var command = connection.CreateCypherCommand(_graphName, cypher);
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        return await reader.ReadAsync(cancellationToken);
-    }
-
-    /// <summary>
     /// Retrieves a digital twin asynchronously.
     /// </summary>
     /// <typeparam name="T">The type to which the digital twin will be deserialized.</typeparam>

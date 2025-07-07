@@ -48,6 +48,9 @@ public partial class AgeDigitalTwinsClient
     /// <param name="etag">The ETag to compare.</param>
     /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
     /// <returns>A task that represents the asynchronous operation. The task result contains a boolean indicating whether the ETag matches.</returns>
+    /// <deprecation>
+    /// This method is deprecated and will be removed in a future version.
+    /// </deprecation>
     private async Task<bool> RelationshipEtagMatchesAsync(
         string digitalTwinId,
         string relationshipId,

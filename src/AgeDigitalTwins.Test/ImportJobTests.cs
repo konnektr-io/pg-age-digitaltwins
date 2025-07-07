@@ -227,7 +227,8 @@ public class ImportJobTests : TestBase
         using var outputStream = new MemoryStream();
 
         // Add some test data to input stream
-        var testData = """
+        var testData =
+            """
                       {"$dtId": "test-twin-1", "$metadata": {"$model": "dtmi:example:Model;1"}}
                       """u8.ToArray();
         inputStream.Write(testData);

@@ -1,7 +1,7 @@
 using System.IO;
 using System.Threading.Tasks;
-using Azure.Storage.Blobs;
 using Azure.Identity;
+using Azure.Storage.Blobs;
 using Microsoft.Extensions.Logging;
 
 namespace AgeDigitalTwins.ApiService.Services;
@@ -48,7 +48,7 @@ public class AzureBlobStorageService : IBlobStorageService
             _logger.LogDebug("Getting read stream for blob URI: {BlobUri}", blobUri);
 
             var blobClient = CreateBlobClient(blobUri);
-            
+
             // Check if blob exists
             var response = await blobClient.ExistsAsync();
             if (!response.Value)
@@ -58,7 +58,7 @@ public class AzureBlobStorageService : IBlobStorageService
 
             // Get blob content as stream
             var downloadResponse = await blobClient.DownloadStreamingAsync();
-            
+
             _logger.LogInformation("Successfully opened read stream for blob: {BlobUri}", blobUri);
             return downloadResponse.Value.Content;
         }
@@ -78,11 +78,14 @@ public class AzureBlobStorageService : IBlobStorageService
             _logger.LogDebug("Getting write stream for blob URI: {BlobUri}", blobUri);
 
             var blobClient = CreateBlobClient(blobUri);
-            
+
             // Create a memory stream that will upload to blob when disposed
             var memoryStream = new BlobUploadStream(blobClient, _logger);
-            
-            _logger.LogInformation("Successfully created write stream for blob: {BlobUri}", blobUri);
+
+            _logger.LogInformation(
+                "Successfully created write stream for blob: {BlobUri}",
+                blobUri
+            );
             return Task.FromResult<Stream>(memoryStream);
         }
         catch (Exception ex)
@@ -97,7 +100,7 @@ public class AzureBlobStorageService : IBlobStorageService
         // Use managed identity for authentication (preferred for Azure-hosted applications)
         // Falls back to other credential types as appropriate
         var credential = new DefaultAzureCredential();
-        
+
         return new BlobClient(new Uri(blobUri), credential);
     }
 
@@ -126,11 +129,18 @@ public class AzureBlobStorageService : IBlobStorageService
                     // Upload the memory stream content to blob storage
                     Position = 0;
                     _blobClient.Upload(this, overwrite: true);
-                    _logger.LogInformation("Successfully uploaded content to blob: {BlobUri}", _blobClient.Uri);
+                    _logger.LogInformation(
+                        "Successfully uploaded content to blob: {BlobUri}",
+                        _blobClient.Uri
+                    );
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Failed to upload content to blob: {BlobUri}", _blobClient.Uri);
+                    _logger.LogError(
+                        ex,
+                        "Failed to upload content to blob: {BlobUri}",
+                        _blobClient.Uri
+                    );
                     throw;
                 }
                 finally
@@ -151,11 +161,18 @@ public class AzureBlobStorageService : IBlobStorageService
                     // Upload the memory stream content to blob storage
                     Position = 0;
                     await _blobClient.UploadAsync(this, overwrite: true);
-                    _logger.LogInformation("Successfully uploaded content to blob: {BlobUri}", _blobClient.Uri);
+                    _logger.LogInformation(
+                        "Successfully uploaded content to blob: {BlobUri}",
+                        _blobClient.Uri
+                    );
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Failed to upload content to blob: {BlobUri}", _blobClient.Uri);
+                    _logger.LogError(
+                        ex,
+                        "Failed to upload content to blob: {BlobUri}",
+                        _blobClient.Uri
+                    );
                     throw;
                 }
                 finally
@@ -185,8 +202,11 @@ public class DefaultBlobStorageService : IBlobStorageService
 
     public Task<Stream> GetReadStreamAsync(string blobUri)
     {
-        _logger.LogWarning("Blob URI access not yet implemented for URI scheme. Using empty stream: {BlobUri}", blobUri);
-        
+        _logger.LogWarning(
+            "Blob URI access not yet implemented for URI scheme. Using empty stream: {BlobUri}",
+            blobUri
+        );
+
         // For testing purposes, return an empty memory stream
         // In a real implementation, this would parse the URI scheme and route to appropriate storage provider
         return Task.FromResult<Stream>(new MemoryStream());
@@ -194,8 +214,11 @@ public class DefaultBlobStorageService : IBlobStorageService
 
     public Task<Stream> GetWriteStreamAsync(string blobUri)
     {
-        _logger.LogWarning("Blob URI access not yet implemented for URI scheme. Using memory stream: {BlobUri}", blobUri);
-        
+        _logger.LogWarning(
+            "Blob URI access not yet implemented for URI scheme. Using memory stream: {BlobUri}",
+            blobUri
+        );
+
         // For testing purposes, return a memory stream
         // In a real implementation, this would parse the URI scheme and route to appropriate storage provider
         return Task.FromResult<Stream>(new MemoryStream());
