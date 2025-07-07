@@ -121,19 +121,19 @@ public partial class AgeDigitalTwinsClient
     /// <summary>
     /// Creates and starts a new import job in the background.
     /// </summary>
+    /// <param name="jobId">Optional job ID. If not provided, a random ID will be generated.</param>
     /// <param name="inputStream">The input stream containing ND-JSON data.</param>
     /// <param name="outputStream">The output stream for logging and progress.</param>
     /// <param name="options">Optional import job options.</param>
-    /// <param name="jobId">Optional job ID. If not provided, a random ID will be generated.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The import job result with initial status (NotStarted or Running).</returns>
     /// <exception cref="InvalidOperationException">Thrown when job manager is not configured or job ID already exists.</exception>
     /// <exception cref="ArgumentNullException">Thrown when input or output stream is null.</exception>
     public virtual async Task<ImportJobResult> CreateImportJobAsync(
+        string jobId,
         Stream inputStream,
         Stream outputStream,
         ImportJobOptions? options = null,
-        string? jobId = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -147,8 +147,6 @@ public partial class AgeDigitalTwinsClient
 
         if (outputStream == null)
             throw new ArgumentNullException(nameof(outputStream));
-
-        jobId ??= Guid.NewGuid().ToString("N")[..8];
 
         return await _jobManager.CreateImportJobAsync(
             jobId,

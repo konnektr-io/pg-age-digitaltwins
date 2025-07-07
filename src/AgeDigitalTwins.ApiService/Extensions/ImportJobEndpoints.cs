@@ -118,8 +118,6 @@ public static class ImportJobEndpoints
 
         try
         {
-            var jobManager = new ImportJobManager(client, cache, logger);
-
             // Get streams from blob URIs
             using var inputStream = await blobStorageService.GetReadStreamAsync(
                 request.InputBlobUri
@@ -128,7 +126,7 @@ public static class ImportJobEndpoints
                 request.OutputBlobUri
             );
 
-            var result = await jobManager.CreateImportJobAsync(
+            var result = await client.CreateImportJobAsync(
                 id,
                 inputStream,
                 outputStream,
@@ -175,8 +173,7 @@ public static class ImportJobEndpoints
         if (string.IsNullOrWhiteSpace(id))
             return TypedResults.NotFound();
 
-        var jobManager = new ImportJobManager(client, cache, logger);
-        var job = jobManager.GetImportJob(id);
+        var job = client.GetImportJob(id);
 
         if (job == null)
             return TypedResults.NotFound();
@@ -192,8 +189,7 @@ public static class ImportJobEndpoints
         [FromQuery] string? apiVersion = "2023-10-31"
     )
     {
-        var jobManager = new ImportJobManager(client, cache, logger);
-        var jobs = jobManager.ListImportJobs().ToList();
+        var jobs = client.ListImportJobs().ToList();
 
         // Apply pagination if requested
         if (maxItemsPerPage.HasValue && maxItemsPerPage.Value > 0)
@@ -223,8 +219,7 @@ public static class ImportJobEndpoints
         if (string.IsNullOrWhiteSpace(id))
             return TypedResults.NotFound();
 
-        var jobManager = new ImportJobManager(client, cache, logger);
-        var job = jobManager.GetImportJob(id);
+        var job = client.GetImportJob(id);
 
         if (job == null)
             return TypedResults.NotFound();
@@ -238,7 +233,7 @@ public static class ImportJobEndpoints
             );
         }
 
-        var cancelled = jobManager.CancelImportJob(id);
+        var cancelled = client.CancelImportJob(id);
         if (!cancelled)
         {
             return TypedResults.Problem(
@@ -249,7 +244,7 @@ public static class ImportJobEndpoints
         }
 
         // Return updated job status
-        var updatedJob = jobManager.GetImportJob(id);
+        var updatedJob = client.GetImportJob(id);
         return TypedResults.Ok(updatedJob!);
     }
 
@@ -264,8 +259,7 @@ public static class ImportJobEndpoints
         if (string.IsNullOrWhiteSpace(id))
             return TypedResults.NotFound();
 
-        var jobManager = new ImportJobManager(client, cache, logger);
-        var deleted = jobManager.DeleteImportJob(id);
+        var deleted = client.DeleteImportJob(id);
 
         if (!deleted)
             return TypedResults.NotFound();
