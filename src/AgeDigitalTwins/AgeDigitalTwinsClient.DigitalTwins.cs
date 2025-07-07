@@ -314,6 +314,12 @@ public partial class AgeDigitalTwinsClient
                     }
                 }
             }
+            /* else if (contentInfo is DTComponentInfo componentDef)
+            {
+                // kv.Value should be a JsonObject representing the component
+                // Get DTInterfaceInfo for the component
+                // Iterate over the properties of the component and validate them
+            } */
             else
             {
                 violations.Add(
