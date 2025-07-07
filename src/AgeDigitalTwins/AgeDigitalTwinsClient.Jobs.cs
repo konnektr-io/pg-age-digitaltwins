@@ -118,7 +118,12 @@ public partial class AgeDigitalTwinsClient
         };
 
         // Create the job record
-        var jobRecord = await JobService.CreateJobAsync(jobId, "import", request, cancellationToken);
+        var jobRecord = await JobService.CreateJobAsync(
+            jobId,
+            "import",
+            request,
+            cancellationToken
+        );
 
         // Start the import job in the background
         _ = Task.Run(
@@ -168,7 +173,11 @@ public partial class AgeDigitalTwinsClient
                         StackTrace = ex.StackTrace,
                     };
 
-                    await JobService.FailJobAsync(jobId, errorData, cancellationToken: cancellationToken);
+                    await JobService.FailJobAsync(
+                        jobId,
+                        errorData,
+                        cancellationToken: cancellationToken
+                    );
                 }
             },
             cancellationToken

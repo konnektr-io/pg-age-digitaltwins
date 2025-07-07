@@ -58,7 +58,7 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
                     ),
             }
         );
-        JobService = new JobService(_dataSource);
+        JobService = new JobService(_dataSource, _graphName);
         InitializeAsync().GetAwaiter().GetResult();
     }
 
@@ -87,7 +87,7 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
                     ),
             }
         );
-        JobService = new JobService(_dataSource);
+        JobService = new JobService(_dataSource, _graphName);
         InitializeAsync().GetAwaiter().GetResult();
     }
 

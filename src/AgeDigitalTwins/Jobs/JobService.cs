@@ -15,14 +15,20 @@ public class JobService
 {
     private readonly NpgsqlMultiHostDataSource _dataSource;
     private readonly ILogger? _logger;
+    private readonly string _schemaName;
     private readonly TimeSpan _defaultJobRetention = TimeSpan.FromHours(24);
     private readonly JsonSerializerOptions _jsonOptions =
         new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
-    public JobService(NpgsqlMultiHostDataSource dataSource, ILogger? logger = null)
+    public JobService(
+        NpgsqlMultiHostDataSource dataSource,
+        string graphName,
+        ILogger? logger = null
+    )
     {
         _dataSource = dataSource ?? throw new ArgumentNullException(nameof(dataSource));
         _logger = logger;
+        _schemaName = $"{graphName}_jobs";
         InitializeSchemaAsync().GetAwaiter().GetResult();
     }
 
@@ -45,9 +51,9 @@ public class JobService
         var requestJson =
             request != null ? JsonSerializer.SerializeToDocument(request, _jsonOptions) : null;
 
-        const string sql =
-            @"
-            INSERT INTO jobs.job_records (id, job_type, status, created_at, updated_at, purge_at, request_data)
+        var sql =
+            $@"
+            INSERT INTO {_schemaName}.job_records (id, job_type, status, created_at, updated_at, purge_at, request_data)
             VALUES (@id, @jobType, @status, @createdAt, @updatedAt, @purgeAt, @requestData)
             RETURNING id, job_type, status, created_at, updated_at, finished_at, purge_at, request_data, result_data, error_data";
 
@@ -89,10 +95,10 @@ public class JobService
         if (string.IsNullOrEmpty(jobId))
             return null;
 
-        const string sql =
-            @"
+        var sql =
+            $@"
             SELECT id, job_type, status, created_at, updated_at, finished_at, purge_at, request_data, result_data, error_data
-            FROM jobs.job_records
+            FROM {_schemaName}.job_records
             WHERE id = @id";
 
         await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
@@ -114,9 +120,9 @@ public class JobService
     )
     {
         var sql =
-            @"
+            $@"
             SELECT id, job_type, status, created_at, updated_at, finished_at, purge_at, request_data, result_data, error_data
-            FROM jobs.job_records";
+            FROM {_schemaName}.job_records";
 
         var whereClause = "";
         if (!string.IsNullOrEmpty(jobType))
@@ -164,8 +170,8 @@ public class JobService
             errorData != null ? JsonSerializer.SerializeToDocument(errorData, _jsonOptions) : null;
 
         var sql =
-            @"
-            UPDATE jobs.job_records
+            $@"
+            UPDATE {_schemaName}.job_records
             SET status = @status,
                 updated_at = @updatedAt,
                 finished_at = @finishedAt,
@@ -217,7 +223,7 @@ public class JobService
         if (string.IsNullOrEmpty(jobId))
             return false;
 
-        const string sql = "DELETE FROM jobs.job_records WHERE id = @id";
+        var sql = $"DELETE FROM {_schemaName}.job_records WHERE id = @id";
 
         await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
         await using var command = new NpgsqlCommand(sql, connection);
@@ -272,10 +278,10 @@ public class JobService
     /// </summary>
     private async Task InitializeSchemaAsync()
     {
-        const string createSchemaSql = "CREATE SCHEMA IF NOT EXISTS jobs";
-        const string createTableSql =
-            @"
-            CREATE TABLE IF NOT EXISTS jobs.job_records (
+        var createSchemaSql = $"CREATE SCHEMA IF NOT EXISTS {_schemaName}";
+        var createTableSql =
+            $@"
+            CREATE TABLE IF NOT EXISTS {_schemaName}.job_records (
                 id VARCHAR(255) PRIMARY KEY,
                 job_type VARCHAR(100) NOT NULL,
                 status VARCHAR(50) NOT NULL DEFAULT 'notstarted',
@@ -288,12 +294,12 @@ public class JobService
                 error_data JSONB NULL
             )";
 
-        const string createIndexSql =
-            @"
-            CREATE INDEX IF NOT EXISTS idx_job_records_job_type ON jobs.job_records(job_type);
-            CREATE INDEX IF NOT EXISTS idx_job_records_status ON jobs.job_records(status);
-            CREATE INDEX IF NOT EXISTS idx_job_records_created_at ON jobs.job_records(created_at);
-            CREATE INDEX IF NOT EXISTS idx_job_records_purge_at ON jobs.job_records(purge_at)";
+        var createIndexSql =
+            $@"
+            CREATE INDEX IF NOT EXISTS idx_job_records_job_type ON {_schemaName}.job_records(job_type);
+            CREATE INDEX IF NOT EXISTS idx_job_records_status ON {_schemaName}.job_records(status);
+            CREATE INDEX IF NOT EXISTS idx_job_records_created_at ON {_schemaName}.job_records(created_at);
+            CREATE INDEX IF NOT EXISTS idx_job_records_purge_at ON {_schemaName}.job_records(purge_at)";
 
         try
         {
