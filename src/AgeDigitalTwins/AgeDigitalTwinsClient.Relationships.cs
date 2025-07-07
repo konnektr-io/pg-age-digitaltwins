@@ -444,16 +444,27 @@ RETURN rel";
         {
             DateTime now = DateTime.UtcNow;
 
-            // Check etag if defined
+            // Retrieve the current relationship as JsonObject
+            var currentRel = await GetRelationshipAsync<JsonObject>(
+                digitalTwinId,
+                relationshipId,
+                cancellationToken
+            );
+            if (currentRel == null)
+            {
+                throw new RelationshipNotFoundException(
+                    $"Relationship with ID {relationshipId} on {digitalTwinId} not found"
+                );
+            }
+
+            // Check if etag matches if If-Match header is provided
             if (!string.IsNullOrEmpty(ifMatch) && !ifMatch.Equals("*"))
             {
                 if (
-                    !await RelationshipEtagMatchesAsync(
-                        digitalTwinId,
-                        relationshipId,
-                        ifMatch,
-                        cancellationToken
-                    )
+                    currentRel.TryGetPropertyValue("$etag", out var etagNode)
+                    && etagNode is JsonValue etagValue
+                    && etagValue.GetValueKind() == JsonValueKind.String
+                    && !etagValue.ToString().Equals(ifMatch, StringComparison.OrdinalIgnoreCase)
                 )
                 {
                     throw new PreconditionFailedException(
@@ -462,78 +473,48 @@ RETURN rel";
                 }
             }
 
-            List<string> violations = new();
-
-            List<string> patchOperations = new();
-
-            foreach (var op in patch.Operations)
+            // Apply the patch locally
+            JsonNode patchedRelNode = currentRel.DeepClone();
+            try
             {
-                var path = op.Path.ToString().TrimStart('/').Replace("/", ".");
-                if (path.StartsWith('$'))
+                var patchResult = patch.Apply(patchedRelNode);
+                if (patchResult.Result is null)
                 {
-                    violations.Add($"Cannot update the {path} property");
+                    throw new ValidationFailedException("Failed to apply patch: result is null");
                 }
-                if (
-                    op.Value != null
-                    && (op.Op == OperationType.Add || op.Op == OperationType.Replace)
-                )
-                {
-                    if (
-                        op.Value.GetValueKind() == JsonValueKind.Object
-                        || op.Value.GetValueKind() == JsonValueKind.Array
-                    )
-                    {
-                        patchOperations.Add(
-                            $"SET rel = {_graphName}.agtype_set(properties(t),['{string.Join("','", path.Split('.'))}'],'{JsonSerializer.Serialize(op.Value, serializerOptions).Replace("'", "\\'")}'::agtype)"
-                        );
-                    }
-                    else if (op.Value.GetValueKind() == JsonValueKind.String)
-                    {
-                        patchOperations.Add(
-                            $"SET rel = {_graphName}.agtype_set(properties(t),['{string.Join("','", path.Split('.'))}'],'{op.Value.ToString().Replace("'", "\\'")}')"
-                        );
-                    }
-                    else
-                    {
-                        patchOperations.Add(
-                            $"SET rel = {_graphName}.agtype_set(properties(t),['{string.Join("','", path.Split('.'))}'],{op.Value})"
-                        );
-                    }
-                }
-                else if (op.Op == OperationType.Remove)
-                {
-                    patchOperations.Add(
-                        $"SET rel = {_graphName}.agtype_delete_key(properties(t),['{string.Join("','", path.Split('.'))}'])"
-                    );
-                }
-                else
-                {
-                    throw new Exceptions.NotSupportedException(
-                        $"Operation '{op.Op}' with value '{op.Value}' is not supported"
-                    );
-                }
+                patchedRelNode = patchResult.Result;
+            }
+            catch (Exception ex)
+            {
+                throw new ValidationFailedException($"Failed to apply patch: {ex.Message}");
+            }
+            if (patchedRelNode is not JsonObject patchedRel)
+            {
+                throw new ValidationFailedException("Patched relationship is not a valid object");
             }
 
-            string newEtag = ETagGenerator.GenerateEtag(digitalTwinId, now);
-            patchOperations.Add($"SET rel.`$etag` = '{newEtag}'");
+            // (Future) Validate the patched relationship here
+            // TODO: Add validation logic
 
+            // Update $etag
+            patchedRel["$etag"] = ETagGenerator.GenerateEtag(
+                $"{digitalTwinId}-{relationshipId}",
+                now
+            );
+
+            // Replace the entire relationship in the database
+            string updatedRelJson = JsonSerializer
+                .Serialize(patchedRel, serializerOptions)
+                .Replace("'", "\\'");
             string cypher =
                 $@"MATCH (:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})-[rel {{`$relationshipId`: '{relationshipId.Replace("'", "\\'")}'}}]->(:Twin)
-{string.Join("\n", patchOperations)}
-RETURN rel";
+SET rel = '{updatedRelJson}'::agtype";
             await using var connection = await _dataSource.OpenConnectionAsync(
                 Npgsql.TargetSessionAttributes.ReadWrite,
                 cancellationToken
             );
             await using var command = connection.CreateCypherCommand(_graphName, cypher);
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-
-            if (!await reader.ReadAsync(cancellationToken))
-            {
-                throw new RelationshipNotFoundException(
-                    $"Relationship with ID {relationshipId} on {digitalTwinId} not found"
-                );
-            }
+            await command.ExecuteNonQueryAsync(cancellationToken);
         }
         catch (Exception ex)
         {
