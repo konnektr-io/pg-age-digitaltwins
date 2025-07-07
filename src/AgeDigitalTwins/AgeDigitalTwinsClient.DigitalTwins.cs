@@ -13,6 +13,7 @@ using DTDLParser;
 using DTDLParser.Models;
 using Json.More;
 using Json.Patch;
+using Npgsql;
 using Npgsql.Age;
 using Npgsql.Age.Types;
 
@@ -31,13 +32,28 @@ public partial class AgeDigitalTwinsClient
         CancellationToken cancellationToken = default
     )
     {
-        string cypher =
-            $"MATCH (t:Twin) WHERE t['$dtId'] = '{digitalTwinId.Replace("'", "\\'")}' RETURN t";
         await using var connection = await _dataSource.OpenConnectionAsync(
-            Npgsql.TargetSessionAttributes.PreferStandby,
+            TargetSessionAttributes.PreferStandby,
             cancellationToken
         );
-        await using var command = connection.CreateCypherCommand(_graphName, cypher);
+        return await DigitalTwinExistsAsync(
+            connection,
+            _graphName,
+            digitalTwinId,
+            cancellationToken
+        );
+    }
+
+    private static async Task<bool> DigitalTwinExistsAsync(
+        NpgsqlConnection connection,
+        string graphName,
+        string digitalTwinId,
+        CancellationToken cancellationToken = default
+    )
+    {
+        string cypher =
+            $"MATCH (t:Twin) WHERE t['$dtId'] = '{digitalTwinId.Replace("'", "\\'")}' RETURN t";
+        await using var command = connection.CreateCypherCommand(graphName, cypher);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         return await reader.ReadAsync(cancellationToken);
     }
@@ -62,32 +78,20 @@ public partial class AgeDigitalTwinsClient
 
         try
         {
-            string cypher =
-                $"MATCH (t:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}}) RETURN t";
             await using var connection = await _dataSource.OpenConnectionAsync(
-                Npgsql.TargetSessionAttributes.PreferStandby,
+                TargetSessionAttributes.PreferStandby,
                 cancellationToken
             );
-            await using var command = connection.CreateCypherCommand(_graphName, cypher);
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-
-            if (await reader.ReadAsync(cancellationToken))
-            {
-                var agResult = await reader.GetFieldValueAsync<Agtype?>(0).ConfigureAwait(false);
-                var vertex = (Vertex)agResult;
-                var twin =
-                    JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(vertex.Properties))
-                    ?? throw new SerializationException(
-                        $"Digital Twin with ID {digitalTwinId} could not be deserialized"
-                    );
-                return twin;
-            }
-            else
-            {
-                throw new DigitalTwinNotFoundException(
+            return await GetDigitalTwinAsync<T>(
+                        connection,
+                        _graphName,
+                        digitalTwinId,
+                        cancellationToken
+                    )
+                    .ConfigureAwait(false)
+                ?? throw new DigitalTwinNotFoundException(
                     $"Digital Twin with ID {digitalTwinId} not found"
                 );
-            }
         }
         catch (Exception ex)
         {
@@ -105,6 +109,33 @@ public partial class AgeDigitalTwinsClient
                 )
             );
             throw;
+        }
+    }
+
+    internal static async Task<T?> GetDigitalTwinAsync<T>(
+        NpgsqlConnection connection,
+        string graphName,
+        string digitalTwinId,
+        CancellationToken cancellationToken = default
+    )
+    {
+        string cypher =
+            $"MATCH (t:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}}) RETURN t";
+        await using var command = connection.CreateCypherCommand(graphName, cypher);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        if (await reader.ReadAsync(cancellationToken))
+        {
+            var agResult = await reader.GetFieldValueAsync<Agtype?>(0).ConfigureAwait(false);
+            var vertex = (Vertex)agResult;
+            return JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(vertex.Properties))
+                ?? throw new SerializationException(
+                    $"Digital Twin with ID {digitalTwinId} could not be deserialized"
+                );
+        }
+        else
+        {
+            return default;
         }
     }
 
