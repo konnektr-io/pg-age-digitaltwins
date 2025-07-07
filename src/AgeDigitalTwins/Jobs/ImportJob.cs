@@ -7,6 +7,7 @@ using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using AgeDigitalTwins.Jobs.Models;
+using Npgsql;
 
 namespace AgeDigitalTwins.Jobs;
 
@@ -48,8 +49,17 @@ public static class StreamingImportJob
                 cancellationToken
             );
 
+            // Open a single connection for the entire import job
+            await using var connection = await client
+                .GetDataSource()
+                .OpenConnectionAsync(
+                    Npgsql.TargetSessionAttributes.PreferPrimary,
+                    cancellationToken
+                );
+
             await ProcessStreamAsync(
                 client,
+                connection,
                 inputStream,
                 outputStream,
                 jobId,
@@ -120,6 +130,7 @@ public static class StreamingImportJob
 
     private static async Task ProcessStreamAsync(
         AgeDigitalTwinsClient client,
+        NpgsqlConnection connection,
         Stream inputStream,
         Stream outputStream,
         string jobId,
@@ -222,6 +233,7 @@ public static class StreamingImportJob
                     case CurrentSection.Twins:
                         await ProcessTwinAsync(
                             client,
+                            connection,
                             outputStream,
                             jobId,
                             line,
@@ -234,6 +246,7 @@ public static class StreamingImportJob
                     case CurrentSection.Relationships:
                         await ProcessRelationshipAsync(
                             client,
+                            connection,
                             outputStream,
                             jobId,
                             line,
@@ -343,6 +356,7 @@ public static class StreamingImportJob
 
     private static async Task ProcessTwinAsync(
         AgeDigitalTwinsClient client,
+        NpgsqlConnection connection,
         Stream outputStream,
         string jobId,
         string twinJson,
@@ -362,6 +376,7 @@ public static class StreamingImportJob
             }
 
             await client.CreateOrReplaceDigitalTwinAsync(
+                connection,
                 twinId,
                 twinJson,
                 cancellationToken: cancellationToken
@@ -388,6 +403,7 @@ public static class StreamingImportJob
 
     private static async Task ProcessRelationshipAsync(
         AgeDigitalTwinsClient client,
+        NpgsqlConnection connection,
         Stream outputStream,
         string jobId,
         string relationshipJson,
@@ -410,6 +426,7 @@ public static class StreamingImportJob
             }
 
             await client.CreateOrReplaceRelationshipAsync(
+                connection,
                 sourceId,
                 relationshipId,
                 relationshipJson,

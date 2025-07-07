@@ -88,6 +88,24 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
     }
 
     /// <summary>
+    /// Gets the data source for connecting to the database.
+    /// </summary>
+    /// <returns>The NpgsqlMultiHostDataSource instance used by this client.</returns>
+    internal NpgsqlMultiHostDataSource GetDataSource()
+    {
+        return _dataSource;
+    }
+
+    /// <summary>
+    /// Gets the graph name used by this client.
+    /// </summary>
+    /// <returns>The graph name.</returns>
+    internal string GetGraphName()
+    {
+        return _graphName;
+    }
+
+    /// <summary>
     /// Disposes the resources used by the <see cref="AgeDigitalTwinsClient"/> instance asynchronously.
     /// </summary>
     /// <returns>A task that represents the asynchronous dispose operation.</returns>
