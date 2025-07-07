@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading;
@@ -33,7 +32,7 @@ public partial class AgeDigitalTwinsClient
         string cypher =
             $"MATCH (:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})-[rel {{`$relationshipId`: '{relationshipId.Replace("'", "\\'")}'}}]->(:Twin) RETURN rel";
         await using var connection = await _dataSource.OpenConnectionAsync(
-            Npgsql.TargetSessionAttributes.PreferStandby,
+            TargetSessionAttributes.PreferStandby,
             cancellationToken
         );
         await using var command = connection.CreateCypherCommand(_graphName, cypher);
@@ -254,130 +253,12 @@ public partial class AgeDigitalTwinsClient
 
         try
         {
-            DateTime now = DateTime.UtcNow;
-
-            string? relationshipJson =
-                relationship is string
-                    ? (string)(object)relationship
-                    : JsonSerializer.Serialize(relationship);
-
-            // Parse the relationship JSON into a JsonObject
-            JsonObject relationshipObject =
-                JsonNode.Parse(relationshipJson)?.AsObject()
-                ?? throw new ArgumentException("Invalid relationship JSON");
-
-            // Check if $relationshipName is present and matches the arguments
-            string relationshipName;
-            if (
-                relationshipObject.TryGetPropertyValue(
-                    "$relationshipName",
-                    out var relationshipNameNode
-                ) && relationshipNameNode is JsonValue relationshipNameValue
-            )
-            {
-                relationshipName =
-                    relationshipNameValue.GetValue<string>()
-                    ?? throw new ArgumentException(
-                        "Relationship's $relationshipName property cannot be null or empty"
-                    );
-            }
-            else
-            {
-                throw new ArgumentException("Relationship's $relationshipName property is missing");
-            }
-            // Check if $targetId is present and matches the arguments
-            string targetId;
-            if (
-                relationshipObject.TryGetPropertyValue("$targetId", out var targetIdNode)
-                && targetIdNode is JsonValue targetIdValue
-            )
-            {
-                targetId =
-                    targetIdValue.GetValue<string>()
-                    ?? throw new ArgumentException(
-                        "Relationship's $targetId property cannot be null or empty"
-                    );
-            }
-            else
-            {
-                throw new ArgumentException("Relationship's $targetId property is missing");
-            }
-            // Check if $sourceId is present and matches the arguments
-            if (
-                relationshipObject.TryGetPropertyValue("$sourceId", out var sourceIdNode)
-                && sourceIdNode is JsonValue sourceIdValue
-            )
-            {
-                string sourceId =
-                    sourceIdValue.GetValue<string>()
-                    ?? throw new ArgumentException(
-                        "Relationship's $sourceId property cannot be null or empty"
-                    );
-                if (sourceId != digitalTwinId)
-                {
-                    throw new ArgumentException(
-                        "Provided $sourceId does not match the digitalTwinId argument"
-                    );
-                }
-            }
-            // Check if $relationshipId is present and matches the arguments
-            if (
-                relationshipObject.TryGetPropertyValue(
-                    "$relationshipId",
-                    out var relationshipIdNode
-                ) && relationshipIdNode is JsonValue relationshipIdValue
-            )
-            {
-                string relId =
-                    relationshipIdValue.GetValue<string>()
-                    ?? throw new ArgumentException(
-                        "Relationship's $relationshipId property cannot be null or empty"
-                    );
-                if (relId != relationshipId)
-                {
-                    throw new ArgumentException(
-                        "Provided $relationshipId does not match the relationshipId argument"
-                    );
-                }
-            }
-            if (!string.IsNullOrEmpty(ifNoneMatch) && !ifNoneMatch.Equals("*"))
-            {
-                throw new ArgumentException(
-                    "Invalid If-None-Match header value. Allowed value(s): If-None-Match: *"
-                );
-            }
-
-            if (ifNoneMatch == "*")
-            {
-                if (await RelationshipExistsAsync(digitalTwinId, relationshipId, cancellationToken))
-                {
-                    throw new PreconditionFailedException(
-                        $"If-None-Match: * header was specified but a relationship with the id {relationshipId} on twin with id {digitalTwinId} was found. Please specify a different twin and relationship id."
-                    );
-                }
-            }
-
-            // TODO: Get source and target models and check relationship validity with DTDL parser
-
-            // Ensure $sourceId and $relationshipId are present and correct
-            relationshipObject["$sourceId"] = digitalTwinId;
-            relationshipObject["$relationshipId"] = relationshipId;
-            // Set new etag
-            string newEtag = ETagGenerator.GenerateEtag($"{digitalTwinId}-{relationshipId}", now);
-            relationshipObject["$etag"] = newEtag;
-
-            string updatedRelationshipJson = JsonSerializer.Serialize(
-                relationshipObject,
-                serializerOptions
-            );
-
             await using var connection = await _dataSource.OpenConnectionAsync(
-                Npgsql.TargetSessionAttributes.ReadWrite,
+                TargetSessionAttributes.ReadWrite,
                 cancellationToken
             );
             return await CreateOrReplaceRelationshipAsync(
                 connection,
-                _graphName,
                 digitalTwinId,
                 relationshipId,
                 relationship,
@@ -404,69 +285,8 @@ public partial class AgeDigitalTwinsClient
         }
     }
 
-    /// <summary>
-    /// Creates or replaces a relationship asynchronously using an existing connection.
-    /// This method is intended for bulk operations to avoid opening multiple connections.
-    /// </summary>
-    /// <typeparam name="T">The type of the relationship to create or replace.</typeparam>
-    /// <param name="connection">An existing NpgsqlConnection to use for the operation.</param>
-    /// <param name="digitalTwinId">The ID of the source digital twin.</param>
-    /// <param name="relationshipId">The ID of the relationship to create or replace.</param>
-    /// <param name="relationship">The relationship object to create or replace.</param>
-    /// <param name="ifNoneMatch">The If-None-Match header value to check for conditional creation (optional).</param>
-    /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
-    /// <returns>A task that represents the asynchronous operation. The task result contains the created or replaced relationship.</returns>
-    public virtual async Task<T?> CreateOrReplaceRelationshipAsync<T>(
+    public async Task<T?> CreateOrReplaceRelationshipAsync<T>(
         NpgsqlConnection connection,
-        string digitalTwinId,
-        string relationshipId,
-        T relationship,
-        string? ifNoneMatch = null,
-        CancellationToken cancellationToken = default
-    )
-    {
-        using var activity = ActivitySource.StartActivity(
-            "CreateOrReplaceRelationshipAsync",
-            ActivityKind.Client
-        );
-        activity?.SetTag("digitalTwinId", digitalTwinId);
-        activity?.SetTag("relationshipId", relationshipId);
-        activity?.SetTag("ifNoneMatch", ifNoneMatch);
-
-        try
-        {
-            return await CreateOrReplaceRelationshipAsync(
-                connection,
-                _graphName,
-                digitalTwinId,
-                relationshipId,
-                relationship,
-                ifNoneMatch,
-                cancellationToken
-            );
-        }
-        catch (Exception ex)
-        {
-            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            activity?.AddEvent(
-                new ActivityEvent(
-                    "Exception",
-                    default,
-                    new ActivityTagsCollection
-                    {
-                        { "exception.type", ex.GetType().FullName },
-                        { "exception.message", ex.Message },
-                        { "exception.stacktrace", ex.StackTrace },
-                    }
-                )
-            );
-            throw;
-        }
-    }
-
-    internal async Task<T?> CreateOrReplaceRelationshipAsync<T>(
-        NpgsqlConnection connection,
-        string graphName,
         string digitalTwinId,
         string relationshipId,
         T relationship,
@@ -542,10 +362,8 @@ public partial class AgeDigitalTwinsClient
         }
         // Check if $relationshipId is present and matches the arguments
         if (
-            relationshipObject.TryGetPropertyValue(
-                "$relationshipId",
-                out var relationshipIdNode
-            ) && relationshipIdNode is JsonValue relationshipIdValue
+            relationshipObject.TryGetPropertyValue("$relationshipId", out var relationshipIdNode)
+            && relationshipIdNode is JsonValue relationshipIdValue
         )
         {
             string relId =
@@ -597,7 +415,7 @@ MATCH (source:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}}),(target:T
 MERGE (source)-[rel:{relationshipName} {{`$relationshipId`: '{relationshipId.Replace("'", "\\'")}'}}]->(target)
 SET rel = relationship
 RETURN rel";
-        await using var command = connection.CreateCypherCommand(graphName, cypher);
+        await using var command = connection.CreateCypherCommand(_graphName, cypher);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
         if (await reader.ReadAsync(cancellationToken))

@@ -36,24 +36,18 @@ public partial class AgeDigitalTwinsClient
             TargetSessionAttributes.PreferStandby,
             cancellationToken
         );
-        return await DigitalTwinExistsAsync(
-            connection,
-            _graphName,
-            digitalTwinId,
-            cancellationToken
-        );
+        return await DigitalTwinExistsAsync(connection, digitalTwinId, cancellationToken);
     }
 
-    private static async Task<bool> DigitalTwinExistsAsync(
+    private async Task<bool> DigitalTwinExistsAsync(
         NpgsqlConnection connection,
-        string graphName,
         string digitalTwinId,
         CancellationToken cancellationToken = default
     )
     {
         string cypher =
             $"MATCH (t:Twin) WHERE t['$dtId'] = '{digitalTwinId.Replace("'", "\\'")}' RETURN t";
-        await using var command = connection.CreateCypherCommand(graphName, cypher);
+        await using var command = connection.CreateCypherCommand(_graphName, cypher);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         return await reader.ReadAsync(cancellationToken);
     }
@@ -82,12 +76,7 @@ public partial class AgeDigitalTwinsClient
                 TargetSessionAttributes.PreferStandby,
                 cancellationToken
             );
-            return await GetDigitalTwinAsync<T>(
-                        connection,
-                        _graphName,
-                        digitalTwinId,
-                        cancellationToken
-                    )
+            return await GetDigitalTwinAsync<T>(connection, digitalTwinId, cancellationToken)
                     .ConfigureAwait(false)
                 ?? throw new DigitalTwinNotFoundException(
                     $"Digital Twin with ID {digitalTwinId} not found"
@@ -112,16 +101,15 @@ public partial class AgeDigitalTwinsClient
         }
     }
 
-    internal static async Task<T?> GetDigitalTwinAsync<T>(
+    internal async Task<T?> GetDigitalTwinAsync<T>(
         NpgsqlConnection connection,
-        string graphName,
         string digitalTwinId,
         CancellationToken cancellationToken = default
     )
     {
         string cypher =
             $"MATCH (t:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}}) RETURN t";
-        await using var command = connection.CreateCypherCommand(graphName, cypher);
+        await using var command = connection.CreateCypherCommand(_graphName, cypher);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
         if (await reader.ReadAsync(cancellationToken))
@@ -170,7 +158,6 @@ public partial class AgeDigitalTwinsClient
             );
             return await CreateOrReplaceDigitalTwinAsync(
                     connection,
-                    _graphName,
                     digitalTwinId,
                     digitalTwin,
                     ifNoneMatch,
@@ -202,71 +189,8 @@ public partial class AgeDigitalTwinsClient
         }
     }
 
-    /// <summary>
-    /// Creates or replaces a digital twin asynchronously using an existing connection.
-    /// This method is intended for bulk operations to avoid opening multiple connections.
-    /// </summary>
-    /// <typeparam name="T">The type of the digital twin to create or replace.</typeparam>
-    /// <param name="connection">An existing NpgsqlConnection to use for the operation.</param>
-    /// <param name="digitalTwinId">The ID of the digital twin to create or replace.</param>
-    /// <param name="digitalTwin">The digital twin object to create or replace.</param>
-    /// <param name="ifNoneMatch">The If-None-Match header value to check for conditional creation.</param>
-    /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
-    /// <returns>A task that represents the asynchronous operation. The task result contains the created or replaced digital twin.</returns>
-    public virtual async Task<T?> CreateOrReplaceDigitalTwinAsync<T>(
+    public async Task<T?> CreateOrReplaceDigitalTwinAsync<T>(
         NpgsqlConnection connection,
-        string digitalTwinId,
-        T digitalTwin,
-        string? ifNoneMatch = null,
-        CancellationToken cancellationToken = default
-    )
-    {
-        using var activity = ActivitySource.StartActivity(
-            "CreateOrReplaceDigitalTwinAsync",
-            ActivityKind.Client
-        );
-        activity?.SetTag("digitalTwinId", digitalTwinId);
-        activity?.SetTag("ifNoneMatch", ifNoneMatch);
-
-        try
-        {
-            return await CreateOrReplaceDigitalTwinAsync(
-                    connection,
-                    _graphName,
-                    digitalTwinId,
-                    digitalTwin,
-                    ifNoneMatch,
-                    cancellationToken
-                )
-                .ConfigureAwait(false);
-        }
-        catch (ModelNotFoundException ex)
-        {
-            // When the model is not found, we should not return a 404, but a 400 as this is an issue with the twin itself
-            throw new ValidationFailedException(ex.Message);
-        }
-        catch (Exception ex)
-        {
-            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            activity?.AddEvent(
-                new ActivityEvent(
-                    "Exception",
-                    default,
-                    new ActivityTagsCollection
-                    {
-                        { "exception.type", ex.GetType().FullName },
-                        { "exception.message", ex.Message },
-                        { "exception.stacktrace", ex.StackTrace },
-                    }
-                )
-            );
-            throw;
-        }
-    }
-
-    internal async Task<T?> CreateOrReplaceDigitalTwinAsync<T>(
-        NpgsqlConnection connection,
-        string graphName,
         string digitalTwinId,
         T digitalTwin,
         string? ifNoneMatch = null,
@@ -431,7 +355,7 @@ public partial class AgeDigitalTwinsClient
 MERGE (t: Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})
 SET t = twin
 RETURN t";
-        await using var command = connection.CreateCypherCommand(graphName, cypher);
+        await using var command = connection.CreateCypherCommand(_graphName, cypher);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
         if (await reader.ReadAsync(cancellationToken))
