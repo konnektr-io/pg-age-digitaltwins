@@ -49,6 +49,9 @@ public static class StreamingImportJob
                 cancellationToken
             );
 
+            // Validate stream header before opening connection
+            await ValidateStreamHeaderAsync(inputStream, cancellationToken);
+
             // Open a single connection for the entire import job
             await using var connection = await client
                 .GetDataSource()
@@ -128,18 +131,15 @@ public static class StreamingImportJob
         }
     }
 
-    private static async Task ProcessStreamAsync(
-        AgeDigitalTwinsClient client,
-        NpgsqlConnection connection,
+    /// <summary>
+    /// Validates the stream header before processing.
+    /// </summary>
+    private static async Task ValidateStreamHeaderAsync(
         Stream inputStream,
-        Stream outputStream,
-        string jobId,
-        ImportJobOptions options,
-        ImportJobResult result,
         CancellationToken cancellationToken
     )
     {
-        using var reader = new StreamReader(inputStream, Encoding.UTF8);
+        using var reader = new StreamReader(inputStream, Encoding.UTF8, leaveOpen: true);
 
         string? firstLine = await reader.ReadLineAsync();
         if (firstLine == null)
@@ -165,6 +165,28 @@ public static class StreamingImportJob
                 throw new ArgumentException($"Unsupported file version: {fileVersion}");
             }
         }
+
+        // Reset stream position to beginning for actual processing
+        inputStream.Seek(0, SeekOrigin.Begin);
+    }
+
+    private static async Task ProcessStreamAsync(
+        AgeDigitalTwinsClient client,
+        NpgsqlConnection connection,
+        Stream inputStream,
+        Stream outputStream,
+        string jobId,
+        ImportJobOptions options,
+        ImportJobResult result,
+        CancellationToken cancellationToken
+    )
+    {
+        using var reader = new StreamReader(inputStream, Encoding.UTF8);
+
+        // Skip header validation since it's already done
+        // Read and skip header section line
+        await reader.ReadLineAsync(); // Header section marker
+        await reader.ReadLineAsync(); // Header data
 
         // Process remaining sections in streaming fashion
         CurrentSection currentSection = CurrentSection.None;
