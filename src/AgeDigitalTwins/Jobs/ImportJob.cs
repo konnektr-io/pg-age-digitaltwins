@@ -86,7 +86,7 @@ public static class StreamingImportJob
                 )
             )
             {
-                result.Status = JobStatus.Failed;
+                result.Status = JobStatus.PartiallySucceeded;
             }
             else
             {

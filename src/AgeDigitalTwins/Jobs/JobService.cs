@@ -343,15 +343,9 @@ public class JobService
             UpdatedAt = reader.GetDateTime(4), // updated_at
             FinishedAt = reader.IsDBNull(5) ? null : reader.GetDateTime(5), // finished_at
             PurgeAt = reader.GetDateTime(6), // purge_at
-            RequestData = reader.IsDBNull(7)
-                ? null
-                : JsonSerializer.SerializeToDocument(reader.GetString(7)), // request_data
-            ResultData = reader.IsDBNull(8)
-                ? null
-                : JsonSerializer.SerializeToDocument(reader.GetString(8)), // result_data
-            ErrorData = reader.IsDBNull(9)
-                ? null
-                : JsonSerializer.SerializeToDocument(reader.GetString(9)), // error_data
+            RequestData = reader.IsDBNull(7) ? null : JsonDocument.Parse(reader.GetString(7)), // request_data
+            ResultData = reader.IsDBNull(8) ? null : JsonDocument.Parse(reader.GetString(8)), // result_data
+            ErrorData = reader.IsDBNull(9) ? null : JsonDocument.Parse(reader.GetString(9)), // error_data
         };
     }
 }
