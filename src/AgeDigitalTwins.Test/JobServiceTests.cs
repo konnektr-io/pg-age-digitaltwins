@@ -195,7 +195,7 @@ public class ImportJobSystemTests : TestBase
             await Client.CreateImportJobAsync(jobId2, inputStream2, outputStream2);
 
             // Act
-            var jobs = Client.ListImportJobs().ToList();
+            var jobs = Client.GetImportJobsAsync().ToList();
 
             // Assert
             Assert.Contains(jobs, j => j.Id == jobId1);

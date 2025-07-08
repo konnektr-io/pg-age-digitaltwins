@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text.Json;
 
-namespace AgeDigitalTwins.Jobs;
+namespace AgeDigitalTwins.Models;
 
 /// <summary>
 /// Job record for storing job information in the database.
@@ -28,22 +28,22 @@ public class JobRecord
     /// <summary>
     /// Gets or sets the job creation timestamp.
     /// </summary>
-    public DateTime CreatedAt { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
 
     /// <summary>
     /// Gets or sets the last update timestamp.
     /// </summary>
-    public DateTime UpdatedAt { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; }
 
     /// <summary>
     /// Gets or sets the job completion timestamp (nullable).
     /// </summary>
-    public DateTime? FinishedAt { get; set; }
+    public DateTimeOffset? FinishedAt { get; set; }
 
     /// <summary>
     /// Gets or sets when the job will be purged from the system.
     /// </summary>
-    public DateTime PurgeAt { get; set; }
+    public DateTimeOffset? PurgeAt { get; set; }
 
     /// <summary>
     /// Gets or sets job-specific request parameters as JSON.
@@ -67,7 +67,7 @@ public class JobRecord
     /// <summary>
     /// Gets or sets the job creation time (Azure Digital Twins API compatibility).
     /// </summary>
-    public DateTime CreatedDateTime
+    public DateTimeOffset CreatedDateTime
     {
         get => CreatedAt;
         set => CreatedAt = value;
@@ -76,7 +76,7 @@ public class JobRecord
     /// <summary>
     /// Gets or sets the last action time (Azure Digital Twins API compatibility).
     /// </summary>
-    public DateTime LastActionDateTime
+    public DateTimeOffset LastActionDateTime
     {
         get => UpdatedAt;
         set => UpdatedAt = value;
@@ -85,7 +85,7 @@ public class JobRecord
     /// <summary>
     /// Gets or sets the job completion time (Azure Digital Twins API compatibility).
     /// </summary>
-    public DateTime? FinishedDateTime
+    public DateTimeOffset? FinishedDateTime
     {
         get => FinishedAt;
         set => FinishedAt = value;
@@ -94,7 +94,7 @@ public class JobRecord
     /// <summary>
     /// Gets or sets the time at which job will be purged by the service from the system (Azure Digital Twins API compatibility).
     /// </summary>
-    public DateTime PurgeDateTime
+    public DateTimeOffset PurgeDateTime
     {
         get => PurgeAt;
         set => PurgeAt = value;
@@ -267,47 +267,6 @@ public class JobRecord
 
         ErrorData = JsonSerializer.SerializeToDocument(dict);
     }
-}
-
-/// <summary>
-/// Job status enumeration.
-/// </summary>
-public enum JobStatus
-{
-    /// <summary>
-    /// Job has been created but not yet started.
-    /// </summary>
-    NotStarted,
-
-    /// <summary>
-    /// Job is currently running.
-    /// </summary>
-    Running,
-
-    /// <summary>
-    /// Job completed successfully.
-    /// </summary>
-    Succeeded,
-
-    /// <summary>
-    /// Job completed partially with some errors.
-    /// </summary>
-    PartiallySucceeded,
-
-    /// <summary>
-    /// Job failed to complete.
-    /// </summary>
-    Failed,
-
-    /// <summary>
-    /// Job was cancelled.
-    /// </summary>
-    Cancelled,
-
-    /// <summary>
-    /// Job cancellation was requested.
-    /// </summary>
-    Cancelling,
 }
 
 /// <summary>

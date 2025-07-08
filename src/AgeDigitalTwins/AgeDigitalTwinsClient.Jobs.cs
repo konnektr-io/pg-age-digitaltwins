@@ -56,7 +56,7 @@ public partial class AgeDigitalTwinsClient
     /// The output stream will receive structured log entries in JSON format documenting the progress and results of the import operation.
     /// </para>
     /// </remarks>
-    public virtual async Task<JobRecord> ImportAsync(
+    public async virtual Task<JobRecord> ImportAsync(
         Stream inputStream,
         Stream outputStream,
         ImportJobOptions? options = null,
@@ -92,11 +92,10 @@ public partial class AgeDigitalTwinsClient
     /// <returns>The import job result with initial status (NotStarted or Running).</returns>
     /// <exception cref="InvalidOperationException">Thrown when job service is not configured or job ID already exists.</exception>
     /// <exception cref="ArgumentNullException">Thrown when input or output stream is null.</exception>
-    public virtual async Task<JobRecord> CreateImportJobAsync(
+    public async virtual Task<JobRecord> ImportGraphAsync(
         string jobId,
         Stream inputStream,
         Stream outputStream,
-        ImportJobOptions? options = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -135,20 +134,18 @@ public partial class AgeDigitalTwinsClient
     /// </summary>
     /// <param name="jobId">The job identifier.</param>
     /// <returns>The job record if found; otherwise null.</returns>
-    public virtual JobRecord? GetImportJob(string jobId)
+    public async virtual Task<JobRecord?> GetImportJobAsync(string jobId)
     {
-        var jobRecord = JobService.GetJobAsync(jobId).GetAwaiter().GetResult();
-        return jobRecord;
+        return await JobService.GetJobAsync(jobId);
     }
 
     /// <summary>
     /// Lists all import jobs.
     /// </summary>
     /// <returns>A collection of all import jobs.</returns>
-    public virtual IEnumerable<JobRecord> ListImportJobs()
+    public async virtual Task<IEnumerable<JobRecord>> GetImportJobsAsync()
     {
-        var jobRecords = JobService.ListJobsAsync("import").GetAwaiter().GetResult();
-        return jobRecords;
+        return await JobService.ListJobsAsync("import");
     }
 
     /// <summary>
@@ -157,11 +154,11 @@ public partial class AgeDigitalTwinsClient
     /// <param name="jobId">The job identifier.</param>
     /// <returns>True if the job was found and cancellation was requested; otherwise false.</returns>
     /// <exception cref="InvalidOperationException">Thrown when job service is not configured.</exception>
-    public virtual bool CancelImportJob(string jobId)
+    public async virtual Task<bool> CancelImportJobAsync(string jobId)
     {
         try
         {
-            JobService.UpdateJobStatusAsync(jobId, JobStatus.Cancelled).GetAwaiter().GetResult();
+            await JobService.UpdateJobStatusAsync(jobId, JobStatus.Cancelled);
             return true;
         }
         catch
@@ -175,11 +172,11 @@ public partial class AgeDigitalTwinsClient
     /// </summary>
     /// <param name="jobId">The job identifier.</param>
     /// <returns>True if the job was found and deleted; otherwise false.</returns>
-    public virtual bool DeleteImportJob(string jobId)
+    public async virtual Task<bool> DeleteImportJobAsync(string jobId)
     {
         try
         {
-            JobService.DeleteJobAsync(jobId).GetAwaiter().GetResult();
+            await JobService.DeleteJobAsync(jobId);
             return true;
         }
         catch

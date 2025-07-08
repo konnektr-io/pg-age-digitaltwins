@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Threading.Tasks;
 using AgeDigitalTwins.ApiService.Models;
 using AgeDigitalTwins.ApiService.Services;
 using AgeDigitalTwins.Jobs;
@@ -75,13 +76,12 @@ public static class ImportJobEndpoints
     }
 
     private static async Task<
-        Results<Created<JobRecord>, ValidationProblem, ProblemHttpResult, Conflict>
+        Results<Created<ImportJob>, ValidationProblem, ProblemHttpResult, Conflict>
     > CreateImportJobAsync(
         [Required] string id,
-        [FromBody] ImportJobRequest request,
+        [FromBody] ImportJob request,
         [FromServices] AgeDigitalTwinsClient client,
-        [FromServices] IBlobStorageService blobStorageService,
-        [FromQuery] string? apiVersion = "2023-10-31"
+        [FromServices] IBlobStorageService blobStorageService
     )
     {
         if (string.IsNullOrWhiteSpace(id))
@@ -123,7 +123,7 @@ public static class ImportJobEndpoints
                 request.OutputBlobUri
             );
 
-            var result = await client.CreateImportJobAsync(
+            var result = await client.ImportGraphAsync(
                 id,
                 inputStream,
                 outputStream,
@@ -159,16 +159,15 @@ public static class ImportJobEndpoints
         }
     }
 
-    private static Results<Ok<JobRecord>, NotFound> GetImportJobAsync(
+    private static async Task<Results<Ok<JobRecord>, NotFound>> GetImportJobAsync(
         [Required] string id,
-        [FromServices] AgeDigitalTwinsClient client,
-        [FromQuery] string? apiVersion = "2023-10-31"
+        [FromServices] AgeDigitalTwinsClient client
     )
     {
         if (string.IsNullOrWhiteSpace(id))
             return TypedResults.NotFound();
 
-        var job = client.GetImportJob(id);
+        var job = await client.GetImportJobAsync(id);
 
         if (job == null)
             return TypedResults.NotFound();
@@ -176,13 +175,12 @@ public static class ImportJobEndpoints
         return TypedResults.Ok(job);
     }
 
-    private static Ok<ImportJobCollection> ListImportJobsAsync(
+    private static async Task<Ok<ImportJobCollection>> ListImportJobsAsync(
         [FromServices] AgeDigitalTwinsClient client,
-        [FromQuery] int? maxItemsPerPage = null,
-        [FromQuery] string? apiVersion = "2023-10-31"
+        [FromQuery] int? maxItemsPerPage = null
     )
     {
-        var jobs = client.ListImportJobs().ToList();
+        var jobs = (await client.GetImportJobsAsync()).ToList();
 
         // Apply pagination if requested
         if (maxItemsPerPage.HasValue && maxItemsPerPage.Value > 0)
@@ -201,16 +199,14 @@ public static class ImportJobEndpoints
         return TypedResults.Ok(collection);
     }
 
-    private static Results<Ok<JobRecord>, NotFound, ProblemHttpResult> CancelImportJobAsync(
-        [Required] string id,
-        [FromServices] AgeDigitalTwinsClient client,
-        [FromQuery] string? apiVersion = "2023-10-31"
-    )
+    private static async Task<
+        Results<Ok<JobRecord>, NotFound, ProblemHttpResult>
+    > CancelImportJobAsync([Required] string id, [FromServices] AgeDigitalTwinsClient client)
     {
         if (string.IsNullOrWhiteSpace(id))
             return TypedResults.NotFound();
 
-        var job = client.GetImportJob(id);
+        var job = await client.GetImportJobAsync(id);
 
         if (job == null)
             return TypedResults.NotFound();
@@ -224,7 +220,7 @@ public static class ImportJobEndpoints
             );
         }
 
-        var cancelled = client.CancelImportJob(id);
+        var cancelled = await client.CancelImportJobAsync(id);
         if (!cancelled)
         {
             return TypedResults.Problem(
@@ -235,20 +231,19 @@ public static class ImportJobEndpoints
         }
 
         // Return updated job status
-        var updatedJob = client.GetImportJob(id);
+        var updatedJob = await client.GetImportJobAsync(id);
         return TypedResults.Ok(updatedJob!);
     }
 
-    private static Results<NoContent, NotFound> DeleteImportJobAsync(
+    private static async Task<Results<NoContent, NotFound>> DeleteImportJobAsync(
         [Required] string id,
-        [FromServices] AgeDigitalTwinsClient client,
-        [FromQuery] string? apiVersion = "2023-10-31"
+        [FromServices] AgeDigitalTwinsClient client
     )
     {
         if (string.IsNullOrWhiteSpace(id))
             return TypedResults.NotFound();
 
-        var deleted = client.DeleteImportJob(id);
+        var deleted = await client.DeleteImportJobAsync(id);
 
         if (!deleted)
             return TypedResults.NotFound();

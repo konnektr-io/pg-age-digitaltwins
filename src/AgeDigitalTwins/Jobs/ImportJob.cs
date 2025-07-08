@@ -6,8 +6,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
-using AgeDigitalTwins.Jobs;
-using AgeDigitalTwins.Jobs.Models;
+using AgeDigitalTwins.Models;
 using Npgsql;
 
 namespace AgeDigitalTwins.Jobs;
@@ -29,7 +28,6 @@ public static class StreamingImportJob
         Stream inputStream,
         Stream outputStream,
         string jobId,
-        ImportJobOptions options,
         CancellationToken cancellationToken = default
     )
     {
@@ -67,7 +65,6 @@ public static class StreamingImportJob
                 inputStream,
                 outputStream,
                 jobId,
-                options,
                 result,
                 cancellationToken
             );
@@ -123,11 +120,6 @@ public static class StreamingImportJob
                 cancellationToken
             );
 
-            if (!options.ContinueOnFailure)
-            {
-                throw;
-            }
-
             return result;
         }
     }
@@ -177,7 +169,6 @@ public static class StreamingImportJob
         Stream inputStream,
         Stream outputStream,
         string jobId,
-        ImportJobOptions options,
         JobRecord result,
         CancellationToken cancellationToken
     )
@@ -217,7 +208,6 @@ public static class StreamingImportJob
                             jobId,
                             allModels,
                             result,
-                            options,
                             cancellationToken
                         );
                         allModels.Clear();
@@ -261,7 +251,6 @@ public static class StreamingImportJob
                             jobId,
                             line,
                             result,
-                            options,
                             cancellationToken
                         );
                         break;
@@ -274,7 +263,6 @@ public static class StreamingImportJob
                             jobId,
                             line,
                             result,
-                            options,
                             cancellationToken
                         );
                         break;
@@ -295,11 +283,6 @@ public static class StreamingImportJob
                     },
                     cancellationToken
                 );
-
-                if (!options.ContinueOnFailure)
-                {
-                    throw;
-                }
             }
         }
 
@@ -312,7 +295,6 @@ public static class StreamingImportJob
                 jobId,
                 allModels,
                 result,
-                options,
                 cancellationToken
             );
         }
@@ -324,7 +306,6 @@ public static class StreamingImportJob
         string jobId,
         List<string> allModels,
         JobRecord result,
-        ImportJobOptions options,
         CancellationToken cancellationToken
     )
     {
@@ -369,11 +350,6 @@ public static class StreamingImportJob
                 new { section = "Models", error = ex.Message },
                 cancellationToken
             );
-
-            if (!options.ContinueOnFailure)
-            {
-                throw;
-            }
         }
     }
 
@@ -384,7 +360,6 @@ public static class StreamingImportJob
         string jobId,
         string twinJson,
         JobRecord result,
-        ImportJobOptions options,
         CancellationToken cancellationToken
     )
     {
@@ -416,11 +391,6 @@ public static class StreamingImportJob
                 new { section = "Twins", error = ex.Message },
                 cancellationToken
             );
-
-            if (!options.ContinueOnFailure)
-            {
-                throw;
-            }
         }
     }
 
@@ -431,7 +401,6 @@ public static class StreamingImportJob
         string jobId,
         string relationshipJson,
         JobRecord result,
-        ImportJobOptions options,
         CancellationToken cancellationToken
     )
     {
@@ -467,11 +436,6 @@ public static class StreamingImportJob
                 new { section = "Relationships", error = ex.Message },
                 cancellationToken
             );
-
-            if (!options.ContinueOnFailure)
-            {
-                throw;
-            }
         }
     }
 
