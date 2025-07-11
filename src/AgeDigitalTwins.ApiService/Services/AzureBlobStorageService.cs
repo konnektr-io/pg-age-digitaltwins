@@ -1,9 +1,5 @@
-using System;
-using System.IO;
-using System.Threading.Tasks;
 using Azure.Identity;
 using Azure.Storage.Blobs;
-using Microsoft.Extensions.Logging;
 
 namespace AgeDigitalTwins.ApiService.Services;
 
@@ -11,18 +7,14 @@ namespace AgeDigitalTwins.ApiService.Services;
 /// Azure Blob Storage implementation of blob storage service.
 /// Supports Azure Storage with managed identity authentication.
 /// </summary>
-public class AzureBlobStorageService : IBlobStorageService
+public class AzureBlobStorageService(ILogger<AzureBlobStorageService> logger) : IBlobStorageService
 {
-    private readonly ILogger<AzureBlobStorageService> _logger;
+    private readonly ILogger<AzureBlobStorageService> _logger =
+        logger ?? throw new ArgumentNullException(nameof(logger));
 
-    public AzureBlobStorageService(ILogger<AzureBlobStorageService> logger)
+    public async Task<Stream> GetReadStreamAsync(Uri blobUri)
     {
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    }
-
-    public async Task<Stream> GetReadStreamAsync(string blobUri)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(blobUri);
+        ArgumentException.ThrowIfNullOrWhiteSpace(blobUri.AbsoluteUri);
 
         try
         {
@@ -50,9 +42,9 @@ public class AzureBlobStorageService : IBlobStorageService
         }
     }
 
-    public Task<Stream> GetWriteStreamAsync(string blobUri)
+    public Task<Stream> GetWriteStreamAsync(Uri blobUri)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(blobUri);
+        ArgumentException.ThrowIfNullOrWhiteSpace(blobUri.AbsoluteUri);
 
         try
         {
@@ -76,13 +68,13 @@ public class AzureBlobStorageService : IBlobStorageService
         }
     }
 
-    private static BlobClient CreateBlobClient(string blobUri)
+    private static BlobClient CreateBlobClient(Uri blobUri)
     {
         // Use managed identity for authentication (preferred for Azure-hosted applications)
         // Falls back to other credential types as appropriate
         var credential = new DefaultAzureCredential();
 
-        return new BlobClient(new Uri(blobUri), credential);
+        return new BlobClient(blobUri, credential);
     }
 
     /// <summary>

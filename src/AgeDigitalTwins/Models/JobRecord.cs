@@ -13,12 +13,12 @@ public class JobRecord
     /// <summary>
     /// Gets or sets the unique job identifier.
     /// </summary>
-    public string Id { get; set; } = string.Empty;
+    public required string Id { get; set; }
 
     /// <summary>
     /// Gets or sets the job type (e.g., "import", "delete").
     /// </summary>
-    public string JobType { get; set; } = string.Empty;
+    public required string JobType { get; set; }
 
     /// <summary>
     /// Gets or sets the current job status.
@@ -267,46 +267,4 @@ public class JobRecord
 
         ErrorData = JsonSerializer.SerializeToDocument(dict);
     }
-}
-
-/// <summary>
-/// Error details for import jobs.
-/// </summary>
-public class ImportJobError
-{
-    /// <summary>
-    /// Gets or sets the service specific error code which serves as the substatus for the HTTP error code.
-    /// </summary>
-    public string? Code { get; set; }
-
-    /// <summary>
-    /// Gets or sets a human-readable representation of the error.
-    /// </summary>
-    public string? Message { get; set; }
-
-    /// <summary>
-    /// Gets or sets internal error details.
-    /// </summary>
-    public ImportJobError[]? Details { get; set; }
-
-    /// <summary>
-    /// Gets or sets an object containing more specific information than the current object about the error.
-    /// </summary>
-    public ImportJobInnerError? InnerError { get; set; }
-}
-
-/// <summary>
-/// Inner error details for import jobs.
-/// </summary>
-public class ImportJobInnerError
-{
-    /// <summary>
-    /// Gets or sets a more specific error code than was provided by the containing error.
-    /// </summary>
-    public string? Code { get; set; }
-
-    /// <summary>
-    /// Gets or sets an object containing more specific information than the current object about the error.
-    /// </summary>
-    public ImportJobInnerError? InnerError { get; set; }
 }

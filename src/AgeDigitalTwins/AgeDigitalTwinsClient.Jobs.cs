@@ -2,10 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using AgeDigitalTwins.Jobs;
-using AgeDigitalTwins.Jobs.Models;
+using AgeDigitalTwins.Models;
 using Microsoft.Extensions.Logging;
 
 namespace AgeDigitalTwins;
@@ -56,7 +57,7 @@ public partial class AgeDigitalTwinsClient
     /// The output stream will receive structured log entries in JSON format documenting the progress and results of the import operation.
     /// </para>
     /// </remarks>
-    public async virtual Task<JobRecord> ImportAsync(
+    /* public async virtual Task<JobRecord> ImportAsync(
         Stream inputStream,
         Stream outputStream,
         ImportJobOptions? options = null,
@@ -79,7 +80,7 @@ public partial class AgeDigitalTwinsClient
             options,
             cancellationToken
         );
-    }
+    } */
 
     /// <summary>
     /// Creates and starts a new import job in the background.
@@ -87,15 +88,16 @@ public partial class AgeDigitalTwinsClient
     /// <param name="jobId">Optional job ID. If not provided, a random ID will be generated.</param>
     /// <param name="inputStream">The input stream containing ND-JSON data.</param>
     /// <param name="outputStream">The output stream for logging and progress.</param>
-    /// <param name="options">Optional import job options.</param>
+    /// <param name="request">Original import job request.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The import job result with initial status (NotStarted or Running).</returns>
     /// <exception cref="InvalidOperationException">Thrown when job service is not configured or job ID already exists.</exception>
     /// <exception cref="ArgumentNullException">Thrown when input or output stream is null.</exception>
-    public async virtual Task<JobRecord> ImportGraphAsync(
+    public async virtual Task<JobRecord> ImportGraphAsync<TRequest>(
         string jobId,
         Stream inputStream,
         Stream outputStream,
+        TRequest? request = default,
         CancellationToken cancellationToken = default
     )
     {
@@ -108,14 +110,6 @@ public partial class AgeDigitalTwinsClient
         if (outputStream == null)
             throw new ArgumentNullException(nameof(outputStream));
 
-        // Create the job request with blob URIs (will be set by API service)
-        var request = new ImportJobRequest
-        {
-            InputBlobUri = null, // Will be set by API service
-            OutputBlobUri = null, // Will be set by API service
-            Options = options,
-        };
-
         // Create the job record
         var jobRecord = await JobService.CreateJobAsync(
             jobId,
@@ -124,8 +118,27 @@ public partial class AgeDigitalTwinsClient
             cancellationToken
         );
 
-        // Return the job record without starting execution
-        // Job execution can be started separately if needed
+        // Start job execution
+        try
+        {
+            await StreamingImportJob.ExecuteAsync(
+                this,
+                inputStream,
+                outputStream,
+                jobId,
+                cancellationToken
+            );
+        }
+        catch (Exception ex)
+        {
+            // Update job status to failed if an exception occurs
+            jobRecord.Status = JobStatus.Failed;
+            jobRecord.ErrorData = JsonDocument.Parse(
+                JsonSerializer.Serialize(new { error = ex.Message })
+            );
+            throw;
+        }
+
         return jobRecord;
     }
 

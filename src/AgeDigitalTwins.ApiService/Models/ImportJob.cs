@@ -12,6 +12,7 @@ public partial class ImportJob
 {
     internal ImportJob(JobRecord jobRecord)
     {
+        ArgumentNullException.ThrowIfNull(jobRecord);
         Id = jobRecord.Id;
         InputBlobUri = new Uri(
             jobRecord.RequestData?.RootElement.GetProperty("inputBlobUri").GetString()

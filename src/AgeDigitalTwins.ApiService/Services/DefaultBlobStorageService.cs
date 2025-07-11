@@ -1,24 +1,16 @@
-using System;
-using System.IO;
-using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
-
 namespace AgeDigitalTwins.ApiService.Services;
 
 /// <summary>
 /// Default implementation of blob storage service for testing and fallback.
 /// Uses memory streams for testing.
 /// </summary>
-public class DefaultBlobStorageService : IBlobStorageService
+public class DefaultBlobStorageService(ILogger<DefaultBlobStorageService> logger)
+    : IBlobStorageService
 {
-    private readonly ILogger<DefaultBlobStorageService> _logger;
+    private readonly ILogger<DefaultBlobStorageService> _logger =
+        logger ?? throw new ArgumentNullException(nameof(logger));
 
-    public DefaultBlobStorageService(ILogger<DefaultBlobStorageService> logger)
-    {
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    }
-
-    public Task<Stream> GetReadStreamAsync(string blobUri)
+    public Task<Stream> GetReadStreamAsync(Uri blobUri)
     {
         _logger.LogWarning(
             "Blob URI access not yet implemented for URI scheme. Using empty stream: {BlobUri}",
@@ -30,7 +22,7 @@ public class DefaultBlobStorageService : IBlobStorageService
         return Task.FromResult<Stream>(new MemoryStream());
     }
 
-    public Task<Stream> GetWriteStreamAsync(string blobUri)
+    public Task<Stream> GetWriteStreamAsync(Uri blobUri)
     {
         _logger.LogWarning(
             "Blob URI access not yet implemented for URI scheme. Using memory stream: {BlobUri}",

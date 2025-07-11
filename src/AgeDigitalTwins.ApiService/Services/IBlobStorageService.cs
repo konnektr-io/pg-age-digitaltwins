@@ -13,12 +13,12 @@ public interface IBlobStorageService
     /// </summary>
     /// <param name="blobUri">The blob URI.</param>
     /// <returns>A stream for reading from the blob.</returns>
-    Task<Stream> GetReadStreamAsync(string blobUri);
+    Task<Stream> GetReadStreamAsync(Uri blobUri);
 
     /// <summary>
     /// Gets a write stream to a blob URI.
     /// </summary>
     /// <param name="blobUri">The blob URI.</param>
     /// <returns>A stream for writing to the blob.</returns>
-    Task<Stream> GetWriteStreamAsync(string blobUri);
+    Task<Stream> GetWriteStreamAsync(Uri blobUri);
 }

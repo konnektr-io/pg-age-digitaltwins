@@ -4,6 +4,7 @@ using AgeDigitalTwins.ApiService.Models;
 using AgeDigitalTwins.ApiService.Services;
 using AgeDigitalTwins.Jobs;
 using AgeDigitalTwins.Jobs.Models;
+using AgeDigitalTwins.Models;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 
@@ -81,7 +82,8 @@ public static class ImportJobEndpoints
         [Required] string id,
         [FromBody] ImportJob request,
         [FromServices] AgeDigitalTwinsClient client,
-        [FromServices] IBlobStorageService blobStorageService
+        [FromServices] IBlobStorageService blobStorageService,
+        CancellationToken cancellationToken = default
     )
     {
         if (string.IsNullOrWhiteSpace(id))
@@ -97,7 +99,7 @@ public static class ImportJobEndpoints
                 }
             );
 
-        if (string.IsNullOrWhiteSpace(request.InputBlobUri))
+        if (string.IsNullOrWhiteSpace(request.InputBlobUri.AbsoluteUri))
             return TypedResults.ValidationProblem(
                 new Dictionary<string, string[]>
                 {
@@ -105,7 +107,7 @@ public static class ImportJobEndpoints
                 }
             );
 
-        if (string.IsNullOrWhiteSpace(request.OutputBlobUri))
+        if (string.IsNullOrWhiteSpace(request.OutputBlobUri.AbsoluteUri))
             return TypedResults.ValidationProblem(
                 new Dictionary<string, string[]>
                 {
@@ -127,14 +129,17 @@ public static class ImportJobEndpoints
                 id,
                 inputStream,
                 outputStream,
-                request.Options
+                request,
+                cancellationToken
             );
 
-            // Update the result with blob URIs for the response
-            result.InputBlobUri = request.InputBlobUri;
-            result.OutputBlobUri = request.OutputBlobUri;
+            if (result == null)
+            {
+                throw new InvalidOperationException($"Import job with ID '{id}' already exists.");
+            }
 
-            return TypedResults.Created($"/jobs/imports/{id}", result);
+
+            return TypedResults.Created($"/jobs/imports/{id}", );
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("already exists"))
         {
