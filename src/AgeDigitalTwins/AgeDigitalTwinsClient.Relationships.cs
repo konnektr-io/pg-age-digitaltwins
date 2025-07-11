@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading;
@@ -9,6 +8,7 @@ using System.Threading.Tasks;
 using AgeDigitalTwins.Exceptions;
 using AgeDigitalTwins.Models;
 using Json.Patch;
+using Npgsql;
 using Npgsql.Age;
 using Npgsql.Age.Types;
 
@@ -32,7 +32,7 @@ public partial class AgeDigitalTwinsClient
         string cypher =
             $"MATCH (:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})-[rel {{`$relationshipId`: '{relationshipId.Replace("'", "\\'")}'}}]->(:Twin) RETURN rel";
         await using var connection = await _dataSource.OpenConnectionAsync(
-            Npgsql.TargetSessionAttributes.PreferStandby,
+            TargetSessionAttributes.PreferStandby,
             cancellationToken
         );
         await using var command = connection.CreateCypherCommand(_graphName, cypher);
@@ -48,6 +48,9 @@ public partial class AgeDigitalTwinsClient
     /// <param name="etag">The ETag to compare.</param>
     /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
     /// <returns>A task that represents the asynchronous operation. The task result contains a boolean indicating whether the ETag matches.</returns>
+    /// <deprecation>
+    /// This method is deprecated and will be removed in a future version.
+    /// </deprecation>
     private async Task<bool> RelationshipEtagMatchesAsync(
         string digitalTwinId,
         string relationshipId,
@@ -250,152 +253,18 @@ public partial class AgeDigitalTwinsClient
 
         try
         {
-            DateTime now = DateTime.UtcNow;
-
-            string? relationshipJson =
-                relationship is string
-                    ? (string)(object)relationship
-                    : JsonSerializer.Serialize(relationship);
-
-            // Parse the relationship JSON into a JsonObject
-            JsonObject relationshipObject =
-                JsonNode.Parse(relationshipJson)?.AsObject()
-                ?? throw new ArgumentException("Invalid relationship JSON");
-
-            // Check if $relationshipName is present and matches the arguments
-            string relationshipName;
-            if (
-                relationshipObject.TryGetPropertyValue(
-                    "$relationshipName",
-                    out var relationshipNameNode
-                ) && relationshipNameNode is JsonValue relationshipNameValue
-            )
-            {
-                relationshipName =
-                    relationshipNameValue.GetValue<string>()
-                    ?? throw new ArgumentException(
-                        "Relationship's $relationshipName property cannot be null or empty"
-                    );
-            }
-            else
-            {
-                throw new ArgumentException("Relationship's $relationshipName property is missing");
-            }
-            // Check if $targetId is present and matches the arguments
-            string targetId;
-            if (
-                relationshipObject.TryGetPropertyValue("$targetId", out var targetIdNode)
-                && targetIdNode is JsonValue targetIdValue
-            )
-            {
-                targetId =
-                    targetIdValue.GetValue<string>()
-                    ?? throw new ArgumentException(
-                        "Relationship's $targetId property cannot be null or empty"
-                    );
-            }
-            else
-            {
-                throw new ArgumentException("Relationship's $targetId property is missing");
-            }
-            // Check if $sourceId is present and matches the arguments
-            if (
-                relationshipObject.TryGetPropertyValue("$sourceId", out var sourceIdNode)
-                && sourceIdNode is JsonValue sourceIdValue
-            )
-            {
-                string sourceId =
-                    sourceIdValue.GetValue<string>()
-                    ?? throw new ArgumentException(
-                        "Relationship's $sourceId property cannot be null or empty"
-                    );
-                if (sourceId != digitalTwinId)
-                {
-                    throw new ArgumentException(
-                        "Provided $sourceId does not match the digitalTwinId argument"
-                    );
-                }
-            }
-            // Check if $relationshipId is present and matches the arguments
-            if (
-                relationshipObject.TryGetPropertyValue(
-                    "$relationshipId",
-                    out var relationshipIdNode
-                ) && relationshipIdNode is JsonValue relationshipIdValue
-            )
-            {
-                string relId =
-                    relationshipIdValue.GetValue<string>()
-                    ?? throw new ArgumentException(
-                        "Relationship's $relationshipId property cannot be null or empty"
-                    );
-                if (relId != relationshipId)
-                {
-                    throw new ArgumentException(
-                        "Provided $relationshipId does not match the relationshipId argument"
-                    );
-                }
-            }
-            if (!string.IsNullOrEmpty(ifNoneMatch) && !ifNoneMatch.Equals("*"))
-            {
-                throw new ArgumentException(
-                    "Invalid If-None-Match header value. Allowed value(s): If-None-Match: *"
-                );
-            }
-
-            if (ifNoneMatch == "*")
-            {
-                if (await RelationshipExistsAsync(digitalTwinId, relationshipId, cancellationToken))
-                {
-                    throw new PreconditionFailedException(
-                        $"If-None-Match: * header was specified but a relationship with the id {relationshipId} on twin with id {digitalTwinId} was found. Please specify a different twin and relationship id."
-                    );
-                }
-            }
-
-            // TODO: Get source and target models and check relationship validity with DTDL parser
-
-            // Ensure $sourceId and $relationshipId are present and correct
-            relationshipObject["$sourceId"] = digitalTwinId;
-            relationshipObject["$relationshipId"] = relationshipId;
-            // Set new etag
-            string newEtag = ETagGenerator.GenerateEtag($"{digitalTwinId}-{relationshipId}", now);
-            relationshipObject["$etag"] = newEtag;
-
-            string updatedRelationshipJson = JsonSerializer.Serialize(
-                relationshipObject,
-                serializerOptions
-            );
-
-            string cypher =
-                $@"WITH '{updatedRelationshipJson}'::agtype as relationship
-MATCH (source:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}}),(target:Twin {{`$dtId`: '{targetId.Replace("'", "\\'")}'}})
-MERGE (source)-[rel:{relationshipName} {{`$relationshipId`: '{relationshipId.Replace("'", "\\'")}'}}]->(target)
-SET rel = relationship
-RETURN rel";
             await using var connection = await _dataSource.OpenConnectionAsync(
-                Npgsql.TargetSessionAttributes.ReadWrite,
+                TargetSessionAttributes.ReadWrite,
                 cancellationToken
             );
-            await using var command = connection.CreateCypherCommand(_graphName, cypher);
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-
-            if (await reader.ReadAsync(cancellationToken))
-            {
-                var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
-                var edge = (Edge)agResult;
-
-                if (typeof(T) == typeof(string))
-                {
-                    return (T)(object)JsonSerializer.Serialize(edge.Properties);
-                }
-                else
-                {
-                    return JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(edge.Properties));
-                }
-            }
-            else
-                return default;
+            return await CreateOrReplaceRelationshipAsync(
+                connection,
+                digitalTwinId,
+                relationshipId,
+                relationship,
+                ifNoneMatch,
+                cancellationToken
+            );
         }
         catch (Exception ex)
         {
@@ -414,6 +283,157 @@ RETURN rel";
             );
             throw;
         }
+    }
+
+    public async Task<T?> CreateOrReplaceRelationshipAsync<T>(
+        NpgsqlConnection connection,
+        string digitalTwinId,
+        string relationshipId,
+        T relationship,
+        string? ifNoneMatch = null,
+        CancellationToken cancellationToken = default
+    )
+    {
+        DateTime now = DateTime.UtcNow;
+
+        string? relationshipJson =
+            relationship is string
+                ? (string)(object)relationship
+                : JsonSerializer.Serialize(relationship);
+
+        // Parse the relationship JSON into a JsonObject
+        JsonObject relationshipObject =
+            JsonNode.Parse(relationshipJson)?.AsObject()
+            ?? throw new ArgumentException("Invalid relationship JSON");
+
+        // Check if $relationshipName is present and matches the arguments
+        string relationshipName;
+        if (
+            relationshipObject.TryGetPropertyValue(
+                "$relationshipName",
+                out var relationshipNameNode
+            ) && relationshipNameNode is JsonValue relationshipNameValue
+        )
+        {
+            relationshipName =
+                relationshipNameValue.GetValue<string>()
+                ?? throw new ArgumentException(
+                    "Relationship's $relationshipName property cannot be null or empty"
+                );
+        }
+        else
+        {
+            throw new ArgumentException("Relationship's $relationshipName property is missing");
+        }
+        // Check if $targetId is present and matches the arguments
+        string targetId;
+        if (
+            relationshipObject.TryGetPropertyValue("$targetId", out var targetIdNode)
+            && targetIdNode is JsonValue targetIdValue
+        )
+        {
+            targetId =
+                targetIdValue.GetValue<string>()
+                ?? throw new ArgumentException(
+                    "Relationship's $targetId property cannot be null or empty"
+                );
+        }
+        else
+        {
+            throw new ArgumentException("Relationship's $targetId property is missing");
+        }
+        // Check if $sourceId is present and matches the arguments
+        if (
+            relationshipObject.TryGetPropertyValue("$sourceId", out var sourceIdNode)
+            && sourceIdNode is JsonValue sourceIdValue
+        )
+        {
+            string sourceId =
+                sourceIdValue.GetValue<string>()
+                ?? throw new ArgumentException(
+                    "Relationship's $sourceId property cannot be null or empty"
+                );
+            if (sourceId != digitalTwinId)
+            {
+                throw new ArgumentException(
+                    "Provided $sourceId does not match the digitalTwinId argument"
+                );
+            }
+        }
+        // Check if $relationshipId is present and matches the arguments
+        if (
+            relationshipObject.TryGetPropertyValue("$relationshipId", out var relationshipIdNode)
+            && relationshipIdNode is JsonValue relationshipIdValue
+        )
+        {
+            string relId =
+                relationshipIdValue.GetValue<string>()
+                ?? throw new ArgumentException(
+                    "Relationship's $relationshipId property cannot be null or empty"
+                );
+            if (relId != relationshipId)
+            {
+                throw new ArgumentException(
+                    "Provided $relationshipId does not match the relationshipId argument"
+                );
+            }
+        }
+        if (!string.IsNullOrEmpty(ifNoneMatch) && !ifNoneMatch.Equals("*"))
+        {
+            throw new ArgumentException(
+                "Invalid If-None-Match header value. Allowed value(s): If-None-Match: *"
+            );
+        }
+
+        if (ifNoneMatch == "*")
+        {
+            if (await RelationshipExistsAsync(digitalTwinId, relationshipId, cancellationToken))
+            {
+                throw new PreconditionFailedException(
+                    $"If-None-Match: * header was specified but a relationship with the id {relationshipId} on twin with id {digitalTwinId} was found. Please specify a different twin and relationship id."
+                );
+            }
+        }
+
+        // TODO: Get source and target models and check relationship validity with DTDL parser
+
+        // Ensure $sourceId and $relationshipId are present and correct
+        relationshipObject["$sourceId"] = digitalTwinId;
+        relationshipObject["$relationshipId"] = relationshipId;
+        // Set new etag
+        string newEtag = ETagGenerator.GenerateEtag($"{digitalTwinId}-{relationshipId}", now);
+        relationshipObject["$etag"] = newEtag;
+
+        string updatedRelationshipJson = JsonSerializer.Serialize(
+            relationshipObject,
+            serializerOptions
+        );
+
+        string cypher =
+            $@"WITH '{updatedRelationshipJson}'::agtype as relationship
+MATCH (source:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}}),(target:Twin {{`$dtId`: '{targetId.Replace("'", "\\'")}'}})
+MERGE (source)-[rel:{relationshipName} {{`$relationshipId`: '{relationshipId.Replace("'", "\\'")}'}}]->(target)
+SET rel = relationship
+RETURN rel";
+        await using var command = connection.CreateCypherCommand(_graphName, cypher);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        if (await reader.ReadAsync(cancellationToken))
+        {
+            var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
+            var edge = (Edge)agResult;
+
+            if (typeof(T) == typeof(string))
+            {
+                return (T)(object)JsonSerializer.Serialize(edge.Properties);
+            }
+            else
+            {
+                return JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(edge.Properties));
+            }
+        }
+        else
+            return default;
     }
 
     /// <summary>
