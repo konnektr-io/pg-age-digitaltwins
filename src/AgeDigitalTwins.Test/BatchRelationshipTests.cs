@@ -48,7 +48,16 @@ public class BatchRelationshipTests : TestBase
         // Act
         var result = await Client.CreateOrReplaceRelationshipsAsync(relationships);
 
+        var readRel1 = await Client.GetRelationshipAsync<JsonDocument>("room1", "rel1");
+        var readRel2 = await Client.GetRelationshipAsync<JsonDocument>("room2", "rel2");
+
         // Assert
+        Assert.NotNull(readRel1);
+        Assert.Equal("sensor1", readRel1.RootElement.GetProperty("$targetId").GetString());
+
+        Assert.NotNull(readRel2);
+        Assert.Equal("sensor2", readRel2.RootElement.GetProperty("$targetId").GetString());
+
         Assert.NotNull(result);
         Assert.Equal(2, result.SuccessCount);
         Assert.Equal(0, result.FailureCount);
