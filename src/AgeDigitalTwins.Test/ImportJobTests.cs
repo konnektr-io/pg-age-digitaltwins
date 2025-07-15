@@ -223,10 +223,11 @@ public class ImportJobTests : TestBase
 
         // Add some test data to input stream with proper ND-JSON format
         var testData = Encoding.UTF8.GetBytes(
-            "{\"Section\": \"Header\"}\n" +
-            "{\"fileVersion\": \"1.0.0\", \"author\": \"test\", \"organization\": \"test\"}\n" +
-            "{\"Section\": \"Models\"}\n" +
-            "{\"@id\":\"dtmi:example:Model;1\",\"@type\":\"Interface\",\"@context\":\"dtmi:dtdl:context;2\"}\n");
+            @"{""Section"": ""Header""}
+{""fileVersion"": ""1.0.0"", ""author"": ""test"", ""organization"": ""test""}
+{""Section"": ""Models""}
+{""@id"":""dtmi:example:Model;1"",""@type"":""Interface"",""@context"":""dtmi:dtdl:context;2""}
+");
         inputStream.Write(testData);
         inputStream.Position = 0;
 
