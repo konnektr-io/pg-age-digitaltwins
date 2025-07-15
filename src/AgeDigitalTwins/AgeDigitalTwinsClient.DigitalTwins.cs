@@ -687,4 +687,344 @@ RETURN COUNT(t) AS deletedCount";
             );
         }
     }
+
+    /// <summary>
+    /// Creates or replaces multiple digital twins asynchronously in a batch operation.
+    /// </summary>
+    /// <typeparam name="T">The type of the digital twins to create or replace.</typeparam>
+    /// <param name="digitalTwins">The digital twins to create or replace, as key-value pairs of twin ID and twin object.</param>
+    /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result contains the batch operation results.</returns>
+    /// <exception cref="ArgumentException">Thrown when the batch size exceeds the maximum allowed size (100).</exception>
+    public virtual async Task<BatchDigitalTwinResult> CreateOrReplaceDigitalTwinsAsync<T>(
+        IEnumerable<KeyValuePair<string, T>> digitalTwins,
+        CancellationToken cancellationToken = default
+    )
+    {
+        const int MaxBatchSize = 100;
+        var digitalTwinsList = digitalTwins.ToList();
+
+        using var activity = ActivitySource.StartActivity(
+            "CreateOrReplaceDigitalTwinsAsync",
+            ActivityKind.Client
+        );
+        activity?.SetTag("batchSize", digitalTwinsList.Count);
+
+        try
+        {
+            // Validate batch size
+            if (digitalTwinsList.Count > MaxBatchSize)
+            {
+                throw new ArgumentException(
+                    $"Batch size ({digitalTwinsList.Count}) exceeds maximum allowed size ({MaxBatchSize})"
+                );
+            }
+
+            if (digitalTwinsList.Count == 0)
+            {
+                return new BatchDigitalTwinResult([]);
+            }
+
+            await using var connection = await _dataSource.OpenConnectionAsync(
+                TargetSessionAttributes.ReadWrite,
+                cancellationToken
+            );
+
+            return await CreateOrReplaceDigitalTwinsInternalAsync(
+                connection,
+                digitalTwinsList,
+                cancellationToken
+            );
+        }
+        catch (Exception ex)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            activity?.AddEvent(
+                new ActivityEvent(
+                    "Exception",
+                    default,
+                    new ActivityTagsCollection
+                    {
+                        { "exception.type", ex.GetType().FullName },
+                        { "exception.message", ex.Message },
+                        { "exception.stacktrace", ex.StackTrace },
+                    }
+                )
+            );
+            throw;
+        }
+    }
+
+    private async Task<BatchDigitalTwinResult> CreateOrReplaceDigitalTwinsInternalAsync<T>(
+        NpgsqlConnection connection,
+        IList<KeyValuePair<string, T>> digitalTwins,
+        CancellationToken cancellationToken = default
+    )
+    {
+        var results = new List<DigitalTwinOperationResult>();
+        var validTwins = new List<(string digitalTwinId, JsonObject digitalTwinObject)>();
+        DateTime now = DateTime.UtcNow;
+
+        // Phase 1: Pre-validation - Basic JSON structure and metadata validation
+        foreach (var kvp in digitalTwins)
+        {
+            string digitalTwinId = kvp.Key;
+            T digitalTwin = kvp.Value;
+
+            try
+            {
+                // Convert to JSON string
+                string digitalTwinJson =
+                    digitalTwin is string
+                        ? (string)(object)digitalTwin
+                        : JsonSerializer.Serialize(digitalTwin);
+
+                // Parse and validate JSON structure
+                JsonObject digitalTwinObject =
+                    JsonNode.Parse(digitalTwinJson)?.AsObject()
+                    ?? throw new ArgumentException("Invalid digital twin JSON");
+
+                // Validate $metadata property
+                if (
+                    !digitalTwinObject.TryGetPropertyValue("$metadata", out JsonNode? metadataNode)
+                    || metadataNode is not JsonObject metadataObject
+                )
+                {
+                    throw new ArgumentException(
+                        "Digital Twin must have a $metadata property of type object"
+                    );
+                }
+
+                // Validate $model property
+                if (
+                    !metadataObject.TryGetPropertyValue("$model", out JsonNode? modelNode)
+                    || modelNode is not JsonValue modelValue
+                    || modelValue.GetValueKind() != JsonValueKind.String
+                )
+                {
+                    throw new ArgumentException(
+                        "Digital Twin's $metadata must contain a $model property of type string"
+                    );
+                }
+
+                // Validate $dtId consistency
+                if (
+                    digitalTwinObject.TryGetPropertyValue("$dtId", out JsonNode? dtIdNode)
+                    && dtIdNode is JsonValue dtIdValue
+                    && digitalTwinId != dtIdValue.ToString()
+                )
+                {
+                    throw new ArgumentException(
+                        "Provided digitalTwinId does not match the $dtId property"
+                    );
+                }
+
+                // Set $dtId if not present
+                digitalTwinObject["$dtId"] = digitalTwinId;
+
+                validTwins.Add((digitalTwinId, digitalTwinObject));
+            }
+            catch (Exception ex)
+            {
+                results.Add(DigitalTwinOperationResult.Failure(digitalTwinId, ex.Message));
+            }
+        }
+
+        if (validTwins.Count == 0)
+        {
+            return new BatchDigitalTwinResult(results);
+        }
+
+        // Phase 2: Load and cache all unique models
+        var modelCache = new Dictionary<string, DTInterfaceInfo>();
+        var uniqueModelIds = validTwins
+            .Select(t => t.digitalTwinObject["$metadata"]!["$model"]!.ToString())
+            .Distinct()
+            .ToList();
+
+        foreach (string modelId in uniqueModelIds)
+        {
+            try
+            {
+                var modelData = await GetModelWithCacheAsync(modelId, cancellationToken);
+                if (modelData == null)
+                {
+                    throw new ModelNotFoundException($"{modelId} does not exist.");
+                }
+
+                var parsedModelEntities = await _modelParser.ParseAsync(
+                    modelData.DtdlModel,
+                    cancellationToken: cancellationToken
+                );
+
+                var dtInterfaceInfo = (DTInterfaceInfo)
+                    parsedModelEntities.FirstOrDefault(e => e.Value is DTInterfaceInfo).Value;
+
+                if (dtInterfaceInfo == null)
+                {
+                    throw new ModelNotFoundException(
+                        $"{modelId} or one of its dependencies does not exist."
+                    );
+                }
+
+                modelCache[modelId] = dtInterfaceInfo;
+            }
+            catch (Exception ex)
+            {
+                // Mark all twins using this model as failed
+                var failedTwins = validTwins
+                    .Where(t => t.digitalTwinObject["$metadata"]!["$model"]!.ToString() == modelId)
+                    .Select(t => t.digitalTwinId)
+                    .ToList();
+
+                foreach (string twinId in failedTwins)
+                {
+                    results.Add(DigitalTwinOperationResult.Failure(twinId, ex.Message));
+                }
+
+                // Remove failed twins from processing
+                validTwins.RemoveAll(t =>
+                    t.digitalTwinObject["$metadata"]!["$model"]!.ToString() == modelId
+                );
+            }
+        }
+
+        // Phase 3: Validate each twin against its model schema
+        var finalValidTwins = new List<(string digitalTwinId, JsonObject digitalTwinObject)>();
+
+        foreach (var (digitalTwinId, digitalTwinObject) in validTwins)
+        {
+            try
+            {
+                string modelId = digitalTwinObject["$metadata"]!["$model"]!.ToString();
+                var dtInterfaceInfo = modelCache[modelId];
+                var metadataObject = digitalTwinObject["$metadata"]!.AsObject();
+                var violations = new List<string>();
+
+                // Validate all properties against the model
+                foreach (var kvp in digitalTwinObject)
+                {
+                    string property = kvp.Key;
+
+                    if (
+                        property == "$metadata"
+                        || property == "$dtId"
+                        || property == "$etag"
+                        || property == "$lastUpdateTime"
+                    )
+                    {
+                        continue;
+                    }
+
+                    if (
+                        !dtInterfaceInfo.Contents.TryGetValue(
+                            property,
+                            out DTContentInfo? contentInfo
+                        )
+                    )
+                    {
+                        violations.Add($"Property '{property}' is not defined in the model");
+                        continue;
+                    }
+
+                    JsonElement value = kvp.Value.ToJsonDocument().RootElement;
+
+                    if (contentInfo is DTPropertyInfo propertyDef)
+                    {
+                        var validationFailures = propertyDef.Schema.ValidateInstance(value);
+                        if (validationFailures.Count != 0)
+                        {
+                            violations.AddRange(
+                                validationFailures.Select(v => $"Property '{property}': {v}")
+                            );
+                        }
+                        else
+                        {
+                            // Set last update time for valid property
+                            if (
+                                metadataObject.TryGetPropertyValue(
+                                    property,
+                                    out JsonNode? metadataPropertyNode
+                                ) && metadataPropertyNode is JsonObject metadataPropertyObject
+                            )
+                            {
+                                metadataPropertyObject["lastUpdateTime"] = now.ToString("o");
+                            }
+                            else
+                            {
+                                metadataObject[property] = new JsonObject
+                                {
+                                    ["lastUpdateTime"] = now.ToString("o"),
+                                };
+                            }
+                        }
+                    }
+                    else
+                    {
+                        violations.Add(
+                            $"Property '{property}' is a {contentInfo.GetType()} and is not supported"
+                        );
+                    }
+                }
+
+                if (violations.Count != 0)
+                {
+                    throw new ValidationFailedException(string.Join(" AND ", violations));
+                }
+
+                // Set global metadata
+                metadataObject["$lastUpdateTime"] = now.ToString("o");
+                string newEtag = ETagGenerator.GenerateEtag(digitalTwinId, now);
+                digitalTwinObject["$etag"] = newEtag;
+
+                finalValidTwins.Add((digitalTwinId, digitalTwinObject));
+            }
+            catch (Exception ex)
+            {
+                results.Add(DigitalTwinOperationResult.Failure(digitalTwinId, ex.Message));
+            }
+        }
+
+        // Phase 4: Execute batch database operation
+        if (finalValidTwins.Count > 0)
+        {
+            try
+            {
+                // Prepare twins for batch insert
+                string twinsString =
+                    $"['{string.Join("','", finalValidTwins.Select(t => 
+                    JsonSerializer.Serialize(t.digitalTwinObject, serializerOptions).Replace("'", "\\'")))}']";
+
+                string cypher =
+                    $@"UNWIND {twinsString} as twin
+WITH twin::agtype as twinAgType
+MERGE (t:Twin {{`$dtId`: twinAgType['$dtId']}})
+SET t = twinAgType";
+
+                await using var command = connection.CreateCypherCommand(_graphName, cypher);
+                await command.ExecuteNonQueryAsync(cancellationToken);
+
+                // Mark all successfully processed twins
+                foreach (var (digitalTwinId, _) in finalValidTwins)
+                {
+                    results.Add(DigitalTwinOperationResult.Success(digitalTwinId));
+                }
+            }
+            catch (Exception ex)
+            {
+                // Mark all remaining twins as failed due to database error
+                foreach (var (digitalTwinId, _) in finalValidTwins)
+                {
+                    results.Add(
+                        DigitalTwinOperationResult.Failure(
+                            digitalTwinId,
+                            $"Database error: {ex.Message}"
+                        )
+                    );
+                }
+            }
+        }
+
+        return new BatchDigitalTwinResult(results);
+    }
 }
