@@ -833,7 +833,9 @@ SET rel = '{updatedRelJson}'::agtype";
 
             while (await existenceReader.ReadAsync(cancellationToken))
             {
-                var agResult = await existenceReader.GetFieldValueAsync<Agtype?>(0);
+                var agResult = await existenceReader
+                    .GetFieldValueAsync<Agtype?>(0)
+                    .ConfigureAwait(false);
                 if (agResult is Agtype agTypeResult)
                 {
                     var twinId = agTypeResult.GetString();
