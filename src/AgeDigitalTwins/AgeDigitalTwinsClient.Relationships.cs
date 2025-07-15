@@ -812,7 +812,7 @@ SET rel = '{updatedRelJson}'::agtype";
             return new BatchRelationshipResult { Results = results };
         }
 
-        // Phase 2: Verify source and target twins exist
+        // Phase 2: Batch validate that source and target twins exist
         var validatedRelationships =
             new List<(
                 T relationship,
@@ -828,47 +828,84 @@ SET rel = '{updatedRelJson}'::agtype";
             cancellationToken
         );
 
-        foreach (var item in validRelationships)
+        if (validRelationships.Count > 0)
         {
-            try
+            // Get all unique twin IDs that need to be validated
+            var allTwinIds = validRelationships
+                .SelectMany(r => new[] { r.sourceId, r.targetId })
+                .Distinct()
+                .ToList();
+
+            // Batch check if all required twins exist
+            var existingTwins = new HashSet<string>();
+            if (allTwinIds.Count > 0)
             {
-                // Check if source twin exists
-                if (!await DigitalTwinExistsAsync(connection, item.sourceId, cancellationToken))
-                {
-                    results.Add(
-                        RelationshipOperationResult.Failure(
-                            item.sourceId,
-                            item.relationshipId,
-                            $"Source twin '{item.sourceId}' does not exist"
-                        )
-                    );
-                    continue;
-                }
+                var twinIdsString = string.Join("','", allTwinIds.Select(id => id.Replace("'", "\\'")));
+                string existenceCheckCypher = $@"
+                    MATCH (t:Twin) 
+                    WHERE t['$dtId'] IN ['{twinIdsString}']
+                    RETURN t['$dtId'] as twinId";
 
-                // Check if target twin exists
-                if (!await DigitalTwinExistsAsync(connection, item.targetId, cancellationToken))
-                {
-                    results.Add(
-                        RelationshipOperationResult.Failure(
-                            item.sourceId,
-                            item.relationshipId,
-                            $"Target twin '{item.targetId}' does not exist"
-                        )
-                    );
-                    continue;
-                }
+                await using var existenceCommand = connection.CreateCypherCommand(_graphName, existenceCheckCypher);
+                await using var existenceReader = await existenceCommand.ExecuteReaderAsync(cancellationToken);
 
-                validatedRelationships.Add(item);
+                while (await existenceReader.ReadAsync(cancellationToken))
+                {
+                    var agResult = await existenceReader.GetFieldValueAsync<Agtype?>(0);
+                    if (agResult != null)
+                    {
+                        var twinId = agResult.ToString();
+                        if (!string.IsNullOrEmpty(twinId))
+                        {
+                            existingTwins.Add(twinId);
+                        }
+                    }
+                }
             }
-            catch (Exception ex)
+
+            // Validate each relationship against existing twins
+            foreach (var item in validRelationships)
             {
-                results.Add(
-                    RelationshipOperationResult.Failure(
-                        item.sourceId,
-                        item.relationshipId,
-                        $"Twin validation error: {ex.Message}"
-                    )
-                );
+                try
+                {
+                    // Check if source twin exists
+                    if (!existingTwins.Contains(item.sourceId))
+                    {
+                        results.Add(
+                            RelationshipOperationResult.Failure(
+                                item.sourceId,
+                                item.relationshipId,
+                                $"Source twin '{item.sourceId}' does not exist"
+                            )
+                        );
+                        continue;
+                    }
+
+                    // Check if target twin exists
+                    if (!existingTwins.Contains(item.targetId))
+                    {
+                        results.Add(
+                            RelationshipOperationResult.Failure(
+                                item.sourceId,
+                                item.relationshipId,
+                                $"Target twin '{item.targetId}' does not exist"
+                            )
+                        );
+                        continue;
+                    }
+
+                    validatedRelationships.Add(item);
+                }
+                catch (Exception ex)
+                {
+                    results.Add(
+                        RelationshipOperationResult.Failure(
+                            item.sourceId,
+                            item.relationshipId,
+                            $"Twin validation error: {ex.Message}"
+                        )
+                    );
+                }
             }
         }
 
@@ -877,39 +914,48 @@ SET rel = '{updatedRelJson}'::agtype";
             return new BatchRelationshipResult { Results = results };
         }
 
-        // Phase 3: Database operation - Create relationships individually for now
-        foreach (var item in validatedRelationships)
+        // Phase 3: Execute batch database operation using UNWIND
+        try
         {
-            try
+            // Prepare relationship data for batch insert
+            var relationshipData = new List<JsonObject>();
+            foreach (var item in validatedRelationships)
             {
                 // Generate ETag
                 var etag = ETagGenerator.GenerateEtag(item.relationshipId, now);
                 item.jsonObject["$etag"] = etag;
+                relationshipData.Add(item.jsonObject);
+            }
 
-                // Create the relationship using individual operations for now
-                string relationshipJson = JsonSerializer
-                    .Serialize(item.jsonObject, serializerOptions)
-                    .Replace("'", "\\'");
+            // Convert to JSON strings for the UNWIND operation
+            var relationshipsJson = relationshipData
+                .Select(r => JsonSerializer.Serialize(r, serializerOptions))
+                .ToArray();
 
-                string cypher =
-                    $@"
-                    MATCH (source:Twin {{`$dtId`: '{item.sourceId.Replace("'", "\\'")}'}}), 
-                          (target:Twin {{`$dtId`: '{item.targetId.Replace("'", "\\'")}'}}),
-                          (rl:{item.relationshipName.Replace("'", "\\'")})
-                    WHERE source.`$dtId` = '{item.sourceId.Replace("'", "\\'")}'
-                      AND target.`$dtId` = '{item.targetId.Replace("'", "\\'")}'
-                    WITH source, target, rl
-                    MERGE (source)-[r:RELATIONSHIP {{`$relationshipId`: '{item.relationshipId.Replace("'", "\\'")}'}}]->(target)
-                    SET r = '{relationshipJson}'::agtype";
+            string cypher = @"
+                UNWIND $relationships as relationshipJson
+                WITH relationshipJson::agtype as relationship
+                MATCH (source:Twin {`$dtId`: relationship['$sourceId']})
+                MATCH (target:Twin {`$dtId`: relationship['$targetId']})
+                MERGE (source)-[r:RELATIONSHIP {`$relationshipId`: relationship['$relationshipId']}]->(target)
+                SET r = relationship";
 
-                await using var command = connection.CreateCypherCommand(_graphName, cypher);
-                await command.ExecuteNonQueryAsync(cancellationToken);
+            await using var command = connection.CreateCypherCommand(_graphName, cypher);
+            command.Parameters.AddWithValue("relationships", relationshipsJson);
+            await command.ExecuteNonQueryAsync(cancellationToken);
 
+            // Mark all relationships as successful
+            foreach (var item in validatedRelationships)
+            {
                 results.Add(
                     RelationshipOperationResult.Success(item.sourceId, item.relationshipId)
                 );
             }
-            catch (Exception ex)
+        }
+        catch (Exception ex)
+        {
+            // Mark all remaining relationships as failed due to database error
+            foreach (var item in validatedRelationships)
             {
                 results.Add(
                     RelationshipOperationResult.Failure(
