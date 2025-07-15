@@ -227,7 +227,8 @@ public class ImportJobTests : TestBase
 {""fileVersion"": ""1.0.0"", ""author"": ""test"", ""organization"": ""test""}
 {""Section"": ""Models""}
 {""@id"":""dtmi:example:Model;1"",""@type"":""Interface"",""@context"":""dtmi:dtdl:context;2""}
-");
+"
+        );
         inputStream.Write(testData);
         inputStream.Position = 0;
 
