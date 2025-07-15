@@ -688,7 +688,7 @@ SET rel = '{updatedRelJson}'::agtype";
                         : JsonSerializer.Serialize(relationship);
 
                 // Parse relationship to JSON for validation
-                var jsonObject = JsonObject.Parse(relationshipJson)?.AsObject();
+                var jsonObject = JsonNode.Parse(relationshipJson)?.AsObject();
                 if (jsonObject == null)
                 {
                     results.Add(
