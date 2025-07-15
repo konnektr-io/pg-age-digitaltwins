@@ -855,7 +855,7 @@ RETURN t.`$dtId` AS twinId";
                             $"Source twin '{sourceId}' does not exist"
                         )
                     );
-                    continue;
+                    // continue;
                 }
 
                 // Check if target twin exists
@@ -868,7 +868,7 @@ RETURN t.`$dtId` AS twinId";
                             $"Target twin '{targetId}' does not exist"
                         )
                     );
-                    continue;
+                    // continue;
                 }
 
                 validatedRelationships.Add(item);
