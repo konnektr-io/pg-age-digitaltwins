@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading;
@@ -615,5 +616,311 @@ SET rel = '{updatedRelJson}'::agtype";
             );
             throw;
         }
+    }
+
+    /// <summary>
+    /// Creates or replaces multiple relationships in a single batch operation.
+    /// </summary>
+    /// <typeparam name="T">The type of the relationships to create or replace.</typeparam>
+    /// <param name="relationships">The relationships to create or replace.</param>
+    /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result contains the batch result.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when relationships is null.</exception>
+    /// <exception cref="ArgumentException">Thrown when relationships is empty or contains more than 100 items.</exception>
+    public async Task<BatchRelationshipResult> CreateOrReplaceRelationshipsAsync<T>(
+        IEnumerable<T> relationships,
+        CancellationToken cancellationToken = default
+    )
+    {
+        ArgumentNullException.ThrowIfNull(relationships);
+        var relationshipList = relationships.ToList();
+
+        if (relationshipList.Count == 0)
+        {
+            throw new ArgumentException("Relationships cannot be empty", nameof(relationships));
+        }
+
+        if (relationshipList.Count > 100)
+        {
+            throw new ArgumentException(
+                "Cannot process more than 100 relationships in a single batch",
+                nameof(relationships)
+            );
+        }
+
+        return await CreateOrReplaceRelationshipsInternalAsync(relationshipList, cancellationToken);
+    }
+
+    /// <summary>
+    /// Internal implementation of batch relationship creation with four-phase validation.
+    /// </summary>
+    private async Task<BatchRelationshipResult> CreateOrReplaceRelationshipsInternalAsync<T>(
+        IReadOnlyList<T> relationships,
+        CancellationToken cancellationToken = default
+    )
+    {
+        var results = new List<RelationshipOperationResult>();
+        var validRelationships =
+            new List<(
+                T relationship,
+                JsonObject jsonObject,
+                string sourceId,
+                string targetId,
+                string relationshipId,
+                string relationshipName
+            )>();
+        DateTime now = DateTime.UtcNow;
+
+        // Phase 1: Pre-validation - Parse JSON and check for required properties
+        foreach (var relationship in relationships)
+        {
+            string sourceId = string.Empty;
+            string targetId = string.Empty;
+            string relationshipId = string.Empty;
+            string relationshipName = string.Empty;
+
+            try
+            {
+                // Convert to JSON string
+                string relationshipJson =
+                    relationship is string
+                        ? (string)(object)relationship
+                        : JsonSerializer.Serialize(relationship);
+
+                // Parse relationship to JSON for validation
+                var jsonObject = JsonObject.Parse(relationshipJson)?.AsObject();
+                if (jsonObject == null)
+                {
+                    results.Add(
+                        RelationshipOperationResult.Failure(
+                            sourceId,
+                            relationshipId,
+                            "Invalid JSON content"
+                        )
+                    );
+                    continue;
+                }
+
+                // Extract required properties
+                if (
+                    jsonObject.TryGetPropertyValue("$sourceId", out var sourceIdNode)
+                    && sourceIdNode is JsonValue sourceIdValue
+                )
+                {
+                    sourceId = sourceIdValue.GetValue<string>() ?? string.Empty;
+                }
+
+                if (
+                    jsonObject.TryGetPropertyValue("$targetId", out var targetIdNode)
+                    && targetIdNode is JsonValue targetIdValue
+                )
+                {
+                    targetId = targetIdValue.GetValue<string>() ?? string.Empty;
+                }
+
+                if (
+                    jsonObject.TryGetPropertyValue("$relationshipId", out var relationshipIdNode)
+                    && relationshipIdNode is JsonValue relationshipIdValue
+                )
+                {
+                    relationshipId = relationshipIdValue.GetValue<string>() ?? string.Empty;
+                }
+
+                if (
+                    jsonObject.TryGetPropertyValue(
+                        "$relationshipName",
+                        out var relationshipNameNode
+                    ) && relationshipNameNode is JsonValue relationshipNameValue
+                )
+                {
+                    relationshipName = relationshipNameValue.GetValue<string>() ?? string.Empty;
+                }
+
+                // Validate required properties
+                if (string.IsNullOrEmpty(sourceId))
+                {
+                    results.Add(
+                        RelationshipOperationResult.Failure(
+                            sourceId,
+                            relationshipId,
+                            "Source ID ($sourceId) is required"
+                        )
+                    );
+                    continue;
+                }
+
+                if (string.IsNullOrEmpty(targetId))
+                {
+                    results.Add(
+                        RelationshipOperationResult.Failure(
+                            sourceId,
+                            relationshipId,
+                            "Target ID ($targetId) is required"
+                        )
+                    );
+                    continue;
+                }
+
+                if (string.IsNullOrEmpty(relationshipId))
+                {
+                    results.Add(
+                        RelationshipOperationResult.Failure(
+                            sourceId,
+                            relationshipId,
+                            "Relationship ID ($relationshipId) is required"
+                        )
+                    );
+                    continue;
+                }
+
+                if (string.IsNullOrEmpty(relationshipName))
+                {
+                    results.Add(
+                        RelationshipOperationResult.Failure(
+                            sourceId,
+                            relationshipId,
+                            "Relationship name ($relationshipName) is required"
+                        )
+                    );
+                    continue;
+                }
+
+                // Ensure all required properties are set in the JSON
+                jsonObject["$sourceId"] = sourceId;
+                jsonObject["$targetId"] = targetId;
+                jsonObject["$relationshipId"] = relationshipId;
+                jsonObject["$relationshipName"] = relationshipName;
+
+                validRelationships.Add(
+                    (relationship, jsonObject, sourceId, targetId, relationshipId, relationshipName)
+                );
+            }
+            catch (Exception ex)
+            {
+                results.Add(
+                    RelationshipOperationResult.Failure(
+                        sourceId,
+                        relationshipId,
+                        $"Validation error: {ex.Message}"
+                    )
+                );
+            }
+        }
+
+        if (validRelationships.Count == 0)
+        {
+            return new BatchRelationshipResult { Results = results };
+        }
+
+        // Phase 2: Verify source and target twins exist
+        var validatedRelationships =
+            new List<(
+                T relationship,
+                JsonObject jsonObject,
+                string sourceId,
+                string targetId,
+                string relationshipId,
+                string relationshipName
+            )>();
+
+        await using var connection = await _dataSource.OpenConnectionAsync(
+            TargetSessionAttributes.PreferStandby,
+            cancellationToken
+        );
+
+        foreach (var item in validRelationships)
+        {
+            try
+            {
+                // Check if source twin exists
+                if (!await DigitalTwinExistsAsync(connection, item.sourceId, cancellationToken))
+                {
+                    results.Add(
+                        RelationshipOperationResult.Failure(
+                            item.sourceId,
+                            item.relationshipId,
+                            $"Source twin '{item.sourceId}' does not exist"
+                        )
+                    );
+                    continue;
+                }
+
+                // Check if target twin exists
+                if (!await DigitalTwinExistsAsync(connection, item.targetId, cancellationToken))
+                {
+                    results.Add(
+                        RelationshipOperationResult.Failure(
+                            item.sourceId,
+                            item.relationshipId,
+                            $"Target twin '{item.targetId}' does not exist"
+                        )
+                    );
+                    continue;
+                }
+
+                validatedRelationships.Add(item);
+            }
+            catch (Exception ex)
+            {
+                results.Add(
+                    RelationshipOperationResult.Failure(
+                        item.sourceId,
+                        item.relationshipId,
+                        $"Twin validation error: {ex.Message}"
+                    )
+                );
+            }
+        }
+
+        if (validatedRelationships.Count == 0)
+        {
+            return new BatchRelationshipResult { Results = results };
+        }
+
+        // Phase 3: Database operation - Create relationships individually for now
+        foreach (var item in validatedRelationships)
+        {
+            try
+            {
+                // Generate ETag
+                var etag = ETagGenerator.GenerateEtag(item.relationshipId, now);
+                item.jsonObject["$etag"] = etag;
+
+                // Create the relationship using individual operations for now
+                string relationshipJson = JsonSerializer
+                    .Serialize(item.jsonObject, serializerOptions)
+                    .Replace("'", "\\'");
+
+                string cypher =
+                    $@"
+                    MATCH (source:Twin {{`$dtId`: '{item.sourceId.Replace("'", "\\'")}'}}), 
+                          (target:Twin {{`$dtId`: '{item.targetId.Replace("'", "\\'")}'}}),
+                          (rl:{item.relationshipName.Replace("'", "\\'")})
+                    WHERE source.`$dtId` = '{item.sourceId.Replace("'", "\\'")}'
+                      AND target.`$dtId` = '{item.targetId.Replace("'", "\\'")}'
+                    WITH source, target, rl
+                    MERGE (source)-[r:RELATIONSHIP {{`$relationshipId`: '{item.relationshipId.Replace("'", "\\'")}'}}]->(target)
+                    SET r = '{relationshipJson}'::agtype";
+
+                await using var command = connection.CreateCypherCommand(_graphName, cypher);
+                await command.ExecuteNonQueryAsync(cancellationToken);
+
+                results.Add(
+                    RelationshipOperationResult.Success(item.sourceId, item.relationshipId)
+                );
+            }
+            catch (Exception ex)
+            {
+                results.Add(
+                    RelationshipOperationResult.Failure(
+                        item.sourceId,
+                        item.relationshipId,
+                        $"Database operation failed: {ex.Message}"
+                    )
+                );
+            }
+        }
+
+        return new BatchRelationshipResult { Results = results };
     }
 }

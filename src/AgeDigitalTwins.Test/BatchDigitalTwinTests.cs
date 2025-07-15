@@ -42,10 +42,28 @@ public class BatchDigitalTwinTests : TestBase
         // Create the model first
         await Client.CreateModelsAsync([model]);
 
-        var digitalTwins = new List<KeyValuePair<string, object>>
+        var digitalTwins = new List<string>
         {
-            new("twin1", new { @metadata = new { @model = modelId }, temperature = 25.5 }),
-            new("twin2", new { @metadata = new { @model = modelId }, temperature = 30.0 }),
+            JsonSerializer
+                .Serialize(
+                    new
+                    {
+                        __dtId = "twin1",
+                        __metadata = new { __model = modelId },
+                        temperature = 25.5,
+                    }
+                )
+                .Replace("__", "$"),
+            JsonSerializer
+                .Serialize(
+                    new
+                    {
+                        __dtId = "twin2",
+                        __metadata = new { __model = modelId },
+                        temperature = 30.0,
+                    }
+                )
+                .Replace("__", "$"),
         };
 
         // Act
@@ -93,26 +111,38 @@ public class BatchDigitalTwinTests : TestBase
         // Create the model first
         await Client.CreateModelsAsync([model]);
 
-        var digitalTwins = new List<KeyValuePair<string, object>>
+        var digitalTwins = new List<string>
         {
-            new("validTwin", new { @metadata = new { @model = modelId }, temperature = 25.5 }),
-            new(
-                "invalidTwin",
-                new
-                {
-                    @metadata = new { @model = modelId },
-                    temperature = "invalid_string" // Should be double
-                    ,
-                }
-            ),
-            new(
-                "missingModelTwin",
-                new
-                {
-                    @metadata = new { @model = "dtmi:com:example:NonExistentModel;1" },
-                    temperature = 20.0,
-                }
-            ),
+            JsonSerializer
+                .Serialize(
+                    new
+                    {
+                        __dtId = "validTwin",
+                        __metadata = new { __model = modelId },
+                        temperature = 25.5,
+                    }
+                )
+                .Replace("__", "$"),
+            JsonSerializer
+                .Serialize(
+                    new
+                    {
+                        __dtId = "invalidTwin",
+                        __metadata = new { __model = modelId },
+                        temperature = "invalid_string",
+                    }
+                )
+                .Replace("__", "$"),
+            JsonSerializer
+                .Serialize(
+                    new
+                    {
+                        __dtId = "missingModelTwin",
+                        __metadata = new { __model = "dtmi:com:example:NonExistentModel;1" },
+                        temperature = 20.0,
+                    }
+                )
+                .Replace("__", "$"),
         };
 
         // Act
@@ -156,7 +186,7 @@ public class BatchDigitalTwinTests : TestBase
     public async Task CreateOrReplaceDigitalTwinsAsync_WithEmptyBatch_ShouldReturnEmptyResult()
     {
         // Arrange
-        var digitalTwins = new List<KeyValuePair<string, object>>();
+        var digitalTwins = new List<string>();
 
         // Act
         var result = await Client.CreateOrReplaceDigitalTwinsAsync(digitalTwins);
@@ -175,18 +205,20 @@ public class BatchDigitalTwinTests : TestBase
     public async Task CreateOrReplaceDigitalTwinsAsync_WithOversizedBatch_ShouldThrowException()
     {
         // Arrange
-        var digitalTwins = new List<KeyValuePair<string, object>>();
+        var digitalTwins = new List<string>();
         for (int i = 0; i < 101; i++) // Exceed the limit of 100
         {
             digitalTwins.Add(
-                new(
-                    $"twin{i}",
-                    new
-                    {
-                        @metadata = new { @model = "dtmi:com:example:TestModel;1" },
-                        temperature = 25.0,
-                    }
-                )
+                JsonSerializer
+                    .Serialize(
+                        new
+                        {
+                            __dtId = $"twin{i}",
+                            __metadata = new { __model = "dtmi:com:example:TestModel;1" },
+                            temperature = 25.0,
+                        }
+                    )
+                    .Replace("__", "$")
             );
         }
 

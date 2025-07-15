@@ -692,12 +692,12 @@ RETURN COUNT(t) AS deletedCount";
     /// Creates or replaces multiple digital twins asynchronously in a batch operation.
     /// </summary>
     /// <typeparam name="T">The type of the digital twins to create or replace.</typeparam>
-    /// <param name="digitalTwins">The digital twins to create or replace, as key-value pairs of twin ID and twin object.</param>
+    /// <param name="digitalTwins">The digital twins to create or replace.</param>
     /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
     /// <returns>A task that represents the asynchronous operation. The task result contains the batch operation results.</returns>
     /// <exception cref="ArgumentException">Thrown when the batch size exceeds the maximum allowed size (100).</exception>
     public virtual async Task<BatchDigitalTwinResult> CreateOrReplaceDigitalTwinsAsync<T>(
-        IEnumerable<KeyValuePair<string, T>> digitalTwins,
+        IEnumerable<T> digitalTwins,
         CancellationToken cancellationToken = default
     )
     {
@@ -722,7 +722,7 @@ RETURN COUNT(t) AS deletedCount";
 
             if (digitalTwinsList.Count == 0)
             {
-                return new BatchDigitalTwinResult([]);
+                return new BatchDigitalTwinResult(Array.Empty<DigitalTwinOperationResult>());
             }
 
             await using var connection = await _dataSource.OpenConnectionAsync(
@@ -757,7 +757,7 @@ RETURN COUNT(t) AS deletedCount";
 
     private async Task<BatchDigitalTwinResult> CreateOrReplaceDigitalTwinsInternalAsync<T>(
         NpgsqlConnection connection,
-        IList<KeyValuePair<string, T>> digitalTwins,
+        IList<T> digitalTwins,
         CancellationToken cancellationToken = default
     )
     {
@@ -766,10 +766,9 @@ RETURN COUNT(t) AS deletedCount";
         DateTime now = DateTime.UtcNow;
 
         // Phase 1: Pre-validation - Basic JSON structure and metadata validation
-        foreach (var kvp in digitalTwins)
+        foreach (var digitalTwin in digitalTwins)
         {
-            string digitalTwinId = kvp.Key;
-            T digitalTwin = kvp.Value;
+            string digitalTwinId = string.Empty;
 
             try
             {
@@ -783,6 +782,19 @@ RETURN COUNT(t) AS deletedCount";
                 JsonObject digitalTwinObject =
                     JsonNode.Parse(digitalTwinJson)?.AsObject()
                     ?? throw new ArgumentException("Invalid digital twin JSON");
+
+                // Extract $dtId from the twin object
+                if (
+                    digitalTwinObject.TryGetPropertyValue("$dtId", out JsonNode? dtIdNode)
+                    && dtIdNode is JsonValue dtIdValue
+                )
+                {
+                    digitalTwinId = dtIdValue.ToString();
+                }
+                else
+                {
+                    throw new ArgumentException("Digital twin must have a $dtId property");
+                }
 
                 // Validate $metadata property
                 if (
@@ -806,21 +818,6 @@ RETURN COUNT(t) AS deletedCount";
                         "Digital Twin's $metadata must contain a $model property of type string"
                     );
                 }
-
-                // Validate $dtId consistency
-                if (
-                    digitalTwinObject.TryGetPropertyValue("$dtId", out JsonNode? dtIdNode)
-                    && dtIdNode is JsonValue dtIdValue
-                    && digitalTwinId != dtIdValue.ToString()
-                )
-                {
-                    throw new ArgumentException(
-                        "Provided digitalTwinId does not match the $dtId property"
-                    );
-                }
-
-                // Set $dtId if not present
-                digitalTwinObject["$dtId"] = digitalTwinId;
 
                 validTwins.Add((digitalTwinId, digitalTwinObject));
             }
@@ -991,17 +988,19 @@ RETURN COUNT(t) AS deletedCount";
             try
             {
                 // Prepare twins for batch insert
-                string twinsString =
-                    $"['{string.Join("','", finalValidTwins.Select(t => 
-                    JsonSerializer.Serialize(t.digitalTwinObject, serializerOptions).Replace("'", "\\'")))}']";
+                var twinsJson = finalValidTwins
+                    .Select(t => JsonSerializer.Serialize(t.digitalTwinObject, serializerOptions))
+                    .ToArray();
 
                 string cypher =
-                    $@"UNWIND {twinsString} as twin
-WITH twin::agtype as twinAgType
-MERGE (t:Twin {{`$dtId`: twinAgType['$dtId']}})
-SET t = twinAgType";
+                    @"
+                    UNWIND $twins as twinJson
+                    WITH twinJson::agtype as twin
+                    MERGE (t:Twin {`$dtId`: twin['$dtId']})
+                    SET t = twin";
 
                 await using var command = connection.CreateCypherCommand(_graphName, cypher);
+                command.Parameters.AddWithValue("twins", twinsJson);
                 await command.ExecuteNonQueryAsync(cancellationToken);
 
                 // Mark all successfully processed twins
