@@ -652,7 +652,7 @@ SET rel = '{updatedRelJson}'::agtype";
     }
 
     /// <summary>
-    /// Internal implementation of batch relationship creation with four-phase validation.
+    /// Internal implementation of batch relationship creation with simplified validation.
     /// </summary>
     private async Task<BatchRelationshipResult> CreateOrReplaceRelationshipsInternalAsync<T>(
         IReadOnlyList<T> relationships,
@@ -665,25 +665,12 @@ SET rel = '{updatedRelJson}'::agtype";
         );
 
         var results = new List<RelationshipOperationResult>();
-        var validRelationships =
-            new List<(
-                T relationship,
-                JsonObject jsonObject,
-                string sourceId,
-                string targetId,
-                string relationshipId,
-                string relationshipName
-            )>();
+        var validRelationships = new List<(JsonObject jsonObject, string relationshipName)>();
         DateTime now = DateTime.UtcNow;
 
-        // Phase 1: Pre-validation - Parse JSON and check for required properties
+        // Phase 1: Parse JSON and validate required properties
         foreach (var relationship in relationships)
         {
-            string sourceId = string.Empty;
-            string targetId = string.Empty;
-            string relationshipId = string.Empty;
-            string relationshipName = string.Empty;
-
             try
             {
                 // Convert to JSON string
@@ -698,56 +685,48 @@ SET rel = '{updatedRelJson}'::agtype";
                 {
                     results.Add(
                         RelationshipOperationResult.Failure(
-                            sourceId,
-                            relationshipId,
+                            string.Empty,
+                            string.Empty,
                             "Invalid JSON content"
                         )
                     );
                     continue;
                 }
 
-                // Extract required properties
-                if (
+                // Extract and validate required properties
+                var sourceId =
                     jsonObject.TryGetPropertyValue("$sourceId", out var sourceIdNode)
                     && sourceIdNode is JsonValue sourceIdValue
-                )
-                {
-                    sourceId = sourceIdValue.GetValue<string>() ?? string.Empty;
-                }
+                        ? sourceIdValue.GetValue<string>()
+                        : null;
 
-                if (
+                var targetId =
                     jsonObject.TryGetPropertyValue("$targetId", out var targetIdNode)
                     && targetIdNode is JsonValue targetIdValue
-                )
-                {
-                    targetId = targetIdValue.GetValue<string>() ?? string.Empty;
-                }
+                        ? targetIdValue.GetValue<string>()
+                        : null;
 
-                if (
+                var relationshipId =
                     jsonObject.TryGetPropertyValue("$relationshipId", out var relationshipIdNode)
                     && relationshipIdNode is JsonValue relationshipIdValue
-                )
-                {
-                    relationshipId = relationshipIdValue.GetValue<string>() ?? string.Empty;
-                }
+                        ? relationshipIdValue.GetValue<string>()
+                        : null;
 
-                if (
+                var relationshipName =
                     jsonObject.TryGetPropertyValue(
                         "$relationshipName",
                         out var relationshipNameNode
                     ) && relationshipNameNode is JsonValue relationshipNameValue
-                )
-                {
-                    relationshipName = relationshipNameValue.GetValue<string>() ?? string.Empty;
-                }
+                        ? relationshipNameValue.GetValue<string>()
+                        : null;
 
                 // Validate required properties
                 if (string.IsNullOrEmpty(sourceId))
                 {
                     results.Add(
                         RelationshipOperationResult.Failure(
-                            sourceId,
-                            relationshipId,
+                            sourceId ?? string.Empty,
+                            relationshipId ?? string.Empty,
                             "Source ID ($sourceId) is required"
                         )
                     );
@@ -759,7 +738,7 @@ SET rel = '{updatedRelJson}'::agtype";
                     results.Add(
                         RelationshipOperationResult.Failure(
                             sourceId,
-                            relationshipId,
+                            relationshipId ?? string.Empty,
                             "Target ID ($targetId) is required"
                         )
                     );
@@ -771,7 +750,7 @@ SET rel = '{updatedRelJson}'::agtype";
                     results.Add(
                         RelationshipOperationResult.Failure(
                             sourceId,
-                            relationshipId,
+                            relationshipId ?? string.Empty,
                             "Relationship ID ($relationshipId) is required"
                         )
                     );
@@ -796,16 +775,14 @@ SET rel = '{updatedRelJson}'::agtype";
                 jsonObject["$relationshipId"] = relationshipId;
                 jsonObject["$relationshipName"] = relationshipName;
 
-                validRelationships.Add(
-                    (relationship, jsonObject, sourceId, targetId, relationshipId, relationshipName)
-                );
+                validRelationships.Add((jsonObject, relationshipName));
             }
             catch (Exception ex)
             {
                 results.Add(
                     RelationshipOperationResult.Failure(
-                        sourceId,
-                        relationshipId,
+                        string.Empty,
+                        string.Empty,
                         $"Validation error: {ex.Message}"
                     )
                 );
@@ -817,99 +794,103 @@ SET rel = '{updatedRelJson}'::agtype";
             return new BatchRelationshipResult { Results = results };
         }
 
-        /* // Phase 2: Batch validate that source and target twins exist
-        var validatedRelationships =
-            new List<(
-                T relationship,
-                JsonObject jsonObject,
-                string sourceId,
-                string targetId,
-                string relationshipId,
-                string relationshipName
-            )>();
+        // Phase 2: Batch validate that source and target twins exist
+        var validatedRelationships = new List<(JsonObject jsonObject, string relationshipName)>();
 
-
-        if (validRelationships.Count > 0)
-        {
-            // Get all unique twin IDs that need to be validated
-            var allTwinIds = validRelationships
-                .SelectMany(r => new[] { r.sourceId, r.targetId })
-                .Distinct()
-                .ToList();
-
-            // Batch check if all required twins exist
-            var existingTwins = new HashSet<string>();
-            if (allTwinIds.Count > 0)
-            {
-                var twinIdsString = string.Join(
-                    "','",
-                    allTwinIds.Select(id => id.Replace("'", "\\'"))
-                );
-                string existenceCheckCypher =
-                    $@"
-                    MATCH (t:Twin)
-                    WHERE t['$dtId'] IN ['{twinIdsString}']
-                    RETURN t['$dtId'] as twinId";
-
-                await using var existenceCommand = connection.CreateCypherCommand(
-                    _graphName,
-                    existenceCheckCypher
-                );
-                await using var existenceReader = await existenceCommand.ExecuteReaderAsync(
-                    cancellationToken
-                );
-
-                while (await existenceReader.ReadAsync(cancellationToken))
+        // Get all unique twin IDs that need to be validated
+        var allTwinIds = validRelationships
+            .SelectMany(r =>
+                new[]
                 {
-                    var agResult = await existenceReader.GetFieldValueAsync<Agtype?>(0);
-                    var twinId = (string)agResult;
-                    existingTwins.Add(twinId);
+                    r.jsonObject["$sourceId"]?.GetValue<string>(),
+                    r.jsonObject["$targetId"]?.GetValue<string>(),
+                }
+            )
+            .Where(id => !string.IsNullOrEmpty(id))
+            .Distinct()
+            .ToList();
+
+        // Batch check if all required twins exist
+        var existingTwins = new HashSet<string>();
+        if (allTwinIds.Count > 0)
+        {
+            var twinIdsString = string.Join(
+                "','",
+                allTwinIds.Select(id => id!.Replace("'", "\\'"))
+            );
+            string existenceCheckCypher =
+                $@"MATCH (t:Twin) 
+                WHERE t['$dtId'] IN ['{twinIdsString}']
+                RETURN t['$dtId'] as twinId";
+
+            await using var existenceCommand = connection.CreateCypherCommand(
+                _graphName,
+                existenceCheckCypher
+            );
+            await using var existenceReader = await existenceCommand.ExecuteReaderAsync(
+                cancellationToken
+            );
+
+            while (await existenceReader.ReadAsync(cancellationToken))
+            {
+                var agResult = await existenceReader.GetFieldValueAsync<Agtype?>(0);
+                if (agResult is Agtype agTypeResult)
+                {
+                    var twinId = agTypeResult.GetString();
+                    if (!string.IsNullOrEmpty(twinId))
+                    {
+                        existingTwins.Add(twinId);
+                    }
                 }
             }
+        }
 
-            // Validate each relationship against existing twins
-            foreach (var item in validRelationships)
+        // Validate each relationship against existing twins
+        foreach (var item in validRelationships)
+        {
+            var sourceId = item.jsonObject["$sourceId"]?.GetValue<string>();
+            var targetId = item.jsonObject["$targetId"]?.GetValue<string>();
+            var relationshipId = item.jsonObject["$relationshipId"]?.GetValue<string>();
+
+            try
             {
-                try
-                {
-                    // Check if source twin exists
-                    if (!existingTwins.Contains(item.sourceId))
-                    {
-                        results.Add(
-                            RelationshipOperationResult.Failure(
-                                item.sourceId,
-                                item.relationshipId,
-                                $"Source twin '{item.sourceId}' does not exist"
-                            )
-                        );
-                        continue;
-                    }
-
-                    // Check if target twin exists
-                    if (!existingTwins.Contains(item.targetId))
-                    {
-                        results.Add(
-                            RelationshipOperationResult.Failure(
-                                item.sourceId,
-                                item.relationshipId,
-                                $"Target twin '{item.targetId}' does not exist"
-                            )
-                        );
-                        continue;
-                    }
-
-                    validatedRelationships.Add(item);
-                }
-                catch (Exception ex)
+                // Check if source twin exists
+                if (string.IsNullOrEmpty(sourceId) || !existingTwins.Contains(sourceId))
                 {
                     results.Add(
                         RelationshipOperationResult.Failure(
-                            item.sourceId,
-                            item.relationshipId,
-                            $"Twin validation error: {ex.Message}"
+                            sourceId ?? string.Empty,
+                            relationshipId ?? string.Empty,
+                            $"Source twin '{sourceId}' does not exist"
                         )
                     );
+                    continue;
                 }
+
+                // Check if target twin exists
+                if (string.IsNullOrEmpty(targetId) || !existingTwins.Contains(targetId))
+                {
+                    results.Add(
+                        RelationshipOperationResult.Failure(
+                            sourceId ?? string.Empty,
+                            relationshipId ?? string.Empty,
+                            $"Target twin '{targetId}' does not exist"
+                        )
+                    );
+                    continue;
+                }
+
+                validatedRelationships.Add(item);
+            }
+            catch (Exception ex)
+            {
+                results.Add(
+                    RelationshipOperationResult.Failure(
+                        sourceId ?? string.Empty,
+                        relationshipId ?? string.Empty,
+                        $"Twin validation error: {ex.Message}"
+                    )
+                );
             }
         }
 
@@ -917,31 +898,28 @@ SET rel = '{updatedRelJson}'::agtype";
         {
             return new BatchRelationshipResult { Results = results };
         }
- */
+
         // Phase 3: Execute batch database operation using UNWIND - grouped by relationship name
         try
         {
-            // Prepare relationship data for batch insert
-            var relationshipData = new List<JsonObject>();
-            foreach (var item in validRelationships)
+            // Add ETags to validated relationships
+            foreach (var item in validatedRelationships)
             {
-                // Generate ETag
-                var etag = ETagGenerator.GenerateEtag(item.relationshipId, now);
+                var relationshipId = item.jsonObject["$relationshipId"]?.GetValue<string>();
+                var etag = ETagGenerator.GenerateEtag(relationshipId ?? string.Empty, now);
                 item.jsonObject["$etag"] = etag;
-                relationshipData.Add(item.jsonObject);
             }
 
             // Group relationships by relationship name since we need separate queries for each relationship type
-            var relationshipGroups = validRelationships
-                .Zip(relationshipData, (item, data) => new { item, data })
-                .GroupBy(x => x.item.relationshipName)
+            var relationshipGroups = validatedRelationships
+                .GroupBy(x => x.relationshipName)
                 .ToList();
 
             // Execute batch operation for each relationship type
             foreach (var group in relationshipGroups)
             {
                 var relationshipName = group.Key;
-                var groupData = group.Select(x => x.data).ToList();
+                var groupData = group.Select(x => x.jsonObject).ToList();
 
                 // Convert to JSON strings for the UNWIND operation - construct full query like models
                 string relationshipsString =
@@ -960,22 +938,29 @@ SET rel = '{updatedRelJson}'::agtype";
             }
 
             // Mark all relationships as successful
-            foreach (var item in validRelationships)
+            foreach (var item in validatedRelationships)
             {
+                var sourceId = item.jsonObject["$sourceId"]?.GetValue<string>();
+                var relationshipId = item.jsonObject["$relationshipId"]?.GetValue<string>();
                 results.Add(
-                    RelationshipOperationResult.Success(item.sourceId, item.relationshipId)
+                    RelationshipOperationResult.Success(
+                        sourceId ?? string.Empty,
+                        relationshipId ?? string.Empty
+                    )
                 );
             }
         }
         catch (Exception ex)
         {
             // Mark all remaining relationships as failed due to database error
-            foreach (var item in validRelationships)
+            foreach (var item in validatedRelationships)
             {
+                var sourceId = item.jsonObject["$sourceId"]?.GetValue<string>();
+                var relationshipId = item.jsonObject["$relationshipId"]?.GetValue<string>();
                 results.Add(
                     RelationshipOperationResult.Failure(
-                        item.sourceId,
-                        item.relationshipId,
+                        sourceId ?? string.Empty,
+                        relationshipId ?? string.Empty,
                         $"Database operation failed: {ex.Message}"
                     )
                 );
