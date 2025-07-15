@@ -23,41 +23,7 @@ public partial class AgeDigitalTwinsClient
     /// <returns>A task that represents the asynchronous operation. The task result contains the import job result.</returns>
     /// <exception cref="ArgumentNullException">Thrown when inputStream or outputStream is null.</exception>
     /// <exception cref="ArgumentException">Thrown when the input stream contains invalid data.</exception>
-    /// <remarks>
-    /// <para>
-    /// This method executes the import job synchronously and waits for completion.
-    /// For background job execution, use <see cref="CreateImportJobAsync"/> instead.
-    /// </para>
-    /// <para>
-    /// The input stream should contain ND-JSON (Newline Delimited JSON) data with the following format:
-    /// </para>
-    /// <list type="number">
-    /// <item>Header section (optional): Contains metadata like file version, author, organization</item>
-    /// <item>Models section (optional): Contains DTDL model definitions</item>
-    /// <item>Twins section (optional): Contains digital twin instances</item>
-    /// <item>Relationships section (optional): Contains relationships between twins</item>
-    /// </list>
-    /// <para>
-    /// Each section is indicated by a JSON line with a "Section" property, followed by the data lines for that section.
-    /// </para>
-    /// <para>
-    /// Example input format:
-    /// </para>
-    /// <code>
-    /// {"Section": "Header"}
-    /// {"fileVersion": "1.0.0", "author": "user", "organization": "company"}
-    /// {"Section": "Models"}
-    /// {"@id":"dtmi:example:model;1","@type":"Interface",...}
-    /// {"Section": "Twins"}
-    /// {"$dtId":"twin1","$metadata":{"$model":"dtmi:example:model;1"},...}
-    /// {"Section": "Relationships"}
-    /// {"$dtId":"twin1","$relationshipId":"rel1","$targetId":"twin2",...}
-    /// </code>
-    /// <para>
-    /// The output stream will receive structured log entries in JSON format documenting the progress and results of the import operation.
-    /// </para>
-    /// </remarks>
-    /* public async virtual Task<JobRecord> ImportAsync(
+    public async virtual Task<JobRecord> ImportAsync(
         Stream inputStream,
         Stream outputStream,
         ImportJobOptions? options = null,
@@ -72,15 +38,34 @@ public partial class AgeDigitalTwinsClient
         options ??= new ImportJobOptions();
         var jobId = Guid.NewGuid().ToString("N")[..8]; // Use first 8 characters for shorter job ID
 
-        return await StreamingImportJob.ExecuteAsync(
-            this,
+        return await ImportGraphAsync(jobId, inputStream, outputStream, options, cancellationToken);
+    }
+
+    /// <summary>
+    /// Creates and starts a new import job in the background.
+    /// </summary>
+    /// <param name="jobId">The job identifier.</param>
+    /// <param name="inputStream">The input stream containing ND-JSON data.</param>
+    /// <param name="outputStream">The output stream for logging and progress.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The import job result with initial status (NotStarted or Running).</returns>
+    /// <exception cref="InvalidOperationException">Thrown when job service is not configured or job ID already exists.</exception>
+    /// <exception cref="ArgumentNullException">Thrown when input or output stream is null.</exception>
+    public async virtual Task<JobRecord> CreateImportJobAsync(
+        string jobId,
+        Stream inputStream,
+        Stream outputStream,
+        CancellationToken cancellationToken = default
+    )
+    {
+        return await ImportGraphAsync(
+            jobId,
             inputStream,
             outputStream,
-            jobId,
-            options,
+            (ImportJobOptions?)null,
             cancellationToken
         );
-    } */
+    }
 
     /// <summary>
     /// Creates and starts a new import job in the background.
@@ -173,6 +158,16 @@ public partial class AgeDigitalTwinsClient
     }
 
     /// <summary>
+    /// Gets an import job by ID (synchronous version).
+    /// </summary>
+    /// <param name="jobId">The job identifier.</param>
+    /// <returns>The job record if found; otherwise null.</returns>
+    public virtual JobRecord? GetImportJob(string jobId)
+    {
+        return GetImportJobAsync(jobId).GetAwaiter().GetResult();
+    }
+
+    /// <summary>
     /// Lists all import jobs.
     /// </summary>
     /// <returns>A collection of all import jobs.</returns>
@@ -201,6 +196,16 @@ public partial class AgeDigitalTwinsClient
     }
 
     /// <summary>
+    /// Cancels an import job (synchronous version).
+    /// </summary>
+    /// <param name="jobId">The job identifier.</param>
+    /// <returns>True if the job was found and cancellation was requested; otherwise false.</returns>
+    public virtual bool CancelImportJob(string jobId)
+    {
+        return CancelImportJobAsync(jobId).GetAwaiter().GetResult();
+    }
+
+    /// <summary>
     /// Deletes an import job from the job store.
     /// </summary>
     /// <param name="jobId">The job identifier.</param>
@@ -216,5 +221,15 @@ public partial class AgeDigitalTwinsClient
         {
             return false;
         }
+    }
+
+    /// <summary>
+    /// Deletes an import job from the job store (synchronous version).
+    /// </summary>
+    /// <param name="jobId">The job identifier.</param>
+    /// <returns>True if the job was found and deleted; otherwise false.</returns>
+    public virtual bool DeleteImportJob(string jobId)
+    {
+        return DeleteImportJobAsync(jobId).GetAwaiter().GetResult();
     }
 }

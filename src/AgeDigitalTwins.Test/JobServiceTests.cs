@@ -1,7 +1,9 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using AgeDigitalTwins.Jobs;
+using AgeDigitalTwins.Models;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -195,7 +197,7 @@ public class ImportJobSystemTests : TestBase
             await Client.CreateImportJobAsync(jobId2, inputStream2, outputStream2);
 
             // Act
-            var jobs = Client.GetImportJobsAsync().ToList();
+            var jobs = (await Client.GetImportJobsAsync()).ToList();
 
             // Assert
             Assert.Contains(jobs, j => j.Id == jobId1);

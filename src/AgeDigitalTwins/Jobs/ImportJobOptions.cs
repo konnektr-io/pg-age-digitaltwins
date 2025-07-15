@@ -1,3 +1,5 @@
+using System;
+
 namespace AgeDigitalTwins.Jobs;
 
 /// <summary>
@@ -19,4 +21,9 @@ public class ImportJobOptions
     /// Gets or sets the number of items to process before saving a checkpoint.
     /// </summary>
     public int CheckpointInterval { get; set; } = 50;
+
+    /// <summary>
+    /// Gets or sets the operation timeout.
+    /// </summary>
+    public TimeSpan OperationTimeout { get; set; } = TimeSpan.FromMinutes(30);
 }
