@@ -659,6 +659,11 @@ SET rel = '{updatedRelJson}'::agtype";
         CancellationToken cancellationToken = default
     )
     {
+        await using var connection = await _dataSource.OpenConnectionAsync(
+            TargetSessionAttributes.ReadWrite,
+            cancellationToken
+        );
+
         var results = new List<RelationshipOperationResult>();
         var validRelationships =
             new List<(
@@ -812,7 +817,7 @@ SET rel = '{updatedRelJson}'::agtype";
             return new BatchRelationshipResult { Results = results };
         }
 
-        // Phase 2: Batch validate that source and target twins exist
+        /* // Phase 2: Batch validate that source and target twins exist
         var validatedRelationships =
             new List<(
                 T relationship,
@@ -823,10 +828,6 @@ SET rel = '{updatedRelJson}'::agtype";
                 string relationshipName
             )>();
 
-        await using var connection = await _dataSource.OpenConnectionAsync(
-            TargetSessionAttributes.ReadWrite,
-            cancellationToken
-        );
 
         if (validRelationships.Count > 0)
         {
@@ -846,7 +847,7 @@ SET rel = '{updatedRelJson}'::agtype";
                 );
                 string existenceCheckCypher =
                     $@"
-                    MATCH (t:Twin) 
+                    MATCH (t:Twin)
                     WHERE t['$dtId'] IN ['{twinIdsString}']
                     RETURN t['$dtId'] as twinId";
 
@@ -916,13 +917,13 @@ SET rel = '{updatedRelJson}'::agtype";
         {
             return new BatchRelationshipResult { Results = results };
         }
-
+ */
         // Phase 3: Execute batch database operation using UNWIND - grouped by relationship name
         try
         {
             // Prepare relationship data for batch insert
             var relationshipData = new List<JsonObject>();
-            foreach (var item in validatedRelationships)
+            foreach (var item in validRelationships)
             {
                 // Generate ETag
                 var etag = ETagGenerator.GenerateEtag(item.relationshipId, now);
@@ -931,7 +932,7 @@ SET rel = '{updatedRelJson}'::agtype";
             }
 
             // Group relationships by relationship name since we need separate queries for each relationship type
-            var relationshipGroups = validatedRelationships
+            var relationshipGroups = validRelationships
                 .Zip(relationshipData, (item, data) => new { item, data })
                 .GroupBy(x => x.item.relationshipName)
                 .ToList();
@@ -959,7 +960,7 @@ SET rel = '{updatedRelJson}'::agtype";
             }
 
             // Mark all relationships as successful
-            foreach (var item in validatedRelationships)
+            foreach (var item in validRelationships)
             {
                 results.Add(
                     RelationshipOperationResult.Success(item.sourceId, item.relationshipId)
@@ -969,7 +970,7 @@ SET rel = '{updatedRelJson}'::agtype";
         catch (Exception ex)
         {
             // Mark all remaining relationships as failed due to database error
-            foreach (var item in validatedRelationships)
+            foreach (var item in validRelationships)
             {
                 results.Add(
                     RelationshipOperationResult.Failure(
