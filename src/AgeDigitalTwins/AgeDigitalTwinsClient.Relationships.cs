@@ -669,6 +669,7 @@ SET rel = '{updatedRelJson}'::agtype";
         DateTime now = DateTime.UtcNow;
 
         // Phase 1: Parse JSON and validate required properties
+        List<string?>? allTwinIds = new List<string?>();
         foreach (var relationship in relationships)
         {
             try
@@ -732,6 +733,10 @@ SET rel = '{updatedRelJson}'::agtype";
                     );
                     continue;
                 }
+                else if (!allTwinIds.Contains(sourceId))
+                {
+                    allTwinIds.Add(sourceId);
+                }
 
                 if (string.IsNullOrEmpty(targetId))
                 {
@@ -743,6 +748,10 @@ SET rel = '{updatedRelJson}'::agtype";
                         )
                     );
                     continue;
+                }
+                else if (!allTwinIds.Contains(targetId))
+                {
+                    allTwinIds.Add(targetId);
                 }
 
                 if (string.IsNullOrEmpty(relationshipId))
@@ -789,7 +798,7 @@ SET rel = '{updatedRelJson}'::agtype";
             }
         }
 
-        if (validRelationships.Count == 0)
+        if (validRelationships.Count == 0 || allTwinIds.Count == 0)
         {
             return new BatchRelationshipResult { Results = results };
         }
@@ -797,48 +806,29 @@ SET rel = '{updatedRelJson}'::agtype";
         // Phase 2: Batch validate that source and target twins exist
         var validatedRelationships = new List<(JsonObject jsonObject, string relationshipName)>();
 
-        // Get all unique twin IDs that need to be validated
-        var allTwinIds = validRelationships
-            .SelectMany(r =>
-                new[]
-                {
-                    r.jsonObject["$sourceId"]?.GetValue<string>(),
-                    r.jsonObject["$targetId"]?.GetValue<string>(),
-                }
-            )
-            .Where(id => !string.IsNullOrEmpty(id))
-            .Distinct()
-            .ToList();
-
         // Batch check if all required twins exist
         var existingTwins = new HashSet<string>();
-        if (allTwinIds.Count > 0)
+        var twinIdsString = string.Join("','", allTwinIds.Select(id => id!.Replace("'", "\\'")));
+        string existenceCheckCypher =
+            $@"MATCH (t:Twin) 
+WHERE t.`$dtId` IN ['{twinIdsString}']
+RETURN t.`$dtId` AS twinId";
+
+        await using var existenceCommand = connection.CreateCypherCommand(
+            _graphName,
+            existenceCheckCypher
+        );
+        await using var existenceReader = await existenceCommand.ExecuteReaderAsync(
+            cancellationToken
+        );
+
+        while (await existenceReader.ReadAsync(cancellationToken))
         {
-            var twinIdsString = string.Join(
-                "','",
-                allTwinIds.Select(id => id!.Replace("'", "\\'"))
-            );
-            string existenceCheckCypher =
-                $@"MATCH (t:Twin) 
-                WHERE t['$dtId'] IN ['{twinIdsString}']
-                RETURN t['$dtId'] as twinId";
-
-            await using var existenceCommand = connection.CreateCypherCommand(
-                _graphName,
-                existenceCheckCypher
-            );
-            await using var existenceReader = await existenceCommand.ExecuteReaderAsync(
-                cancellationToken
-            );
-
-            while (await existenceReader.ReadAsync(cancellationToken))
+            var agTwinId = await existenceReader.GetFieldValueAsync<Agtype?>(0);
+            string twinId = ((Agtype)agTwinId).GetString().Trim('\u0001');
+            if (!string.IsNullOrEmpty(twinId))
             {
-                var agTwinId = await existenceReader.GetFieldValueAsync<Agtype?>(0);
-                string twinId = ((Agtype)agTwinId).GetString().Trim('\u0001');
-                if (!string.IsNullOrEmpty(twinId))
-                {
-                    existingTwins.Add(twinId);
-                }
+                existingTwins.Add(twinId);
             }
         }
 
