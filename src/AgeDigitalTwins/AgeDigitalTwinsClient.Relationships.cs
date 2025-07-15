@@ -843,46 +843,33 @@ RETURN t.`$dtId` AS twinId";
             var targetId = item.jsonObject["$targetId"]?.GetValue<string>();
             var relationshipId = item.jsonObject["$relationshipId"]?.GetValue<string>();
 
-            try
-            {
-                // Check if source twin exists
-                if (string.IsNullOrEmpty(sourceId) || !existingTwins.Contains(sourceId))
-                {
-                    results.Add(
-                        RelationshipOperationResult.Failure(
-                            sourceId ?? string.Empty,
-                            relationshipId ?? string.Empty,
-                            $"Source twin '{sourceId}' does not exist"
-                        )
-                    );
-                    // continue;
-                }
-
-                // Check if target twin exists
-                if (string.IsNullOrEmpty(targetId) || !existingTwins.Contains(targetId))
-                {
-                    results.Add(
-                        RelationshipOperationResult.Failure(
-                            sourceId ?? string.Empty,
-                            relationshipId ?? string.Empty,
-                            $"Target twin '{targetId}' does not exist"
-                        )
-                    );
-                    // continue;
-                }
-
-                validatedRelationships.Add(item);
-            }
-            catch (Exception ex)
+            // Check if source twin exists
+            if (string.IsNullOrEmpty(sourceId) || !existingTwins.Contains(sourceId))
             {
                 results.Add(
                     RelationshipOperationResult.Failure(
                         sourceId ?? string.Empty,
                         relationshipId ?? string.Empty,
-                        $"Twin validation error: {ex.Message}"
+                        $"Source twin '{sourceId}' does not exist"
                     )
                 );
+                // continue;
             }
+
+            // Check if target twin exists
+            if (string.IsNullOrEmpty(targetId) || !existingTwins.Contains(targetId))
+            {
+                results.Add(
+                    RelationshipOperationResult.Failure(
+                        sourceId ?? string.Empty,
+                        relationshipId ?? string.Empty,
+                        $"Target twin '{targetId}' does not exist"
+                    )
+                );
+                // continue;
+            }
+
+            validatedRelationships.Add(item);
         }
 
         if (validatedRelationships.Count == 0)
