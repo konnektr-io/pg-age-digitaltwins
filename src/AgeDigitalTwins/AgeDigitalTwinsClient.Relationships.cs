@@ -581,7 +581,7 @@ SET rel = '{updatedRelJson}'::agtype";
             string cypher =
                 $"MATCH (:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})-[rel {{`$relationshipId`: '{relationshipId.Replace("'", "\\'")}'}}]->(:Twin) DELETE rel RETURN COUNT(rel) AS deletedCount";
             await using var connection = await _dataSource.OpenConnectionAsync(
-                Npgsql.TargetSessionAttributes.ReadWrite,
+                TargetSessionAttributes.ReadWrite,
                 cancellationToken
             );
             await using var command = connection.CreateCypherCommand(_graphName, cypher);
@@ -824,7 +824,7 @@ SET rel = '{updatedRelJson}'::agtype";
             )>();
 
         await using var connection = await _dataSource.OpenConnectionAsync(
-            TargetSessionAttributes.PreferStandby,
+            TargetSessionAttributes.ReadWrite,
             cancellationToken
         );
 
@@ -861,14 +861,8 @@ SET rel = '{updatedRelJson}'::agtype";
                 while (await existenceReader.ReadAsync(cancellationToken))
                 {
                     var agResult = await existenceReader.GetFieldValueAsync<Agtype?>(0);
-                    if (agResult is Agtype agResultNotNull)
-                    {
-                        var twinId = agResultNotNull.GetString();
-                        if (!string.IsNullOrEmpty(twinId))
-                        {
-                            existingTwins.Add(twinId);
-                        }
-                    }
+                    var twinId = (string)agResult;
+                    existingTwins.Add(twinId);
                 }
             }
 
