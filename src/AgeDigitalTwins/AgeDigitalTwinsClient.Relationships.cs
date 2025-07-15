@@ -923,7 +923,7 @@ SET rel = '{updatedRelJson}'::agtype";
             return new BatchRelationshipResult { Results = results };
         }
 
-        // Phase 3: Execute batch database operation using UNWIND
+        // Phase 3: Execute batch database operation using UNWIND - grouped by relationship name
         try
         {
             // Prepare relationship data for batch insert
@@ -936,20 +936,33 @@ SET rel = '{updatedRelJson}'::agtype";
                 relationshipData.Add(item.jsonObject);
             }
 
-            // Convert to JSON strings for the UNWIND operation - construct full query like models
-            string relationshipsString =
-                $"['{string.Join("','", relationshipData.Select(r => JsonSerializer.Serialize(r, serializerOptions).Replace("'", "\\'")))}']";
+            // Group relationships by relationship name since we need separate queries for each relationship type
+            var relationshipGroups = validatedRelationships
+                .Zip(relationshipData, (item, data) => new { item, data })
+                .GroupBy(x => x.item.relationshipName)
+                .ToList();
 
-            string cypher =
-                $@"UNWIND {relationshipsString} as relationshipJson
-                WITH relationshipJson::agtype as relationship
-                MATCH (source:Twin {{`$dtId`: relationship['$sourceId']}})
-                MATCH (target:Twin {{`$dtId`: relationship['$targetId']}})
-                MERGE (source)-[r:RELATIONSHIP {{`$relationshipId`: relationship['$relationshipId']}}]->(target)
-                SET r = relationship";
+            // Execute batch operation for each relationship type
+            foreach (var group in relationshipGroups)
+            {
+                var relationshipName = group.Key;
+                var groupData = group.Select(x => x.data).ToList();
 
-            await using var command = connection.CreateCypherCommand(_graphName, cypher);
-            await command.ExecuteNonQueryAsync(cancellationToken);
+                // Convert to JSON strings for the UNWIND operation - construct full query like models
+                string relationshipsString =
+                    $"['{string.Join("','", groupData.Select(r => JsonSerializer.Serialize(r, serializerOptions).Replace("'", "\\'")))}']";
+
+                string cypher =
+                    $@"UNWIND {relationshipsString} as relationshipJson
+                    WITH relationshipJson::agtype as relationship
+                    MATCH (source:Twin {{`$dtId`: relationship['$sourceId']}})
+                    MATCH (target:Twin {{`$dtId`: relationship['$targetId']}})
+                    MERGE (source)-[r:{relationshipName} {{`$relationshipId`: relationship['$relationshipId']}}]->(target)
+                    SET r = relationship";
+
+                await using var command = connection.CreateCypherCommand(_graphName, cypher);
+                await command.ExecuteNonQueryAsync(cancellationToken);
+            }
 
             // Mark all relationships as successful
             foreach (var item in validatedRelationships)
