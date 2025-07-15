@@ -833,16 +833,11 @@ SET rel = '{updatedRelJson}'::agtype";
 
             while (await existenceReader.ReadAsync(cancellationToken))
             {
-                var agResult = await existenceReader
-                    .GetFieldValueAsync<Agtype?>(0)
-                    .ConfigureAwait(false);
-                if (agResult is Agtype agTypeResult)
+                var agTwinId = await existenceReader.GetFieldValueAsync<Agtype?>(0);
+                string twinId = ((Agtype)agTwinId).GetString().Trim('\u0001');
+                if (!string.IsNullOrEmpty(twinId))
                 {
-                    var twinId = agTypeResult.GetString();
-                    if (!string.IsNullOrEmpty(twinId))
-                    {
-                        existingTwins.Add(twinId);
-                    }
+                    existingTwins.Add(twinId);
                 }
             }
         }
