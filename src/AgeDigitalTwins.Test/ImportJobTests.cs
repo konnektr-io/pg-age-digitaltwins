@@ -2,7 +2,7 @@ using System.IO;
 using System.Text;
 using System.Threading.Tasks;
 using AgeDigitalTwins.Jobs;
-using AgeDigitalTwins.Jobs.Models;
+using AgeDigitalTwins.Models;
 using Xunit.Abstractions;
 
 namespace AgeDigitalTwins.Test;

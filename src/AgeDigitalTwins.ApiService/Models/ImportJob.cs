@@ -2,7 +2,7 @@ using System;
 using System.Text.Json;
 using AgeDigitalTwins.Models;
 
-namespace AgeDigitalTwins.Jobs.Models;
+namespace AgeDigitalTwins.ApiService.Models;
 
 /// <summary>
 /// Request model for creating an import job.
@@ -52,11 +52,11 @@ public partial class ImportJob
     }
 
     /// <summary> The identifier of the import job. </summary>
-    public required string Id { get; set; }
+    public string Id { get; set; }
 
-    public required Uri InputBlobUri { get; set; }
+    public Uri InputBlobUri { get; set; }
 
-    public required Uri OutputBlobUri { get; set; }
+    public Uri OutputBlobUri { get; set; }
 
     /// <summary> Start time of the job. The timestamp is in RFC3339 format: `yyyy-MM-ddTHH:mm:ssZ`. </summary>
     public DateTimeOffset? CreatedDateTime { get; }

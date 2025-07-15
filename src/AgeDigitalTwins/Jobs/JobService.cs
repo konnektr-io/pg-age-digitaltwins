@@ -56,7 +56,7 @@ public class JobService
             $@"
             INSERT INTO {_schemaName}.job_records (id, job_type, status, created_at, updated_at, purge_at, request_data)
             VALUES (@id, @jobType, @status, @createdAt, @updatedAt, @purgeAt, @requestData)
-            RETURNING id, job_type, status, created_at, updated_at, finished_at, purge_at, request_data, result_data, error_data";
+            RETURNING id, job_type, status, created_at, updated_at, finished_at, purge_at, request_data, result_data, error_data, checkpoint_data";
 
         await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
         await using var command = new NpgsqlCommand(sql, connection);
@@ -98,7 +98,7 @@ public class JobService
 
         var sql =
             $@"
-            SELECT id, job_type, status, created_at, updated_at, finished_at, purge_at, request_data, result_data, error_data
+            SELECT id, job_type, status, created_at, updated_at, finished_at, purge_at, request_data, result_data, error_data, checkpoint_data
             FROM {_schemaName}.job_records
             WHERE id = @id";
 
@@ -122,7 +122,7 @@ public class JobService
     {
         var sql =
             $@"
-            SELECT id, job_type, status, created_at, updated_at, finished_at, purge_at, request_data, result_data, error_data
+            SELECT id, job_type, status, created_at, updated_at, finished_at, purge_at, request_data, result_data, error_data, checkpoint_data
             FROM {_schemaName}.job_records";
 
         var whereClause = "";
@@ -275,6 +275,111 @@ public class JobService
     }
 
     /// <summary>
+    /// Saves a checkpoint for the specified job.
+    /// </summary>
+    /// <param name="checkpoint">The checkpoint data to save.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>True if the checkpoint was saved successfully; otherwise false.</returns>
+    public async Task<bool> SaveCheckpointAsync(
+        ImportJobCheckpoint checkpoint,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (checkpoint == null || string.IsNullOrEmpty(checkpoint.JobId))
+            return false;
+
+        var checkpointJson = JsonSerializer.SerializeToDocument(checkpoint, _jsonOptions);
+
+        var sql =
+            $@"
+            UPDATE {_schemaName}.job_records
+            SET checkpoint_data = @checkpointData,
+                updated_at = @updatedAt
+            WHERE id = @jobId";
+
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var command = new NpgsqlCommand(sql, connection);
+
+        command.Parameters.AddWithValue("@jobId", checkpoint.JobId);
+        command.Parameters.AddWithValue("@checkpointData", (object?)checkpointJson ?? DBNull.Value);
+        command.Parameters.AddWithValue("@updatedAt", DateTime.UtcNow);
+
+        var rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken);
+        return rowsAffected > 0;
+    }
+
+    /// <summary>
+    /// Loads a checkpoint for the specified job.
+    /// </summary>
+    /// <param name="jobId">The job identifier.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The checkpoint data if found; otherwise null.</returns>
+    public async Task<ImportJobCheckpoint?> LoadCheckpointAsync(
+        string jobId,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (string.IsNullOrEmpty(jobId))
+            return null;
+
+        var sql =
+            $@"
+            SELECT checkpoint_data
+            FROM {_schemaName}.job_records
+            WHERE id = @jobId";
+
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("@jobId", jobId);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (await reader.ReadAsync(cancellationToken))
+        {
+            if (!reader.IsDBNull(0))
+            {
+                var checkpointJson = reader.GetString(0);
+                return JsonSerializer.Deserialize<ImportJobCheckpoint>(
+                    checkpointJson,
+                    _jsonOptions
+                );
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Clears the checkpoint for the specified job.
+    /// </summary>
+    /// <param name="jobId">The job identifier.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>True if the checkpoint was cleared successfully; otherwise false.</returns>
+    public async Task<bool> ClearCheckpointAsync(
+        string jobId,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (string.IsNullOrEmpty(jobId))
+            return false;
+
+        var sql =
+            $@"
+            UPDATE {_schemaName}.job_records
+            SET checkpoint_data = NULL,
+                updated_at = @updatedAt
+            WHERE id = @jobId";
+
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var command = new NpgsqlCommand(sql, connection);
+
+        command.Parameters.AddWithValue("@jobId", jobId);
+        command.Parameters.AddWithValue("@updatedAt", DateTime.UtcNow);
+
+        var rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken);
+        return rowsAffected > 0;
+    }
+
+    /// <summary>
     /// Initializes the database schema and table for job storage.
     /// </summary>
     private async Task InitializeSchemaAsync()
@@ -292,8 +397,15 @@ public class JobService
                 purge_at TIMESTAMP WITH TIME ZONE NOT NULL,
                 request_data JSONB NULL,
                 result_data JSONB NULL,
-                error_data JSONB NULL
+                error_data JSONB NULL,
+                checkpoint_data JSONB NULL
             )";
+
+        // Add checkpoint column if it doesn't exist (for existing installations)
+        var addCheckpointColumnSql =
+            $@"
+            ALTER TABLE {_schemaName}.job_records 
+            ADD COLUMN IF NOT EXISTS checkpoint_data JSONB NULL";
 
         var createIndexSql =
             $@"
@@ -314,6 +426,12 @@ public class JobService
 
             // Create table
             await using (var command = new NpgsqlCommand(createTableSql, connection))
+            {
+                await command.ExecuteNonQueryAsync();
+            }
+
+            // Add checkpoint column for existing installations
+            await using (var command = new NpgsqlCommand(addCheckpointColumnSql, connection))
             {
                 await command.ExecuteNonQueryAsync();
             }
@@ -347,6 +465,7 @@ public class JobService
             RequestData = reader.IsDBNull(7) ? null : JsonDocument.Parse(reader.GetString(7)), // request_data
             ResultData = reader.IsDBNull(8) ? null : JsonDocument.Parse(reader.GetString(8)), // result_data
             ErrorData = reader.IsDBNull(9) ? null : JsonDocument.Parse(reader.GetString(9)), // error_data
+            // checkpoint_data is at index 10 but we don't need it in JobRecord - it's accessed via LoadCheckpointAsync
         };
     }
 }

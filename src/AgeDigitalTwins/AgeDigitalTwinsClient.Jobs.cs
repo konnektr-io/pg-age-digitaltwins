@@ -118,28 +118,48 @@ public partial class AgeDigitalTwinsClient
             cancellationToken
         );
 
-        // Start job execution
+        // Check if there's an existing checkpoint for this job
+        var checkpoint = await JobService.LoadCheckpointAsync(jobId, cancellationToken);
+
+        // Start job execution with checkpoint support
         try
         {
-            await StreamingImportJob.ExecuteAsync(
+            var result = await StreamingImportJob.ExecuteWithCheckpointAsync(
                 this,
                 inputStream,
                 outputStream,
                 jobId,
+                checkpoint,
                 cancellationToken
             );
+
+            // Update job record with final result
+            await JobService.UpdateJobStatusAsync(
+                jobId,
+                result.Status,
+                resultData: new
+                {
+                    modelsCreated = result.ModelsCreated,
+                    twinsCreated = result.TwinsCreated,
+                    relationshipsCreated = result.RelationshipsCreated,
+                    errorCount = result.ErrorCount,
+                },
+                cancellationToken: cancellationToken
+            );
+
+            return result;
         }
         catch (Exception ex)
         {
             // Update job status to failed if an exception occurs
-            jobRecord.Status = JobStatus.Failed;
-            jobRecord.ErrorData = JsonDocument.Parse(
-                JsonSerializer.Serialize(new { error = ex.Message })
+            await JobService.UpdateJobStatusAsync(
+                jobId,
+                JobStatus.Failed,
+                errorData: new { error = ex.Message },
+                cancellationToken: cancellationToken
             );
             throw;
         }
-
-        return jobRecord;
     }
 
     /// <summary>

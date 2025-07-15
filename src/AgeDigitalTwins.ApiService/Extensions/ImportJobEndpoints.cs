@@ -3,7 +3,6 @@ using System.Threading.Tasks;
 using AgeDigitalTwins.ApiService.Models;
 using AgeDigitalTwins.ApiService.Services;
 using AgeDigitalTwins.Jobs;
-using AgeDigitalTwins.Jobs.Models;
 using AgeDigitalTwins.Models;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
@@ -138,8 +137,7 @@ public static class ImportJobEndpoints
                 throw new InvalidOperationException($"Import job with ID '{id}' already exists.");
             }
 
-
-            return TypedResults.Created($"/jobs/imports/{id}", );
+            return TypedResults.Created($"/jobs/imports/{id}", new ImportJob(result));
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("already exists"))
         {

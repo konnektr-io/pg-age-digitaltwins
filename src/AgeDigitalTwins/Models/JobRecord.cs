@@ -96,7 +96,7 @@ public class JobRecord
     /// </summary>
     public DateTimeOffset PurgeDateTime
     {
-        get => PurgeAt;
+        get => PurgeAt ?? DateTimeOffset.MinValue;
         set => PurgeAt = value;
     }
 

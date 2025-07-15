@@ -1,4 +1,5 @@
 using AgeDigitalTwins.Jobs;
+using AgeDigitalTwins.Models;
 
 namespace AgeDigitalTwins.ApiService.Models;
 
