@@ -826,6 +826,10 @@ RETURN t.`$dtId` AS twinId";
         {
             var agTwinId = await existenceReader.GetFieldValueAsync<Agtype?>(0);
             string twinId = ((Agtype)agTwinId).GetString().Trim('\u0001');
+            if (twinId.StartsWith('"') && twinId.EndsWith('"'))
+            {
+                twinId = twinId[1..^1]; // Remove surrounding quotes
+            }
             if (!string.IsNullOrEmpty(twinId))
             {
                 existingTwins.Add(twinId);
