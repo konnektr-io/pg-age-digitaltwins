@@ -8,6 +8,7 @@ using Xunit.Abstractions;
 
 namespace AgeDigitalTwins.Test;
 
+[Trait("Category", "Integration")]
 public class BatchRelationshipTests : TestBase
 {
     private readonly ITestOutputHelper _output;
@@ -20,82 +21,28 @@ public class BatchRelationshipTests : TestBase
     [Fact]
     public async Task CreateOrReplaceRelationshipsAsync_WithValidRelationships_ShouldSucceed()
     {
-        // Arrange
-        var modelId = "dtmi:com:example:TestModel;1";
-        var model = $$"""
-            {
-                "@id": "{{modelId}}",
-                "@type": "Interface",
-                "@context": "dtmi:dtdl:context;2",
-                "contents": [
-                    {
-                        "@type": "Property",
-                        "name": "temperature",
-                        "schema": "double"
-                    },
-                    {
-                        "@type": "Relationship",
-                        "name": "contains",
-                        "target": "{{modelId}}"
-                    }
-                ]
-            }
-            """;
+        // Arrange - Load required models and create twins using existing sample data
+        string[] models = [SampleData.DtdlRoom, SampleData.DtdlTemperatureSensor];
+        await Client.CreateModelsAsync(models);
 
-        // Create the model first
-        await Client.CreateModelsAsync([model]);
+        // Create twins using sample data
+        await Client.CreateOrReplaceDigitalTwinAsync("room1", SampleData.TwinRoom1);
+        await Client.CreateOrReplaceDigitalTwinAsync("sensor1", SampleData.TwinTemperatureSensor1);
 
-        // Create twins first
-        var sourceTwin = JsonSerializer
-            .Serialize(
-                new
-                {
-                    __dtId = "sourceTwin",
-                    __metadata = new { __model = modelId },
-                    temperature = 25.5,
-                }
-            )
-            .Replace("__", "$");
+        // Create a second room and sensor for batch testing
+        var room2 = SampleData.TwinRoom1.Replace("room1", "room2").Replace("Room 1", "Room 2");
+        var sensor2 = SampleData
+            .TwinTemperatureSensor1.Replace("sensor1", "sensor2")
+            .Replace("Temperature Sensor 1", "Temperature Sensor 2");
 
-        var targetTwin = JsonSerializer
-            .Serialize(
-                new
-                {
-                    __dtId = "targetTwin",
-                    __metadata = new { __model = modelId },
-                    temperature = 30.0,
-                }
-            )
-            .Replace("__", "$");
+        await Client.CreateOrReplaceDigitalTwinAsync("room2", room2);
+        await Client.CreateOrReplaceDigitalTwinAsync("sensor2", sensor2);
 
-        await Client.CreateOrReplaceDigitalTwinAsync("sourceTwin", sourceTwin);
-        await Client.CreateOrReplaceDigitalTwinAsync("targetTwin", targetTwin);
-
-        // Create relationships
+        // Create relationships using the existing relationship pattern
         var relationships = new List<string>
         {
-            JsonSerializer
-                .Serialize(
-                    new
-                    {
-                        __sourceId = "sourceTwin",
-                        __targetId = "targetTwin",
-                        __relationshipId = "rel1",
-                        __relationshipName = "contains",
-                    }
-                )
-                .Replace("__", "$"),
-            JsonSerializer
-                .Serialize(
-                    new
-                    {
-                        __sourceId = "targetTwin",
-                        __targetId = "sourceTwin",
-                        __relationshipId = "rel2",
-                        __relationshipName = "contains",
-                    }
-                )
-                .Replace("__", "$"),
+            @"{""$relationshipId"": ""rel1"", ""$sourceId"": ""room1"", ""$relationshipName"": ""rel_has_sensors"", ""$targetId"": ""sensor1""}",
+            @"{""$relationshipId"": ""rel2"", ""$sourceId"": ""room2"", ""$relationshipName"": ""rel_has_sensors"", ""$targetId"": ""sensor2""}",
         };
 
         // Act
@@ -123,70 +70,18 @@ public class BatchRelationshipTests : TestBase
     [Fact]
     public async Task CreateOrReplaceRelationshipsAsync_WithInvalidRelationships_ShouldReportFailures()
     {
-        // Arrange
-        var modelId = "dtmi:com:example:TestModel;1";
-        var model = $$"""
-            {
-                "@id": "{{modelId}}",
-                "@type": "Interface",
-                "@context": "dtmi:dtdl:context;2",
-                "contents": [
-                    {
-                        "@type": "Property",
-                        "name": "temperature",
-                        "schema": "double"
-                    },
-                    {
-                        "@type": "Relationship",
-                        "name": "contains",
-                        "target": "{{modelId}}"
-                    }
-                ]
-            }
-            """;
-
-        // Create the model first
-        await Client.CreateModelsAsync([model]);
+        // Arrange - Load required models and create only one twin
+        string[] models = [SampleData.DtdlRoom, SampleData.DtdlTemperatureSensor];
+        await Client.CreateModelsAsync(models);
 
         // Create only one twin
-        var sourceTwin = JsonSerializer
-            .Serialize(
-                new
-                {
-                    __dtId = "sourceTwin",
-                    __metadata = new { __model = modelId },
-                    temperature = 25.5,
-                }
-            )
-            .Replace("__", "$");
+        await Client.CreateOrReplaceDigitalTwinAsync("room1", SampleData.TwinRoom1);
 
-        await Client.CreateOrReplaceDigitalTwinAsync("sourceTwin", sourceTwin);
-
-        // Create relationships - one valid, one with non-existent target
+        // Create relationships - one with non-existent target, one with non-existent source
         var relationships = new List<string>
         {
-            JsonSerializer
-                .Serialize(
-                    new
-                    {
-                        __sourceId = "sourceTwin",
-                        __targetId = "nonExistentTwin",
-                        __relationshipId = "rel1",
-                        __relationshipName = "contains",
-                    }
-                )
-                .Replace("__", "$"),
-            JsonSerializer
-                .Serialize(
-                    new
-                    {
-                        __sourceId = "nonExistentSource",
-                        __targetId = "sourceTwin",
-                        __relationshipId = "rel2",
-                        __relationshipName = "contains",
-                    }
-                )
-                .Replace("__", "$"),
+            @"{""$relationshipId"": ""rel1"", ""$sourceId"": ""room1"", ""$relationshipName"": ""rel_has_sensors"", ""$targetId"": ""nonExistentSensor""}",
+            @"{""$relationshipId"": ""rel2"", ""$sourceId"": ""nonExistentRoom"", ""$relationshipName"": ""rel_has_sensors"", ""$targetId"": ""room1""}",
         };
 
         // Act
@@ -236,17 +131,7 @@ public class BatchRelationshipTests : TestBase
         for (int i = 0; i < 101; i++) // Exceed the limit of 100
         {
             relationships.Add(
-                JsonSerializer
-                    .Serialize(
-                        new
-                        {
-                            __sourceId = $"source{i}",
-                            __targetId = $"target{i}",
-                            __relationshipId = $"rel{i}",
-                            __relationshipName = "contains",
-                        }
-                    )
-                    .Replace("__", "$")
+                $@"{{""$relationshipId"": ""rel{i}"", ""$sourceId"": ""source{i}"", ""$relationshipName"": ""rel_has_sensors"", ""$targetId"": ""target{i}""}}"
             );
         }
 

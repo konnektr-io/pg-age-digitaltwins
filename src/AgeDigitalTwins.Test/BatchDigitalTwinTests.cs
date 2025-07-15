@@ -22,48 +22,15 @@ public class BatchDigitalTwinTests : TestBase
     [Fact]
     public async Task CreateOrReplaceDigitalTwinsAsync_WithValidTwins_ShouldSucceed()
     {
-        // Arrange
-        var modelId = "dtmi:com:example:TestModel;1";
-        var model = $$"""
-            {
-                "@id": "{{modelId}}",
-                "@type": "Interface",
-                "@context": "dtmi:dtdl:context;2",
-                "contents": [
-                    {
-                        "@type": "Property",
-                        "name": "temperature",
-                        "schema": "double"
-                    }
-                ]
-            }
-            """;
+        // Arrange - Load required models using existing sample data
+        string[] models = [SampleData.DtdlRoom, SampleData.DtdlTemperatureSensor];
+        await Client.CreateModelsAsync(models);
 
-        // Create the model first
-        await Client.CreateModelsAsync([model]);
-
+        // Create twins using sample data patterns
         var digitalTwins = new List<string>
         {
-            JsonSerializer
-                .Serialize(
-                    new
-                    {
-                        __dtId = "twin1",
-                        __metadata = new { __model = modelId },
-                        temperature = 25.5,
-                    }
-                )
-                .Replace("__", "$"),
-            JsonSerializer
-                .Serialize(
-                    new
-                    {
-                        __dtId = "twin2",
-                        __metadata = new { __model = modelId },
-                        temperature = 30.0,
-                    }
-                )
-                .Replace("__", "$"),
+            SampleData.TwinRoom1,
+            SampleData.TwinTemperatureSensor1,
         };
 
         // Act
@@ -80,7 +47,7 @@ public class BatchDigitalTwinTests : TestBase
         {
             Assert.True(operationResult.IsSuccess);
             Assert.Null(operationResult.ErrorMessage);
-            Assert.Contains(operationResult.DigitalTwinId, new[] { "twin1", "twin2" });
+            Assert.Contains(operationResult.DigitalTwinId, new[] { "room1", "sensor1" });
         }
 
         _output.WriteLine(
@@ -91,58 +58,15 @@ public class BatchDigitalTwinTests : TestBase
     [Fact]
     public async Task CreateOrReplaceDigitalTwinsAsync_WithInvalidTwins_ShouldReportFailures()
     {
-        // Arrange
-        var modelId = "dtmi:com:example:TestModel;1";
-        var model = $$"""
-            {
-                "@id": "{{modelId}}",
-                "@type": "Interface",
-                "@context": "dtmi:dtdl:context;2",
-                "contents": [
-                    {
-                        "@type": "Property",
-                        "name": "temperature",
-                        "schema": "double"
-                    }
-                ]
-            }
-            """;
-
-        // Create the model first
-        await Client.CreateModelsAsync([model]);
+        // Arrange - Load required models
+        string[] models = [SampleData.DtdlRoom];
+        await Client.CreateModelsAsync(models);
 
         var digitalTwins = new List<string>
         {
-            JsonSerializer
-                .Serialize(
-                    new
-                    {
-                        __dtId = "validTwin",
-                        __metadata = new { __model = modelId },
-                        temperature = 25.5,
-                    }
-                )
-                .Replace("__", "$"),
-            JsonSerializer
-                .Serialize(
-                    new
-                    {
-                        __dtId = "invalidTwin",
-                        __metadata = new { __model = modelId },
-                        temperature = "invalid_string",
-                    }
-                )
-                .Replace("__", "$"),
-            JsonSerializer
-                .Serialize(
-                    new
-                    {
-                        __dtId = "missingModelTwin",
-                        __metadata = new { __model = "dtmi:com:example:NonExistentModel;1" },
-                        temperature = 20.0,
-                    }
-                )
-                .Replace("__", "$"),
+            SampleData.TwinRoom1, // Valid twin
+            @"{""$dtId"": ""invalidTwin"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""temperature"": ""invalid_string""}", // Invalid property
+            @"{""$dtId"": ""missingModelTwin"", ""$metadata"": {""$model"": ""dtmi:com:example:NonExistentModel;1""}, ""temperature"": 20.0}", // Non-existent model
         };
 
         // Act
@@ -150,7 +74,7 @@ public class BatchDigitalTwinTests : TestBase
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(1, result.SuccessCount); // Only validTwin should succeed
+        Assert.Equal(1, result.SuccessCount); // Only room1 should succeed
         Assert.Equal(2, result.FailureCount); // invalidTwin and missingModelTwin should fail
         Assert.True(result.HasFailures);
 
@@ -158,7 +82,7 @@ public class BatchDigitalTwinTests : TestBase
         var failedResults = result.Results.Where(r => !r.IsSuccess).ToList();
 
         Assert.Single(successfulResults);
-        Assert.Equal("validTwin", successfulResults[0].DigitalTwinId);
+        Assert.Equal("room1", successfulResults[0].DigitalTwinId);
 
         Assert.Equal(2, failedResults.Count);
         Assert.Contains(failedResults, r => r.DigitalTwinId == "invalidTwin");
@@ -209,16 +133,7 @@ public class BatchDigitalTwinTests : TestBase
         for (int i = 0; i < 101; i++) // Exceed the limit of 100
         {
             digitalTwins.Add(
-                JsonSerializer
-                    .Serialize(
-                        new
-                        {
-                            __dtId = $"twin{i}",
-                            __metadata = new { __model = "dtmi:com:example:TestModel;1" },
-                            temperature = 25.0,
-                        }
-                    )
-                    .Replace("__", "$")
+                $@"{{""$dtId"": ""twin{i}"", ""$metadata"": {{""$model"": ""dtmi:com:adt:dtsample:room;1""}}, ""temperature"": 25.0}}"
             );
         }
 
