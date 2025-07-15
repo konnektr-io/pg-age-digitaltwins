@@ -58,13 +58,24 @@ public partial class AgeDigitalTwinsClient
         CancellationToken cancellationToken = default
     )
     {
-        return await ImportGraphAsync(
+        if (string.IsNullOrEmpty(jobId))
+            throw new ArgumentException("Job ID cannot be null or empty.", nameof(jobId));
+
+        if (inputStream == null)
+            throw new ArgumentNullException(nameof(inputStream));
+
+        if (outputStream == null)
+            throw new ArgumentNullException(nameof(outputStream));
+
+        // Create the job record without executing it
+        var jobRecord = await JobService.CreateJobAsync(
             jobId,
-            inputStream,
-            outputStream,
-            (ImportJobOptions?)null,
+            "import",
+            new { inputStream = "provided", outputStream = "provided" }, // Basic request data
             cancellationToken
         );
+
+        return jobRecord;
     }
 
     /// <summary>

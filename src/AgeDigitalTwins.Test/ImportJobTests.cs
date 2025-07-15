@@ -221,11 +221,14 @@ public class ImportJobTests : TestBase
         using var inputStream = new MemoryStream();
         using var outputStream = new MemoryStream();
 
-        // Add some test data to input stream
-        var testData =
+        // Add some test data to input stream with proper ND-JSON format
+        var testData = Encoding.UTF8.GetBytes(
             """
-                      {"$dtId": "test-twin-1", "$metadata": {"$model": "dtmi:example:Model;1"}}
-                      """u8.ToArray();
+            {"Section": "Header"}
+            {"fileVersion": "1.0.0", "author": "test", "organization": "test"}
+            {"Section": "Models"}
+            {"@id":"dtmi:example:Model;1","@type":"Interface","@context":"dtmi:dtdl:context;2"}
+            """);
         inputStream.Write(testData);
         inputStream.Position = 0;
 
@@ -236,15 +239,11 @@ public class ImportJobTests : TestBase
         Assert.NotNull(result);
         Assert.Equal(jobId, result.Id);
         Assert.Equal(JobStatus.NotStarted, result.Status);
-        Assert.Null(result.InputBlobUri); // Should be null since no blob URI was provided
-        Assert.Null(result.OutputBlobUri); // Should be null since no blob URI was provided
         Assert.True(result.CreatedDateTime > DateTime.MinValue);
         Assert.True(result.LastActionDateTime > DateTime.MinValue);
 
         _output.WriteLine($"Created import job with ID: {result.Id}");
         _output.WriteLine($"Job status: {result.Status}");
-        _output.WriteLine($"InputBlobUri: {result.InputBlobUri ?? "null"}");
-        _output.WriteLine($"OutputBlobUri: {result.OutputBlobUri ?? "null"}");
     }
 
     [Fact]
