@@ -840,14 +840,23 @@ SET rel = '{updatedRelJson}'::agtype";
             var existingTwins = new HashSet<string>();
             if (allTwinIds.Count > 0)
             {
-                var twinIdsString = string.Join("','", allTwinIds.Select(id => id.Replace("'", "\\'")));
-                string existenceCheckCypher = $@"
+                var twinIdsString = string.Join(
+                    "','",
+                    allTwinIds.Select(id => id.Replace("'", "\\'"))
+                );
+                string existenceCheckCypher =
+                    $@"
                     MATCH (t:Twin) 
                     WHERE t['$dtId'] IN ['{twinIdsString}']
                     RETURN t['$dtId'] as twinId";
 
-                await using var existenceCommand = connection.CreateCypherCommand(_graphName, existenceCheckCypher);
-                await using var existenceReader = await existenceCommand.ExecuteReaderAsync(cancellationToken);
+                await using var existenceCommand = connection.CreateCypherCommand(
+                    _graphName,
+                    existenceCheckCypher
+                );
+                await using var existenceReader = await existenceCommand.ExecuteReaderAsync(
+                    cancellationToken
+                );
 
                 while (await existenceReader.ReadAsync(cancellationToken))
                 {
@@ -927,21 +936,19 @@ SET rel = '{updatedRelJson}'::agtype";
                 relationshipData.Add(item.jsonObject);
             }
 
-            // Convert to JSON strings for the UNWIND operation
-            var relationshipsJson = relationshipData
-                .Select(r => JsonSerializer.Serialize(r, serializerOptions))
-                .ToArray();
+            // Convert to JSON strings for the UNWIND operation - construct full query like models
+            string relationshipsString =
+                $"['{string.Join("','", relationshipData.Select(r => JsonSerializer.Serialize(r, serializerOptions).Replace("'", "\\'")))}']";
 
-            string cypher = @"
-                UNWIND $relationships as relationshipJson
+            string cypher =
+                $@"UNWIND {relationshipsString} as relationshipJson
                 WITH relationshipJson::agtype as relationship
-                MATCH (source:Twin {`$dtId`: relationship['$sourceId']})
-                MATCH (target:Twin {`$dtId`: relationship['$targetId']})
-                MERGE (source)-[r:RELATIONSHIP {`$relationshipId`: relationship['$relationshipId']}]->(target)
+                MATCH (source:Twin {{`$dtId`: relationship['$sourceId']}})
+                MATCH (target:Twin {{`$dtId`: relationship['$targetId']}})
+                MERGE (source)-[r:RELATIONSHIP {{`$relationshipId`: relationship['$relationshipId']}}]->(target)
                 SET r = relationship";
 
             await using var command = connection.CreateCypherCommand(_graphName, cypher);
-            command.Parameters.AddWithValue("relationships", relationshipsJson);
             await command.ExecuteNonQueryAsync(cancellationToken);
 
             // Mark all relationships as successful

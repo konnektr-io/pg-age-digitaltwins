@@ -987,20 +987,17 @@ RETURN COUNT(t) AS deletedCount";
         {
             try
             {
-                // Prepare twins for batch insert
-                var twinsJson = finalValidTwins
-                    .Select(t => JsonSerializer.Serialize(t.digitalTwinObject, serializerOptions))
-                    .ToArray();
+                // Prepare twins for batch insert - construct full query like models
+                string twinsString =
+                    $"['{string.Join("','", finalValidTwins.Select(t => JsonSerializer.Serialize(t.digitalTwinObject, serializerOptions).Replace("'", "\\'")))}']";
 
                 string cypher =
-                    @"
-                    UNWIND $twins as twinJson
+                    $@"UNWIND {twinsString} as twinJson
                     WITH twinJson::agtype as twin
-                    MERGE (t:Twin {`$dtId`: twin['$dtId']})
+                    MERGE (t:Twin {{`$dtId`: twin['$dtId']}})
                     SET t = twin";
 
                 await using var command = connection.CreateCypherCommand(_graphName, cypher);
-                command.Parameters.AddWithValue("twins", twinsJson);
                 await command.ExecuteNonQueryAsync(cancellationToken);
 
                 // Mark all successfully processed twins

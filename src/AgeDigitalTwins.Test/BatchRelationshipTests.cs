@@ -46,17 +46,27 @@ public class BatchRelationshipTests : TestBase
         await Client.CreateModelsAsync([model]);
 
         // Create twins first
-        var sourceTwin = JsonSerializer.Serialize(new { 
-            __dtId = "sourceTwin", 
-            __metadata = new { __model = modelId }, 
-            temperature = 25.5 
-        }).Replace("__", "$");
-        
-        var targetTwin = JsonSerializer.Serialize(new { 
-            __dtId = "targetTwin", 
-            __metadata = new { __model = modelId }, 
-            temperature = 30.0 
-        }).Replace("__", "$");
+        var sourceTwin = JsonSerializer
+            .Serialize(
+                new
+                {
+                    __dtId = "sourceTwin",
+                    __metadata = new { __model = modelId },
+                    temperature = 25.5,
+                }
+            )
+            .Replace("__", "$");
+
+        var targetTwin = JsonSerializer
+            .Serialize(
+                new
+                {
+                    __dtId = "targetTwin",
+                    __metadata = new { __model = modelId },
+                    temperature = 30.0,
+                }
+            )
+            .Replace("__", "$");
 
         await Client.CreateOrReplaceDigitalTwinAsync("sourceTwin", sourceTwin);
         await Client.CreateOrReplaceDigitalTwinAsync("targetTwin", targetTwin);
@@ -64,18 +74,28 @@ public class BatchRelationshipTests : TestBase
         // Create relationships
         var relationships = new List<string>
         {
-            JsonSerializer.Serialize(new { 
-                __sourceId = "sourceTwin", 
-                __targetId = "targetTwin", 
-                __relationshipId = "rel1", 
-                __relationshipName = "contains" 
-            }).Replace("__", "$"),
-            JsonSerializer.Serialize(new { 
-                __sourceId = "targetTwin", 
-                __targetId = "sourceTwin", 
-                __relationshipId = "rel2", 
-                __relationshipName = "contains" 
-            }).Replace("__", "$")
+            JsonSerializer
+                .Serialize(
+                    new
+                    {
+                        __sourceId = "sourceTwin",
+                        __targetId = "targetTwin",
+                        __relationshipId = "rel1",
+                        __relationshipName = "contains",
+                    }
+                )
+                .Replace("__", "$"),
+            JsonSerializer
+                .Serialize(
+                    new
+                    {
+                        __sourceId = "targetTwin",
+                        __targetId = "sourceTwin",
+                        __relationshipId = "rel2",
+                        __relationshipName = "contains",
+                    }
+                )
+                .Replace("__", "$"),
         };
 
         // Act
@@ -129,29 +149,44 @@ public class BatchRelationshipTests : TestBase
         await Client.CreateModelsAsync([model]);
 
         // Create only one twin
-        var sourceTwin = JsonSerializer.Serialize(new { 
-            __dtId = "sourceTwin", 
-            __metadata = new { __model = modelId }, 
-            temperature = 25.5 
-        }).Replace("__", "$");
+        var sourceTwin = JsonSerializer
+            .Serialize(
+                new
+                {
+                    __dtId = "sourceTwin",
+                    __metadata = new { __model = modelId },
+                    temperature = 25.5,
+                }
+            )
+            .Replace("__", "$");
 
         await Client.CreateOrReplaceDigitalTwinAsync("sourceTwin", sourceTwin);
 
         // Create relationships - one valid, one with non-existent target
         var relationships = new List<string>
         {
-            JsonSerializer.Serialize(new { 
-                __sourceId = "sourceTwin", 
-                __targetId = "nonExistentTwin", 
-                __relationshipId = "rel1", 
-                __relationshipName = "contains" 
-            }).Replace("__", "$"),
-            JsonSerializer.Serialize(new { 
-                __sourceId = "nonExistentSource", 
-                __targetId = "sourceTwin", 
-                __relationshipId = "rel2", 
-                __relationshipName = "contains" 
-            }).Replace("__", "$")
+            JsonSerializer
+                .Serialize(
+                    new
+                    {
+                        __sourceId = "sourceTwin",
+                        __targetId = "nonExistentTwin",
+                        __relationshipId = "rel1",
+                        __relationshipName = "contains",
+                    }
+                )
+                .Replace("__", "$"),
+            JsonSerializer
+                .Serialize(
+                    new
+                    {
+                        __sourceId = "nonExistentSource",
+                        __targetId = "sourceTwin",
+                        __relationshipId = "rel2",
+                        __relationshipName = "contains",
+                    }
+                )
+                .Replace("__", "$"),
         };
 
         // Act
@@ -201,12 +236,17 @@ public class BatchRelationshipTests : TestBase
         for (int i = 0; i < 101; i++) // Exceed the limit of 100
         {
             relationships.Add(
-                JsonSerializer.Serialize(new { 
-                    __sourceId = $"source{i}", 
-                    __targetId = $"target{i}", 
-                    __relationshipId = $"rel{i}", 
-                    __relationshipName = "contains" 
-                }).Replace("__", "$")
+                JsonSerializer
+                    .Serialize(
+                        new
+                        {
+                            __sourceId = $"source{i}",
+                            __targetId = $"target{i}",
+                            __relationshipId = $"rel{i}",
+                            __relationshipName = "contains",
+                        }
+                    )
+                    .Replace("__", "$")
             );
         }
 
