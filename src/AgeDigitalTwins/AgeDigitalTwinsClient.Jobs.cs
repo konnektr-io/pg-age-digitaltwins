@@ -43,6 +43,23 @@ public partial class AgeDigitalTwinsClient
         if (outputStream == null)
             throw new ArgumentNullException(nameof(outputStream));
 
+        // Check if job already exists
+        var existingJob = await JobService.GetJobAsync(jobId, cancellationToken);
+
+        if (existingJob != null)
+        {
+            // Job already exists - throw exception
+            throw new InvalidOperationException($"Job with ID '{jobId}' already exists.");
+        }
+
+        // Create new job record
+        var jobRecord = await JobService.CreateJobAsync(
+            jobId,
+            "import",
+            request,
+            cancellationToken
+        );
+
         // Try to acquire a distributed lock for the job
         var lockAcquired = await JobService.TryAcquireJobLockAsync(
             jobId,
@@ -57,20 +74,22 @@ public partial class AgeDigitalTwinsClient
 
         try
         {
-            // Create the job record
-            var jobRecord = await JobService.CreateJobAsync(
-                jobId,
-                "import",
-                request,
-                cancellationToken
-            );
-
             // Check if there's an existing checkpoint for this job
             var checkpoint = await JobService.LoadCheckpointAsync(jobId, cancellationToken);
 
             if (executeInBackground)
             {
-                // For background execution, start the job and return immediately
+                // For background execution, update job status to Running and start the job
+                await JobService.UpdateJobStatusAsync(
+                    jobId,
+                    JobStatus.Running,
+                    cancellationToken: cancellationToken
+                );
+
+                // Update the job record to reflect the new status
+                jobRecord = await JobService.GetJobAsync(jobId, cancellationToken) ?? jobRecord;
+
+                // Start the job execution in the background
                 _ = Task.Run(
                     async () =>
                     {
@@ -150,51 +169,28 @@ public partial class AgeDigitalTwinsClient
                 );
 
                 // Return the updated job record from the database
-                return await JobService.GetJobAsync(jobId) ?? result;
+                return await JobService.GetJobAsync(jobId) ?? jobRecord;
             }
         }
         catch (Exception ex)
         {
-            // Only attempt to update job status if the job was created successfully
-            // If job creation failed, re-throw the original exception
-            try
+            // Update job status to failed if an exception occurs
+            await JobService.UpdateJobStatusAsync(
+                jobId,
+                JobStatus.Failed,
+                errorData: new { error = ex.Message },
+                cancellationToken: cancellationToken
+            );
+
+            if (executeInBackground)
             {
-                await JobService.GetJobAsync(jobId);
-                // Job exists, so we can update its status
-                if (executeInBackground)
-                {
-                    // For background execution, update job status and return the job record
-                    await JobService.UpdateJobStatusAsync(
-                        jobId,
-                        JobStatus.Failed,
-                        errorData: new { error = ex.Message },
-                        cancellationToken: cancellationToken
-                    );
-                    var jobRecord = await JobService.GetJobAsync(jobId);
-                    if (jobRecord == null)
-                    {
-                        throw new InvalidOperationException(
-                            $"Job {jobId} not found after creation"
-                        );
-                    }
-                    return jobRecord;
-                }
-                else
-                {
-                    // For synchronous execution, update job status and throw
-                    await JobService.UpdateJobStatusAsync(
-                        jobId,
-                        JobStatus.Failed,
-                        errorData: new { error = ex.Message },
-                        cancellationToken: cancellationToken
-                    );
-                    throw;
-                }
+                // For background execution, return the job record with failed status
+                return jobRecord;
             }
-            catch
+            else
             {
-                // Job doesn't exist, so just re-throw the original exception
-                throw ex;
+                // For synchronous execution, re-throw the exception
+                throw;
             }
         }
         finally

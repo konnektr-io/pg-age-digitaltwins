@@ -497,11 +497,13 @@ public class JobService
 
     /// <summary>
     /// Attempts to acquire a distributed lock for the specified job.
+    /// The job must already exist in the database.
     /// </summary>
     /// <param name="jobId">The job identifier.</param>
     /// <param name="leaseDuration">The lease duration for the lock (optional, defaults to 5 minutes).</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>True if the lock was acquired successfully; otherwise false.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the job doesn't exist.</exception>
     public async Task<bool> TryAcquireJobLockAsync(
         string jobId,
         TimeSpan? leaseDuration = null,
@@ -513,11 +515,10 @@ public class JobService
 
         var lockDuration = leaseDuration ?? _defaultLockDuration;
         var now = DateTime.UtcNow;
-        var lockExpiresAt = now.Add(lockDuration);
 
         await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
 
-        // First try to update existing job record
+        // Try to update existing job record to acquire lock
         var updateSql =
             $@"
             UPDATE {_schemaName}.job_records
@@ -544,54 +545,33 @@ public class JobService
 
         var rowsAffected = await updateCommand.ExecuteNonQueryAsync(cancellationToken);
 
-        // If update didn't affect any rows, try to insert a new job record
+        // If no rows were affected, check if the job exists
         if (rowsAffected == 0)
         {
-            var insertSql =
-                $@"
-                INSERT INTO {_schemaName}.job_records (
-                    id, job_type, status, created_at, updated_at, purge_at,
-                    lock_acquired_at, lock_acquired_by, lock_lease_duration, lock_heartbeat_at
-                ) VALUES (
-                    @jobId, 'lock-only', 'pending', @now, @now, @purgeAt,
-                    @lockAcquiredAt, @lockAcquiredBy, @lockLeaseDuration, @lockHeartbeatAt
-                )
-                ON CONFLICT (id) DO NOTHING";
+            var existsJob = await GetJobAsync(jobId, cancellationToken);
+            if (existsJob == null)
+            {
+                throw new InvalidOperationException(
+                    $"Job with ID '{jobId}' does not exist. Create the job first before acquiring a lock."
+                );
+            }
 
-            await using var insertCommand = new NpgsqlCommand(insertSql, connection);
-
-            insertCommand.Parameters.AddWithValue("@jobId", jobId);
-            insertCommand.Parameters.AddWithValue("@lockAcquiredAt", now);
-            insertCommand.Parameters.AddWithValue("@lockAcquiredBy", _instanceId);
-            insertCommand.Parameters.AddWithValue("@lockLeaseDuration", lockDuration);
-            insertCommand.Parameters.AddWithValue("@lockHeartbeatAt", now);
-            insertCommand.Parameters.AddWithValue("@now", now);
-            insertCommand.Parameters.AddWithValue("@purgeAt", now.AddHours(24)); // Keep lock records for 24 hours
-
-            var insertRows = await insertCommand.ExecuteNonQueryAsync(cancellationToken);
-            rowsAffected = insertRows;
-        }
-
-        var lockAcquired = rowsAffected > 0;
-
-        if (lockAcquired)
-        {
-            _logger?.LogDebug(
-                "Acquired lock for job {JobId} by instance {InstanceId}",
-                jobId,
-                _instanceId
-            );
-        }
-        else
-        {
+            // Job exists but lock couldn't be acquired (probably already locked by another instance)
             _logger?.LogWarning(
-                "Failed to acquire lock for job {JobId} by instance {InstanceId}",
+                "Failed to acquire lock for job {JobId} by instance {InstanceId} - job may already be locked",
                 jobId,
                 _instanceId
             );
+            return false;
         }
 
-        return lockAcquired;
+        _logger?.LogDebug(
+            "Acquired lock for job {JobId} by instance {InstanceId}",
+            jobId,
+            _instanceId
+        );
+
+        return true;
     }
 
     /// <summary>
