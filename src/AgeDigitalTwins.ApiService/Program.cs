@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using AgeDigitalTwins;
 using AgeDigitalTwins.ApiService;
 using AgeDigitalTwins.ApiService.Extensions;
+using AgeDigitalTwins.ApiService.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.IdentityModel.Tokens;
@@ -128,6 +129,9 @@ else
         .Services.AddAuthorizationBuilder()
         .SetDefaultPolicy(new AuthorizationPolicyBuilder().RequireAssertion(_ => true).Build());
 }
+
+// Add job resumption service
+builder.Services.AddHostedService<JobResumptionService>();
 
 builder.Services.AddRequestTimeouts();
 builder.Services.AddOutputCache();

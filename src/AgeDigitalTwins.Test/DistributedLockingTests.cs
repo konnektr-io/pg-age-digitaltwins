@@ -191,10 +191,10 @@ public class DistributedLockingTests : TestBase
             jobId,
             TimeSpan.FromMilliseconds(1)
         );
-        
+
         // Wait for the lock to expire
         await Task.Delay(TimeSpan.FromMilliseconds(100));
-        
+
         var expiredLocksCount = await jobService.CleanupExpiredLocksAsync();
 
         // Assert
@@ -214,10 +214,10 @@ public class DistributedLockingTests : TestBase
             jobId,
             TimeSpan.FromMilliseconds(1)
         );
-        
+
         // Wait for the lock to expire
         await Task.Delay(TimeSpan.FromMilliseconds(100));
-        
+
         var secondLockAcquired = await jobService.TryAcquireJobLockAsync(jobId);
 
         // Assert

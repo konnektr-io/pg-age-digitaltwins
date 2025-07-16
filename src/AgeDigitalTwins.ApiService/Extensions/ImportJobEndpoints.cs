@@ -73,6 +73,17 @@ public static class ImportJobEndpoints
             )
             .Produces(StatusCodes.Status204NoContent)
             .ProducesProblem(StatusCodes.Status404NotFound);
+
+        // Resume Import Job
+        jobs.MapPost("/{id}/resume", ResumeImportJobAsync)
+            .WithName("ResumeImportJob")
+            .WithSummary("Resume an import job")
+            .WithDescription(
+                "Resumes an interrupted import job from its last checkpoint. The job must be in a resumable state (Running or Failed)."
+            )
+            .Produces<JobRecord>()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound);
     }
 
     private static async Task<
@@ -252,5 +263,94 @@ public static class ImportJobEndpoints
             return TypedResults.NotFound();
 
         return TypedResults.NoContent();
+    }
+
+    private static async Task<
+        Results<Ok<JobRecord>, NotFound, ProblemHttpResult>
+    > ResumeImportJobAsync(
+        [Required] string id,
+        [FromServices] AgeDigitalTwinsClient client,
+        [FromServices] IBlobStorageService blobStorageService,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (string.IsNullOrWhiteSpace(id))
+            return TypedResults.NotFound();
+
+        var job = await client.GetImportJobAsync(id);
+        if (job == null)
+            return TypedResults.NotFound();
+
+        // Check if job is in a resumable state
+        if (job.Status != JobStatus.Running && job.Status != JobStatus.Failed)
+        {
+            return TypedResults.Problem(
+                detail: $"Cannot resume job in status '{job.Status}'. Only running or failed jobs can be resumed.",
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Validation Failed"
+            );
+        }
+
+        // Check if job is already locked by another instance
+        var isLocked = await client.IsJobLockedByAnotherInstanceAsync(id, cancellationToken);
+        if (isLocked)
+        {
+            return TypedResults.Problem(
+                detail: "Job is currently being processed by another instance.",
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Job Locked"
+            );
+        }
+
+        try
+        {
+            // Get blob URIs from job record
+            var inputBlobUri = job.InputBlobUri;
+            var outputBlobUri = job.OutputBlobUri;
+
+            if (string.IsNullOrEmpty(inputBlobUri) || string.IsNullOrEmpty(outputBlobUri))
+            {
+                return TypedResults.Problem(
+                    detail: "Job is missing required blob URIs for resumption.",
+                    statusCode: StatusCodes.Status400BadRequest,
+                    title: "Invalid Job State"
+                );
+            }
+
+            // Get blob streams
+            await using var inputStream = await blobStorageService.GetReadStreamAsync(
+                new Uri(inputBlobUri)
+            );
+            await using var outputStream = await blobStorageService.GetWriteStreamAsync(
+                new Uri(outputBlobUri)
+            );
+
+            // Resume the job
+            var result = await client.ResumeImportJobAsync(
+                id,
+                inputStream,
+                outputStream,
+                cancellationToken
+            );
+
+            return TypedResults.Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return TypedResults.Problem(
+                detail: ex.Message,
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Resume Failed"
+            );
+        }
+        catch (Exception ex)
+        {
+            // Log the exception here if needed
+            return TypedResults.Problem(
+                detail: $"An unexpected error occurred while resuming the job: {ex.Message}",
+                statusCode: StatusCodes.Status500InternalServerError,
+                title: "Internal Server Error"
+            );
+        }
     }
 }

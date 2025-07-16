@@ -140,7 +140,7 @@ public static class StreamingImportJob
             },
             null,
             TimeSpan.FromMinutes(1), // First heartbeat after 1 minute
-            TimeSpan.FromMinutes(1)  // Subsequent heartbeats every 1 minute
+            TimeSpan.FromMinutes(1) // Subsequent heartbeats every 1 minute
         );
 
         try

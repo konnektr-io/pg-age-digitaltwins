@@ -43,10 +43,15 @@ public partial class AgeDigitalTwinsClient
             throw new ArgumentNullException(nameof(outputStream));
 
         // Try to acquire a distributed lock for the job
-        var lockAcquired = await JobService.TryAcquireJobLockAsync(jobId, cancellationToken: cancellationToken);
+        var lockAcquired = await JobService.TryAcquireJobLockAsync(
+            jobId,
+            cancellationToken: cancellationToken
+        );
         if (!lockAcquired)
         {
-            throw new InvalidOperationException($"Failed to acquire lock for job {jobId}. Job may already be running on another instance.");
+            throw new InvalidOperationException(
+                $"Failed to acquire lock for job {jobId}. Job may already be running on another instance."
+            );
         }
 
         try
@@ -225,7 +230,10 @@ public partial class AgeDigitalTwinsClient
         }
 
         // Try to acquire the distributed lock
-        var lockAcquired = await JobService.TryAcquireJobLockAsync(jobId, cancellationToken: cancellationToken);
+        var lockAcquired = await JobService.TryAcquireJobLockAsync(
+            jobId,
+            cancellationToken: cancellationToken
+        );
         if (!lockAcquired)
         {
             // Job is already being processed by another instance
@@ -287,5 +295,87 @@ public partial class AgeDigitalTwinsClient
             return null;
 
         return await JobService.GetJobLockInfoAsync(jobId, cancellationToken);
+    }
+
+    /// <summary>
+    /// Gets all jobs that should be resumed on startup.
+    /// </summary>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A list of job records that need to be resumed.</returns>
+    public async Task<List<JobRecord>> GetJobsToResumeAsync(
+        CancellationToken cancellationToken = default
+    )
+    {
+        return await JobService.GetJobsToResumeAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Resumes a specific import job from its checkpoint.
+    /// </summary>
+    /// <param name="jobId">The job identifier.</param>
+    /// <param name="inputStream">The input stream containing ND-JSON data.</param>
+    /// <param name="outputStream">The output stream for logging and progress.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The updated job record.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when job is not in a resumable state.</exception>
+    public async Task<JobRecord> ResumeImportJobAsync(
+        string jobId,
+        Stream inputStream,
+        Stream outputStream,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (string.IsNullOrEmpty(jobId))
+            throw new ArgumentException("Job ID cannot be null or empty.", nameof(jobId));
+
+        if (inputStream == null)
+            throw new ArgumentNullException(nameof(inputStream));
+
+        if (outputStream == null)
+            throw new ArgumentNullException(nameof(outputStream));
+
+        // Check if we have a lock on this job
+        var lockInfo = await JobService.GetJobLockInfoAsync(jobId, cancellationToken);
+        if (lockInfo?.IsExpired != false)
+        {
+            throw new InvalidOperationException(
+                $"Job {jobId} is not locked by this instance or lock has expired"
+            );
+        }
+
+        // Load checkpoint for this job
+        var checkpoint = await JobService.LoadCheckpointAsync(jobId, cancellationToken);
+        if (checkpoint == null)
+        {
+            throw new InvalidOperationException($"No checkpoint found for job {jobId}");
+        }
+
+        // Resume execution from checkpoint
+        var result = await StreamingImportJob.ExecuteWithCheckpointAsync(
+            this,
+            inputStream,
+            outputStream,
+            jobId,
+            checkpoint,
+            cancellationToken
+        );
+
+        // Update job record with final result
+        await JobService.UpdateJobStatusAsync(
+            jobId,
+            result.Status,
+            resultData: new
+            {
+                modelsCreated = result.ModelsCreated,
+                twinsCreated = result.TwinsCreated,
+                relationshipsCreated = result.RelationshipsCreated,
+                errorCount = result.ErrorCount,
+                resumed = true,
+                resumedAt = DateTime.UtcNow,
+            },
+            cancellationToken: cancellationToken
+        );
+
+        return result;
     }
 }

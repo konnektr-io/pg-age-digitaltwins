@@ -33,7 +33,8 @@ public class JobService
         _dataSource = dataSource ?? throw new ArgumentNullException(nameof(dataSource));
         _logger = logger;
         _schemaName = $"{graphName}_jobs";
-        _instanceId = $"{Environment.MachineName}-{Environment.ProcessId}-{Guid.NewGuid().ToString("N")[..8]}";
+        _instanceId =
+            $"{Environment.MachineName}-{Environment.ProcessId}-{Guid.NewGuid().ToString("N")[..8]}";
         InitializeSchemaAsync().GetAwaiter().GetResult();
     }
 
@@ -515,7 +516,8 @@ public class JobService
         var lockExpiresAt = now.Add(lockDuration);
 
         // Try to acquire lock using optimistic concurrency control
-        var sql = $@"
+        var sql =
+            $@"
             UPDATE {_schemaName}.job_records
             SET lock_acquired_at = @lockAcquiredAt,
                 lock_acquired_by = @lockAcquiredBy,
@@ -579,7 +581,8 @@ public class JobService
 
         var now = DateTime.UtcNow;
 
-        var sql = $@"
+        var sql =
+            $@"
             UPDATE {_schemaName}.job_records
             SET lock_heartbeat_at = @lockHeartbeatAt,
                 updated_at = @updatedAt
@@ -633,7 +636,8 @@ public class JobService
         if (string.IsNullOrEmpty(jobId))
             return false;
 
-        var sql = $@"
+        var sql =
+            $@"
             UPDATE {_schemaName}.job_records
             SET lock_acquired_at = NULL,
                 lock_acquired_by = NULL,
@@ -688,7 +692,8 @@ public class JobService
 
         var now = DateTime.UtcNow;
 
-        var sql = $@"
+        var sql =
+            $@"
             SELECT COUNT(*)
             FROM {_schemaName}.job_records
             WHERE id = @jobId
@@ -720,7 +725,8 @@ public class JobService
         if (string.IsNullOrEmpty(jobId))
             return null;
 
-        var sql = $@"
+        var sql =
+            $@"
             SELECT lock_acquired_at, lock_acquired_by, lock_lease_duration, lock_heartbeat_at
             FROM {_schemaName}.job_records
             WHERE id = @jobId
@@ -763,7 +769,8 @@ public class JobService
     {
         var now = DateTime.UtcNow;
 
-        var sql = $@"
+        var sql =
+            $@"
             UPDATE {_schemaName}.job_records
             SET lock_acquired_at = NULL,
                 lock_acquired_by = NULL,
@@ -789,5 +796,111 @@ public class JobService
         }
 
         return rowsAffected;
+    }
+
+    /// <summary>
+    /// Gets all jobs that should be resumed on startup (jobs that are in progress but not locked by any instance).
+    /// </summary>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A list of job records that need to be resumed.</returns>
+    public async Task<List<JobRecord>> GetJobsToResumeAsync(
+        CancellationToken cancellationToken = default
+    )
+    {
+        string sql = $"""
+            SELECT j.job_id, j.job_type, j.status, j.created_at, j.updated_at, j.request_data, j.result_data
+            FROM {_schemaName}.jobs j
+            LEFT JOIN {_schemaName}.job_locks jl ON j.job_id = jl.job_id AND jl.lock_acquired_at + jl.lock_lease_duration > NOW()
+            WHERE j.status IN ('InProgress', 'Pending')
+            AND jl.job_id IS NULL
+            ORDER BY j.created_at;
+            """;
+
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var command = new NpgsqlCommand(sql, connection);
+
+        var jobs = new List<JobRecord>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var job = new JobRecord
+            {
+                Id = reader.GetString(0), // job_id
+                JobType = reader.GetString(1), // job_type
+                Status = Enum.Parse<JobStatus>(reader.GetString(2)), // status
+                CreatedAt = reader.GetDateTime(3), // created_at
+                UpdatedAt = reader.GetDateTime(4), // updated_at
+                RequestData = reader.IsDBNull(5) ? null : JsonDocument.Parse(reader.GetString(5)), // request_data
+                ResultData = reader.IsDBNull(6)
+                    ? null
+                    : JsonDocument.Parse(
+                        reader.GetString(6)
+                    ) // result_data
+                ,
+            };
+            jobs.Add(job);
+        }
+
+        _logger?.LogInformation("Found {JobCount} jobs to resume", jobs.Count);
+        return jobs;
+    }
+
+    /// <summary>
+    /// Resumes incomplete jobs by attempting to acquire locks and continue processing.
+    /// </summary>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A list of job records that were successfully resumed.</returns>
+    public async Task<List<JobRecord>> ResumeIncompleteJobsAsync(
+        CancellationToken cancellationToken = default
+    )
+    {
+        var jobsToResume = await GetJobsToResumeAsync(cancellationToken);
+        var resumedJobs = new List<JobRecord>();
+
+        foreach (var job in jobsToResume)
+        {
+            try
+            {
+                // Try to acquire a lock for this job
+                var lockAcquired = await TryAcquireJobLockAsync(
+                    job.Id,
+                    cancellationToken: cancellationToken
+                );
+                if (lockAcquired)
+                {
+                    _logger?.LogInformation(
+                        "Acquired lock for job {JobId}, will resume execution",
+                        job.Id
+                    );
+
+                    // Update the job status to indicate it's being resumed
+                    await UpdateJobStatusAsync(
+                        job.Id,
+                        JobStatus.Running,
+                        resultData: new { resumedAt = DateTime.UtcNow, resumedBy = _instanceId },
+                        cancellationToken: cancellationToken
+                    );
+
+                    // Add to list of jobs that can be resumed
+                    resumedJobs.Add(job);
+                }
+                else
+                {
+                    _logger?.LogDebug("Could not acquire lock for job {JobId}, skipping", job.Id);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error resuming job {JobId}", job.Id);
+            }
+        }
+
+        _logger?.LogInformation(
+            "Prepared {ResumedCount} out of {TotalJobs} incomplete jobs for resumption",
+            resumedJobs.Count,
+            jobsToResume.Count
+        );
+        return resumedJobs;
     }
 }
