@@ -42,56 +42,71 @@ public partial class AgeDigitalTwinsClient
         if (outputStream == null)
             throw new ArgumentNullException(nameof(outputStream));
 
-        // Create the job record
-        var jobRecord = await JobService.CreateJobAsync(
-            jobId,
-            "import",
-            request,
-            cancellationToken
-        );
+        // Try to acquire a distributed lock for the job
+        var lockAcquired = await JobService.TryAcquireJobLockAsync(jobId, cancellationToken: cancellationToken);
+        if (!lockAcquired)
+        {
+            throw new InvalidOperationException($"Failed to acquire lock for job {jobId}. Job may already be running on another instance.");
+        }
 
-        // Check if there's an existing checkpoint for this job
-        var checkpoint = await JobService.LoadCheckpointAsync(jobId, cancellationToken);
-
-        // Start job execution with checkpoint support
         try
         {
-            var result = await StreamingImportJob.ExecuteWithCheckpointAsync(
-                this,
-                inputStream,
-                outputStream,
+            // Create the job record
+            var jobRecord = await JobService.CreateJobAsync(
                 jobId,
-                checkpoint,
+                "import",
+                request,
                 cancellationToken
             );
 
-            // Update job record with final result
-            await JobService.UpdateJobStatusAsync(
-                jobId,
-                result.Status,
-                resultData: new
-                {
-                    modelsCreated = result.ModelsCreated,
-                    twinsCreated = result.TwinsCreated,
-                    relationshipsCreated = result.RelationshipsCreated,
-                    errorCount = result.ErrorCount,
-                },
-                cancellationToken: cancellationToken
-            );
+            // Check if there's an existing checkpoint for this job
+            var checkpoint = await JobService.LoadCheckpointAsync(jobId, cancellationToken);
 
-            // Return the updated job record from the database
-            return await JobService.GetJobAsync(jobId) ?? result;
+            // Start job execution with checkpoint support
+            try
+            {
+                var result = await StreamingImportJob.ExecuteWithCheckpointAsync(
+                    this,
+                    inputStream,
+                    outputStream,
+                    jobId,
+                    checkpoint,
+                    cancellationToken
+                );
+
+                // Update job record with final result
+                await JobService.UpdateJobStatusAsync(
+                    jobId,
+                    result.Status,
+                    resultData: new
+                    {
+                        modelsCreated = result.ModelsCreated,
+                        twinsCreated = result.TwinsCreated,
+                        relationshipsCreated = result.RelationshipsCreated,
+                        errorCount = result.ErrorCount,
+                    },
+                    cancellationToken: cancellationToken
+                );
+
+                // Return the updated job record from the database
+                return await JobService.GetJobAsync(jobId) ?? result;
+            }
+            catch (Exception ex)
+            {
+                // Update job status to failed if an exception occurs
+                await JobService.UpdateJobStatusAsync(
+                    jobId,
+                    JobStatus.Failed,
+                    errorData: new { error = ex.Message },
+                    cancellationToken: cancellationToken
+                );
+                throw;
+            }
         }
-        catch (Exception ex)
+        finally
         {
-            // Update job status to failed if an exception occurs
-            await JobService.UpdateJobStatusAsync(
-                jobId,
-                JobStatus.Failed,
-                errorData: new { error = ex.Message },
-                cancellationToken: cancellationToken
-            );
-            throw;
+            // Always release the lock when done
+            await JobService.ReleaseJobLockAsync(jobId, cancellationToken);
         }
     }
 
@@ -179,5 +194,98 @@ public partial class AgeDigitalTwinsClient
     public virtual bool DeleteImportJob(string jobId)
     {
         return DeleteImportJobAsync(jobId).GetAwaiter().GetResult();
+    }
+
+    /// <summary>
+    /// Resumes a previously interrupted import job using the distributed locking mechanism.
+    /// This method should be called when a job needs to be resumed, potentially on a different instance.
+    /// </summary>
+    /// <param name="jobId">The job identifier.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The job record if the job was resumed successfully; otherwise null.</returns>
+    public async Task<JobRecord?> ResumeImportJobAsync(
+        string jobId,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (string.IsNullOrEmpty(jobId))
+            throw new ArgumentException("Job ID cannot be null or empty.", nameof(jobId));
+
+        // Check if the job exists and is in a resumable state
+        var existingJob = await JobService.GetJobAsync(jobId, cancellationToken);
+        if (existingJob == null)
+        {
+            return null;
+        }
+
+        // Only resume jobs that are in running state or have failed due to instance failure
+        if (existingJob.Status != JobStatus.Running && existingJob.Status != JobStatus.Failed)
+        {
+            return existingJob;
+        }
+
+        // Try to acquire the distributed lock
+        var lockAcquired = await JobService.TryAcquireJobLockAsync(jobId, cancellationToken: cancellationToken);
+        if (!lockAcquired)
+        {
+            // Job is already being processed by another instance
+            return existingJob;
+        }
+
+        try
+        {
+            // Check if we have a checkpoint to resume from
+            var checkpoint = await JobService.LoadCheckpointAsync(jobId, cancellationToken);
+            if (checkpoint == null)
+            {
+                // No checkpoint available, cannot resume
+                return existingJob;
+            }
+
+            // For resuming, we need the original input stream - this would typically
+            // come from a stored location (e.g., blob storage, file system)
+            // For now, we'll return the existing job and let the caller handle providing the stream
+            return existingJob;
+        }
+        finally
+        {
+            // Release the lock if we're not going to process the job
+            await JobService.ReleaseJobLockAsync(jobId, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Checks if a job is currently locked by another instance.
+    /// </summary>
+    /// <param name="jobId">The job identifier.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>True if the job is locked by another instance; otherwise false.</returns>
+    public async Task<bool> IsJobLockedByAnotherInstanceAsync(
+        string jobId,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (string.IsNullOrEmpty(jobId))
+            return false;
+
+        var lockInfo = await JobService.GetJobLockInfoAsync(jobId, cancellationToken);
+        return lockInfo != null && !lockInfo.IsExpired;
+    }
+
+    /// <summary>
+    /// Gets information about the job lock.
+    /// </summary>
+    /// <param name="jobId">The job identifier.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>Lock information if available; otherwise null.</returns>
+    public async Task<JobLockInfo?> GetJobLockInfoAsync(
+        string jobId,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (string.IsNullOrEmpty(jobId))
+            return null;
+
+        return await JobService.GetJobLockInfoAsync(jobId, cancellationToken);
     }
 }

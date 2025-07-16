@@ -118,6 +118,31 @@ public static class StreamingImportJob
             );
         }
 
+        // Create a timer for periodic heartbeat updates
+        using var heartbeatTimer = new Timer(
+            async _ =>
+            {
+                try
+                {
+                    await client.JobService.RenewJobLockHeartbeatAsync(jobId, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    // Log heartbeat failure but don't stop the job
+                    await LogAsync(
+                        outputStream,
+                        jobId,
+                        "Warning",
+                        new { warning = $"Heartbeat renewal failed: {ex.Message}" },
+                        cancellationToken
+                    );
+                }
+            },
+            null,
+            TimeSpan.FromMinutes(1), // First heartbeat after 1 minute
+            TimeSpan.FromMinutes(1)  // Subsequent heartbeats every 1 minute
+        );
+
         try
         {
             // Only validate stream header if starting from beginning
@@ -209,6 +234,11 @@ public static class StreamingImportJob
             );
 
             return result;
+        }
+        finally
+        {
+            // Dispose the heartbeat timer
+            heartbeatTimer?.Dispose();
         }
     }
 
