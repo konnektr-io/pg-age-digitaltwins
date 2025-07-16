@@ -355,7 +355,8 @@ public class ImportJobTests : TestBase
         Assert.Equal(executedJob.Status, retrievedJob.Status);
         // Use time tolerance for datetime comparison to avoid microsecond differences
         Assert.True(
-            Math.Abs((executedJob.CreatedDateTime - retrievedJob.CreatedDateTime).TotalMilliseconds) < 100,
+            Math.Abs((executedJob.CreatedDateTime - retrievedJob.CreatedDateTime).TotalMilliseconds)
+                < 100,
             $"Expected CreatedDateTime to be within 100ms. Expected: {executedJob.CreatedDateTime}, Actual: {retrievedJob.CreatedDateTime}"
         );
 
