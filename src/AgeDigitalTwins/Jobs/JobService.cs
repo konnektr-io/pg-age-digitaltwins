@@ -209,18 +209,6 @@ public class JobService
         return rowsAffected > 0;
     }
 
-    public async Task<bool> CancelJobAsync(
-        string jobId,
-        CancellationToken cancellationToken = default
-    )
-    {
-        return await UpdateJobStatusAsync(
-            jobId,
-            JobStatus.Cancelled,
-            cancellationToken: cancellationToken
-        );
-    }
-
     public async Task<bool> DeleteJobAsync(
         string jobId,
         CancellationToken cancellationToken = default
@@ -237,46 +225,6 @@ public class JobService
 
         var rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken);
         return rowsAffected > 0;
-    }
-
-    public async Task CompleteJobAsync<TResult>(
-        string jobId,
-        TResult result,
-        CancellationToken cancellationToken = default
-    )
-    {
-        var success = await UpdateJobStatusAsync(
-            jobId,
-            JobStatus.Succeeded,
-            resultData: result,
-            cancellationToken: cancellationToken
-        );
-
-        if (!success)
-        {
-            _logger?.LogWarning("Failed to complete job {JobId}", jobId);
-            throw new InvalidOperationException($"Failed to complete job '{jobId}'.");
-        }
-    }
-
-    public async Task FailJobAsync<TError>(
-        string jobId,
-        TError error,
-        CancellationToken cancellationToken = default
-    )
-    {
-        var success = await UpdateJobStatusAsync(
-            jobId,
-            JobStatus.Failed,
-            errorData: error,
-            cancellationToken: cancellationToken
-        );
-
-        if (!success)
-        {
-            _logger?.LogWarning("Failed to mark job {JobId} as failed", jobId);
-            throw new InvalidOperationException($"Failed to mark job '{jobId}' as failed.");
-        }
     }
 
     /// <summary>
@@ -853,63 +801,5 @@ public class JobService
 
         _logger?.LogInformation("Found {JobCount} jobs to resume", jobs.Count);
         return jobs;
-    }
-
-    /// <summary>
-    /// Resumes incomplete jobs by attempting to acquire locks and continue processing.
-    /// </summary>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>A list of job records that were successfully resumed.</returns>
-    public async Task<List<JobRecord>> ResumeIncompleteJobsAsync(
-        CancellationToken cancellationToken = default
-    )
-    {
-        var jobsToResume = await GetJobsToResumeAsync(cancellationToken);
-        var resumedJobs = new List<JobRecord>();
-
-        foreach (var job in jobsToResume)
-        {
-            try
-            {
-                // Try to acquire a lock for this job
-                var lockAcquired = await TryAcquireJobLockAsync(
-                    job.Id,
-                    cancellationToken: cancellationToken
-                );
-                if (lockAcquired)
-                {
-                    _logger?.LogInformation(
-                        "Acquired lock for job {JobId}, will resume execution",
-                        job.Id
-                    );
-
-                    // Update the job status to indicate it's being resumed
-                    await UpdateJobStatusAsync(
-                        job.Id,
-                        JobStatus.Running,
-                        resultData: new { resumedAt = DateTime.UtcNow, resumedBy = _instanceId },
-                        cancellationToken: cancellationToken
-                    );
-
-                    // Add to list of jobs that can be resumed
-                    resumedJobs.Add(job);
-                }
-                else
-                {
-                    _logger?.LogDebug("Could not acquire lock for job {JobId}, skipping", job.Id);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "Error resuming job {JobId}", job.Id);
-            }
-        }
-
-        _logger?.LogInformation(
-            "Prepared {ResumedCount} out of {TotalJobs} incomplete jobs for resumption",
-            resumedJobs.Count,
-            jobsToResume.Count
-        );
-        return resumedJobs;
     }
 }
