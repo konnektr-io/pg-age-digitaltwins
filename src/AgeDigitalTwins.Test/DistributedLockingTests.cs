@@ -19,6 +19,9 @@ public class DistributedLockingTests : TestBase
         var jobId = $"test-lock-{Guid.NewGuid()}";
         var jobService = Client.JobService;
 
+        // Create a job first
+        await jobService.CreateJobAsync(jobId, "test", (object?)null);
+
         // Act
         var lockAcquired = await jobService.TryAcquireJobLockAsync(jobId);
 
@@ -35,6 +38,9 @@ public class DistributedLockingTests : TestBase
         // Arrange
         var jobId = $"test-lock-{Guid.NewGuid()}";
         var jobService = Client.JobService;
+
+        // Create a job first
+        await jobService.CreateJobAsync(jobId, "test", (object?)null);
 
         // Act
         var firstLockAcquired = await jobService.TryAcquireJobLockAsync(jobId);
@@ -54,6 +60,9 @@ public class DistributedLockingTests : TestBase
         // Arrange
         var jobId = $"test-lock-{Guid.NewGuid()}";
         var jobService = Client.JobService;
+
+        // Create a job first
+        await jobService.CreateJobAsync(jobId, "test", (object?)null);
 
         // Act
         var lockAcquired = await jobService.TryAcquireJobLockAsync(jobId);
@@ -88,6 +97,9 @@ public class DistributedLockingTests : TestBase
         var jobId = $"test-lock-{Guid.NewGuid()}";
         var jobService = Client.JobService;
 
+        // Create a job first
+        await jobService.CreateJobAsync(jobId, "test", (object?)null);
+
         // Act
         var lockAcquired = await jobService.TryAcquireJobLockAsync(jobId);
         var lockReleased = await jobService.ReleaseJobLockAsync(jobId);
@@ -117,6 +129,9 @@ public class DistributedLockingTests : TestBase
         // Arrange
         var jobId = $"test-lock-{Guid.NewGuid()}";
         var jobService = Client.JobService;
+
+        // Create a job first
+        await jobService.CreateJobAsync(jobId, "test", (object?)null);
 
         // Act
         var lockAcquired = await jobService.TryAcquireJobLockAsync(jobId);
@@ -150,6 +165,9 @@ public class DistributedLockingTests : TestBase
         // Arrange
         var jobId = $"test-lock-{Guid.NewGuid()}";
         var jobService = Client.JobService;
+
+        // Create a job first
+        await jobService.CreateJobAsync(jobId, "test", (object?)null);
 
         // Act
         var lockAcquired = await jobService.TryAcquireJobLockAsync(jobId);
@@ -186,6 +204,9 @@ public class DistributedLockingTests : TestBase
         var jobId = $"test-lock-{Guid.NewGuid()}";
         var jobService = Client.JobService;
 
+        // Create a job first
+        await jobService.CreateJobAsync(jobId, "test", (object?)null);
+
         // Act
         var lockAcquired = await jobService.TryAcquireJobLockAsync(
             jobId,
@@ -208,6 +229,9 @@ public class DistributedLockingTests : TestBase
         // Arrange
         var jobId = $"test-lock-{Guid.NewGuid()}";
         var jobService = Client.JobService;
+
+        // Create a job first
+        await jobService.CreateJobAsync(jobId, "test", (object?)null);
 
         // Act
         var firstLockAcquired = await jobService.TryAcquireJobLockAsync(
