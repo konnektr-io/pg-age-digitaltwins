@@ -648,22 +648,26 @@ SET rel = '{updatedRelJson}'::agtype";
             );
         }
 
-        return await CreateOrReplaceRelationshipsInternalAsync(relationshipList, cancellationToken);
+        await using var connection = await _dataSource.OpenConnectionAsync(
+            TargetSessionAttributes.ReadWrite,
+            cancellationToken
+        );
+        return await CreateOrReplaceRelationshipsInternalAsync(
+            connection,
+            relationshipList,
+            cancellationToken
+        );
     }
 
     /// <summary>
     /// Internal implementation of batch relationship creation with simplified validation.
     /// </summary>
     private async Task<BatchRelationshipResult> CreateOrReplaceRelationshipsInternalAsync<T>(
+        NpgsqlConnection connection,
         IReadOnlyList<T> relationships,
         CancellationToken cancellationToken = default
     )
     {
-        await using var connection = await _dataSource.OpenConnectionAsync(
-            TargetSessionAttributes.ReadWrite,
-            cancellationToken
-        );
-
         var results = new List<RelationshipOperationResult>();
         var validRelationships = new List<(JsonObject jsonObject, string relationshipName)>();
         DateTime now = DateTime.UtcNow;
@@ -901,7 +905,7 @@ RETURN t.`$dtId` AS twinId";
 
                 // Convert to JSON strings for the UNWIND operation - construct full query like models
                 string relationshipsString =
-                    $"['{string.Join("','", groupData.Select(r => JsonSerializer.Serialize(r, serializerOptions).Replace("'", "\\'")))}']";
+                    $"['{string.Join("','", groupData.Select(r => JsonSerializer.Serialize(r, serializerOptions).Replace("'", "\\'").Replace("\\", "\\\\")))}']";
 
                 string cypher =
                     $@"UNWIND {relationshipsString} as relationshipJson
