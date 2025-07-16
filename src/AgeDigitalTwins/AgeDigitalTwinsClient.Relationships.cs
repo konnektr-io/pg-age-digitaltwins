@@ -818,25 +818,27 @@ SET rel = '{updatedRelJson}'::agtype";
 WHERE t.`$dtId` IN ['{twinIdsString}']
 RETURN t.`$dtId` AS twinId";
 
-        await using var existenceCommand = connection.CreateCypherCommand(
-            _graphName,
-            existenceCheckCypher
-        );
-        await using var existenceReader = await existenceCommand.ExecuteReaderAsync(
-            cancellationToken
-        );
-
-        while (await existenceReader.ReadAsync(cancellationToken))
+        await using (
+            var existenceCommand = connection.CreateCypherCommand(_graphName, existenceCheckCypher)
+        )
         {
-            var agTwinId = await existenceReader.GetFieldValueAsync<Agtype?>(0);
-            string twinId = ((Agtype)agTwinId).GetString().Trim('\u0001');
-            if (twinId.StartsWith('"') && twinId.EndsWith('"'))
+            await using (
+                var existenceReader = await existenceCommand.ExecuteReaderAsync(cancellationToken)
+            )
             {
-                twinId = twinId[1..^1]; // Remove surrounding quotes
-            }
-            if (!string.IsNullOrEmpty(twinId))
-            {
-                existingTwins.Add(twinId);
+                while (await existenceReader.ReadAsync(cancellationToken))
+                {
+                    var agTwinId = await existenceReader.GetFieldValueAsync<Agtype?>(0);
+                    string twinId = ((Agtype)agTwinId).GetString();
+                    if (twinId.StartsWith('"') && twinId.EndsWith('"'))
+                    {
+                        twinId = twinId[1..^1]; // Remove surrounding quotes
+                    }
+                    if (!string.IsNullOrEmpty(twinId))
+                    {
+                        existingTwins.Add(twinId);
+                    }
+                }
             }
         }
 
@@ -905,7 +907,7 @@ RETURN t.`$dtId` AS twinId";
 
                 // Convert to JSON strings for the UNWIND operation - construct full query like models
                 string relationshipsString =
-                    $"['{string.Join("','", groupData.Select(r => JsonSerializer.Serialize(r, serializerOptions).Replace("'", "\\'").Replace("\\", "\\\\")))}']";
+                    $"['{string.Join("','", groupData.Select(r => JsonSerializer.Serialize(r, serializerOptions).Replace("'", "\\'")))}']";
 
                 string cypher =
                     $@"UNWIND {relationshipsString} as relationshipJson
