@@ -66,10 +66,10 @@ public class ImportJobSystemTests : TestBase
             // Assert
             Assert.NotNull(jobRecord);
             Assert.Equal(jobId, jobRecord.Id);
-            Assert.Equal(JobStatus.NotStarted, jobRecord.Status);
+            Assert.Equal(JobStatus.Succeeded, jobRecord.Status); // ImportGraphAsync executes the job immediately
             Assert.True(jobRecord.CreatedDateTime <= DateTime.UtcNow);
             Assert.True(jobRecord.LastActionDateTime <= DateTime.UtcNow);
-            Assert.Null(jobRecord.FinishedDateTime);
+            Assert.NotNull(jobRecord.FinishedDateTime); // Job is finished since it executed
             Assert.True(jobRecord.PurgeDateTime > DateTime.UtcNow);
 
             _output.WriteLine(

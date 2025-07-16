@@ -72,6 +72,7 @@ public static class StreamingImportJob
             Id = jobId,
             JobType = "import",
             CreatedDateTime = DateTime.UtcNow,
+            LastActionDateTime = DateTime.UtcNow,
             Status = JobStatus.Running,
         };
 
@@ -166,6 +167,7 @@ public static class StreamingImportJob
             }
 
             result.FinishedDateTime = DateTime.UtcNow;
+            result.LastActionDateTime = DateTime.UtcNow;
 
             // Clear checkpoint on successful completion
             if (
@@ -195,6 +197,7 @@ public static class StreamingImportJob
         {
             result.Status = JobStatus.Failed;
             result.FinishedDateTime = DateTime.UtcNow;
+            result.LastActionDateTime = DateTime.UtcNow;
             result.ErrorCount++;
 
             await LogAsync(
