@@ -32,7 +32,7 @@ public class ImportJobTests : TestBase
 {""$dtId"":""twin0"",""$metadata"":{""$model"":""dtmi:com:microsoft:azure:iot:model0;1""},""property00"":10,""property01"":{""subProperty1"":""subProperty1Value"",""subProperty2"":""subProperty2Value""}}
 {""$dtId"":""twin1"",""$metadata"":{""$model"":""dtmi:com:microsoft:azure:iot:model1;1""},""property10"":""propertyValue1"",""property11"":{""subProperty1"":""subProperty1Value"",""subProperty2"":""subProperty2Value""}}
 {""Section"": ""Relationships""}
-{""$dtId"":""twin0"",""$relationshipId"":""relationship"",""$targetId"":""twin1"",""$relationshipName"":""has"",""relationshipProperty1"":""propertyValue1"",""relationshipProperty2"":10}";
+{""$sourceId"":""twin0"",""$relationshipId"":""relationship"",""$targetId"":""twin1"",""$relationshipName"":""has"",""relationshipProperty1"":""propertyValue1"",""relationshipProperty2"":10}";
 
         using var inputStream = new MemoryStream(Encoding.UTF8.GetBytes(sampleData));
         using var outputStream = new MemoryStream();
@@ -46,6 +46,23 @@ public class ImportJobTests : TestBase
         // Act
         var jobId = $"test-import-{Guid.NewGuid().ToString("N")[..8]}";
         var result = await Client.ImportGraphAsync(jobId, inputStream, outputStream, options);
+
+        // Log result details BEFORE assertions for debugging
+        outputStream.Position = 0;
+        using var logReader = new StreamReader(outputStream);
+        var logContent = await logReader.ReadToEndAsync();
+
+        _output.WriteLine("Import Job Result:");
+        _output.WriteLine($"Job ID: {result.Id}");
+        _output.WriteLine($"Status: {result.Status}");
+        _output.WriteLine($"Start Time: {result.CreatedDateTime}");
+        _output.WriteLine($"End Time: {result.FinishedDateTime}");
+        _output.WriteLine($"Models Created: {result.ModelsCreated}");
+        _output.WriteLine($"Twins Created: {result.TwinsCreated}");
+        _output.WriteLine($"Relationships Created: {result.RelationshipsCreated}");
+        _output.WriteLine($"Error Count: {result.ErrorCount}");
+        _output.WriteLine("Log Output:");
+        _output.WriteLine(logContent);
 
         // Assert
         Assert.NotNull(result);
@@ -247,8 +264,8 @@ public class ImportJobTests : TestBase
         Assert.True(
             result.Status == JobStatus.Succeeded || result.Status == JobStatus.PartiallySucceeded
         );
-        Assert.True(result.CreatedDateTime > DateTime.MinValue);
-        Assert.True(result.LastActionDateTime > DateTime.MinValue);
+        Assert.True(result.CreatedDateTime > DateTimeOffset.MinValue);
+        Assert.True(result.LastActionDateTime > DateTimeOffset.MinValue);
 
         _output.WriteLine($"Executed import job with ID: {result.Id}");
         _output.WriteLine($"Job status: {result.Status}");
