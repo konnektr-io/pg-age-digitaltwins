@@ -79,7 +79,8 @@ public partial class AgeDigitalTwinsClient
                 cancellationToken: cancellationToken
             );
 
-            return result;
+            // Return the updated job record from the database
+            return await JobService.GetJobAsync(jobId) ?? result;
         }
         catch (Exception ex)
         {

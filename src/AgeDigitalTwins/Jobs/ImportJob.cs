@@ -412,16 +412,6 @@ public static class StreamingImportJob
                         break;
 
                     case CurrentSection.Twins:
-                        // Skip if this twin was already processed
-                        if (checkpoint.TwinsProcessed > 0)
-                        {
-                            var twinData = JsonNode.Parse(line);
-                            var twinId = twinData?["$dtId"]?.ToString();
-                            // This is a simple skip logic - in a real implementation, you'd want to
-                            // track processed IDs in the checkpoint
-                            continue;
-                        }
-
                         // Add to batch instead of processing individually
                         twinsBatch.Add(line);
 
@@ -442,16 +432,6 @@ public static class StreamingImportJob
                         break;
 
                     case CurrentSection.Relationships:
-                        // Skip if this relationship was already processed
-                        if (checkpoint.RelationshipsProcessed > 0)
-                        {
-                            var relData = JsonNode.Parse(line);
-                            var relationshipId = relData?["$relationshipId"]?.ToString();
-                            // This is a simple skip logic - in a real implementation, you'd want to
-                            // track processed IDs in the checkpoint
-                            continue;
-                        }
-
                         // Add to batch instead of processing individually
                         relationshipsBatch.Add(line);
 
