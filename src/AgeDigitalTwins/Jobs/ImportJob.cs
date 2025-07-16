@@ -280,6 +280,11 @@ public static class StreamingImportJob
         CurrentSection currentSection = checkpoint.CurrentSection;
         List<string> allModels = new(checkpoint.PendingModels); // Restore pending models from checkpoint
 
+        // Batch processing for twins and relationships
+        List<string> twinsBatch = new();
+        List<string> relationshipsBatch = new();
+        const int batchSize = 50;
+
         // Checkpoint save interval (save every 50 items)
         const int checkpointInterval = 50;
         int itemsSinceLastCheckpoint = 0;
@@ -299,6 +304,35 @@ public static class StreamingImportJob
                 // Check if this is a section header
                 if (jsonNode?["Section"] != null)
                 {
+                    // Process any pending batches before switching sections
+                    if (twinsBatch.Count > 0)
+                    {
+                        await ProcessTwinsBatchAsync(
+                            client,
+                            connection,
+                            outputStream,
+                            jobId,
+                            twinsBatch,
+                            result,
+                            cancellationToken
+                        );
+                        twinsBatch.Clear();
+                    }
+
+                    if (relationshipsBatch.Count > 0)
+                    {
+                        await ProcessRelationshipsBatchAsync(
+                            client,
+                            connection,
+                            outputStream,
+                            jobId,
+                            relationshipsBatch,
+                            result,
+                            cancellationToken
+                        );
+                        relationshipsBatch.Clear();
+                    }
+
                     // Process all models when leaving the Models section
                     if (currentSection == CurrentSection.Models && allModels.Count > 0)
                     {
@@ -385,15 +419,23 @@ public static class StreamingImportJob
                             continue;
                         }
 
-                        await ProcessTwinAsync(
-                            client,
-                            connection,
-                            outputStream,
-                            jobId,
-                            line,
-                            result,
-                            cancellationToken
-                        );
+                        // Add to batch instead of processing individually
+                        twinsBatch.Add(line);
+
+                        // Process batch when it reaches batchSize
+                        if (twinsBatch.Count >= batchSize)
+                        {
+                            await ProcessTwinsBatchAsync(
+                                client,
+                                connection,
+                                outputStream,
+                                jobId,
+                                twinsBatch,
+                                result,
+                                cancellationToken
+                            );
+                            twinsBatch.Clear();
+                        }
                         break;
 
                     case CurrentSection.Relationships:
@@ -407,15 +449,23 @@ public static class StreamingImportJob
                             continue;
                         }
 
-                        await ProcessRelationshipAsync(
-                            client,
-                            connection,
-                            outputStream,
-                            jobId,
-                            line,
-                            result,
-                            cancellationToken
-                        );
+                        // Add to batch instead of processing individually
+                        relationshipsBatch.Add(line);
+
+                        // Process batch when it reaches batchSize
+                        if (relationshipsBatch.Count >= batchSize)
+                        {
+                            await ProcessRelationshipsBatchAsync(
+                                client,
+                                connection,
+                                outputStream,
+                                jobId,
+                                relationshipsBatch,
+                                result,
+                                cancellationToken
+                            );
+                            relationshipsBatch.Clear();
+                        }
                         break;
                 }
 
@@ -460,6 +510,33 @@ public static class StreamingImportJob
                 cancellationToken
             );
             checkpoint.ModelsCompleted = true;
+        }
+
+        // Process any remaining batches
+        if (twinsBatch.Count > 0)
+        {
+            await ProcessTwinsBatchAsync(
+                client,
+                connection,
+                outputStream,
+                jobId,
+                twinsBatch,
+                result,
+                cancellationToken
+            );
+        }
+
+        if (relationshipsBatch.Count > 0)
+        {
+            await ProcessRelationshipsBatchAsync(
+                client,
+                connection,
+                outputStream,
+                jobId,
+                relationshipsBatch,
+                result,
+                cancellationToken
+            );
         }
 
         // Mark sections as completed
@@ -639,5 +716,182 @@ public static class StreamingImportJob
 
         await outputStream.WriteAsync(logBytes, cancellationToken);
         await outputStream.FlushAsync(cancellationToken);
+    }
+
+    private static async Task ProcessTwinsBatchAsync(
+        AgeDigitalTwinsClient client,
+        NpgsqlConnection connection,
+        Stream outputStream,
+        string jobId,
+        List<string> twinsBatch,
+        JobRecord result,
+        CancellationToken cancellationToken
+    )
+    {
+        if (twinsBatch.Count == 0)
+            return;
+
+        try
+        {
+            await LogAsync(
+                outputStream,
+                jobId,
+                "Info",
+                new
+                {
+                    section = "Twins",
+                    status = "Processing",
+                    batchSize = twinsBatch.Count,
+                },
+                cancellationToken
+            );
+
+            var batchResult = await client.CreateOrReplaceDigitalTwinsAsync(
+                twinsBatch,
+                cancellationToken
+            );
+
+            var successCount = batchResult.Results.Count(r => r.IsSuccess);
+            var errorCount = batchResult.Results.Count(r => !r.IsSuccess);
+
+            result.TwinsCreated += successCount;
+            result.ErrorCount += errorCount;
+
+            await LogAsync(
+                outputStream,
+                jobId,
+                "Info",
+                new
+                {
+                    section = "Twins",
+                    status = "Completed",
+                    successCount,
+                    errorCount,
+                },
+                cancellationToken
+            );
+
+            // Log individual errors if any
+            foreach (var error in batchResult.Results.Where(r => !r.IsSuccess))
+            {
+                await LogAsync(
+                    outputStream,
+                    jobId,
+                    "Error",
+                    new
+                    {
+                        section = "Twins",
+                        digitalTwinId = error.DigitalTwinId,
+                        error = error.ErrorMessage,
+                    },
+                    cancellationToken
+                );
+            }
+        }
+        catch (Exception ex)
+        {
+            result.ErrorCount += twinsBatch.Count;
+            await LogAsync(
+                outputStream,
+                jobId,
+                "Error",
+                new
+                {
+                    section = "Twins",
+                    error = ex.Message,
+                    batchSize = twinsBatch.Count,
+                },
+                cancellationToken
+            );
+        }
+    }
+
+    private static async Task ProcessRelationshipsBatchAsync(
+        AgeDigitalTwinsClient client,
+        NpgsqlConnection connection,
+        Stream outputStream,
+        string jobId,
+        List<string> relationshipsBatch,
+        JobRecord result,
+        CancellationToken cancellationToken
+    )
+    {
+        if (relationshipsBatch.Count == 0)
+            return;
+
+        try
+        {
+            await LogAsync(
+                outputStream,
+                jobId,
+                "Info",
+                new
+                {
+                    section = "Relationships",
+                    status = "Processing",
+                    batchSize = relationshipsBatch.Count,
+                },
+                cancellationToken
+            );
+
+            var batchResult = await client.CreateOrReplaceRelationshipsAsync(
+                relationshipsBatch,
+                cancellationToken
+            );
+
+            var successCount = batchResult.Results.Count(r => r.IsSuccess);
+            var errorCount = batchResult.Results.Count(r => !r.IsSuccess);
+
+            result.RelationshipsCreated += successCount;
+            result.ErrorCount += errorCount;
+
+            await LogAsync(
+                outputStream,
+                jobId,
+                "Info",
+                new
+                {
+                    section = "Relationships",
+                    status = "Completed",
+                    successCount,
+                    errorCount,
+                },
+                cancellationToken
+            );
+
+            // Log individual errors if any
+            foreach (var error in batchResult.Results.Where(r => !r.IsSuccess))
+            {
+                await LogAsync(
+                    outputStream,
+                    jobId,
+                    "Error",
+                    new
+                    {
+                        section = "Relationships",
+                        sourceId = error.SourceId,
+                        relationshipId = error.RelationshipId,
+                        error = error.ErrorMessage,
+                    },
+                    cancellationToken
+                );
+            }
+        }
+        catch (Exception ex)
+        {
+            result.ErrorCount += relationshipsBatch.Count;
+            await LogAsync(
+                outputStream,
+                jobId,
+                "Error",
+                new
+                {
+                    section = "Relationships",
+                    error = ex.Message,
+                    batchSize = relationshipsBatch.Count,
+                },
+                cancellationToken
+            );
+        }
     }
 }

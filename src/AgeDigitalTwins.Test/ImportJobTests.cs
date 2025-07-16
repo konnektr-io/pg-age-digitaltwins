@@ -44,7 +44,8 @@ public class ImportJobTests : TestBase
         };
 
         // Act
-        var result = await Client.ImportAsync(inputStream, outputStream, options);
+        var jobId = $"test-import-{Guid.NewGuid().ToString("N")[..8]}";
+        var result = await Client.ImportGraphAsync(jobId, inputStream, outputStream, options);
 
         // Assert
         Assert.NotNull(result);
@@ -96,8 +97,9 @@ public class ImportJobTests : TestBase
         var options = new ImportJobOptions();
 
         // Act & Assert
+        var jobId = $"test-import-{Guid.NewGuid().ToString("N")[..8]}";
         var exception = await Assert.ThrowsAsync<ArgumentException>(
-            async () => await Client.ImportAsync(inputStream, outputStream, options)
+            async () => await Client.ImportGraphAsync(jobId, inputStream, outputStream, options)
         );
 
         Assert.Contains("Unsupported file version", exception.Message);
@@ -117,8 +119,9 @@ public class ImportJobTests : TestBase
         var options = new ImportJobOptions();
 
         // Act & Assert
+        var jobId = $"test-import-{Guid.NewGuid().ToString("N")[..8]}";
         var exception = await Assert.ThrowsAsync<ArgumentException>(
-            async () => await Client.ImportAsync(inputStream, outputStream, options)
+            async () => await Client.ImportGraphAsync(jobId, inputStream, outputStream, options)
         );
 
         Assert.Contains("First section must be 'Header'", exception.Message);
@@ -134,8 +137,9 @@ public class ImportJobTests : TestBase
         var options = new ImportJobOptions();
 
         // Act & Assert
+        var jobId = $"test-import-{Guid.NewGuid().ToString("N")[..8]}";
         var exception = await Assert.ThrowsAsync<ArgumentException>(
-            async () => await Client.ImportAsync(inputStream, outputStream, options)
+            async () => await Client.ImportGraphAsync(jobId, inputStream, outputStream, options)
         );
 
         Assert.Contains("Empty input stream", exception.Message);
@@ -160,7 +164,8 @@ public class ImportJobTests : TestBase
         var options = new ImportJobOptions { ContinueOnFailure = true };
 
         // Act
-        var result = await Client.ImportAsync(inputStream, outputStream, options);
+        var jobId = $"test-import-{Guid.NewGuid().ToString("N")[..8]}";
+        var result = await Client.ImportGraphAsync(jobId, inputStream, outputStream, options);
 
         // Assert
         Assert.NotNull(result);
@@ -194,7 +199,8 @@ public class ImportJobTests : TestBase
         var options = new ImportJobOptions();
 
         // Act
-        var result = await Client.ImportAsync(inputStream, outputStream, options);
+        var jobId = $"test-import-{Guid.NewGuid().ToString("N")[..8]}";
+        var result = await Client.ImportGraphAsync(jobId, inputStream, outputStream, options);
 
         // Assert
         Assert.NotNull(result);
@@ -214,7 +220,7 @@ public class ImportJobTests : TestBase
     // Tests use the client methods which internally use the new PostgreSQL job service
 
     [Fact]
-    public async Task Client_CreateImportJobAsync_WithStreams_ShouldSucceed()
+    public async Task Client_ImportGraphAsync_WithStreams_ShouldSucceed()
     {
         // Arrange
         var jobId = "test-job-" + Guid.NewGuid().ToString("N")[..8];
@@ -233,21 +239,23 @@ public class ImportJobTests : TestBase
         inputStream.Position = 0;
 
         // Act
-        var result = await Client.CreateImportJobAsync(jobId, inputStream, outputStream);
+        var result = await Client.ImportGraphAsync(jobId, inputStream, outputStream, (object?)null);
 
         // Assert
         Assert.NotNull(result);
         Assert.Equal(jobId, result.Id);
-        Assert.Equal(JobStatus.NotStarted, result.Status);
+        Assert.True(
+            result.Status == JobStatus.Succeeded || result.Status == JobStatus.PartiallySucceeded
+        );
         Assert.True(result.CreatedDateTime > DateTime.MinValue);
         Assert.True(result.LastActionDateTime > DateTime.MinValue);
 
-        _output.WriteLine($"Created import job with ID: {result.Id}");
+        _output.WriteLine($"Executed import job with ID: {result.Id}");
         _output.WriteLine($"Job status: {result.Status}");
     }
 
     [Fact]
-    public async Task Client_CreateImportJobAsync_WithNullInputStream_ShouldThrow()
+    public async Task Client_ImportGraphAsync_WithNullInputStream_ShouldThrow()
     {
         // Arrange
         var jobId = "test-job-" + Guid.NewGuid().ToString("N")[..8];
@@ -255,7 +263,7 @@ public class ImportJobTests : TestBase
 
         // Act & Assert
         var exception = await Assert.ThrowsAsync<ArgumentNullException>(
-            () => Client.CreateImportJobAsync(jobId, null!, outputStream)
+            () => Client.ImportGraphAsync(jobId, null!, outputStream, (object?)null)
         );
 
         Assert.Equal("inputStream", exception.ParamName);
@@ -263,7 +271,7 @@ public class ImportJobTests : TestBase
     }
 
     [Fact]
-    public async Task Client_CreateImportJobAsync_WithNullOutputStream_ShouldThrow()
+    public async Task Client_ImportGraphAsync_WithNullOutputStream_ShouldThrow()
     {
         // Arrange
         var jobId = "test-job-" + Guid.NewGuid().ToString("N")[..8];
@@ -271,7 +279,7 @@ public class ImportJobTests : TestBase
 
         // Act & Assert
         var exception = await Assert.ThrowsAsync<ArgumentNullException>(
-            () => Client.CreateImportJobAsync(jobId, inputStream, null!)
+            () => Client.ImportGraphAsync(jobId, inputStream, null!, (object?)null)
         );
 
         Assert.Equal("outputStream", exception.ParamName);
@@ -279,7 +287,7 @@ public class ImportJobTests : TestBase
     }
 
     [Fact]
-    public async Task Client_CreateImportJobAsync_WithDuplicateJobId_ShouldThrow()
+    public async Task Client_ImportGraphAsync_WithDuplicateJobId_ShouldThrow()
     {
         // Arrange
         var jobId = "test-job-" + Guid.NewGuid().ToString("N")[..8];
@@ -288,13 +296,28 @@ public class ImportJobTests : TestBase
         using var inputStream2 = new MemoryStream();
         using var outputStream2 = new MemoryStream();
 
+        // Add minimal test data
+        var testData = Encoding.UTF8.GetBytes(
+            @"{""Section"": ""Header""}
+{""fileVersion"": ""1.0.0"", ""author"": ""test"", ""organization"": ""test""}"
+        );
+        inputStream1.Write(testData);
+        inputStream1.Position = 0;
+        inputStream2.Write(testData);
+        inputStream2.Position = 0;
+
         // Act
-        var result1 = await Client.CreateImportJobAsync(jobId, inputStream1, outputStream1);
-        _output.WriteLine($"First job created with ID: {result1.Id}");
+        var result1 = await Client.ImportGraphAsync(
+            jobId,
+            inputStream1,
+            outputStream1,
+            (object?)null
+        );
+        _output.WriteLine($"First job executed with ID: {result1.Id}");
 
         // Assert
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => Client.CreateImportJobAsync(jobId, inputStream2, outputStream2)
+            () => Client.ImportGraphAsync(jobId, inputStream2, outputStream2, (object?)null)
         );
 
         Assert.Contains($"already exists", exception.Message);
@@ -309,15 +332,28 @@ public class ImportJobTests : TestBase
         using var inputStream = new MemoryStream();
         using var outputStream = new MemoryStream();
 
+        // Add minimal test data
+        var testData = Encoding.UTF8.GetBytes(
+            @"{""Section"": ""Header""}
+{""fileVersion"": ""1.0.0"", ""author"": ""test"", ""organization"": ""test""}"
+        );
+        inputStream.Write(testData);
+        inputStream.Position = 0;
+
         // Act
-        var createdJob = await Client.CreateImportJobAsync(jobId, inputStream, outputStream);
+        var executedJob = await Client.ImportGraphAsync(
+            jobId,
+            inputStream,
+            outputStream,
+            (object?)null
+        );
         var retrievedJob = Client.GetImportJob(jobId);
 
         // Assert
         Assert.NotNull(retrievedJob);
-        Assert.Equal(createdJob.Id, retrievedJob.Id);
-        Assert.Equal(createdJob.Status, retrievedJob.Status);
-        Assert.Equal(createdJob.CreatedDateTime, retrievedJob.CreatedDateTime);
+        Assert.Equal(executedJob.Id, retrievedJob.Id);
+        Assert.Equal(executedJob.Status, retrievedJob.Status);
+        Assert.Equal(executedJob.CreatedDateTime, retrievedJob.CreatedDateTime);
 
         _output.WriteLine($"Retrieved job: {retrievedJob.Id} with status: {retrievedJob.Status}");
     }
@@ -348,9 +384,19 @@ public class ImportJobTests : TestBase
         using var inputStream2 = new MemoryStream();
         using var outputStream2 = new MemoryStream();
 
+        // Add minimal test data
+        var testData = Encoding.UTF8.GetBytes(
+            @"{""Section"": ""Header""}
+{""fileVersion"": ""1.0.0"", ""author"": ""test"", ""organization"": ""test""}"
+        );
+        inputStream1.Write(testData);
+        inputStream1.Position = 0;
+        inputStream2.Write(testData);
+        inputStream2.Position = 0;
+
         // Act
-        await Client.CreateImportJobAsync(jobId1, inputStream1, outputStream1);
-        await Client.CreateImportJobAsync(jobId2, inputStream2, outputStream2);
+        await Client.ImportGraphAsync(jobId1, inputStream1, outputStream1, (object?)null);
+        await Client.ImportGraphAsync(jobId2, inputStream2, outputStream2, (object?)null);
         var jobs = (await Client.GetImportJobsAsync()).ToList();
 
         // Assert

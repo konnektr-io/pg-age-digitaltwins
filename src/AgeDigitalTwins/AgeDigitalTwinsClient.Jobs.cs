@@ -14,81 +14,17 @@ namespace AgeDigitalTwins;
 public partial class AgeDigitalTwinsClient
 {
     /// <summary>
-    /// Imports models, twins, and relationships from an ND-JSON stream synchronously.
-    /// </summary>
-    /// <param name="inputStream">The ND-JSON input stream containing the data to import.</param>
-    /// <param name="outputStream">The output stream where structured log entries will be written.</param>
-    /// <param name="options">Configuration options for the import job. If null, default options will be used.</param>
-    /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
-    /// <returns>A task that represents the asynchronous operation. The task result contains the import job result.</returns>
-    /// <exception cref="ArgumentNullException">Thrown when inputStream or outputStream is null.</exception>
-    /// <exception cref="ArgumentException">Thrown when the input stream contains invalid data.</exception>
-    public async virtual Task<JobRecord> ImportAsync(
-        Stream inputStream,
-        Stream outputStream,
-        ImportJobOptions? options = null,
-        CancellationToken cancellationToken = default
-    )
-    {
-        if (inputStream == null)
-            throw new ArgumentNullException(nameof(inputStream));
-        if (outputStream == null)
-            throw new ArgumentNullException(nameof(outputStream));
-
-        options ??= new ImportJobOptions();
-        var jobId = Guid.NewGuid().ToString("N")[..8]; // Use first 8 characters for shorter job ID
-
-        return await ImportGraphAsync(jobId, inputStream, outputStream, options, cancellationToken);
-    }
-
-    /// <summary>
-    /// Creates and starts a new import job in the background.
+    /// Creates and executes an import job.
     /// </summary>
     /// <param name="jobId">The job identifier.</param>
     /// <param name="inputStream">The input stream containing ND-JSON data.</param>
     /// <param name="outputStream">The output stream for logging and progress.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The import job result with initial status (NotStarted or Running).</returns>
-    /// <exception cref="InvalidOperationException">Thrown when job service is not configured or job ID already exists.</exception>
-    /// <exception cref="ArgumentNullException">Thrown when input or output stream is null.</exception>
-    public async virtual Task<JobRecord> CreateImportJobAsync(
-        string jobId,
-        Stream inputStream,
-        Stream outputStream,
-        CancellationToken cancellationToken = default
-    )
-    {
-        if (string.IsNullOrEmpty(jobId))
-            throw new ArgumentException("Job ID cannot be null or empty.", nameof(jobId));
-
-        if (inputStream == null)
-            throw new ArgumentNullException(nameof(inputStream));
-
-        if (outputStream == null)
-            throw new ArgumentNullException(nameof(outputStream));
-
-        // Create the job record without executing it
-        var jobRecord = await JobService.CreateJobAsync(
-            jobId,
-            "import",
-            new { inputStream = "provided", outputStream = "provided" }, // Basic request data
-            cancellationToken
-        );
-
-        return jobRecord;
-    }
-
-    /// <summary>
-    /// Creates and starts a new import job in the background.
-    /// </summary>
-    /// <param name="jobId">Optional job ID. If not provided, a random ID will be generated.</param>
-    /// <param name="inputStream">The input stream containing ND-JSON data.</param>
-    /// <param name="outputStream">The output stream for logging and progress.</param>
     /// <param name="request">Original import job request.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The import job result with initial status (NotStarted or Running).</returns>
+    /// <returns>The import job result.</returns>
     /// <exception cref="InvalidOperationException">Thrown when job service is not configured or job ID already exists.</exception>
     /// <exception cref="ArgumentNullException">Thrown when input or output stream is null.</exception>
+    /// <exception cref="ArgumentException">Thrown when the input stream contains invalid data.</exception>
     public async virtual Task<JobRecord> ImportGraphAsync<TRequest>(
         string jobId,
         Stream inputStream,
