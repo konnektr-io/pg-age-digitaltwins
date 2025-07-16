@@ -31,7 +31,7 @@ public static class ImportJobEndpoints
             .WithName("CreateImportJob")
             .WithSummary("Create and start a new import job")
             .WithDescription(
-                "Creates and starts a new import job. The job will run in the background and can be monitored using the GetImportJob endpoint."
+                "Creates and starts a new import job. The job will run in the background and return immediately. Monitor job progress using the GetImportJob endpoint."
             )
             .Produces<JobRecord>(StatusCodes.Status201Created)
             .ProducesValidationProblem()
@@ -140,6 +140,7 @@ public static class ImportJobEndpoints
                 inputStream,
                 outputStream,
                 request,
+                executeInBackground: true,
                 cancellationToken
             );
 

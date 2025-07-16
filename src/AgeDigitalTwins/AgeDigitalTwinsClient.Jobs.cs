@@ -30,6 +30,7 @@ public partial class AgeDigitalTwinsClient
         Stream inputStream,
         Stream outputStream,
         TRequest? request = default,
+        bool executeInBackground = false,
         CancellationToken cancellationToken = default
     )
     {
@@ -67,9 +68,64 @@ public partial class AgeDigitalTwinsClient
             // Check if there's an existing checkpoint for this job
             var checkpoint = await JobService.LoadCheckpointAsync(jobId, cancellationToken);
 
-            // Start job execution with checkpoint support
-            try
+            if (executeInBackground)
             {
+                // For background execution, start the job and return immediately
+                _ = Task.Run(
+                    async () =>
+                    {
+                        try
+                        {
+                            // Start job execution with checkpoint support
+                            var result = await StreamingImportJob.ExecuteWithCheckpointAsync(
+                                this,
+                                inputStream,
+                                outputStream,
+                                jobId,
+                                checkpoint,
+                                cancellationToken
+                            );
+
+                            // Update job record with final result
+                            await JobService.UpdateJobStatusAsync(
+                                jobId,
+                                result.Status,
+                                resultData: new
+                                {
+                                    modelsCreated = result.ModelsCreated,
+                                    twinsCreated = result.TwinsCreated,
+                                    relationshipsCreated = result.RelationshipsCreated,
+                                    errorCount = result.ErrorCount,
+                                },
+                                cancellationToken: cancellationToken
+                            );
+                        }
+                        catch (Exception ex)
+                        {
+                            // Update job status to failed if an exception occurs
+                            await JobService.UpdateJobStatusAsync(
+                                jobId,
+                                JobStatus.Failed,
+                                errorData: new { error = ex.Message },
+                                cancellationToken: cancellationToken
+                            );
+                        }
+                        finally
+                        {
+                            // Always release the lock when done
+                            await JobService.ReleaseJobLockAsync(jobId, cancellationToken);
+                        }
+                    },
+                    cancellationToken
+                );
+
+                // Return the job record immediately for background execution
+                return jobRecord;
+            }
+            else
+            {
+                // For synchronous execution, wait for completion
+                // Start job execution with checkpoint support
                 var result = await StreamingImportJob.ExecuteWithCheckpointAsync(
                     this,
                     inputStream,
@@ -96,22 +152,59 @@ public partial class AgeDigitalTwinsClient
                 // Return the updated job record from the database
                 return await JobService.GetJobAsync(jobId) ?? result;
             }
-            catch (Exception ex)
+        }
+        catch (Exception ex)
+        {
+            // Only attempt to update job status if the job was created successfully
+            // If job creation failed, re-throw the original exception
+            try
             {
-                // Update job status to failed if an exception occurs
-                await JobService.UpdateJobStatusAsync(
-                    jobId,
-                    JobStatus.Failed,
-                    errorData: new { error = ex.Message },
-                    cancellationToken: cancellationToken
-                );
-                throw;
+                await JobService.GetJobAsync(jobId);
+                // Job exists, so we can update its status
+                if (executeInBackground)
+                {
+                    // For background execution, update job status and return the job record
+                    await JobService.UpdateJobStatusAsync(
+                        jobId,
+                        JobStatus.Failed,
+                        errorData: new { error = ex.Message },
+                        cancellationToken: cancellationToken
+                    );
+                    var jobRecord = await JobService.GetJobAsync(jobId);
+                    if (jobRecord == null)
+                    {
+                        throw new InvalidOperationException(
+                            $"Job {jobId} not found after creation"
+                        );
+                    }
+                    return jobRecord;
+                }
+                else
+                {
+                    // For synchronous execution, update job status and throw
+                    await JobService.UpdateJobStatusAsync(
+                        jobId,
+                        JobStatus.Failed,
+                        errorData: new { error = ex.Message },
+                        cancellationToken: cancellationToken
+                    );
+                    throw;
+                }
+            }
+            catch
+            {
+                // Job doesn't exist, so just re-throw the original exception
+                throw ex;
             }
         }
         finally
         {
-            // Always release the lock when done
-            await JobService.ReleaseJobLockAsync(jobId, cancellationToken);
+            // Only release the lock for synchronous execution
+            // For background execution, the lock is released in the background task
+            if (!executeInBackground)
+            {
+                await JobService.ReleaseJobLockAsync(jobId, cancellationToken);
+            }
         }
     }
 
