@@ -515,8 +515,10 @@ public class JobService
         var now = DateTime.UtcNow;
         var lockExpiresAt = now.Add(lockDuration);
 
-        // Try to acquire lock using optimistic concurrency control
-        var sql =
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+
+        // First try to update existing job record
+        var updateSql =
             $@"
             UPDATE {_schemaName}.job_records
             SET lock_acquired_at = @lockAcquiredAt,
@@ -527,22 +529,49 @@ public class JobService
             WHERE id = @jobId
             AND (
                 lock_acquired_at IS NULL 
-                OR lock_acquired_by = @lockAcquiredBy
                 OR (lock_acquired_at + lock_lease_duration) < @now
             )";
 
-        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
-        await using var command = new NpgsqlCommand(sql, connection);
+        await using var updateCommand = new NpgsqlCommand(updateSql, connection);
 
-        command.Parameters.AddWithValue("@jobId", jobId);
-        command.Parameters.AddWithValue("@lockAcquiredAt", now);
-        command.Parameters.AddWithValue("@lockAcquiredBy", _instanceId);
-        command.Parameters.AddWithValue("@lockLeaseDuration", lockDuration);
-        command.Parameters.AddWithValue("@lockHeartbeatAt", now);
-        command.Parameters.AddWithValue("@updatedAt", now);
-        command.Parameters.AddWithValue("@now", now);
+        updateCommand.Parameters.AddWithValue("@jobId", jobId);
+        updateCommand.Parameters.AddWithValue("@lockAcquiredAt", now);
+        updateCommand.Parameters.AddWithValue("@lockAcquiredBy", _instanceId);
+        updateCommand.Parameters.AddWithValue("@lockLeaseDuration", lockDuration);
+        updateCommand.Parameters.AddWithValue("@lockHeartbeatAt", now);
+        updateCommand.Parameters.AddWithValue("@updatedAt", now);
+        updateCommand.Parameters.AddWithValue("@now", now);
 
-        var rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken);
+        var rowsAffected = await updateCommand.ExecuteNonQueryAsync(cancellationToken);
+
+        // If update didn't affect any rows, try to insert a new job record
+        if (rowsAffected == 0)
+        {
+            var insertSql =
+                $@"
+                INSERT INTO {_schemaName}.job_records (
+                    id, job_type, status, created_at, updated_at, purge_at,
+                    lock_acquired_at, lock_acquired_by, lock_lease_duration, lock_heartbeat_at
+                ) VALUES (
+                    @jobId, 'lock-only', 'pending', @now, @now, @purgeAt,
+                    @lockAcquiredAt, @lockAcquiredBy, @lockLeaseDuration, @lockHeartbeatAt
+                )
+                ON CONFLICT (id) DO NOTHING";
+
+            await using var insertCommand = new NpgsqlCommand(insertSql, connection);
+
+            insertCommand.Parameters.AddWithValue("@jobId", jobId);
+            insertCommand.Parameters.AddWithValue("@lockAcquiredAt", now);
+            insertCommand.Parameters.AddWithValue("@lockAcquiredBy", _instanceId);
+            insertCommand.Parameters.AddWithValue("@lockLeaseDuration", lockDuration);
+            insertCommand.Parameters.AddWithValue("@lockHeartbeatAt", now);
+            insertCommand.Parameters.AddWithValue("@now", now);
+            insertCommand.Parameters.AddWithValue("@purgeAt", now.AddHours(24)); // Keep lock records for 24 hours
+
+            var insertRows = await insertCommand.ExecuteNonQueryAsync(cancellationToken);
+            rowsAffected = insertRows;
+        }
+
         var lockAcquired = rowsAffected > 0;
 
         if (lockAcquired)

@@ -42,6 +42,24 @@ public class TestBase : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        // Clean up jobs schema and locks
+        try
+        {
+            await using var connection = await _client.GetDataSource().OpenConnectionAsync();
+            var jobsSchemaName = $"{_client.GetGraphName()}_jobs";
+
+            // Drop the jobs schema if it exists
+            await using var command = new NpgsqlCommand(
+                $"DROP SCHEMA IF EXISTS {jobsSchemaName} CASCADE",
+                connection
+            );
+            await command.ExecuteNonQueryAsync();
+        }
+        catch (Exception)
+        {
+            // Ignore cleanup errors
+        }
+
         await _client.DropGraphAsync();
         await _client.DisposeAsync();
         GC.SuppressFinalize(this);
