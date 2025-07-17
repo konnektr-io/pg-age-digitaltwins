@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using AgeDigitalTwins;
 using AgeDigitalTwins.ApiService;
 using AgeDigitalTwins.ApiService.Extensions;
+using AgeDigitalTwins.ApiService.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.IdentityModel.Tokens;
@@ -61,12 +62,31 @@ builder.Services.AddSingleton(sp =>
         GraphName = graphName,
         ModelCacheExpiration = TimeSpan.FromSeconds(modelCacheExpiration),
     };
-    return new AgeDigitalTwinsClient(dataSource, options);
+    var client = new AgeDigitalTwinsClient(dataSource, options);
+
+    return client;
 });
 
 // Add services to the container.
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<ExceptionHandler>();
+
+// Add blob storage service
+// Use Azure Blob Storage for production, fallback to default for testing/development
+if (builder.Environment.IsDevelopment())
+{
+    builder.Services.AddSingleton<
+        AgeDigitalTwins.ApiService.Services.IBlobStorageService,
+        AgeDigitalTwins.ApiService.Services.DefaultBlobStorageService
+    >();
+}
+else
+{
+    builder.Services.AddSingleton<
+        AgeDigitalTwins.ApiService.Services.IBlobStorageService,
+        AgeDigitalTwins.ApiService.Services.AzureBlobStorageService
+    >();
+}
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
@@ -110,6 +130,9 @@ else
         .SetDefaultPolicy(new AuthorizationPolicyBuilder().RequireAssertion(_ => true).Build());
 }
 
+// Add job resumption service
+builder.Services.AddHostedService<JobResumptionService>();
+
 builder.Services.AddRequestTimeouts();
 builder.Services.AddOutputCache();
 
@@ -138,6 +161,7 @@ app.MapDigitalTwinsEndpoints();
 app.MapRelationshipsEndpoints();
 app.MapQueryEndpoints();
 app.MapModelsEndpoints();
+app.MapImportJobEndpoints();
 
 // When the client is initiated, a new graph will automatically be created if the specified graph doesn't exist
 // Creating and dropping graphs should be done in the control plane
