@@ -19,7 +19,38 @@ public partial class AgeDigitalTwinsClient
     /// <param name="jobId">The job identifier.</param>
     /// <param name="inputStream">The input stream containing ND-JSON data.</param>
     /// <param name="outputStream">The output stream for logging and progress.</param>
-    /// <param name="request">Original import job request.</param>
+    /// <param name="options">Import job options.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The import job result.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when job service is not configured or job ID already exists.</exception>
+    /// <exception cref="ArgumentNullException">Thrown when input or output stream is null.</exception>
+    /// <exception cref="ArgumentException">Thrown when the input stream contains invalid data.</exception>
+    public async virtual Task<JobRecord> ImportGraphAsync(
+        string jobId,
+        Stream inputStream,
+        Stream outputStream,
+        ImportJobOptions? options = null,
+        CancellationToken cancellationToken = default
+    )
+    {
+        return await ImportGraphAsync<object>(
+            jobId,
+            inputStream,
+            outputStream,
+            options,
+            request: null,
+            cancellationToken
+        );
+    }
+
+    /// <summary>
+    /// Creates and executes an import job.
+    /// </summary>
+    /// <param name="jobId">The job identifier.</param>
+    /// <param name="inputStream">The input stream containing ND-JSON data.</param>
+    /// <param name="outputStream">The output stream for logging and progress.</param>
+    /// <param name="options">Import job options.</param>
+    /// <param name="request">Original import job request to store in database.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The import job result.</returns>
     /// <exception cref="InvalidOperationException">Thrown when job service is not configured or job ID already exists.</exception>
@@ -29,6 +60,7 @@ public partial class AgeDigitalTwinsClient
         string jobId,
         Stream inputStream,
         Stream outputStream,
+        ImportJobOptions? options = null,
         TRequest? request = default,
         CancellationToken cancellationToken = default
     )
@@ -42,15 +74,19 @@ public partial class AgeDigitalTwinsClient
         if (outputStream == null)
             throw new ArgumentNullException(nameof(outputStream));
 
+        // Use the options if provided, otherwise create default options
+        options ??= new ImportJobOptions();
+
         // Create a stream factory that returns the provided streams
         Func<CancellationToken, Task<(Stream inputStream, Stream outputStream)>> streamFactory = (
             ct
         ) => Task.FromResult((inputStream, outputStream));
 
-        // Delegate to the factory-based method with synchronous execution
+        // Delegate to the factory-based method with synchronous execution and stream disposal based on options
         return await ImportGraphAsync(
             jobId,
             streamFactory,
+            options,
             request,
             executeInBackground: false,
             cancellationToken
@@ -62,13 +98,15 @@ public partial class AgeDigitalTwinsClient
     /// </summary>
     /// <param name="jobId">The job identifier.</param>
     /// <param name="streamFactory">Factory function that creates input and output streams.</param>
-    /// <param name="request">Original import job request.</param>
+    /// <param name="options">Import job options.</param>
+    /// <param name="request">Original import job request to store in database.</param>
     /// <param name="executeInBackground">Whether to execute the job in background.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The import job result.</returns>
     public async virtual Task<JobRecord> ImportGraphAsync<TRequest>(
         string jobId,
         Func<CancellationToken, Task<(Stream inputStream, Stream outputStream)>> streamFactory,
+        ImportJobOptions? options = null,
         TRequest? request = default,
         bool executeInBackground = false,
         CancellationToken cancellationToken = default
@@ -79,6 +117,13 @@ public partial class AgeDigitalTwinsClient
 
         if (streamFactory == null)
             throw new ArgumentNullException(nameof(streamFactory));
+
+        // Use the options if provided, otherwise create default options
+        options ??= new ImportJobOptions();
+
+        // For background execution, always dispose streams
+        // For synchronous execution, respect the LeaveOpen option
+        bool shouldDisposeStreams = executeInBackground || !options.LeaveOpen;
 
         // Check if job already exists
         var existingJob = await JobService.GetJobAsync(jobId, cancellationToken);
@@ -192,10 +237,43 @@ public partial class AgeDigitalTwinsClient
                 // For synchronous execution, create streams and proceed
                 var (inputStream, outputStream) = await streamFactory(cancellationToken);
 
-                await using (inputStream)
-                await using (outputStream)
+                if (shouldDisposeStreams)
                 {
-                    // Start job execution with checkpoint support
+                    await using (inputStream)
+                    await using (outputStream)
+                    {
+                        // Start job execution with checkpoint support
+                        var result = await StreamingImportJob.ExecuteWithCheckpointAsync(
+                            this,
+                            inputStream,
+                            outputStream,
+                            jobId,
+                            checkpoint,
+                            cancellationToken
+                        );
+
+                        // Update job record with final result
+                        await JobService.UpdateJobStatusAsync(
+                            jobId,
+                            result.Status,
+                            resultData: new
+                            {
+                                modelsCreated = result.ModelsCreated,
+                                twinsCreated = result.TwinsCreated,
+                                relationshipsCreated = result.RelationshipsCreated,
+                                errorCount = result.ErrorCount,
+                            },
+                            cancellationToken: cancellationToken
+                        );
+
+                        // Get the updated job record
+                        var updatedJob = await JobService.GetJobAsync(jobId, cancellationToken);
+                        return updatedJob ?? jobRecord;
+                    }
+                }
+                else
+                {
+                    // Don't dispose streams - they're owned by the caller
                     var result = await StreamingImportJob.ExecuteWithCheckpointAsync(
                         this,
                         inputStream,
@@ -219,8 +297,9 @@ public partial class AgeDigitalTwinsClient
                         cancellationToken: cancellationToken
                     );
 
-                    // Return the updated job record from the database
-                    return await JobService.GetJobAsync(jobId) ?? jobRecord;
+                    // Get the updated job record
+                    var updatedJob = await JobService.GetJobAsync(jobId, cancellationToken);
+                    return updatedJob ?? jobRecord;
                 }
             }
         }

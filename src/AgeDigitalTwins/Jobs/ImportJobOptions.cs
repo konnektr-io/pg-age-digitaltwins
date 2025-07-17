@@ -26,4 +26,10 @@ public class ImportJobOptions
     /// Gets or sets the operation timeout.
     /// </summary>
     public TimeSpan OperationTimeout { get; set; } = TimeSpan.FromMinutes(30);
+
+    /// <summary>
+    /// Gets or sets a value indicating whether to leave the input and output streams open after processing.
+    /// When true, the streams will not be disposed automatically.
+    /// </summary>
+    public bool LeaveOpen { get; set; } = false;
 }

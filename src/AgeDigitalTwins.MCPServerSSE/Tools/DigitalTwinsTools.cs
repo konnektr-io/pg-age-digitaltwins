@@ -82,9 +82,12 @@ public static class DigitalTwinsTools
             )
         )
         {
-            models.Add(model.DtdlModel!);
+            if (model is not null)
+            {
+                models.Add(model.DtdlModel!);
+            }
         }
-        return models.Any() ? models : new[] { "No models found." };
+        return models.Count != 0 ? models : new[] { "No models found." };
     }
 
     [McpServerTool, Description("Fetches relationships for a digital twin.")]

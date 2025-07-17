@@ -38,6 +38,9 @@ public class ImportJobTests : TestBase
         {
             ContinueOnFailure = true,
             OperationTimeout = TimeSpan.FromSeconds(30),
+            LeaveOpen =
+                true // Don't dispose the streams so we can read from outputStream after
+            ,
         };
 
         // Act
@@ -253,7 +256,7 @@ public class ImportJobTests : TestBase
         inputStream.Position = 0;
 
         // Act
-        var result = await Client.ImportGraphAsync(jobId, inputStream, outputStream, (object?)null);
+        var result = await Client.ImportGraphAsync(jobId, inputStream, outputStream);
 
         // Assert
         Assert.NotNull(result);
@@ -277,7 +280,7 @@ public class ImportJobTests : TestBase
 
         // Act & Assert
         var exception = await Assert.ThrowsAsync<ArgumentNullException>(
-            () => Client.ImportGraphAsync(jobId, null!, outputStream, (object?)null)
+            () => Client.ImportGraphAsync(jobId, null!, outputStream)
         );
 
         Assert.Equal("inputStream", exception.ParamName);
@@ -293,7 +296,7 @@ public class ImportJobTests : TestBase
 
         // Act & Assert
         var exception = await Assert.ThrowsAsync<ArgumentNullException>(
-            () => Client.ImportGraphAsync(jobId, inputStream, null!, (object?)null)
+            () => Client.ImportGraphAsync(jobId, inputStream, null!)
         );
 
         Assert.Equal("outputStream", exception.ParamName);
@@ -321,17 +324,12 @@ public class ImportJobTests : TestBase
         inputStream2.Position = 0;
 
         // Act
-        var result1 = await Client.ImportGraphAsync(
-            jobId,
-            inputStream1,
-            outputStream1,
-            (object?)null
-        );
+        var result1 = await Client.ImportGraphAsync(jobId, inputStream1, outputStream1);
         _output.WriteLine($"First job executed with ID: {result1.Id}");
 
         // Assert
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => Client.ImportGraphAsync(jobId, inputStream2, outputStream2, (object?)null)
+            () => Client.ImportGraphAsync(jobId, inputStream2, outputStream2)
         );
 
         Assert.Contains($"already exists", exception.Message);
@@ -355,12 +353,7 @@ public class ImportJobTests : TestBase
         inputStream.Position = 0;
 
         // Act
-        var executedJob = await Client.ImportGraphAsync(
-            jobId,
-            inputStream,
-            outputStream,
-            (object?)null
-        );
+        var executedJob = await Client.ImportGraphAsync(jobId, inputStream, outputStream);
         var retrievedJob = Client.GetImportJob(jobId);
 
         // Assert
@@ -414,8 +407,8 @@ public class ImportJobTests : TestBase
         inputStream2.Position = 0;
 
         // Act
-        await Client.ImportGraphAsync(jobId1, inputStream1, outputStream1, (object?)null);
-        await Client.ImportGraphAsync(jobId2, inputStream2, outputStream2, (object?)null);
+        await Client.ImportGraphAsync(jobId1, inputStream1, outputStream1);
+        await Client.ImportGraphAsync(jobId2, inputStream2, outputStream2);
         var jobs = (await Client.GetImportJobsAsync()).ToList();
 
         // Assert

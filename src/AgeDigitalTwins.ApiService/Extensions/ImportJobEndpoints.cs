@@ -140,6 +140,7 @@ public static class ImportJobEndpoints
             var result = await client.ImportGraphAsync(
                 id,
                 streamFactory,
+                options: null, // API doesn't provide these options currently
                 request,
                 executeInBackground: true,
                 cancellationToken

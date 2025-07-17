@@ -41,11 +41,13 @@ public class BackgroundJobTests : TestBase
 
         // Act - Execute with background execution enabled
         var startTime = DateTime.UtcNow;
-        var result = await Client.ImportGraphAsync(
+        var result = await Client.ImportGraphAsync<JobRecord>(
             jobId,
             streamFactory,
-            options,
-            executeInBackground: true
+            null,
+            request: default,
+            executeInBackground: true,
+            cancellationToken: default
         );
         var endTime = DateTime.UtcNow;
 
