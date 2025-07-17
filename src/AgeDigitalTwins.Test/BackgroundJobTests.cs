@@ -27,17 +27,23 @@ public class BackgroundJobTests : TestBase
 {""@id"":""dtmi:example:Model;1"",""@type"":""Interface"",""@context"":""dtmi:dtdl:context;2""}
 ";
 
-        using var inputStream = new MemoryStream(Encoding.UTF8.GetBytes(testData));
-        using var outputStream = new MemoryStream();
-
         var options = new ImportJobOptions();
+
+        // Create a stream factory for background execution
+        Func<CancellationToken, Task<(Stream inputStream, Stream outputStream)>> streamFactory = (
+            ct
+        ) =>
+        {
+            var inputStream = new MemoryStream(Encoding.UTF8.GetBytes(testData));
+            var outputStream = new MemoryStream();
+            return Task.FromResult<(Stream, Stream)>((inputStream, outputStream));
+        };
 
         // Act - Execute with background execution enabled
         var startTime = DateTime.UtcNow;
         var result = await Client.ImportGraphAsync(
             jobId,
-            inputStream,
-            outputStream,
+            streamFactory,
             options,
             executeInBackground: true
         );
@@ -94,13 +100,7 @@ public class BackgroundJobTests : TestBase
 
         // Act - Execute with synchronous execution (default)
         var startTime = DateTime.UtcNow;
-        var result = await Client.ImportGraphAsync(
-            jobId,
-            inputStream,
-            outputStream,
-            options,
-            executeInBackground: false
-        );
+        var result = await Client.ImportGraphAsync(jobId, inputStream, outputStream, options);
         var endTime = DateTime.UtcNow;
 
         // Assert - Should return after completion

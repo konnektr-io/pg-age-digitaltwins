@@ -1,8 +1,6 @@
 using System.ComponentModel.DataAnnotations;
-using System.Threading.Tasks;
 using AgeDigitalTwins.ApiService.Models;
 using AgeDigitalTwins.ApiService.Services;
-using AgeDigitalTwins.Jobs;
 using AgeDigitalTwins.Models;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
@@ -22,9 +20,7 @@ public static class ImportJobEndpoints
     {
         var jobs = app.MapGroup("/jobs/imports")
             .WithTags("Import Jobs")
-            .WithDescription(
-                "Import job management endpoints compatible with Azure Digital Twins API"
-            );
+            .WithDescription("Import job management endpoints");
 
         // Create/Start Import Job
         jobs.MapPut("/{id}", CreateImportJobAsync)
@@ -33,7 +29,7 @@ public static class ImportJobEndpoints
             .WithDescription(
                 "Creates and starts a new import job. The job will run in the background and return immediately. Monitor job progress using the GetImportJob endpoint."
             )
-            .Produces<JobRecord>(StatusCodes.Status201Created)
+            .Produces<ImportJob>(StatusCodes.Status201Created)
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status409Conflict);
@@ -43,7 +39,7 @@ public static class ImportJobEndpoints
             .WithName("GetImportJob")
             .WithSummary("Get import job by ID")
             .WithDescription("Retrieves the status and details of an import job by its ID.")
-            .Produces<JobRecord>()
+            .Produces<ImportJob>()
             .ProducesProblem(StatusCodes.Status404NotFound);
 
         // List Import Jobs
@@ -51,7 +47,7 @@ public static class ImportJobEndpoints
             .WithName("ListImportJobs")
             .WithSummary("List all import jobs")
             .WithDescription("Retrieves a list of all import jobs with optional pagination.")
-            .Produces<ImportJobCollection>();
+            .Produces<PageWithNextLink<ImportJob>>();
 
         // Cancel Import Job
         jobs.MapPost("/{id}/cancel", CancelImportJobAsync)
@@ -60,7 +56,7 @@ public static class ImportJobEndpoints
             .WithDescription(
                 "Cancels a running import job. Note that this will leave your instance in an unknown state as there won't be any rollback operation."
             )
-            .Produces<JobRecord>()
+            .Produces<ImportJob>()
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status404NotFound);
 
@@ -81,7 +77,7 @@ public static class ImportJobEndpoints
             .WithDescription(
                 "Resumes an interrupted import job from its last checkpoint. The job must be in a resumable state (Running or Failed)."
             )
-            .Produces<JobRecord>()
+            .Produces<ImportJob>()
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status404NotFound);
     }
@@ -127,18 +123,23 @@ public static class ImportJobEndpoints
 
         try
         {
-            // Get streams from blob URIs
-            using var inputStream = await blobStorageService.GetReadStreamAsync(
-                request.InputBlobUri
-            );
-            using var outputStream = await blobStorageService.GetWriteStreamAsync(
-                request.OutputBlobUri
-            );
+            // Create a stream factory that will be called within the background task
+            Func<
+                CancellationToken,
+                Task<(Stream inputStream, Stream outputStream)>
+            > streamFactory = async (ct) =>
+            {
+                var inputStream = await blobStorageService.GetReadStreamAsync(request.InputBlobUri);
+                var outputStream = await blobStorageService.GetWriteStreamAsync(
+                    request.OutputBlobUri
+                );
+                return (inputStream, outputStream);
+            };
 
+            // Execute the import job with background execution
             var result = await client.ImportGraphAsync(
                 id,
-                inputStream,
-                outputStream,
+                streamFactory,
                 request,
                 executeInBackground: true,
                 cancellationToken
@@ -174,7 +175,7 @@ public static class ImportJobEndpoints
         }
     }
 
-    private static async Task<Results<Ok<JobRecord>, NotFound>> GetImportJobAsync(
+    private static async Task<Results<Ok<ImportJob>, NotFound>> GetImportJobAsync(
         [Required] string id,
         [FromServices] AgeDigitalTwinsClient client
     )
@@ -187,35 +188,22 @@ public static class ImportJobEndpoints
         if (job == null)
             return TypedResults.NotFound();
 
-        return TypedResults.Ok(job);
+        return TypedResults.Ok(new ImportJob(job));
     }
 
-    private static async Task<Ok<ImportJobCollection>> ListImportJobsAsync(
-        [FromServices] AgeDigitalTwinsClient client,
-        [FromQuery] int? maxItemsPerPage = null
+    private static async Task<Ok<PageWithNextLink<ImportJob?>>> ListImportJobsAsync(
+        HttpContext httpContext,
+        [FromServices] AgeDigitalTwinsClient client
     )
     {
-        var jobs = (await client.GetImportJobsAsync()).ToList();
+        var jobs = (await client.GetImportJobsAsync()).Select(job => new ImportJob(job));
+        var page = new Page<ImportJob?>() { Value = jobs };
 
-        // Apply pagination if requested
-        if (maxItemsPerPage.HasValue && maxItemsPerPage.Value > 0)
-        {
-            jobs = jobs.Take(maxItemsPerPage.Value).ToList();
-        }
-
-        var collection = new ImportJobCollection
-        {
-            Value = jobs,
-            NextLink =
-                null // TODO: Implement pagination with next link if needed
-            ,
-        };
-
-        return TypedResults.Ok(collection);
+        return TypedResults.Ok(new PageWithNextLink<ImportJob?>(page, httpContext.Request));
     }
 
     private static async Task<
-        Results<Ok<JobRecord>, NotFound, ProblemHttpResult>
+        Results<Ok<ImportJob>, NotFound, ProblemHttpResult>
     > CancelImportJobAsync([Required] string id, [FromServices] AgeDigitalTwinsClient client)
     {
         if (string.IsNullOrWhiteSpace(id))
@@ -247,7 +235,7 @@ public static class ImportJobEndpoints
 
         // Return updated job status
         var updatedJob = await client.GetImportJobAsync(id);
-        return TypedResults.Ok(updatedJob!);
+        return TypedResults.Ok(new ImportJob(updatedJob!));
     }
 
     private static async Task<Results<NoContent, NotFound>> DeleteImportJobAsync(
@@ -267,7 +255,7 @@ public static class ImportJobEndpoints
     }
 
     private static async Task<
-        Results<Ok<JobRecord>, NotFound, ProblemHttpResult>
+        Results<Ok<ImportJob>, NotFound, ProblemHttpResult>
     > ResumeImportJobAsync(
         [Required] string id,
         [FromServices] AgeDigitalTwinsClient client,
@@ -334,7 +322,7 @@ public static class ImportJobEndpoints
                 cancellationToken
             );
 
-            return TypedResults.Ok(result);
+            return TypedResults.Ok(new ImportJob(result));
         }
         catch (InvalidOperationException ex)
         {

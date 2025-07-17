@@ -30,7 +30,6 @@ public partial class AgeDigitalTwinsClient
         Stream inputStream,
         Stream outputStream,
         TRequest? request = default,
-        bool executeInBackground = false,
         CancellationToken cancellationToken = default
     )
     {
@@ -42,6 +41,44 @@ public partial class AgeDigitalTwinsClient
 
         if (outputStream == null)
             throw new ArgumentNullException(nameof(outputStream));
+
+        // Create a stream factory that returns the provided streams
+        Func<CancellationToken, Task<(Stream inputStream, Stream outputStream)>> streamFactory = (
+            ct
+        ) => Task.FromResult((inputStream, outputStream));
+
+        // Delegate to the factory-based method with synchronous execution
+        return await ImportGraphAsync(
+            jobId,
+            streamFactory,
+            request,
+            executeInBackground: false,
+            cancellationToken
+        );
+    }
+
+    /// <summary>
+    /// Creates and executes an import job using stream factories for background execution.
+    /// </summary>
+    /// <param name="jobId">The job identifier.</param>
+    /// <param name="streamFactory">Factory function that creates input and output streams.</param>
+    /// <param name="request">Original import job request.</param>
+    /// <param name="executeInBackground">Whether to execute the job in background.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The import job result.</returns>
+    public async virtual Task<JobRecord> ImportGraphAsync<TRequest>(
+        string jobId,
+        Func<CancellationToken, Task<(Stream inputStream, Stream outputStream)>> streamFactory,
+        TRequest? request = default,
+        bool executeInBackground = false,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (string.IsNullOrEmpty(jobId))
+            throw new ArgumentException("Job ID cannot be null or empty.", nameof(jobId));
+
+        if (streamFactory == null)
+            throw new ArgumentNullException(nameof(streamFactory));
 
         // Check if job already exists
         var existingJob = await JobService.GetJobAsync(jobId, cancellationToken);
@@ -89,35 +126,44 @@ public partial class AgeDigitalTwinsClient
                 // Update the job record to reflect the new status
                 jobRecord = await JobService.GetJobAsync(jobId, cancellationToken) ?? jobRecord;
 
-                // Start the job execution in the background
+                // Start the job execution in the background with proper stream lifecycle
                 _ = Task.Run(
                     async () =>
                     {
                         try
                         {
-                            // Start job execution with checkpoint support
-                            var result = await StreamingImportJob.ExecuteWithCheckpointAsync(
-                                this,
-                                inputStream,
-                                outputStream,
-                                jobId,
-                                checkpoint,
+                            // Create streams within the background task
+                            var (inputStream, outputStream) = await streamFactory(
                                 cancellationToken
                             );
 
-                            // Update job record with final result
-                            await JobService.UpdateJobStatusAsync(
-                                jobId,
-                                result.Status,
-                                resultData: new
-                                {
-                                    modelsCreated = result.ModelsCreated,
-                                    twinsCreated = result.TwinsCreated,
-                                    relationshipsCreated = result.RelationshipsCreated,
-                                    errorCount = result.ErrorCount,
-                                },
-                                cancellationToken: cancellationToken
-                            );
+                            await using (inputStream)
+                            await using (outputStream)
+                            {
+                                // Start job execution with checkpoint support
+                                var result = await StreamingImportJob.ExecuteWithCheckpointAsync(
+                                    this,
+                                    inputStream,
+                                    outputStream,
+                                    jobId,
+                                    checkpoint,
+                                    cancellationToken
+                                );
+
+                                // Update job record with final result
+                                await JobService.UpdateJobStatusAsync(
+                                    jobId,
+                                    result.Status,
+                                    resultData: new
+                                    {
+                                        modelsCreated = result.ModelsCreated,
+                                        twinsCreated = result.TwinsCreated,
+                                        relationshipsCreated = result.RelationshipsCreated,
+                                        errorCount = result.ErrorCount,
+                                    },
+                                    cancellationToken: cancellationToken
+                                );
+                            }
                         }
                         catch (Exception ex)
                         {
@@ -143,33 +189,39 @@ public partial class AgeDigitalTwinsClient
             }
             else
             {
-                // For synchronous execution, wait for completion
-                // Start job execution with checkpoint support
-                var result = await StreamingImportJob.ExecuteWithCheckpointAsync(
-                    this,
-                    inputStream,
-                    outputStream,
-                    jobId,
-                    checkpoint,
-                    cancellationToken
-                );
+                // For synchronous execution, create streams and proceed
+                var (inputStream, outputStream) = await streamFactory(cancellationToken);
 
-                // Update job record with final result
-                await JobService.UpdateJobStatusAsync(
-                    jobId,
-                    result.Status,
-                    resultData: new
-                    {
-                        modelsCreated = result.ModelsCreated,
-                        twinsCreated = result.TwinsCreated,
-                        relationshipsCreated = result.RelationshipsCreated,
-                        errorCount = result.ErrorCount,
-                    },
-                    cancellationToken: cancellationToken
-                );
+                await using (inputStream)
+                await using (outputStream)
+                {
+                    // Start job execution with checkpoint support
+                    var result = await StreamingImportJob.ExecuteWithCheckpointAsync(
+                        this,
+                        inputStream,
+                        outputStream,
+                        jobId,
+                        checkpoint,
+                        cancellationToken
+                    );
 
-                // Return the updated job record from the database
-                return await JobService.GetJobAsync(jobId) ?? jobRecord;
+                    // Update job record with final result
+                    await JobService.UpdateJobStatusAsync(
+                        jobId,
+                        result.Status,
+                        resultData: new
+                        {
+                            modelsCreated = result.ModelsCreated,
+                            twinsCreated = result.TwinsCreated,
+                            relationshipsCreated = result.RelationshipsCreated,
+                            errorCount = result.ErrorCount,
+                        },
+                        cancellationToken: cancellationToken
+                    );
+
+                    // Return the updated job record from the database
+                    return await JobService.GetJobAsync(jobId) ?? jobRecord;
+                }
             }
         }
         catch (Exception ex)
