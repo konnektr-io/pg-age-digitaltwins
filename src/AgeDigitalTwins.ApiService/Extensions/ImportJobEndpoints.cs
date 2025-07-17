@@ -90,7 +90,7 @@ public static class ImportJobEndpoints
         Results<Created<ImportJob>, ValidationProblem, ProblemHttpResult, Conflict>
     > CreateImportJobAsync(
         [Required] string id,
-        [FromBody] ImportJob request,
+        [FromBody] ImportJobRequest request,
         [FromServices] AgeDigitalTwinsClient client,
         [FromServices] IBlobStorageService blobStorageService,
         CancellationToken cancellationToken = default

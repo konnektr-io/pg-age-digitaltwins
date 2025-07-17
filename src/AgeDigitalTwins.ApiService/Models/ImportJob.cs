@@ -1,72 +1,108 @@
-using System;
-using System.Text.Json;
 using AgeDigitalTwins.Models;
 
 namespace AgeDigitalTwins.ApiService.Models;
 
 /// <summary>
-/// Request model for creating an import job.
+/// Represents an import job with its current status and details.
 /// </summary>
-/// <summary> A job which contains a reference to the operations to perform, results, and execution metadata. </summary>
-public partial class ImportJob
+public class ImportJob : ImportJobRequest
 {
+    /// <summary>
+    /// Gets or sets the unique identifier for the import job.
+    /// </summary>
+    public string? Id { get; set; }
+
+    /// <summary>
+    /// Gets the current status of the import job.
+    /// </summary>
+    public JobStatus Status { get; init; }
+
+    /// <summary>
+    /// Gets the date and time when the import job was created.
+    /// </summary>
+    public DateTimeOffset CreatedDateTime { get; init; }
+
+    /// <summary>
+    /// Gets the date and time when the import job was last updated.
+    /// </summary>
+    public DateTimeOffset LastActionDateTime { get; init; }
+
+    /// <summary>
+    /// Gets the date and time when the import job finished (if completed).
+    /// </summary>
+    public DateTimeOffset? FinishedDateTime { get; init; }
+
+    /// <summary>
+    /// Gets the date and time when the import job will be purged from the system.
+    /// </summary>
+    public DateTimeOffset? PurgeDateTime { get; init; }
+
+    /// <summary>
+    /// Gets the number of models that were successfully created.
+    /// </summary>
+    public int ModelsCreated { get; init; }
+
+    /// <summary>
+    /// Gets the number of twins that were successfully created.
+    /// </summary>
+    public int TwinsCreated { get; init; }
+
+    /// <summary>
+    /// Gets the number of relationships that were successfully created.
+    /// </summary>
+    public int RelationshipsCreated { get; init; }
+
+    /// <summary>
+    /// Gets the number of errors that occurred during the import.
+    /// </summary>
+    public int ErrorCount { get; init; }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ImportJob"/> class.
+    /// </summary>
+    public ImportJob() { }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ImportJob"/> class from a job record.
+    /// </summary>
+    /// <param name="jobRecord">The job record to convert.</param>
     internal ImportJob(JobRecord jobRecord)
     {
-        ArgumentNullException.ThrowIfNull(jobRecord);
         Id = jobRecord.Id;
-        InputBlobUri = new Uri(
-            jobRecord.RequestData?.RootElement.GetProperty("inputBlobUri").GetString()
-                ?? string.Empty
-        );
-        OutputBlobUri = new Uri(
-            jobRecord.RequestData?.RootElement.GetProperty("outputBlobUri").GetString()
-                ?? string.Empty
-        );
+        Status = jobRecord.Status;
         CreatedDateTime = jobRecord.CreatedAt;
         LastActionDateTime = jobRecord.UpdatedAt;
         FinishedDateTime = jobRecord.FinishedAt;
         PurgeDateTime = jobRecord.PurgeAt;
-    }
 
-    internal JobRecord ToJobRecord()
-    {
-        return new JobRecord
+        // Extract URIs from request data if available
+        if (jobRecord.RequestData != null)
         {
-            Id = Id,
-            JobType = "import",
-            Status = JobStatus.NotStarted,
-            CreatedAt = CreatedDateTime ?? DateTimeOffset.UtcNow,
-            UpdatedAt = LastActionDateTime ?? DateTimeOffset.UtcNow,
-            FinishedAt = FinishedDateTime,
-            PurgeAt = PurgeDateTime,
-            RequestData = JsonDocument.Parse(
-                JsonSerializer.Serialize(
-                    new
-                    {
-                        inputBlobUri = InputBlobUri.ToString(),
-                        outputBlobUri = OutputBlobUri.ToString(),
-                    }
-                )
-            ),
-        };
+            var requestData = jobRecord.RequestData.RootElement;
+            if (requestData.TryGetProperty("inputBlobUri", out var inputUri))
+                InputBlobUri = new Uri(inputUri.GetString() ?? "about:blank");
+            if (requestData.TryGetProperty("outputBlobUri", out var outputUri))
+                OutputBlobUri = new Uri(outputUri.GetString() ?? "about:blank");
+        }
+
+        // Set placeholder URIs if not found in request data
+        if (InputBlobUri == null)
+            InputBlobUri = new Uri("about:blank");
+        if (OutputBlobUri == null)
+            OutputBlobUri = new Uri("about:blank");
+
+        // Extract result data if available
+        if (jobRecord.ResultData != null)
+        {
+            var resultData = jobRecord.ResultData.RootElement;
+            if (resultData.TryGetProperty("modelsCreated", out var modelsCreated))
+                ModelsCreated = modelsCreated.GetInt32();
+            if (resultData.TryGetProperty("twinsCreated", out var twinsCreated))
+                TwinsCreated = twinsCreated.GetInt32();
+            if (resultData.TryGetProperty("relationshipsCreated", out var relationshipsCreated))
+                RelationshipsCreated = relationshipsCreated.GetInt32();
+            if (resultData.TryGetProperty("errorCount", out var errorCount))
+                ErrorCount = errorCount.GetInt32();
+        }
     }
-
-    /// <summary> The identifier of the import job. </summary>
-    public string Id { get; set; }
-
-    public Uri InputBlobUri { get; set; }
-
-    public Uri OutputBlobUri { get; set; }
-
-    /// <summary> Start time of the job. The timestamp is in RFC3339 format: `yyyy-MM-ddTHH:mm:ssZ`. </summary>
-    public DateTimeOffset? CreatedDateTime { get; }
-
-    /// <summary> Last time service performed any action from the job. The timestamp is in RFC3339 format: `yyyy-MM-ddTHH:mm:ssZ`. </summary>
-    public DateTimeOffset? LastActionDateTime { get; }
-
-    /// <summary> End time of the job. The timestamp is in RFC3339 format: `yyyy-MM-ddTHH:mm:ssZ`. </summary>
-    public DateTimeOffset? FinishedDateTime { get; }
-
-    /// <summary> Time at which job will be purged by the service from the system. The timestamp is in RFC3339 format: `yyyy-MM-ddTHH:mm:ssZ`. </summary>
-    public DateTimeOffset? PurgeDateTime { get; }
 }

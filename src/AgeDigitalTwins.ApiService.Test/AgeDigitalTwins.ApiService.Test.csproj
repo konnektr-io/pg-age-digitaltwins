@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../AgeDigitalTwins/AgeDigitalTwins.csproj" />
+    <ProjectReference Include="../AgeDigitalTwins.ApiService/AgeDigitalTwins.ApiService.csproj" />
     <ProjectReference Include="../AgeDigitalTwins.AppHost/AgeDigitalTwins.AppHost.csproj" />
   </ItemGroup>
 
