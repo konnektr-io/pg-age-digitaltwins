@@ -1,14 +1,11 @@
-using System;
-using System.IO;
 using System.Text;
-using System.Threading.Tasks;
 using AgeDigitalTwins.Jobs;
 using AgeDigitalTwins.Models;
-using Xunit;
 using Xunit.Abstractions;
 
 namespace AgeDigitalTwins.Test;
 
+[Trait("Category", "Integration")]
 public class BackgroundJobTests : TestBase
 {
     private readonly ITestOutputHelper _output;

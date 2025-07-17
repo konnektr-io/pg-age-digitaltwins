@@ -1,10 +1,4 @@
-using System;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
-using AgeDigitalTwins.Jobs;
 using AgeDigitalTwins.Models;
-using Xunit;
 using Xunit.Abstractions;
 
 namespace AgeDigitalTwins.Test;

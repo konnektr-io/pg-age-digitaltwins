@@ -1,9 +1,3 @@
-using System;
-using System.Threading;
-using System.Threading.Tasks;
-using AgeDigitalTwins.Jobs;
-using Xunit;
-
 namespace AgeDigitalTwins.Test;
 
 /// <summary>
