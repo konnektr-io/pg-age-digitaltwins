@@ -59,7 +59,7 @@ public class JobService
 
         var sql =
             $@"
-            INSERT INTO {_schemaName}.job_records (id, job_type, status, created_at, updated_at, purge_at, request_data)
+            INSERT INTO {_schemaName}.jobs (id, job_type, status, created_at, updated_at, purge_at, request_data)
             VALUES (@id, @jobType, @status, @createdAt, @updatedAt, @purgeAt, @requestData)
             RETURNING id, job_type, status, created_at, updated_at, finished_at, purge_at, request_data, result_data, error_data, checkpoint_data";
 
@@ -104,7 +104,7 @@ public class JobService
         var sql =
             $@"
             SELECT id, job_type, status, created_at, updated_at, finished_at, purge_at, request_data, result_data, error_data, checkpoint_data
-            FROM {_schemaName}.job_records
+            FROM {_schemaName}.jobs
             WHERE id = @id";
 
         await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
@@ -128,7 +128,7 @@ public class JobService
         var sql =
             $@"
             SELECT id, job_type, status, created_at, updated_at, finished_at, purge_at, request_data, result_data, error_data, checkpoint_data
-            FROM {_schemaName}.job_records";
+            FROM {_schemaName}.jobs";
 
         var whereClause = "";
         if (!string.IsNullOrEmpty(jobType))
@@ -177,7 +177,7 @@ public class JobService
 
         var sql =
             $@"
-            UPDATE {_schemaName}.job_records
+            UPDATE {_schemaName}.jobs
             SET status = @status,
                 updated_at = @updatedAt,
                 finished_at = @finishedAt,
@@ -217,7 +217,7 @@ public class JobService
         if (string.IsNullOrEmpty(jobId))
             return false;
 
-        var sql = $"DELETE FROM {_schemaName}.job_records WHERE id = @id";
+        var sql = $"DELETE FROM {_schemaName}.jobs WHERE id = @id";
 
         await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
         await using var command = new NpgsqlCommand(sql, connection);
@@ -245,7 +245,7 @@ public class JobService
 
         var sql =
             $@"
-            UPDATE {_schemaName}.job_records
+            UPDATE {_schemaName}.jobs
             SET checkpoint_data = @checkpointData,
                 updated_at = @updatedAt
             WHERE id = @jobId";
@@ -278,7 +278,7 @@ public class JobService
         var sql =
             $@"
             SELECT checkpoint_data
-            FROM {_schemaName}.job_records
+            FROM {_schemaName}.jobs
             WHERE id = @jobId";
 
         await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
@@ -317,7 +317,7 @@ public class JobService
 
         var sql =
             $@"
-            UPDATE {_schemaName}.job_records
+            UPDATE {_schemaName}.jobs
             SET checkpoint_data = NULL,
                 updated_at = @updatedAt
             WHERE id = @jobId";
@@ -340,7 +340,7 @@ public class JobService
         var createSchemaSql = $"CREATE SCHEMA IF NOT EXISTS {_schemaName}";
         var createTableSql =
             $@"
-            CREATE TABLE IF NOT EXISTS {_schemaName}.job_records (
+            CREATE TABLE IF NOT EXISTS {_schemaName}.jobs (
                 id VARCHAR(255) PRIMARY KEY,
                 job_type VARCHAR(100) NOT NULL,
                 status VARCHAR(50) NOT NULL DEFAULT 'notstarted',
@@ -358,29 +358,14 @@ public class JobService
                 lock_heartbeat_at TIMESTAMP WITH TIME ZONE NULL
             )";
 
-        // Add checkpoint column if it doesn't exist (for existing installations)
-        var addCheckpointColumnSql =
-            $@"
-            ALTER TABLE {_schemaName}.job_records 
-            ADD COLUMN IF NOT EXISTS checkpoint_data JSONB NULL";
-
-        // Add locking columns if they don't exist (for existing installations)
-        var addLockingColumnsSql =
-            $@"
-            ALTER TABLE {_schemaName}.job_records 
-            ADD COLUMN IF NOT EXISTS lock_acquired_at TIMESTAMP WITH TIME ZONE NULL,
-            ADD COLUMN IF NOT EXISTS lock_acquired_by VARCHAR(255) NULL,
-            ADD COLUMN IF NOT EXISTS lock_lease_duration INTERVAL NOT NULL DEFAULT '5 minutes',
-            ADD COLUMN IF NOT EXISTS lock_heartbeat_at TIMESTAMP WITH TIME ZONE NULL";
-
         var createIndexSql =
             $@"
-            CREATE INDEX IF NOT EXISTS idx_job_records_job_type ON {_schemaName}.job_records(job_type);
-            CREATE INDEX IF NOT EXISTS idx_job_records_status ON {_schemaName}.job_records(status);
-            CREATE INDEX IF NOT EXISTS idx_job_records_created_at ON {_schemaName}.job_records(created_at);
-            CREATE INDEX IF NOT EXISTS idx_job_records_purge_at ON {_schemaName}.job_records(purge_at);
-            CREATE INDEX IF NOT EXISTS idx_job_records_lock_acquired_by ON {_schemaName}.job_records(lock_acquired_by);
-            CREATE INDEX IF NOT EXISTS idx_job_records_lock_acquired_at ON {_schemaName}.job_records(lock_acquired_at)";
+            CREATE INDEX IF NOT EXISTS idx_jobs_job_type ON {_schemaName}.jobs(job_type);
+            CREATE INDEX IF NOT EXISTS idx_jobs_status ON {_schemaName}.jobs(status);
+            CREATE INDEX IF NOT EXISTS idx_jobs_created_at ON {_schemaName}.jobs(created_at);
+            CREATE INDEX IF NOT EXISTS idx_jobs_purge_at ON {_schemaName}.jobs(purge_at);
+            CREATE INDEX IF NOT EXISTS idx_jobs_lock_acquired_by ON {_schemaName}.jobs(lock_acquired_by);
+            CREATE INDEX IF NOT EXISTS idx_jobs_lock_acquired_at ON {_schemaName}.jobs(lock_acquired_at)";
 
         try
         {
@@ -394,18 +379,6 @@ public class JobService
 
             // Create table
             await using (var command = new NpgsqlCommand(createTableSql, connection))
-            {
-                await command.ExecuteNonQueryAsync();
-            }
-
-            // Add checkpoint column for existing installations
-            await using (var command = new NpgsqlCommand(addCheckpointColumnSql, connection))
-            {
-                await command.ExecuteNonQueryAsync();
-            }
-
-            // Add locking columns for existing installations
-            await using (var command = new NpgsqlCommand(addLockingColumnsSql, connection))
             {
                 await command.ExecuteNonQueryAsync();
             }
@@ -469,7 +442,7 @@ public class JobService
         // Try to update existing job record to acquire lock
         var updateSql =
             $@"
-            UPDATE {_schemaName}.job_records
+            UPDATE {_schemaName}.jobs
             SET lock_acquired_at = @lockAcquiredAt,
                 lock_acquired_by = @lockAcquiredBy,
                 lock_lease_duration = @lockLeaseDuration,
@@ -540,7 +513,7 @@ public class JobService
 
         var sql =
             $@"
-            UPDATE {_schemaName}.job_records
+            UPDATE {_schemaName}.jobs
             SET lock_heartbeat_at = @lockHeartbeatAt,
                 updated_at = @updatedAt
             WHERE id = @jobId
@@ -595,7 +568,7 @@ public class JobService
 
         var sql =
             $@"
-            UPDATE {_schemaName}.job_records
+            UPDATE {_schemaName}.jobs
             SET lock_acquired_at = NULL,
                 lock_acquired_by = NULL,
                 lock_heartbeat_at = NULL,
@@ -652,7 +625,7 @@ public class JobService
         var sql =
             $@"
             SELECT COUNT(*)
-            FROM {_schemaName}.job_records
+            FROM {_schemaName}.jobs
             WHERE id = @jobId
             AND lock_acquired_by = @lockAcquiredBy
             AND (lock_acquired_at + lock_lease_duration) > @now";
@@ -685,7 +658,7 @@ public class JobService
         var sql =
             $@"
             SELECT lock_acquired_at, lock_acquired_by, lock_lease_duration, lock_heartbeat_at
-            FROM {_schemaName}.job_records
+            FROM {_schemaName}.jobs
             WHERE id = @jobId
             AND lock_acquired_at IS NOT NULL";
 
@@ -728,7 +701,7 @@ public class JobService
 
         var sql =
             $@"
-            UPDATE {_schemaName}.job_records
+            UPDATE {_schemaName}.jobs
             SET lock_acquired_at = NULL,
                 lock_acquired_by = NULL,
                 lock_heartbeat_at = NULL,
@@ -765,12 +738,11 @@ public class JobService
     )
     {
         string sql = $"""
-            SELECT j.job_id, j.job_type, j.status, j.created_at, j.updated_at, j.request_data, j.result_data
-            FROM {_schemaName}.jobs j
-            LEFT JOIN {_schemaName}.job_locks jl ON j.job_id = jl.job_id AND jl.lock_acquired_at + jl.lock_lease_duration > NOW()
-            WHERE j.status IN ('InProgress', 'Pending')
-            AND jl.job_id IS NULL
-            ORDER BY j.created_at;
+            SELECT id, job_type, status, created_at, updated_at, request_data, result_data
+            FROM {_schemaName}.jobs
+            WHERE status IN ('running')
+            AND (lock_acquired_at IS NULL OR lock_acquired_at + lock_lease_duration <= NOW())
+            ORDER BY created_at;
             """;
 
         await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
@@ -783,7 +755,7 @@ public class JobService
         {
             var job = new JobRecord
             {
-                Id = reader.GetString(0), // job_id
+                Id = reader.GetString(0), // id
                 JobType = reader.GetString(1), // job_type
                 Status = Enum.Parse<JobStatus>(reader.GetString(2)), // status
                 CreatedAt = reader.GetDateTime(3), // created_at
