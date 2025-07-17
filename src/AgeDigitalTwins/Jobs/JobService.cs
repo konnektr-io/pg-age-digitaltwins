@@ -358,21 +358,6 @@ public class JobService
                 lock_heartbeat_at TIMESTAMP WITH TIME ZONE NULL
             )";
 
-        // Add checkpoint column if it doesn't exist (for existing installations)
-        var addCheckpointColumnSql =
-            $@"
-            ALTER TABLE {_schemaName}.jobs 
-            ADD COLUMN IF NOT EXISTS checkpoint_data JSONB NULL";
-
-        // Add locking columns if they don't exist (for existing installations)
-        var addLockingColumnsSql =
-            $@"
-            ALTER TABLE {_schemaName}.jobs 
-            ADD COLUMN IF NOT EXISTS lock_acquired_at TIMESTAMP WITH TIME ZONE NULL,
-            ADD COLUMN IF NOT EXISTS lock_acquired_by VARCHAR(255) NULL,
-            ADD COLUMN IF NOT EXISTS lock_lease_duration INTERVAL NOT NULL DEFAULT '5 minutes',
-            ADD COLUMN IF NOT EXISTS lock_heartbeat_at TIMESTAMP WITH TIME ZONE NULL";
-
         var createIndexSql =
             $@"
             CREATE INDEX IF NOT EXISTS idx_jobs_job_type ON {_schemaName}.jobs(job_type);
@@ -394,18 +379,6 @@ public class JobService
 
             // Create table
             await using (var command = new NpgsqlCommand(createTableSql, connection))
-            {
-                await command.ExecuteNonQueryAsync();
-            }
-
-            // Add checkpoint column for existing installations
-            await using (var command = new NpgsqlCommand(addCheckpointColumnSql, connection))
-            {
-                await command.ExecuteNonQueryAsync();
-            }
-
-            // Add locking columns for existing installations
-            await using (var command = new NpgsqlCommand(addLockingColumnsSql, connection))
             {
                 await command.ExecuteNonQueryAsync();
             }
