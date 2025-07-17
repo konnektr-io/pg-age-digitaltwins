@@ -87,40 +87,67 @@ public class JobResumptionService : BackgroundService
                     }
 
                     // Try to acquire lock for this job first
-                    var lockAcquired = await _client.IsJobLockedByAnotherInstanceAsync(
+                    var lockAcquired = await _client.JobService.TryAcquireJobLockAsync(
                         job.Id,
-                        stoppingToken
+                        cancellationToken: stoppingToken
                     );
-                    if (lockAcquired)
+                    if (!lockAcquired)
                     {
                         _logger.LogDebug(
-                            "Job {JobId} is already locked by another instance, skipping",
+                            "Could not acquire lock for job {JobId}, skipping (likely being processed by another instance)",
                             job.Id
                         );
                         continue;
                     }
 
-                    // Get blob streams
-                    await using var inputStream = await _blobStorageService.GetReadStreamAsync(
-                        new Uri(inputBlobUri)
-                    );
-                    await using var outputStream = await _blobStorageService.GetWriteStreamAsync(
-                        new Uri(outputBlobUri)
-                    );
+                    try
+                    {
+                        // Get blob streams
+                        await using var inputStream = await _blobStorageService.GetReadStreamAsync(
+                            new Uri(inputBlobUri)
+                        );
+                        await using var outputStream =
+                            await _blobStorageService.GetWriteStreamAsync(new Uri(outputBlobUri));
 
-                    // Resume the job execution
-                    var result = await _client.ResumeImportJobAsync(
-                        job.Id,
-                        inputStream,
-                        outputStream,
-                        stoppingToken
-                    );
+                        // Resume the job execution
+                        var result = await _client.ResumeImportJobAsync(
+                            job.Id,
+                            inputStream,
+                            outputStream,
+                            stoppingToken
+                        );
 
-                    _logger.LogInformation(
-                        "Successfully resumed job {JobId} with status {Status}",
-                        job.Id,
-                        result.Status
-                    );
+                        _logger.LogInformation(
+                            "Successfully resumed job {JobId} with status {Status}",
+                            job.Id,
+                            result.Status
+                        );
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(
+                            ex,
+                            "Failed to resume job {JobId}: {Error}",
+                            job.Id,
+                            ex.Message
+                        );
+
+                        // Release the lock since we failed to process the job
+                        try
+                        {
+                            await _client.JobService.ReleaseJobLockAsync(job.Id, stoppingToken);
+                            _logger.LogDebug("Released lock for failed job {JobId}", job.Id);
+                        }
+                        catch (Exception lockEx)
+                        {
+                            _logger.LogWarning(
+                                lockEx,
+                                "Failed to release lock for job {JobId}: {Error}",
+                                job.Id,
+                                lockEx.Message
+                            );
+                        }
+                    }
                 }
                 catch (Exception ex)
                 {
