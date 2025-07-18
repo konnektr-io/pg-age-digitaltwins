@@ -412,7 +412,7 @@ public class JobService
             RequestData = reader.IsDBNull(7) ? null : JsonDocument.Parse(reader.GetString(7)), // request_data
             ResultData = reader.IsDBNull(8) ? null : JsonDocument.Parse(reader.GetString(8)), // result_data
             ErrorData = reader.IsDBNull(9) ? null : JsonDocument.Parse(reader.GetString(9)), // error_data
-            // checkpoint_data is at index 10 but we don't need it in JobRecord - it's accessed via LoadCheckpointAsync
+            CheckpointData = reader.IsDBNull(10) ? null : JsonDocument.Parse(reader.GetString(10)), // checkpoint_data
         };
     }
 
@@ -757,7 +757,7 @@ public class JobService
             {
                 Id = reader.GetString(0), // id
                 JobType = reader.GetString(1), // job_type
-                Status = Enum.Parse<JobStatus>(reader.GetString(2)), // status
+                Status = Enum.Parse<JobStatus>(reader.GetString(2), ignoreCase: true), // status - case insensitive parsing
                 CreatedAt = reader.GetDateTime(3), // created_at
                 UpdatedAt = reader.GetDateTime(4), // updated_at
                 RequestData = reader.IsDBNull(5) ? null : JsonDocument.Parse(reader.GetString(5)), // request_data

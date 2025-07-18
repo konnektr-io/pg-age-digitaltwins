@@ -6,7 +6,6 @@ namespace AgeDigitalTwins.Models;
 
 /// <summary>
 /// Job record for storing job information in the database.
-/// Compatible with Azure Digital Twins API for import jobs.
 /// </summary>
 public class JobRecord
 {
@@ -62,6 +61,12 @@ public class JobRecord
     /// Contains error code and message, not detailed logs.
     /// </summary>
     public JsonDocument? ErrorData { get; set; }
+
+    /// <summary>
+    /// Gets or sets checkpoint data for job resumption.
+    /// Contains current progress for ongoing jobs.
+    /// </summary>
+    public JsonDocument? CheckpointData { get; set; }
 
     // Helper properties for Azure Digital Twins API compatibility
     /// <summary>
@@ -129,37 +134,65 @@ public class JobRecord
 
     /// <summary>
     /// Gets or sets the number of models successfully created (import jobs).
+    /// Shows current progress from checkpoint during execution, final results when completed.
     /// </summary>
     public int ModelsCreated
     {
-        get => GetResultProperty<int>("modelsCreated");
+        get
+        {
+            var checkpointValue = GetCheckpointProperty<int?>("modelsProcessed");
+            if (checkpointValue.HasValue)
+                return checkpointValue.Value;
+            return GetResultProperty<int>("modelsCreated");
+        }
         set => SetResultProperty("modelsCreated", value);
     }
 
     /// <summary>
     /// Gets or sets the number of twins successfully created (import jobs).
+    /// Shows current progress from checkpoint during execution, final results when completed.
     /// </summary>
     public int TwinsCreated
     {
-        get => GetResultProperty<int>("twinsCreated");
+        get
+        {
+            var checkpointValue = GetCheckpointProperty<int?>("twinsProcessed");
+            if (checkpointValue.HasValue)
+                return checkpointValue.Value;
+            return GetResultProperty<int>("twinsCreated");
+        }
         set => SetResultProperty("twinsCreated", value);
     }
 
     /// <summary>
     /// Gets or sets the number of relationships successfully created (import jobs).
+    /// Shows current progress from checkpoint during execution, final results when completed.
     /// </summary>
     public int RelationshipsCreated
     {
-        get => GetResultProperty<int>("relationshipsCreated");
+        get
+        {
+            var checkpointValue = GetCheckpointProperty<int?>("relationshipsProcessed");
+            if (checkpointValue.HasValue)
+                return checkpointValue.Value;
+            return GetResultProperty<int>("relationshipsCreated");
+        }
         set => SetResultProperty("relationshipsCreated", value);
     }
 
     /// <summary>
     /// Gets or sets the total number of errors encountered (import jobs).
+    /// Shows current progress from checkpoint during execution, final results when completed.
     /// </summary>
     public int ErrorCount
     {
-        get => GetResultProperty<int>("errorCount");
+        get
+        {
+            var checkpointValue = GetCheckpointProperty<int?>("errorCount");
+            if (checkpointValue.HasValue)
+                return checkpointValue.Value;
+            return GetResultProperty<int>("errorCount");
+        }
         set => SetResultProperty("errorCount", value);
     }
 
@@ -202,6 +235,15 @@ public class JobRecord
             dict.Remove(propertyName);
 
         RequestData = JsonSerializer.SerializeToDocument(dict);
+    }
+
+    private T? GetCheckpointProperty<T>(string propertyName)
+    {
+        if (CheckpointData?.RootElement.TryGetProperty(propertyName, out var element) == true)
+        {
+            return JsonSerializer.Deserialize<T>(element.GetRawText());
+        }
+        return default;
     }
 
     private T? GetResultProperty<T>(string propertyName)

@@ -22,33 +22,6 @@ public static class StreamingImportJob
         new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = false };
 
     /// <summary>
-    /// Executes a streaming import job that processes ND-JSON line by line.
-    /// </summary>
-    /// <param name="client">The AgeDigitalTwinsClient instance.</param>
-    /// <param name="inputStream">The input stream containing ND-JSON data.</param>
-    /// <param name="outputStream">The output stream for logging.</param>
-    /// <param name="jobId">The job identifier.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The job result.</returns>
-    public static async Task<JobRecord> ExecuteAsync(
-        AgeDigitalTwinsClient client,
-        Stream inputStream,
-        Stream outputStream,
-        string jobId,
-        CancellationToken cancellationToken = default
-    )
-    {
-        return await ExecuteWithCheckpointAsync(
-            client,
-            inputStream,
-            outputStream,
-            jobId,
-            checkpoint: null,
-            cancellationToken
-        );
-    }
-
-    /// <summary>
     /// Executes a streaming import job that processes ND-JSON line by line with checkpoint support.
     /// </summary>
     /// <param name="client">The AgeDigitalTwinsClient instance.</param>
