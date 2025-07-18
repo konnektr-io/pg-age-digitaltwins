@@ -738,7 +738,7 @@ public class JobService
     )
     {
         string sql = $"""
-            SELECT id, job_type, status, created_at, updated_at, request_data, result_data
+            SELECT id, job_type, status, created_at, updated_at, finished_at, purge_at, request_data, result_data, error_data, checkpoint_data
             FROM {_schemaName}.jobs
             WHERE status IN ('running')
             AND (lock_acquired_at IS NULL OR lock_acquired_at + lock_lease_duration <= NOW())
@@ -753,22 +753,7 @@ public class JobService
 
         while (await reader.ReadAsync(cancellationToken))
         {
-            var job = new JobRecord
-            {
-                Id = reader.GetString(0), // id
-                JobType = reader.GetString(1), // job_type
-                Status = Enum.Parse<JobStatus>(reader.GetString(2), ignoreCase: true), // status - case insensitive parsing
-                CreatedAt = reader.GetDateTime(3), // created_at
-                UpdatedAt = reader.GetDateTime(4), // updated_at
-                RequestData = reader.IsDBNull(5) ? null : JsonDocument.Parse(reader.GetString(5)), // request_data
-                ResultData = reader.IsDBNull(6)
-                    ? null
-                    : JsonDocument.Parse(
-                        reader.GetString(6)
-                    ) // result_data
-                ,
-            };
-            jobs.Add(job);
+            jobs.Add(MapJobRecord(reader));
         }
 
         _logger?.LogInformation("Found {JobCount} jobs to resume", jobs.Count);

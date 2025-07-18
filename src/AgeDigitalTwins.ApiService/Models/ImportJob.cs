@@ -91,18 +91,11 @@ public class ImportJob : ImportJobRequest
         if (OutputBlobUri == null)
             OutputBlobUri = new Uri("about:blank");
 
-        // Extract result data if available
-        if (jobRecord.ResultData != null)
-        {
-            var resultData = jobRecord.ResultData.RootElement;
-            if (resultData.TryGetProperty("modelsCreated", out var modelsCreated))
-                ModelsCreated = modelsCreated.GetInt32();
-            if (resultData.TryGetProperty("twinsCreated", out var twinsCreated))
-                TwinsCreated = twinsCreated.GetInt32();
-            if (resultData.TryGetProperty("relationshipsCreated", out var relationshipsCreated))
-                RelationshipsCreated = relationshipsCreated.GetInt32();
-            if (resultData.TryGetProperty("errorCount", out var errorCount))
-                ErrorCount = errorCount.GetInt32();
-        }
+        // Use JobRecord's smart properties that read from checkpoint data during execution
+        // and result data when completed
+        ModelsCreated = jobRecord.ModelsCreated;
+        TwinsCreated = jobRecord.TwinsCreated;
+        RelationshipsCreated = jobRecord.RelationshipsCreated;
+        ErrorCount = jobRecord.ErrorCount;
     }
 }
