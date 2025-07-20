@@ -215,7 +215,7 @@ public static class ImportJobEndpoints
         if (job == null)
             return TypedResults.NotFound();
 
-        if (job.Status != JobStatus.Running && job.Status != JobStatus.NotStarted)
+        if (job.Status != JobStatus.Running && job.Status != JobStatus.Notstarted)
         {
             return TypedResults.Problem(
                 detail: $"Cannot cancel job in status '{job.Status}'. Only running or not started jobs can be cancelled.",

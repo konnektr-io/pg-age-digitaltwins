@@ -8,7 +8,7 @@ public enum JobStatus
     /// <summary>
     /// Job has been created but not yet started.
     /// </summary>
-    NotStarted,
+    Notstarted,
 
     /// <summary>
     /// Job is currently running.

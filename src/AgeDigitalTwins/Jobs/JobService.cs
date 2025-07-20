@@ -70,7 +70,7 @@ public class JobService
         command.Parameters.AddWithValue("@jobType", jobType);
         command.Parameters.AddWithValue(
             "@status",
-            JobStatus.NotStarted.ToString().ToLowerInvariant()
+            JobStatus.Notstarted.ToString().ToLowerInvariant()
         );
         command.Parameters.AddWithValue("@createdAt", now);
         command.Parameters.AddWithValue("@updatedAt", now);
