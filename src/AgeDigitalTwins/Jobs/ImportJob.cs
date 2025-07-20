@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -127,10 +128,7 @@ public static class StreamingImportJob
             // Open a single connection for the entire import job
             await using var connection = await client
                 .GetDataSource()
-                .OpenConnectionAsync(
-                    Npgsql.TargetSessionAttributes.PreferPrimary,
-                    cancellationToken
-                );
+                .OpenConnectionAsync(TargetSessionAttributes.ReadWrite, cancellationToken);
 
             await ProcessStreamWithCheckpointAsync(
                 client,
@@ -646,7 +644,8 @@ public static class StreamingImportJob
                 cancellationToken
             );
 
-            var batchResult = await client.CreateOrReplaceDigitalTwinsAsync(
+            var batchResult = await client.CreateOrReplaceDigitalTwinsInternalAsync(
+                connection,
                 twinsBatch,
                 cancellationToken
             );
@@ -734,7 +733,8 @@ public static class StreamingImportJob
                 cancellationToken
             );
 
-            var batchResult = await client.CreateOrReplaceRelationshipsAsync(
+            var batchResult = await client.CreateOrReplaceRelationshipsInternalAsync(
+                connection,
                 relationshipsBatch,
                 cancellationToken
             );

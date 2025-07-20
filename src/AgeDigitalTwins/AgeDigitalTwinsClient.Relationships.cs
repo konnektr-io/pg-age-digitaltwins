@@ -662,7 +662,7 @@ SET rel = '{updatedRelJson}'::agtype";
     /// <summary>
     /// Internal implementation of batch relationship creation with simplified validation.
     /// </summary>
-    private async Task<BatchRelationshipResult> CreateOrReplaceRelationshipsInternalAsync<T>(
+    internal async Task<BatchRelationshipResult> CreateOrReplaceRelationshipsInternalAsync<T>(
         NpgsqlConnection connection,
         IReadOnlyList<T> relationships,
         CancellationToken cancellationToken = default

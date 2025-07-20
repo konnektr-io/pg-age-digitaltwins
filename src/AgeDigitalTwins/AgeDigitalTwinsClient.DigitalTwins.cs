@@ -141,7 +141,7 @@ public partial class AgeDigitalTwinsClient
         try
         {
             await using var connection = await _dataSource.OpenConnectionAsync(
-                TargetSessionAttributes.PreferStandby,
+                TargetSessionAttributes.ReadWrite,
                 cancellationToken
             );
             return await CreateOrReplaceDigitalTwinAsync(
@@ -755,7 +755,7 @@ RETURN COUNT(t) AS deletedCount";
         }
     }
 
-    private async Task<BatchDigitalTwinResult> CreateOrReplaceDigitalTwinsInternalAsync<T>(
+    internal async Task<BatchDigitalTwinResult> CreateOrReplaceDigitalTwinsInternalAsync<T>(
         NpgsqlConnection connection,
         IList<T> digitalTwins,
         CancellationToken cancellationToken = default
