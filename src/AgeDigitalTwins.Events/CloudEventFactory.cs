@@ -102,11 +102,12 @@ public static class CloudEventFactory
             );
         }
         JsonPatch jsonPatch = eventData.OldValue.CreatePatch(eventData.NewValue);
+        JsonPatch enhancedPatch = EnhancePatchWithSameValueUpdates(jsonPatch, eventData);
         JsonObject body =
             new()
             {
                 ["modelId"] = eventData.NewValue["$metadata"]?["$model"]?.DeepClone(),
-                ["patch"] = JsonNode.Parse(jsonPatch.ToJsonDocument().RootElement.GetRawText()),
+                ["patch"] = JsonNode.Parse(enhancedPatch.ToJsonDocument().RootElement.GetRawText()),
             };
         CloudEvent cloudEvent =
             new()
@@ -233,11 +234,12 @@ public static class CloudEventFactory
             );
         }
         JsonPatch jsonPatch = eventData.OldValue.CreatePatch(eventData.NewValue);
+        JsonPatch enhancedPatch = EnhancePatchWithSameValueUpdates(jsonPatch, eventData);
         JsonObject body =
             new()
             {
                 ["modelId"] = eventData.NewValue["$metadata"]?["$model"]?.DeepClone(),
-                ["patch"] = JsonNode.Parse(jsonPatch.ToJsonDocument().RootElement.GetRawText()),
+                ["patch"] = JsonNode.Parse(enhancedPatch.ToJsonDocument().RootElement.GetRawText()),
             };
         CloudEvent cloudEvent =
             new()
@@ -507,6 +509,65 @@ public static class CloudEventFactory
         return cloudEvents;
     }
 
+    private static JsonPatch EnhancePatchWithSameValueUpdates(
+        JsonPatch originalPatch,
+        EventData eventData
+    )
+    {
+        // Track which properties have explicit operations
+        HashSet<string> propertiesWithOperations = new();
+
+        // Collect all non-metadata operations
+        foreach (PatchOperation op in originalPatch.Operations)
+        {
+            if (op.Path.Count > 0 && op.Path[0] == "$metadata")
+            {
+                continue;
+            }
+            if (op.Path.Count > 0)
+            {
+                propertiesWithOperations.Add(op.Path[0]);
+            }
+        }
+
+        // Find same-value updates and create additional operations
+        List<PatchOperation> additionalOperations = new();
+        foreach (PatchOperation op in originalPatch.Operations)
+        {
+            if (op.Path.Count > 0 && op.Path[0] == "$metadata")
+            {
+                // Check if this is a lastUpdateTime change for a property that doesn't have an explicit operation
+                if (op.Path.Count >= 3 && op.Path[2] == "lastUpdateTime")
+                {
+                    var propertyName = op.Path[1];
+                    if (!propertiesWithOperations.Contains(propertyName))
+                    {
+                        // This property was updated with the same value - create a replace operation
+                        var propertyValue = eventData.NewValue?[propertyName];
+                        if (propertyValue != null)
+                        {
+                            additionalOperations.Add(
+                                PatchOperation.Replace(
+                                    Json.Pointer.JsonPointer.Parse($"/{propertyName}"),
+                                    propertyValue
+                                )
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        // If we have additional operations, create a new patch with them
+        if (additionalOperations.Count > 0)
+        {
+            var allOperations = originalPatch.Operations.Concat(additionalOperations);
+            return new JsonPatch(allOperations);
+        }
+
+        return originalPatch;
+    }
+
     private static List<CloudEvent> CreateCloudEventsFromPatch(
         EventData eventData,
         Uri source,
@@ -515,10 +576,51 @@ public static class CloudEventFactory
     {
         JsonPatch jsonPatch = eventData.OldValue.CreatePatch(eventData.NewValue);
         List<CloudEvent> cloudEvents = [];
+
+        // Track which properties have explicit operations
+        HashSet<string> propertiesWithOperations = new();
+
+        // First pass: collect all non-metadata operations
         foreach (PatchOperation op in jsonPatch.Operations)
         {
-            if (op.Path.ToString().StartsWith("/$"))
+            if (op.Path.Count > 0 && op.Path[0] == "$metadata")
             {
+                continue;
+            }
+            if (op.Path.Count > 0)
+            {
+                propertiesWithOperations.Add(op.Path[0]);
+            }
+        }
+
+        // Second pass: process all operations and detect same-value updates
+        foreach (PatchOperation op in jsonPatch.Operations)
+        {
+            if (op.Path.Count > 0 && op.Path[0] == "$metadata")
+            {
+                // Check if this is a lastUpdateTime change for a property that doesn't have an explicit operation
+                if (op.Path.Count >= 3 && op.Path[2] == "lastUpdateTime")
+                {
+                    var propertyName = op.Path[1];
+                    if (!propertiesWithOperations.Contains(propertyName))
+                    {
+                        // This property was updated with the same value - create a replace operation
+                        var propertyValue = eventData.NewValue?[propertyName];
+                        if (propertyValue != null)
+                        {
+                            CreatePropertyCloudEvent(
+                                propertyName,
+                                propertyValue,
+                                OperationType.Replace,
+                                eventData,
+                                source,
+                                typeMapping,
+                                jsonPatch,
+                                cloudEvents
+                            );
+                        }
+                    }
+                }
                 continue;
             }
             if (op.Path.Count == 0 && op.Value == null)
@@ -526,54 +628,80 @@ public static class CloudEventFactory
                 // Skip empty operations
                 continue;
             }
+
             string key = op.Path.ToString().Trim('/').Replace("/", "_");
-            JsonObject body =
-                new()
-                {
-                    ["timeStamp"] = eventData.Timestamp,
-                    ["serviceId"] = source.ToString(),
-                    ["id"] =
-                        eventData.NewValue?["$dtId"]?.ToString()
-                        ?? eventData.NewValue?["$sourceId"]?.ToString(),
-                    ["modelId"] = eventData.NewValue?["$metadata"]?["$model"]?.ToString(),
-                    ["key"] = key,
-                    ["value"] = op.Value,
-                    ["relationshipTarget"] = eventData.NewValue?["$targetId"]?.ToString(),
-                    ["relationshipId"] = eventData.NewValue?["$relationshipId"]?.ToString(),
-                    ["action"] = op.Op switch
-                    {
-                        OperationType.Add => "Create",
-                        OperationType.Remove => "Delete",
-                        OperationType.Replace => "Update",
-                        _ => "unknown",
-                    },
-                };
-            PatchOperation? sourceTimeOperation = jsonPatch.Operations.FirstOrDefault(o =>
-                o.Path.ToString() == $"/$metadata/{key}/sourceTime"
+            CreatePropertyCloudEvent(
+                key,
+                op.Value,
+                op.Op,
+                eventData,
+                source,
+                typeMapping,
+                jsonPatch,
+                cloudEvents
             );
-            if (sourceTimeOperation != null)
-            {
-                body["sourceTimeStamp"] = sourceTimeOperation.Value;
-            }
-            var type = typeMapping.TryGetValue(SinkEventType.PropertyEvent, out var t)
-                ? t
-                : DefaultDataHistoryTypeMapping[SinkEventType.PropertyEvent];
-            CloudEvent cloudEvent =
-                new()
-                {
-                    Id = Guid.NewGuid().ToString(),
-                    Source = source,
-                    Data = body,
-                    Type = type,
-                    DataContentType = "application/json",
-                    Subject = string.IsNullOrEmpty(body["relationshipId"]?.ToString())
-                        ? $"{body["id"]}"
-                        : $"{body["id"]}/relationships/{body["relationshipId"]}",
-                    Time = eventData.Timestamp,
-                };
-            cloudEvents.Add(cloudEvent);
         }
         return cloudEvents;
+    }
+
+    private static void CreatePropertyCloudEvent(
+        string key,
+        JsonNode? value,
+        OperationType operationType,
+        EventData eventData,
+        Uri source,
+        Dictionary<SinkEventType, string> typeMapping,
+        JsonPatch jsonPatch,
+        List<CloudEvent> cloudEvents
+    )
+    {
+        JsonObject body =
+            new()
+            {
+                ["timeStamp"] = eventData.Timestamp,
+                ["serviceId"] = source.ToString(),
+                ["id"] =
+                    eventData.NewValue?["$dtId"]?.ToString()
+                    ?? eventData.NewValue?["$sourceId"]?.ToString(),
+                ["modelId"] = eventData.NewValue?["$metadata"]?["$model"]?.ToString(),
+                ["key"] = key.Replace("/", "_"),
+                ["value"] = value,
+                ["relationshipTarget"] = eventData.NewValue?["$targetId"]?.ToString(),
+                ["relationshipId"] = eventData.NewValue?["$relationshipId"]?.ToString(),
+                ["action"] = operationType switch
+                {
+                    OperationType.Add => "Create",
+                    OperationType.Remove => "Delete",
+                    OperationType.Replace => "Update",
+                    _ => "unknown",
+                },
+            };
+
+        PatchOperation? sourceTimeOperation = jsonPatch.Operations.FirstOrDefault(o =>
+            o.Path.ToString() == $"/$metadata/{key.Replace("_", "/")}/sourceTime"
+        );
+        if (sourceTimeOperation != null)
+        {
+            body["sourceTimeStamp"] = sourceTimeOperation.Value;
+        }
+
+        var type = typeMapping.TryGetValue(SinkEventType.PropertyEvent, out var t)
+            ? t
+            : DefaultDataHistoryTypeMapping[SinkEventType.PropertyEvent];
+        CloudEvent cloudEvent =
+            new()
+            {
+                Id = Guid.NewGuid().ToString(),
+                Source = source,
+                Data = body,
+                Type = type,
+                DataContentType = "application/json",
+                Subject = string.IsNullOrEmpty(body["relationshipId"]?.ToString())
+                    ? $"{body["id"]}"
+                    : $"{body["id"]}/relationships/{body["relationshipId"]}",
+                Time = eventData.Timestamp,
+            };
+        cloudEvents.Add(cloudEvent);
     }
 
     #endregion
