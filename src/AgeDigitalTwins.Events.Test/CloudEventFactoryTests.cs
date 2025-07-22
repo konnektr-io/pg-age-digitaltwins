@@ -429,70 +429,10 @@ public class CloudEventFactoryTests
                 var opObj = op as JsonObject;
                 return opObj != null
                     && opObj["op"]?.ToString() == "replace"
-                    && opObj["path"]?.ToString() == "/temperature";
+                    && opObj["path"]?.ToString() == "/temperature"
+                    && opObj["value"]?.ToString() == "25.5";
             }
         );
-    }
-
-    [Fact]
-    public void CreateRelationshipChangeNotificationEvents_SameValueUpdate_IncludesPropertyInPatch()
-    {
-        // Arrange - Relationship property 'priority' updated with same value
-        var eventData = new EventData
-        {
-            EventType = EventType.RelationshipUpdate,
-            NewValue = JsonNode
-                .Parse(
-                    @"{
-                    ""$relationshipId"": ""rel1"",
-                    ""$sourceId"": ""twin1"",
-                    ""$targetId"": ""twin2"",
-                    ""$metadata"": {
-                        ""$model"": ""hasRelationship"",
-                        ""priority"": {
-                            ""lastUpdateTime"": ""2024-01-15T10:30:00Z""
-                        }
-                    },
-                    ""priority"": 1
-                }"
-                )!
-                .AsObject(),
-            OldValue = JsonNode
-                .Parse(
-                    @"{
-                    ""$relationshipId"": ""rel1"",
-                    ""$sourceId"": ""twin1"",
-                    ""$targetId"": ""twin2"",
-                    ""$metadata"": {
-                        ""$model"": ""hasRelationship"",
-                        ""priority"": {
-                            ""lastUpdateTime"": ""2024-01-15T10:00:00Z""
-                        }
-                    },
-                    ""priority"": 1
-                }"
-                )!
-                .AsObject(),
-            Timestamp = DateTime.UtcNow,
-        };
-        var source = new Uri("http://example.com");
-
-        // Act
-        var result = CloudEventFactory.CreateRelationshipChangeNotificationEvents(
-            eventData,
-            source,
-            []
-        );
-
-        // Assert
-        Assert.Single(result);
-        var cloudEvent = result[0];
-        var data = cloudEvent.Data as JsonObject;
-        Assert.NotNull(data);
-
-        // Verify patch contains the same-value update
-        var patch = data["patch"] as JsonArray;
-        Assert.NotNull(patch);
         Assert.Contains(
             patch,
             op =>
@@ -500,7 +440,8 @@ public class CloudEventFactoryTests
                 var opObj = op as JsonObject;
                 return opObj != null
                     && opObj["op"]?.ToString() == "replace"
-                    && opObj["path"]?.ToString() == "/priority";
+                    && opObj["path"]?.ToString() == "/$metadata/temperature/lastUpdateTime"
+                    && opObj["value"]?.ToString() == "2024-01-15T10:30:00Z";
             }
         );
     }
@@ -508,7 +449,7 @@ public class CloudEventFactoryTests
     [Fact]
     public void CreateDataHistoryEvents_SameValueUpdate_CreatesPropertyEvent()
     {
-        // Arrange - Property 'humidity' updated with same value
+        // Arrange - Property 'humidity' updated with same value, but lastUpdateTime changed
         var eventData = new EventData
         {
             EventType = EventType.TwinUpdate,
@@ -557,7 +498,7 @@ public class CloudEventFactoryTests
         Assert.NotNull(data);
         Assert.Equal("twin1", data["id"]?.ToString());
         Assert.Equal("humidity", data["key"]?.ToString());
-        Assert.Equal("60", data["value"]?.ToString());
+        Assert.Equal("60.0", data["value"]?.ToString());
         Assert.Equal("Update", data["action"]?.ToString());
     }
 }

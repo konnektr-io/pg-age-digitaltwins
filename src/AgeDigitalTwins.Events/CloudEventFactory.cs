@@ -234,12 +234,11 @@ public static class CloudEventFactory
             );
         }
         JsonPatch jsonPatch = eventData.OldValue.CreatePatch(eventData.NewValue);
-        JsonPatch enhancedPatch = EnhancePatchWithSameValueUpdates(jsonPatch, eventData);
         JsonObject body =
             new()
             {
                 ["modelId"] = eventData.NewValue["$metadata"]?["$model"]?.DeepClone(),
-                ["patch"] = JsonNode.Parse(enhancedPatch.ToJsonDocument().RootElement.GetRawText()),
+                ["patch"] = JsonNode.Parse(jsonPatch.ToJsonDocument().RootElement.GetRawText()),
             };
         CloudEvent cloudEvent =
             new()
@@ -575,54 +574,12 @@ public static class CloudEventFactory
     )
     {
         JsonPatch jsonPatch = eventData.OldValue.CreatePatch(eventData.NewValue);
+        JsonPatch enhancedPatch = EnhancePatchWithSameValueUpdates(jsonPatch, eventData);
         List<CloudEvent> cloudEvents = [];
 
-        // Track which properties have explicit operations
-        HashSet<string> propertiesWithOperations = new();
-
-        // First pass: collect all non-metadata operations
-        foreach (PatchOperation op in jsonPatch.Operations)
+        // First pass: process normal patch operations
+        foreach (PatchOperation op in enhancedPatch.Operations)
         {
-            if (op.Path.Count > 0 && op.Path[0] == "$metadata")
-            {
-                continue;
-            }
-            if (op.Path.Count > 0)
-            {
-                propertiesWithOperations.Add(op.Path[0]);
-            }
-        }
-
-        // Second pass: process all operations and detect same-value updates
-        foreach (PatchOperation op in jsonPatch.Operations)
-        {
-            if (op.Path.Count > 0 && op.Path[0] == "$metadata")
-            {
-                // Check if this is a lastUpdateTime change for a property that doesn't have an explicit operation
-                if (op.Path.Count >= 3 && op.Path[2] == "lastUpdateTime")
-                {
-                    var propertyName = op.Path[1];
-                    if (!propertiesWithOperations.Contains(propertyName))
-                    {
-                        // This property was updated with the same value - create a replace operation
-                        var propertyValue = eventData.NewValue?[propertyName];
-                        if (propertyValue != null)
-                        {
-                            CreatePropertyCloudEvent(
-                                propertyName,
-                                propertyValue,
-                                OperationType.Replace,
-                                eventData,
-                                source,
-                                typeMapping,
-                                jsonPatch,
-                                cloudEvents
-                            );
-                        }
-                    }
-                }
-                continue;
-            }
             if (op.Path.Count == 0 && op.Value == null)
             {
                 // Skip empty operations
@@ -630,6 +587,13 @@ public static class CloudEventFactory
             }
 
             string key = op.Path.ToString().Trim('/').Replace("/", "_");
+
+            // Skip system properties that start with $
+            if (key.StartsWith("$"))
+            {
+                continue;
+            }
+
             CreatePropertyCloudEvent(
                 key,
                 op.Value,
@@ -641,6 +605,7 @@ public static class CloudEventFactory
                 cloudEvents
             );
         }
+
         return cloudEvents;
     }
 
@@ -665,7 +630,7 @@ public static class CloudEventFactory
                     ?? eventData.NewValue?["$sourceId"]?.ToString(),
                 ["modelId"] = eventData.NewValue?["$metadata"]?["$model"]?.ToString(),
                 ["key"] = key.Replace("/", "_"),
-                ["value"] = value,
+                ["value"] = value?.DeepClone(),
                 ["relationshipTarget"] = eventData.NewValue?["$targetId"]?.ToString(),
                 ["relationshipId"] = eventData.NewValue?["$relationshipId"]?.ToString(),
                 ["action"] = operationType switch
@@ -682,7 +647,7 @@ public static class CloudEventFactory
         );
         if (sourceTimeOperation != null)
         {
-            body["sourceTimeStamp"] = sourceTimeOperation.Value;
+            body["sourceTimeStamp"] = sourceTimeOperation.Value?.DeepClone();
         }
 
         var type = typeMapping.TryGetValue(SinkEventType.PropertyEvent, out var t)
