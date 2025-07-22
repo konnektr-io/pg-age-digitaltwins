@@ -366,4 +366,139 @@ public class CloudEventFactoryTests
         Assert.Equal("rel1", data["relationshipId"]?.ToString());
         Assert.Equal("Create", data["action"]?.ToString());
     }
+
+    [Fact]
+    public void CreateDigitalTwinChangeNotificationEvents_SameValueUpdate_IncludesPropertyInPatch()
+    {
+        // Arrange - Property 'temperature' updated with same value, but lastUpdateTime changed
+        var eventData = new EventData
+        {
+            EventType = EventType.TwinUpdate,
+            NewValue = JsonNode
+                .Parse(
+                    @"{
+                    ""$dtId"": ""twin1"",
+                    ""$metadata"": {
+                        ""$model"": ""model1"",
+                        ""temperature"": {
+                            ""lastUpdateTime"": ""2024-01-15T10:30:00Z""
+                        }
+                    },
+                    ""temperature"": 25.5
+                }"
+                )!
+                .AsObject(),
+            OldValue = JsonNode
+                .Parse(
+                    @"{
+                    ""$dtId"": ""twin1"",
+                    ""$metadata"": {
+                        ""$model"": ""model1"",
+                        ""temperature"": {
+                            ""lastUpdateTime"": ""2024-01-15T10:00:00Z""
+                        }
+                    },
+                    ""temperature"": 25.5
+                }"
+                )!
+                .AsObject(),
+            Timestamp = DateTime.UtcNow,
+        };
+        var source = new Uri("http://example.com");
+
+        // Act
+        var result = CloudEventFactory.CreateDigitalTwinChangeNotificationEvents(
+            eventData,
+            source,
+            []
+        );
+
+        // Assert
+        Assert.Single(result);
+        var cloudEvent = result[0];
+        var data = cloudEvent.Data as JsonObject;
+        Assert.NotNull(data);
+
+        // Verify patch contains the same-value update
+        var patch = data["patch"] as JsonArray;
+        Assert.NotNull(patch);
+        Assert.Contains(
+            patch,
+            op =>
+            {
+                var opObj = op as JsonObject;
+                return opObj != null
+                    && opObj["op"]?.ToString() == "replace"
+                    && opObj["path"]?.ToString() == "/temperature"
+                    && opObj["value"]?.ToString() == "25.5";
+            }
+        );
+        Assert.Contains(
+            patch,
+            op =>
+            {
+                var opObj = op as JsonObject;
+                return opObj != null
+                    && opObj["op"]?.ToString() == "replace"
+                    && opObj["path"]?.ToString() == "/$metadata/temperature/lastUpdateTime"
+                    && opObj["value"]?.ToString() == "2024-01-15T10:30:00Z";
+            }
+        );
+    }
+
+    [Fact]
+    public void CreateDataHistoryEvents_SameValueUpdate_CreatesPropertyEvent()
+    {
+        // Arrange - Property 'humidity' updated with same value, but lastUpdateTime changed
+        var eventData = new EventData
+        {
+            EventType = EventType.TwinUpdate,
+            NewValue = JsonNode
+                .Parse(
+                    @"{
+                    ""$dtId"": ""twin1"",
+                    ""$metadata"": {
+                        ""$model"": ""model1"",
+                        ""humidity"": {
+                            ""lastUpdateTime"": ""2024-01-15T10:30:00Z""
+                        }
+                    },
+                    ""humidity"": 60.0
+                }"
+                )!
+                .AsObject(),
+            OldValue = JsonNode
+                .Parse(
+                    @"{
+                    ""$dtId"": ""twin1"",
+                    ""$metadata"": {
+                        ""$model"": ""model1"",
+                        ""humidity"": {
+                            ""lastUpdateTime"": ""2024-01-15T10:00:00Z""
+                        }
+                    },
+                    ""humidity"": 60.0
+                }"
+                )!
+                .AsObject(),
+            Timestamp = DateTime.UtcNow,
+        };
+        var source = new Uri("http://example.com");
+
+        // Act
+        var result = CloudEventFactory.CreateDataHistoryEvents(eventData, source, []);
+
+        // Assert
+        Assert.Single(result); // Should have 1 property event for the same-value update
+        var propertyEvent = result[0];
+        Assert.Equal("Konnektr.DigitalTwins.Property.Event", propertyEvent.Type);
+        Assert.Equal("twin1", propertyEvent.Subject);
+
+        var data = propertyEvent.Data as JsonObject;
+        Assert.NotNull(data);
+        Assert.Equal("twin1", data["id"]?.ToString());
+        Assert.Equal("humidity", data["key"]?.ToString());
+        Assert.Equal("60.0", data["value"]?.ToString());
+        Assert.Equal("Update", data["action"]?.ToString());
+    }
 }
