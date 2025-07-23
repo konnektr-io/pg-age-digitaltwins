@@ -713,17 +713,41 @@ public class QueryTests : TestBase
             await Client.CreateOrReplaceDigitalTwinAsync(twin.Key, twin.Value);
         }
 
-        // First page
-        var firstPage = await Client
+        // Query 2 twins with a page size of 4
+        var queryTwoPage = await Client
             .QueryAsync<JsonDocument>(
                 "MATCH (t:Twin) WHERE t.`$metadata`.`$model` = 'dtmi:com:adt:dtsample:room;1' RETURN t LIMIT 2"
             )
             .AsPages(pageSizeHint: 4)
             .FirstAsync();
 
-        Assert.NotNull(firstPage);
-        Assert.Equal(2, firstPage.Value.Count());
-        Assert.Null(firstPage.ContinuationToken);
+        Assert.NotNull(queryTwoPage);
+        Assert.Equal(2, queryTwoPage.Value.Count());
+        Assert.Null(queryTwoPage.ContinuationToken);
+
+        // Query 5 twins with a limit of 4
+        var queryFivePages = Client
+            .QueryAsync<JsonDocument>(
+                "SELECT TOP(5) T FROM DIGITALTWINS T WHERE T.$metadata.$model = 'dtmi:com:adt:dtsample:room;1'"
+            )
+            .AsPages(pageSizeHint: 2);
+
+        int count = 0;
+        await foreach (var page in queryFivePages)
+        {
+            Assert.NotNull(page);
+            Assert.InRange(page.Value.Count(), 1, 2);
+            count += page.Value.Count();
+            Assert.True(count <= 5, "Count should never be higher than 5");
+            if (count == 2)
+            {
+                Assert.NotNull(page.ContinuationToken);
+            }
+            else if (count == 5)
+            {
+                Assert.Null(page.ContinuationToken);
+            }
+        }
     }
 
     [Fact]
