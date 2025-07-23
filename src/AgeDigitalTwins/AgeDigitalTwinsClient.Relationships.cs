@@ -737,10 +737,6 @@ SET rel = '{updatedRelJson}'::agtype";
                     );
                     continue;
                 }
-                else if (!allTwinIds.Contains(sourceId))
-                {
-                    allTwinIds.Add(sourceId);
-                }
 
                 if (string.IsNullOrEmpty(targetId))
                 {
@@ -753,11 +749,6 @@ SET rel = '{updatedRelJson}'::agtype";
                     );
                     continue;
                 }
-                else if (!allTwinIds.Contains(targetId))
-                {
-                    allTwinIds.Add(targetId);
-                }
-
                 if (string.IsNullOrEmpty(relationshipId))
                 {
                     results.Add(
@@ -780,6 +771,16 @@ SET rel = '{updatedRelJson}'::agtype";
                         )
                     );
                     continue;
+                }
+
+                // Add source and target IDs to the list of all twin IDs to retrieve for validation
+                if (!allTwinIds.Contains(sourceId))
+                {
+                    allTwinIds.Add(sourceId);
+                }
+                if (!allTwinIds.Contains(targetId))
+                {
+                    allTwinIds.Add(targetId);
                 }
 
                 // Ensure all required properties are set in the JSON
