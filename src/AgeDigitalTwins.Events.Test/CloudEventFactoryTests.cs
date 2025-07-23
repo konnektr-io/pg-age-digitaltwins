@@ -426,8 +426,7 @@ public class CloudEventFactoryTests
             patch,
             op =>
             {
-                var opObj = op as JsonObject;
-                return opObj != null
+                return op is JsonObject opObj
                     && opObj["op"]?.ToString() == "replace"
                     && opObj["path"]?.ToString() == "/temperature"
                     && opObj["value"]?.ToString() == "25.5";
@@ -437,11 +436,24 @@ public class CloudEventFactoryTests
             patch,
             op =>
             {
-                var opObj = op as JsonObject;
-                return opObj != null
+                return op is JsonObject opObj
                     && opObj["op"]?.ToString() == "replace"
                     && opObj["path"]?.ToString() == "/$metadata/temperature/lastUpdateTime"
                     && opObj["value"]?.ToString() == "2024-01-15T10:30:00Z";
+            }
+        );
+        Assert.DoesNotContain(
+            patch,
+            op =>
+            {
+                return op is JsonObject opObj && opObj["path"]?.ToString() == "/$dtId";
+            }
+        );
+        Assert.DoesNotContain(
+            patch,
+            op =>
+            {
+                return op is JsonObject opObj && opObj["path"]?.ToString() == "/$etag";
             }
         );
     }
