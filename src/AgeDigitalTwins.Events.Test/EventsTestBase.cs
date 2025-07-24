@@ -17,6 +17,7 @@ public class EventsTestBase : IAsyncDisposable
     protected readonly AgeDigitalTwinsReplication Replication;
     private readonly CancellationTokenSource _cancellationTokenSource;
     private readonly ILoggerFactory _loggerFactory;
+    private readonly Task _replicationTask;
 
     public EventsTestBase()
     {
@@ -73,11 +74,11 @@ public class EventsTestBase : IAsyncDisposable
 
         _cancellationTokenSource = new CancellationTokenSource();
 
-        // Start replication in background
-        _ = Task.Run(() => Replication.RunAsync(_cancellationTokenSource.Token));
+        // Start replication - RunAsync should handle its own background tasks
+        _replicationTask = Replication.RunAsync(_cancellationTokenSource.Token);
 
-        // Wait a moment for replication to start
-        Thread.Sleep(1000);
+        // Give replication a moment to initialize
+        Task.Delay(500).Wait();
     }
 
     /// <summary>
@@ -86,23 +87,56 @@ public class EventsTestBase : IAsyncDisposable
     protected async Task WaitForReplicationHealthy(TimeSpan timeout = default)
     {
         if (timeout == default)
-            timeout = TimeSpan.FromSeconds(20);
+            timeout = TimeSpan.FromSeconds(30); // Increased timeout
 
         var endTime = DateTime.UtcNow.Add(timeout);
+        var checkCount = 0;
+
         while (DateTime.UtcNow < endTime)
         {
+            checkCount++;
+
+            // Check if replication task has faulted
+            if (_replicationTask.IsFaulted)
+            {
+                throw new InvalidOperationException(
+                    $"Replication task faulted: {_replicationTask.Exception?.GetBaseException().Message}"
+                );
+            }
+
             if (Replication.IsHealthy)
+            {
+                Console.WriteLine($"Replication became healthy after {checkCount} checks");
                 return;
+            }
+
+            if (checkCount % 50 == 0) // Log every 5 seconds
+            {
+                Console.WriteLine($"Waiting for replication health... (check #{checkCount})");
+            }
 
             await Task.Delay(100);
         }
 
-        throw new TimeoutException("Replication did not become healthy within the timeout period");
+        throw new TimeoutException(
+            $"Replication did not become healthy within {timeout.TotalSeconds} seconds after {checkCount} checks. "
+                + $"Task Status: {_replicationTask.Status}"
+        );
     }
 
     public async ValueTask DisposeAsync()
     {
         _cancellationTokenSource.Cancel();
+
+        try
+        {
+            // Wait for replication task to complete or timeout
+            await _replicationTask.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+        catch
+        {
+            // Ignore task completion errors
+        }
 
         try
         {

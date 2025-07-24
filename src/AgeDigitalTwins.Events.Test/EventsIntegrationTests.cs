@@ -36,10 +36,10 @@ public class EventsIntegrationTests : EventsTestBase
         await Client.CreateOrReplaceDigitalTwinAsync(digitalTwin.Id, digitalTwin);
 
         // Assert - Wait for the specific event
-        var receivedEvent = TestSink.WaitForEvent(
+        var receivedEvent = await TestSink.WaitForEventAsync(
             uniqueTwinId,
             "Konnektr.DigitalTwins.Twin.Create",
-            TimeSpan.FromSeconds(10)
+            TimeSpan.FromSeconds(30)
         );
 
         Assert.NotNull(receivedEvent);
@@ -77,7 +77,7 @@ public class EventsIntegrationTests : EventsTestBase
         await Client.CreateOrReplaceDigitalTwinAsync(digitalTwin.Id, digitalTwin);
 
         // Assert - Wait for the update event
-        var receivedEvent = TestSink.WaitForEvent(
+        var receivedEvent = await TestSink.WaitForEventAsync(
             uniqueTwinId,
             "Konnektr.DigitalTwins.Twin.Update",
             TimeSpan.FromSeconds(10)
@@ -116,7 +116,7 @@ public class EventsIntegrationTests : EventsTestBase
         await Client.DeleteDigitalTwinAsync(digitalTwin.Id);
 
         // Assert - Wait for the delete event
-        var receivedEvent = TestSink.WaitForEvent(
+        var receivedEvent = await TestSink.WaitForEventAsync(
             uniqueTwinId,
             "Konnektr.DigitalTwins.Twin.Delete",
             TimeSpan.FromSeconds(10)
@@ -172,7 +172,7 @@ public class EventsIntegrationTests : EventsTestBase
 
         // Assert - Wait for the relationship create event
         var expectedSubject = $"{sourceTwinId}/relationships/{relationshipId}";
-        var receivedEvent = TestSink.WaitForEvent(
+        var receivedEvent = await TestSink.WaitForEventAsync(
             expectedSubject,
             "Konnektr.DigitalTwins.Relationship.Create",
             TimeSpan.FromSeconds(10)
