@@ -75,17 +75,11 @@ builder.Services.AddExceptionHandler<ExceptionHandler>();
 // Use Azure Blob Storage for production, fallback to default for testing/development
 if (builder.Environment.IsDevelopment())
 {
-    builder.Services.AddSingleton<
-        AgeDigitalTwins.ApiService.Services.IBlobStorageService,
-        AgeDigitalTwins.ApiService.Services.DefaultBlobStorageService
-    >();
+    builder.Services.AddSingleton<IBlobStorageService, DefaultBlobStorageService>();
 }
 else
 {
-    builder.Services.AddSingleton<
-        AgeDigitalTwins.ApiService.Services.IBlobStorageService,
-        AgeDigitalTwins.ApiService.Services.AzureBlobStorageService
-    >();
+    builder.Services.AddSingleton<IBlobStorageService, AzureBlobStorageService>();
 }
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi

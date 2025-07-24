@@ -144,6 +144,12 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
             cancellationToken
         );
 
+        _logger.LogInformation(
+            "Started replication on slot {ReplicationSlot} for publication {Publication}",
+            _replicationSlot,
+            _publication
+        );
+
         EventData? currentEvent = null;
         Activity? transactionActivity = null;
 
