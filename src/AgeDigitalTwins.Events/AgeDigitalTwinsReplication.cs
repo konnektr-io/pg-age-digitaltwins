@@ -193,29 +193,45 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                         _logger.LogDebug("Skipping insert message without a transaction");
                         continue;
                     }
+
+                    var newValue = await ConvertRowToJsonAsync(insertMessage.NewRow);
+                    if (newValue == null)
+                    {
+                        _logger.LogDebug("Skipping insert message without a JSON value");
+                        continue;
+                    }
+
+                    var newEntityId = GetEntityIdentifier(newValue);
+                    var currentEntityId = GetCurrentEventEntityId(currentEvent);
+
+                    // Check if we're starting a new entity operation
+                    if (
+                        currentEntityId != null
+                        && newEntityId != null
+                        && currentEntityId != newEntityId
+                    )
+                    {
+                        // Enqueue the current event and start a new one
+                        EnqueueCurrentEventIfValid(currentEvent);
+                        currentEvent = new EventData();
+                    }
+
                     currentEvent.GraphName = insertMessage.Relation.Namespace;
                     currentEvent.TableName = insertMessage.Relation.RelationName;
                     currentEvent.OldValue = [];
-                    currentEvent.NewValue = await ConvertRowToJsonAsync(insertMessage.NewRow);
-                    if (currentEvent.NewValue != null)
+                    currentEvent.NewValue = newValue;
+
+                    if (newValue.ContainsKey("$dtId"))
                     {
-                        if (currentEvent.NewValue.ContainsKey("$dtId"))
-                        {
-                            currentEvent.EventType = EventType.TwinCreate;
-                        }
-                        else if (currentEvent.NewValue.ContainsKey("$relationshipId"))
-                        {
-                            currentEvent.EventType = EventType.RelationshipCreate;
-                        }
-                        else
-                        {
-                            _logger.LogDebug("Skipping insert message without a valid JSON value");
-                            continue;
-                        }
+                        currentEvent.EventType = EventType.TwinCreate;
+                    }
+                    else if (newValue.ContainsKey("$relationshipId"))
+                    {
+                        currentEvent.EventType = EventType.RelationshipCreate;
                     }
                     else
                     {
-                        _logger.LogDebug("Skipping insert message without a JSON value");
+                        _logger.LogDebug("Skipping insert message without a valid JSON value");
                         continue;
                     }
                 }
@@ -226,17 +242,43 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                         _logger.LogDebug("Skipping update message without a transaction");
                         continue;
                     }
+
+                    var newValue = await ConvertRowToJsonAsync(updateMessage.NewRow);
+                    var oldValue = await ConvertRowToJsonAsync(updateMessage.OldRow);
+
+                    if (newValue == null)
+                    {
+                        _logger.LogDebug("Skipping update message without a new JSON value");
+                        continue;
+                    }
+
+                    var newEntityId = GetEntityIdentifier(newValue);
+                    var currentEntityId = GetCurrentEventEntityId(currentEvent);
+
+                    // Check if we're starting a new entity operation
+                    if (
+                        currentEntityId != null
+                        && newEntityId != null
+                        && currentEntityId != newEntityId
+                    )
+                    {
+                        // Enqueue the current event and start a new one
+                        EnqueueCurrentEventIfValid(currentEvent);
+                        currentEvent = new EventData();
+                    }
+
                     currentEvent.GraphName = updateMessage.Relation.Namespace;
                     currentEvent.TableName = updateMessage.Relation.RelationName;
-                    currentEvent.OldValue ??= await ConvertRowToJsonAsync(updateMessage.OldRow);
-                    currentEvent.NewValue = await ConvertRowToJsonAsync(updateMessage.NewRow);
-                    if (currentEvent.EventType == null && currentEvent.NewValue != null)
+                    currentEvent.OldValue ??= oldValue;
+                    currentEvent.NewValue = newValue;
+
+                    if (currentEvent.EventType == null && newValue != null)
                     {
-                        if (currentEvent.NewValue.ContainsKey("$dtId"))
+                        if (newValue.ContainsKey("$dtId"))
                         {
                             currentEvent.EventType = EventType.TwinUpdate;
                         }
-                        else if (currentEvent.NewValue.ContainsKey("$relationshipId"))
+                        else if (newValue.ContainsKey("$relationshipId"))
                         {
                             currentEvent.EventType = EventType.RelationshipUpdate;
                         }
@@ -249,19 +291,40 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                         _logger.LogDebug("Skipping delete message without a transaction");
                         continue;
                     }
+
+                    var oldValue = await ConvertRowToJsonAsync(deleteMessage.OldRow);
+                    if (oldValue == null)
+                    {
+                        _logger.LogDebug("Skipping delete message without an old JSON value");
+                        continue;
+                    }
+
+                    var deleteEntityId = GetEntityIdentifier(oldValue);
+                    var currentEntityId = GetCurrentEventEntityId(currentEvent);
+
+                    // Check if we're starting a new entity operation
+                    if (
+                        currentEntityId != null
+                        && deleteEntityId != null
+                        && currentEntityId != deleteEntityId
+                    )
+                    {
+                        // Enqueue the current event and start a new one
+                        EnqueueCurrentEventIfValid(currentEvent);
+                        currentEvent = new EventData();
+                    }
+
                     currentEvent.GraphName = deleteMessage.Relation.Namespace;
                     currentEvent.TableName = deleteMessage.Relation.RelationName;
-                    currentEvent.OldValue = await ConvertRowToJsonAsync(deleteMessage.OldRow);
-                    if (currentEvent.OldValue != null)
+                    currentEvent.OldValue = oldValue;
+
+                    if (oldValue.ContainsKey("$dtId"))
                     {
-                        if (currentEvent.OldValue.ContainsKey("$dtId"))
-                        {
-                            currentEvent.EventType = EventType.TwinDelete;
-                        }
-                        else if (currentEvent.OldValue.ContainsKey("$relationshipId"))
-                        {
-                            currentEvent.EventType = EventType.RelationshipDelete;
-                        }
+                        currentEvent.EventType = EventType.TwinDelete;
+                    }
+                    else if (oldValue.ContainsKey("$relationshipId"))
+                    {
+                        currentEvent.EventType = EventType.RelationshipDelete;
                     }
                 }
                 else if (message is CommitMessage commitMessage)
@@ -272,11 +335,9 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                         continue;
                     }
                     currentEvent.Timestamp = commitMessage.TransactionCommitTimestamp;
-                    _eventQueue.Enqueue(currentEvent);
-                    _logger.LogDebug(
-                        "Enqueued event: {Event}",
-                        JsonSerializer.Serialize(currentEvent, _jsonSerializerOptions)
-                    );
+
+                    // Enqueue the final event in this transaction
+                    EnqueueCurrentEventIfValid(currentEvent);
                     currentEvent = null;
 
                     transactionActivity?.Stop();
@@ -451,5 +512,66 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
             return JsonSerializer.Deserialize<JsonObject>(sValue);
         }
         return null;
+    }
+
+    /// <summary>
+    /// Extracts a unique entity identifier from JSON data.
+    /// For twins: returns $dtId
+    /// For relationships: returns $relationshipId + $sourceId (concatenated)
+    /// For models: returns id (future support)
+    /// </summary>
+    private static string? GetEntityIdentifier(JsonObject? jsonData)
+    {
+        if (jsonData == null)
+            return null;
+
+        // Twin identifier
+        if (jsonData.ContainsKey("$dtId"))
+        {
+            return jsonData["$dtId"]?.ToString();
+        }
+
+        // Relationship identifier (combination of $relationshipId and $sourceId)
+        if (jsonData.ContainsKey("$relationshipId") && jsonData.ContainsKey("$sourceId"))
+        {
+            var relationshipId = jsonData["$relationshipId"]?.ToString();
+            var sourceId = jsonData["$sourceId"]?.ToString();
+            return $"{relationshipId}#{sourceId}";
+        }
+
+        // Future: DTDL model identifier
+        if (jsonData.ContainsKey("id"))
+        {
+            return jsonData["id"]?.ToString();
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Gets the current entity identifier from an EventData object.
+    /// Checks NewValue first, then OldValue.
+    /// </summary>
+    private static string? GetCurrentEventEntityId(EventData? eventData)
+    {
+        if (eventData == null)
+            return null;
+
+        return GetEntityIdentifier(eventData.NewValue) ?? GetEntityIdentifier(eventData.OldValue);
+    }
+
+    /// <summary>
+    /// Enqueues the current event if it has valid data and an event type.
+    /// </summary>
+    private void EnqueueCurrentEventIfValid(EventData? currentEvent)
+    {
+        if (currentEvent?.EventType != null)
+        {
+            _eventQueue.Enqueue(currentEvent);
+            _logger.LogDebug(
+                "Enqueued event: {Event}",
+                JsonSerializer.Serialize(currentEvent, _jsonSerializerOptions)
+            );
+        }
     }
 }
