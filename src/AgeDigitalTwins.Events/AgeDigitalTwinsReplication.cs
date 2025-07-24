@@ -67,10 +67,20 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
     /// The source URI for the event sink. This is used to identify the source of the events.
     /// </summary>
     private readonly Uri _sourceUri;
+
+    /// <summary>
+    /// Factory for creating event sinks. This is used to create the sinks that will process the events.
+    /// </summary>
     private readonly EventSinkFactory _eventSinkFactory;
     private readonly ILogger<AgeDigitalTwinsReplication> _logger;
     private LogicalReplicationConnection? _conn;
     private readonly ConcurrentQueue<EventData> _eventQueue = new();
+
+    /// <summary>
+    /// Indicates whether the replication connection is currently healthy.
+    /// Used by health checks to determine service status.
+    /// </summary>
+    public bool IsHealthy { get; private set; } = false;
 
     private readonly JsonSerializerOptions _jsonSerializerOptions =
         new()
@@ -93,6 +103,7 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                     }
                     catch (Exception ex)
                     {
+                        IsHealthy = false; // Mark as unhealthy on connection failure
                         _logger.LogError(
                             ex,
                             "Error during replication: {Message}\nRetrying in 5 seconds...",
@@ -149,6 +160,9 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
             _replicationSlot,
             _publication
         );
+
+        // Mark as healthy now that replication has started successfully
+        IsHealthy = true;
 
         EventData? currentEvent = null;
         Activity? transactionActivity = null;
@@ -410,6 +424,7 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        IsHealthy = false; // Mark as unhealthy when disposing
         if (_conn != null)
         {
             await _conn.DisposeAsync();

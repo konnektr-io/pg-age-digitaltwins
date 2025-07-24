@@ -48,6 +48,9 @@ builder.Services.AddSingleton(sp =>
     );
 });
 
+// Add replication health check
+builder.Services.AddHealthChecks().AddCheck<ReplicationHealthCheck>("replication", tags: ["live"]);
+
 builder.Services.AddRequestTimeouts();
 builder.Services.AddOutputCache();
 
