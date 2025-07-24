@@ -29,7 +29,7 @@ public class TestingEventSinkFactory : EventSinkFactory
 
     public override List<EventRoute> GetEventRoutes()
     {
-        // Return a single route that sends all events to our test sink
+        // Return two routes - one for EventNotification and one for DataHistory
         return new List<EventRoute>
         {
             new EventRoute
@@ -37,6 +37,13 @@ public class TestingEventSinkFactory : EventSinkFactory
                 SinkName = _testSink.Name,
                 EventFormat =
                     EventFormat.EventNotification // Using EventNotification format for simpler testing
+                ,
+            },
+            new EventRoute
+            {
+                SinkName = _testSink.Name,
+                EventFormat =
+                    EventFormat.DataHistory // Using DataHistory format for lifecycle and property events
                 ,
             },
         };

@@ -36,27 +36,6 @@ public class TestingEventSink : IEventSink
     public IEnumerable<CloudEvent> GetCapturedEvents() => _capturedEvents.ToArray();
 
     /// <summary>
-    /// Waits for a specific event to be received based on the subject (usually the twin ID).
-    /// </summary>
-    /// <param name="expectedSubject">The expected subject (e.g., twin ID)</param>
-    /// <param name="timeout">Maximum time to wait</param>
-    /// <returns>The matching event or null if not found within timeout</returns>
-    public CloudEvent? WaitForEvent(string expectedSubject, TimeSpan timeout)
-    {
-        var endTime = DateTime.UtcNow.Add(timeout);
-        while (DateTime.UtcNow < endTime)
-        {
-            var events = GetCapturedEvents();
-            var matchingEvent = events.FirstOrDefault(e => e.Subject == expectedSubject);
-            if (matchingEvent != null)
-                return matchingEvent;
-
-            Thread.Sleep(100); // Poll every 100ms
-        }
-        return null;
-    }
-
-    /// <summary>
     /// Waits for a specific event to be received based on subject and event type.
     /// </summary>
     /// <param name="expectedSubject">The expected subject (e.g., twin ID)</param>

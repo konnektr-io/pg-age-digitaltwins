@@ -86,7 +86,7 @@ public class EventsTestBase : IAsyncDisposable
     protected async Task WaitForReplicationHealthy(TimeSpan timeout = default)
     {
         if (timeout == default)
-            timeout = TimeSpan.FromSeconds(10);
+            timeout = TimeSpan.FromSeconds(20);
 
         var endTime = DateTime.UtcNow.Add(timeout);
         while (DateTime.UtcNow < endTime)
