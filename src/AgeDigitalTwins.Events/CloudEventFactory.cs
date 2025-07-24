@@ -508,65 +508,6 @@ public static class CloudEventFactory
         return cloudEvents;
     }
 
-    private static JsonPatch EnhancePatchWithSameValueUpdates(
-        JsonPatch originalPatch,
-        EventData eventData
-    )
-    {
-        // Track which properties have explicit operations
-        HashSet<string> propertiesWithOperations = new();
-
-        // Collect all non-metadata operations
-        foreach (PatchOperation op in originalPatch.Operations)
-        {
-            if (op.Path.Count > 0 && op.Path[0] == "$metadata")
-            {
-                continue;
-            }
-            if (op.Path.Count > 0)
-            {
-                propertiesWithOperations.Add(op.Path[0]);
-            }
-        }
-
-        // Find same-value updates and create additional operations
-        List<PatchOperation> additionalOperations = new();
-        foreach (PatchOperation op in originalPatch.Operations)
-        {
-            if (op.Path.Count > 0 && op.Path[0] == "$metadata")
-            {
-                // Check if this is a lastUpdateTime change for a property that doesn't have an explicit operation
-                if (op.Path.Count >= 3 && op.Path[2] == "lastUpdateTime")
-                {
-                    var propertyName = op.Path[1];
-                    if (!propertiesWithOperations.Contains(propertyName))
-                    {
-                        // This property was updated with the same value - create a replace operation
-                        var propertyValue = eventData.NewValue?[propertyName];
-                        if (propertyValue != null)
-                        {
-                            additionalOperations.Add(
-                                PatchOperation.Replace(
-                                    Json.Pointer.JsonPointer.Parse($"/{propertyName}"),
-                                    propertyValue
-                                )
-                            );
-                        }
-                    }
-                }
-            }
-        }
-
-        // If we have additional operations, create a new patch with them
-        if (additionalOperations.Count > 0)
-        {
-            var allOperations = originalPatch.Operations.Concat(additionalOperations);
-            return new JsonPatch(allOperations);
-        }
-
-        return originalPatch;
-    }
-
     private static List<CloudEvent> CreateCloudEventsFromPatch(
         EventData eventData,
         Uri source,
@@ -667,6 +608,71 @@ public static class CloudEventFactory
                 Time = eventData.Timestamp,
             };
         cloudEvents.Add(cloudEvent);
+    }
+
+    #endregion
+
+    #region Utility Methods
+
+    private static JsonPatch EnhancePatchWithSameValueUpdates(
+        JsonPatch originalPatch,
+        EventData eventData
+    )
+    {
+        // Track which properties have explicit operations
+        HashSet<string> propertiesWithOperations = new();
+
+        // Collect all non-metadata operations
+        foreach (PatchOperation op in originalPatch.Operations)
+        {
+            if (op.Path.Count > 0 && op.Path[0] == "$metadata")
+            {
+                continue;
+            }
+            if (op.Path.Count > 0)
+            {
+                propertiesWithOperations.Add(op.Path[0]);
+            }
+        }
+
+        // Find same-value updates and create additional operations
+        List<PatchOperation> additionalOperations = new();
+        foreach (PatchOperation op in originalPatch.Operations)
+        {
+            if (op.Path.Count > 0 && op.Path[0] == "$metadata")
+            {
+                // Check if this is a lastUpdateTime change for a property that doesn't have an explicit operation
+                if (op.Path.Count >= 3 && op.Path[2] == "lastUpdateTime")
+                {
+                    var propertyName = op.Path[1];
+                    if (!propertiesWithOperations.Contains(propertyName))
+                    {
+                        // This property was updated with the same value - create a replace operation
+                        var propertyValue = eventData.NewValue?[propertyName];
+                        if (propertyValue != null)
+                        {
+                            additionalOperations.Add(
+                                PatchOperation.Replace(
+                                    Json.Pointer.JsonPointer.Parse($"/{propertyName}"),
+                                    propertyValue
+                                )
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        // If we have additional operations, create a new patch with them
+        if (additionalOperations.Count > 0)
+        {
+            var allOperations = originalPatch
+                .Operations.Where(op => op.Path[0] != "$etag" && op.Path[0] != "$dtId")
+                .Concat(additionalOperations);
+            return new JsonPatch(allOperations);
+        }
+
+        return originalPatch;
     }
 
     #endregion
