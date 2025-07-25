@@ -349,7 +349,8 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                     {
                         _logger.LogDebug(
                             "Immediately enqueueing relationship creation event for {RelationshipId}",
-                            newValue.TryGetPropertyValue("$relationshipId", out var relIdNode)
+                            newValue != null
+                            && newValue.TryGetPropertyValue("$relationshipId", out var relIdNode)
                                 ? relIdNode?.ToString() ?? "unknown"
                                 : "unknown"
                         );

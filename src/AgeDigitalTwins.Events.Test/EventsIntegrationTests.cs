@@ -747,4 +747,292 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         _output.WriteLine($"Relationship Lifecycle Events: {relationshipLifecycleEvents.Count}");
         _output.WriteLine("✓ All event types successfully generated and verified!");
     }
+
+    [Fact]
+    public async Task ImportJob_WithUpdatesAndNewEntities_ShouldGenerateCorrectEventTypes()
+    {
+        // Arrange
+        await _fixture.WaitForReplicationHealthy();
+
+        // Step 1: Create models first
+        string[] models =
+        [
+            SampleData.DtdlCelestialBody,
+            SampleData.DtdlPlanet,
+            SampleData.DtdlMoon,
+            SampleData.DtdlCrater,
+        ];
+        try
+        {
+            await Client.CreateModelsAsync(models);
+        }
+        catch (Exceptions.ModelAlreadyExistsException)
+        {
+            // Models already exist, ignore
+        }
+
+        // Step 2: Create some initial twins and relationships using regular API calls
+        var earthTwin = new BasicDigitalTwin
+        {
+            Id = "earth",
+            Metadata = { ModelId = "dtmi:com:contoso:Planet;1" },
+            Contents =
+            {
+                ["name"] = "Earth",
+                ["mass"] = 5.972e24,
+                ["hasLife"] = true,
+            },
+        };
+
+        var moonTwin = new BasicDigitalTwin
+        {
+            Id = "moon",
+            Metadata = { ModelId = "dtmi:com:contoso:Moon;1" },
+            Contents = { ["name"] = "Moon", ["mass"] = 7.342e22 },
+        };
+
+        var marsTwin = new BasicDigitalTwin
+        {
+            Id = "mars",
+            Metadata = { ModelId = "dtmi:com:contoso:Planet;1" },
+            Contents =
+            {
+                ["name"] = "Mars",
+                ["mass"] = 6.39e23,
+                ["hasLife"] = false,
+            },
+        };
+
+        await Client.CreateOrReplaceDigitalTwinAsync(earthTwin.Id, earthTwin);
+        await Client.CreateOrReplaceDigitalTwinAsync(moonTwin.Id, moonTwin);
+        await Client.CreateOrReplaceDigitalTwinAsync(marsTwin.Id, marsTwin);
+
+        // Create a satellite relationship between Earth and Moon
+        var satelliteRelationship = new BasicRelationship
+        {
+            Id = "earth_moon_satellite",
+            SourceId = "earth",
+            TargetId = "moon",
+            Name = "satellites",
+            Properties = { ["Distance"] = 384400.0 }, // km
+        };
+
+        await Client.CreateOrReplaceRelationshipAsync(
+            earthTwin.Id,
+            satelliteRelationship.Id,
+            satelliteRelationship
+        );
+
+        // Wait a moment for initial events to be processed, then clear them
+        await Task.Delay(2000);
+        TestSink.ClearEvents();
+
+        // Step 3: Create an import job that will update existing entities and create new ones
+        var updateData =
+            @"{""Section"": ""Header""}
+{""fileVersion"": ""1.0.0"", ""author"": ""update-test"", ""organization"": ""contoso""}
+{""Section"": ""Twins""}
+{""$dtId"":""earth"",""$metadata"":{""$model"":""dtmi:com:contoso:Planet;1""},""name"":""Earth (Updated)"",""mass"":5.972e24,""hasLife"":true,""temperature"":15.0}
+{""$dtId"":""mars"",""$metadata"":{""$model"":""dtmi:com:contoso:Planet;1""},""name"":""Mars (Updated)"",""mass"":6.39e23,""hasLife"":false,""temperature"":-63.0}
+{""$dtId"":""jupiter"",""$metadata"":{""$model"":""dtmi:com:contoso:Planet;1""},""name"":""Jupiter"",""mass"":1.898e27,""hasLife"":false,""temperature"":-110.0}
+{""$dtId"":""europa"",""$metadata"":{""$model"":""dtmi:com:contoso:Moon;1""},""name"":""Europa"",""mass"":4.8e22,""temperature"":-160.0}
+{""Section"": ""Relationships""}
+{""$sourceId"":""earth"",""$relationshipId"":""earth_moon_satellite"",""$targetId"":""moon"",""$relationshipName"":""satellites"",""Distance"":384400.5}
+{""$sourceId"":""jupiter"",""$relationshipId"":""jupiter_europa_satellite"",""$targetId"":""europa"",""$relationshipName"":""satellites"",""Distance"":671034.0}";
+
+        using var inputStream = new MemoryStream(Encoding.UTF8.GetBytes(updateData));
+        using var outputStream = new MemoryStream();
+
+        var options = new ImportJobOptions
+        {
+            ContinueOnFailure = true,
+            OperationTimeout = TimeSpan.FromSeconds(60),
+            LeaveOpen = true,
+        };
+
+        // Act
+        var jobId = $"test-update-events-{Guid.NewGuid().ToString("N")[..8]}";
+        var result = await Client.ImportGraphAsync(jobId, inputStream, outputStream, options);
+
+        // Log result details
+        outputStream.Position = 0;
+        using var logReader = new StreamReader(outputStream);
+        var logContent = await logReader.ReadToEndAsync();
+
+        _output.WriteLine("Import Job Update Result:");
+        _output.WriteLine($"Job ID: {result.Id}");
+        _output.WriteLine($"Status: {result.Status}");
+        _output.WriteLine($"Twins Created: {result.TwinsCreated}");
+        _output.WriteLine($"Relationships Created: {result.RelationshipsCreated}");
+        _output.WriteLine($"Error Count: {result.ErrorCount}");
+        _output.WriteLine("Log Output:");
+        _output.WriteLine(logContent);
+
+        // Wait for events to be processed
+        await Task.Delay(5000);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(
+            result.TwinsCreated >= 2,
+            $"Expected at least 2 new twins created, got {result.TwinsCreated}"
+        ); // jupiter, europa
+        Assert.True(
+            result.RelationshipsCreated >= 1,
+            $"Expected at least 1 new relationship created, got {result.RelationshipsCreated}"
+        ); // jupiter_europa_satellite
+
+        // Get all captured events
+        var allEvents = TestSink.GetCapturedEvents().ToList();
+
+        _output.WriteLine($"\nTotal events captured: {allEvents.Count}");
+        foreach (var evt in allEvents)
+        {
+            _output.WriteLine($"Event: {evt.Type} - Subject: {evt.Subject} - ID: {evt.Id}");
+        }
+
+        // Verify Twin events - should have both Create and Update events
+        var twinCreateEvents = allEvents
+            .Where(e => e.Type == "Konnektr.DigitalTwins.Twin.Create")
+            .ToList();
+        var twinUpdateEvents = allEvents
+            .Where(e => e.Type == "Konnektr.DigitalTwins.Twin.Update")
+            .ToList();
+        var twinLifecycleEvents = allEvents
+            .Where(e => e.Type == "Konnektr.DigitalTwins.Twin.Lifecycle")
+            .ToList();
+
+        // Should have Create events for new twins (jupiter, europa)
+        var jupiterCreateEvent = twinCreateEvents.FirstOrDefault(e => e.Subject == "jupiter");
+        var europaCreateEvent = twinCreateEvents.FirstOrDefault(e => e.Subject == "europa");
+        Assert.NotNull(jupiterCreateEvent);
+        Assert.NotNull(europaCreateEvent);
+
+        // Should have Update events for existing twins (earth, mars)
+        var earthUpdateEvent = twinUpdateEvents.FirstOrDefault(e => e.Subject == "earth");
+        var marsUpdateEvent = twinUpdateEvents.FirstOrDefault(e => e.Subject == "mars");
+        Assert.NotNull(earthUpdateEvent);
+        Assert.NotNull(marsUpdateEvent);
+
+        // Verify Lifecycle events have correct actions
+        var earthLifecycleEvent = twinLifecycleEvents.FirstOrDefault(e => e.Subject == "earth");
+        var jupiterLifecycleEvent = twinLifecycleEvents.FirstOrDefault(e => e.Subject == "jupiter");
+
+        if (earthLifecycleEvent != null)
+        {
+            var earthEventData = earthLifecycleEvent.Data as JsonObject;
+            if (earthEventData?.ContainsKey("action") == true)
+            {
+                _output.WriteLine($"Earth lifecycle action: {earthEventData["action"]}");
+            }
+        }
+
+        if (jupiterLifecycleEvent != null)
+        {
+            var jupiterEventData = jupiterLifecycleEvent.Data as JsonObject;
+            if (jupiterEventData?.ContainsKey("action") == true)
+            {
+                Assert.Equal("Create", jupiterEventData["action"]?.ToString());
+                _output.WriteLine($"✓ Jupiter lifecycle event verified as Create");
+            }
+        }
+
+        // Verify Relationship events
+        var relationshipCreateEvents = allEvents
+            .Where(e => e.Type == "Konnektr.DigitalTwins.Relationship.Create")
+            .ToList();
+        var relationshipUpdateEvents = allEvents
+            .Where(e => e.Type == "Konnektr.DigitalTwins.Relationship.Update")
+            .ToList();
+        var relationshipLifecycleEvents = allEvents
+            .Where(e => e.Type == "Konnektr.DigitalTwins.Relationship.Lifecycle")
+            .ToList();
+
+        // Should have Create event for new relationship (jupiter_europa_satellite)
+        var jupiterEuropaCreateEvent = relationshipCreateEvents.FirstOrDefault(e =>
+            e.Subject?.Contains("jupiter_europa_satellite") == true
+        );
+        Assert.NotNull(jupiterEuropaCreateEvent);
+
+        // Should have Update event for existing relationship (earth_moon_satellite)
+        var earthMoonUpdateEvent = relationshipUpdateEvents.FirstOrDefault(e =>
+            e.Subject?.Contains("earth_moon_satellite") == true
+        );
+        Assert.NotNull(earthMoonUpdateEvent);
+
+        // Verify Relationship Lifecycle events have correct actions
+        var earthMoonLifecycleEvent = relationshipLifecycleEvents.FirstOrDefault(e =>
+            e.Subject?.Contains("earth_moon_satellite") == true
+        );
+        var jupiterEuropaLifecycleEvent = relationshipLifecycleEvents.FirstOrDefault(e =>
+            e.Subject?.Contains("jupiter_europa_satellite") == true
+        );
+
+        if (earthMoonLifecycleEvent != null)
+        {
+            var earthMoonEventData = earthMoonLifecycleEvent.Data as JsonObject;
+            if (earthMoonEventData?.ContainsKey("action") == true)
+            {
+                _output.WriteLine(
+                    $"Earth-Moon relationship lifecycle action: {earthMoonEventData["action"]}"
+                );
+            }
+        }
+
+        if (jupiterEuropaLifecycleEvent != null)
+        {
+            var jupiterEuropaEventData = jupiterEuropaLifecycleEvent.Data as JsonObject;
+            if (jupiterEuropaEventData?.ContainsKey("action") == true)
+            {
+                Assert.Equal("Create", jupiterEuropaEventData["action"]?.ToString());
+                _output.WriteLine(
+                    $"✓ Jupiter-Europa relationship lifecycle event verified as Create"
+                );
+            }
+        }
+
+        // Verify Property events for updated properties
+        var propertyEvents = allEvents
+            .Where(e => e.Type == "Konnektr.DigitalTwins.Property.Event")
+            .ToList();
+
+        // Should have property events for updated name and new temperature property
+        var earthNamePropertyEvent = propertyEvents.FirstOrDefault(e =>
+        {
+            var data = e.Data as JsonObject;
+            return e.Subject == "earth" && data?["key"]?.ToString() == "name";
+        });
+
+        var earthTempPropertyEvent = propertyEvents.FirstOrDefault(e =>
+        {
+            var data = e.Data as JsonObject;
+            return e.Subject == "earth" && data?["key"]?.ToString() == "temperature";
+        });
+
+        if (earthNamePropertyEvent != null)
+        {
+            var earthNameData = earthNamePropertyEvent.Data as JsonObject;
+            _output.WriteLine($"✓ Earth name property event: {earthNameData?["value"]}");
+        }
+
+        if (earthTempPropertyEvent != null)
+        {
+            var earthTempData = earthTempPropertyEvent.Data as JsonObject;
+            Assert.Equal("15", earthTempData?["value"]?.ToString());
+            _output.WriteLine(
+                $"✓ Earth temperature property event verified: {earthTempData?["value"]}"
+            );
+        }
+
+        // Summary
+        _output.WriteLine("\n=== UPDATE/CREATE EVENT VERIFICATION SUMMARY ===");
+        _output.WriteLine($"Twin Create Events: {twinCreateEvents.Count}");
+        _output.WriteLine($"Twin Update Events: {twinUpdateEvents.Count}");
+        _output.WriteLine($"Twin Lifecycle Events: {twinLifecycleEvents.Count}");
+        _output.WriteLine($"Relationship Create Events: {relationshipCreateEvents.Count}");
+        _output.WriteLine($"Relationship Update Events: {relationshipUpdateEvents.Count}");
+        _output.WriteLine($"Relationship Lifecycle Events: {relationshipLifecycleEvents.Count}");
+        _output.WriteLine($"Property Events: {propertyEvents.Count}");
+        _output.WriteLine("✓ All update and create event types successfully verified!");
+    }
 }
