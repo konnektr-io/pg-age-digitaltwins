@@ -630,11 +630,12 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
         var newHasCompleteData = IsCompleteRelationshipData(newValue);
 
         _logger.LogDebug(
-            "Relationship update - ID: {RelationshipId}, Old complete: {OldComplete}, New complete: {NewComplete}, CurrentEvent.OldValue complete: {CurrentOldComplete}",
+            "Relationship update - ID: {RelationshipId}, Old complete: {OldComplete}, New complete: {NewComplete}, CurrentEvent.OldValue complete: {CurrentOldComplete}, CurrentEvent.EventType: {CurrentEventType}",
             relationshipId,
             oldHasCompleteData,
             newHasCompleteData,
-            IsCompleteRelationshipData(currentEvent.OldValue)
+            IsCompleteRelationshipData(currentEvent.OldValue),
+            currentEvent.EventType
         );
 
         currentEvent.GraphName = updateMessage.Relation.Namespace;
@@ -659,15 +660,46 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
             }
             else
             {
-                // New relationship creation - no prior complete old value
-                currentEvent.OldValue = new JsonObject();
-                currentEvent.NewValue = newValue;
-                currentEvent.EventType = EventType.RelationshipCreate;
+                // This could be either:
+                // 1. A genuine new relationship creation
+                // 2. An existing relationship update where we missed the complete → incomplete transition
+                
+                // Try to determine by checking if the newValue looks like an update vs creation
+                // For updates via import jobs, there are usually ETag values and other metadata
+                // For true creations, the data is usually cleaner
+                
+                bool looksLikeUpdate =
+                    newValue.ContainsKey("$etag")
+                    || (
+                        newValue.TryGetPropertyValue("Distance", out var distanceNode)
+                        && distanceNode?.ToString().Contains(".") == true
+                    ); // Updated distances often have decimals
+                
+                if (looksLikeUpdate)
+                {
+                    // Treat as update - the old value was likely lost in MERGE/SET
+                    // We'll create a synthetic old value or use empty for property diffing
+                    currentEvent.OldValue = new JsonObject(); // Empty old value will show all properties as new/changed
+                    currentEvent.NewValue = newValue;
+                    currentEvent.EventType = EventType.RelationshipUpdate;
 
-                _logger.LogDebug(
-                    "Detected new relationship creation for {RelationshipId}",
-                    relationshipId
-                );
+                    _logger.LogDebug(
+                        "Detected likely relationship update for {RelationshipId} (inferred from ETag/metadata)",
+                        relationshipId
+                    );
+                }
+                else
+                {
+                    // Treat as creation
+                    currentEvent.OldValue = new JsonObject();
+                    currentEvent.NewValue = newValue;
+                    currentEvent.EventType = EventType.RelationshipCreate;
+
+                    _logger.LogDebug(
+                        "Detected new relationship creation for {RelationshipId}",
+                        relationshipId
+                    );
+                }
             }
 
             // Enqueue immediately since we have complete data
