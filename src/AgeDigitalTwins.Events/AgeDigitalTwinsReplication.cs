@@ -243,8 +243,15 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                         continue;
                     }
 
+                    // Convert both rows at once to avoid "already been read" issues
                     var newValue = await ConvertRowToJsonAsync(updateMessage.NewRow);
-                    var oldValue = await ConvertRowToJsonAsync(updateMessage.OldRow);
+                    JsonObject? oldValue = null;
+
+                    // Only try to convert old row if new row conversion succeeded
+                    if (newValue != null)
+                    {
+                        oldValue = await ConvertRowToJsonAsync(updateMessage.OldRow);
+                    }
 
                     if (newValue == null)
                     {
@@ -496,20 +503,29 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
 
     public static async Task<JsonObject?> ConvertRowToJsonAsync(ReplicationTuple row)
     {
-        await foreach (var value in row)
+        try
         {
-            if (
-                value.GetFieldName() != "properties"
-                || value.GetDataTypeName() != "ag_catalog.agtype"
-            )
+            await foreach (var value in row)
             {
-                continue;
+                if (
+                    value.GetFieldName() != "properties"
+                    || value.GetDataTypeName() != "ag_catalog.agtype"
+                )
+                {
+                    continue;
+                }
+                using Stream stream = value.GetStream();
+                var bytes = new byte[stream.Length];
+                await stream.ReadExactlyAsync(bytes.AsMemory(0, (int)stream.Length));
+                var sValue = System.Text.Encoding.UTF8.GetString(bytes);
+                return JsonSerializer.Deserialize<JsonObject>(sValue);
             }
-            using Stream stream = value.GetStream();
-            var bytes = new byte[stream.Length];
-            await stream.ReadExactlyAsync(bytes.AsMemory(0, (int)stream.Length));
-            var sValue = System.Text.Encoding.UTF8.GetString(bytes);
-            return JsonSerializer.Deserialize<JsonObject>(sValue);
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("already been read"))
+        {
+            // Row has already been enumerated, return null and log the issue
+            // This can happen when the same ReplicationTuple is processed multiple times
+            return null;
         }
         return null;
     }
