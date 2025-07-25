@@ -204,6 +204,12 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                     var newEntityId = GetEntityIdentifier(newValue);
                     var currentEntityId = GetCurrentEventEntityId(currentEvent);
 
+                    _logger.LogDebug(
+                        "Insert message - Current entity: {CurrentEntityId}, New entity: {NewEntityId}",
+                        currentEntityId,
+                        newEntityId
+                    );
+
                     // Check if we're starting a new entity operation
                     if (
                         currentEntityId != null
@@ -211,6 +217,11 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                         && currentEntityId != newEntityId
                     )
                     {
+                        _logger.LogDebug(
+                            "Entity transition detected, enqueueing current event for {CurrentEntityId} and starting new event for {NewEntityId}",
+                            currentEntityId,
+                            newEntityId
+                        );
                         // Enqueue the current event and start a new one
                         EnqueueCurrentEventIfValid(currentEvent);
                         currentEvent = new EventData();
@@ -549,7 +560,7 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
         {
             var relationshipId = jsonData["$relationshipId"]?.ToString();
             var sourceId = jsonData["$sourceId"]?.ToString();
-            return $"{relationshipId}#{sourceId}";
+            return $"{sourceId}/{relationshipId}";
         }
 
         // Future: DTDL model identifier
@@ -580,10 +591,23 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
     {
         if (currentEvent?.EventType != null)
         {
+            var entityId = GetCurrentEventEntityId(currentEvent);
+            _logger.LogDebug(
+                "Enqueuing event: {EventType} for entity {EntityId}",
+                currentEvent.EventType,
+                entityId
+            );
             _eventQueue.Enqueue(currentEvent);
             _logger.LogDebug(
                 "Enqueued event: {Event}",
                 JsonSerializer.Serialize(currentEvent, _jsonSerializerOptions)
+            );
+        }
+        else
+        {
+            _logger.LogDebug(
+                "Skipping enqueue for event without valid type: {Event}",
+                currentEvent?.EventType
             );
         }
     }
