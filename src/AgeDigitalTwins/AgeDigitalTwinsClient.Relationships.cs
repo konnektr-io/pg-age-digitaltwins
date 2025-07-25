@@ -42,35 +42,6 @@ public partial class AgeDigitalTwinsClient
     }
 
     /// <summary>
-    /// Checks if a relationship's ETag matches asynchronously.
-    /// </summary>
-    /// <param name="digitalTwinId">The ID of the source digital twin.</param>
-    /// <param name="relationshipId">The ID of the relationship to check.</param>
-    /// <param name="etag">The ETag to compare.</param>
-    /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
-    /// <returns>A task that represents the asynchronous operation. The task result contains a boolean indicating whether the ETag matches.</returns>
-    /// <deprecation>
-    /// This method is deprecated and will be removed in a future version.
-    /// </deprecation>
-    private async Task<bool> RelationshipEtagMatchesAsync(
-        string digitalTwinId,
-        string relationshipId,
-        string etag,
-        CancellationToken cancellationToken = default
-    )
-    {
-        string cypher =
-            $"MATCH (:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})-[rel {{`$relationshipId`: '{relationshipId.Replace("'", "\\'")}'}}]->(:Twin) WHERE rel['$etag'] = '{etag}' RETURN rel";
-        await using var connection = await _dataSource.OpenConnectionAsync(
-            Npgsql.TargetSessionAttributes.PreferStandby,
-            cancellationToken
-        );
-        await using var command = connection.CreateCypherCommand(_graphName, cypher);
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        return await reader.ReadAsync(cancellationToken);
-    }
-
-    /// <summary>
     /// Retrieves a relationship asynchronously.
     /// </summary>
     /// <typeparam name="T">The type to which the relationship will be deserialized.</typeparam>

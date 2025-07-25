@@ -988,39 +988,20 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
             e.Subject?.Contains("earth_moon_satellite") == true
         );
 
-        if (earthMoonPropertyEvent != null)
-        {
-            var earthMoonPropertyData = earthMoonPropertyEvent.Data as JsonObject;
-            Assert.NotNull(earthMoonPropertyData);
-            Assert.Equal("Distance", earthMoonPropertyData["key"]?.ToString());
-            Assert.Equal("384400.5", earthMoonPropertyData["value"]?.ToString());
-            Assert.Equal("earth", earthMoonPropertyData["relationshipSource"]?.ToString());
-            Assert.Equal("moon", earthMoonPropertyData["relationshipTarget"]?.ToString());
-            Assert.Equal(
-                "earth_moon_satellite",
-                earthMoonPropertyData["relationshipId"]?.ToString()
-            );
-            _output.WriteLine("✓ Earth-Moon relationship property update event verified");
-        }
-        else
-        {
-            _output.WriteLine(
-                "⚠ Earth-Moon relationship property event NOT found - this indicates the relationship property update was not captured"
-            );
-            _output.WriteLine(
-                "Expected: Property event with key='Distance', value='384400.5' for subject containing 'earth_moon_satellite'"
-            );
+        // This should NOT be optional - relationship property updates MUST generate events
+        Assert.NotNull(earthMoonPropertyEvent);
 
-            // Debug: Show all relationship property events
-            _output.WriteLine("All relationship property events found:");
-            foreach (var evt in relationshipPropertyEvents)
-            {
-                var data = evt.Data as JsonObject;
-                _output.WriteLine(
-                    $"  Subject: {evt.Subject}, Key: {data?["key"]}, Value: {data?["value"]}"
-                );
-            }
-        }
+        var earthMoonPropertyData = earthMoonPropertyEvent.Data as JsonObject;
+        Assert.NotNull(earthMoonPropertyData);
+        Assert.Equal("Distance", earthMoonPropertyData["key"]?.ToString());
+        Assert.Equal("384400.5", earthMoonPropertyData["value"]?.ToString());
+        Assert.Equal("earth", earthMoonPropertyData["relationshipSource"]?.ToString());
+        Assert.Equal("moon", earthMoonPropertyData["relationshipTarget"]?.ToString());
+        Assert.Equal(
+            "earth_moon_satellite",
+            earthMoonPropertyData["relationshipId"]?.ToString()
+        );
+        _output.WriteLine("✓ Earth-Moon relationship property update event verified");
 
         // Verify Relationship Lifecycle events have correct actions
         var earthMoonLifecycleEvent = relationshipLifecycleEvents.FirstOrDefault(e =>
@@ -1090,7 +1071,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         if (earthTempPropertyEvent != null)
         {
             var earthTempData = earthTempPropertyEvent.Data as JsonObject;
-            Assert.Equal("15", earthTempData?["value"]?.ToString());
+            Assert.Equal("15.0", earthTempData?["value"]?.ToString());
             _output.WriteLine(
                 $"✓ Earth temperature property event verified: {earthTempData?["value"]}"
             );
