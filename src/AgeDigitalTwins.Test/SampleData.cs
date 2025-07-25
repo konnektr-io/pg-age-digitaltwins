@@ -137,7 +137,7 @@ namespace AgeDigitalTwins.Test
                         ""schema"": ""double""
                     },
                     {
-                        ""@type"": ""Telemetry"",
+                        ""@type"": ""Property"",
                         ""name"": ""temperature"",
                         ""schema"": ""double""
                     }
