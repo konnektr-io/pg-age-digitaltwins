@@ -2,6 +2,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Npgsql;
 using Npgsql.Age;
+using Npgsql.Replication;
+using Npgsql.Replication.PgOutput;
 
 namespace AgeDigitalTwins.Events.Test;
 
@@ -17,6 +19,7 @@ public class EventsTestBase : IAsyncDisposable
     protected readonly AgeDigitalTwinsReplication Replication;
     private readonly CancellationTokenSource _cancellationTokenSource;
     private readonly ILoggerFactory _loggerFactory;
+    private readonly ILogger<EventsTestBase> _logger;
     private readonly Task _replicationTask;
 
     public EventsTestBase()
@@ -51,8 +54,9 @@ public class EventsTestBase : IAsyncDisposable
 
         // Setup logging
         _loggerFactory = LoggerFactory.Create(builder =>
-            builder.AddConsole().SetMinimumLevel(LogLevel.Debug)
+            builder.AddConsole().SetMinimumLevel(LogLevel.Information)
         );
+        _logger = _loggerFactory.CreateLogger<EventsTestBase>();
 
         // Setup test sink
         var testSinkLogger = _loggerFactory.CreateLogger<TestingEventSink>();
@@ -77,8 +81,22 @@ public class EventsTestBase : IAsyncDisposable
         // Start replication - RunAsync should handle its own background tasks
         _replicationTask = Replication.RunAsync(_cancellationTokenSource.Token);
 
-        // Give replication a moment to initialize
-        Task.Delay(1000).Wait();
+        // Give replication a moment to initialize and check for immediate failures
+        Task.Delay(2000).Wait();
+
+        // Check if the task faulted immediately
+        if (_replicationTask.IsFaulted)
+        {
+            var exception = _replicationTask.Exception?.GetBaseException();
+            _logger.LogError(
+                "Replication task faulted during startup: {Message}",
+                exception?.Message
+            );
+            throw new InvalidOperationException(
+                $"Replication failed to start: {exception?.Message}",
+                exception
+            );
+        }
     }
 
     /// <summary>
@@ -94,7 +112,7 @@ public class EventsTestBase : IAsyncDisposable
             connection
         );
         var pubExists = (bool)(await pubCommand.ExecuteScalarAsync() ?? false);
-        Console.WriteLine($"Publication 'age_pub' exists: {pubExists}");
+        _logger.LogInformation("Publication 'age_pub' exists: {PubExists}", pubExists);
 
         // Check if the replication slot exists
         await using var slotCommand = new NpgsqlCommand(
@@ -102,12 +120,12 @@ public class EventsTestBase : IAsyncDisposable
             connection
         );
         var slotExists = (bool)(await slotCommand.ExecuteScalarAsync() ?? false);
-        Console.WriteLine($"Replication slot 'age_slot' exists: {slotExists}");
+        _logger.LogInformation("Replication slot 'age_slot' exists: {SlotExists}", slotExists);
 
         // Check WAL level
         await using var walCommand = new NpgsqlCommand("SHOW wal_level", connection);
         var walLevel = await walCommand.ExecuteScalarAsync();
-        Console.WriteLine($"WAL level: {walLevel}");
+        _logger.LogInformation("WAL level: {WalLevel}", walLevel);
 
         // Check max_replication_slots
         await using var maxSlotsCommand = new NpgsqlCommand(
@@ -115,13 +133,46 @@ public class EventsTestBase : IAsyncDisposable
             connection
         );
         var maxSlots = await maxSlotsCommand.ExecuteScalarAsync();
-        Console.WriteLine($"Max replication slots: {maxSlots}");
+        _logger.LogInformation("Max replication slots: {MaxSlots}", maxSlots);
 
         if (!pubExists || !slotExists)
         {
             throw new InvalidOperationException(
                 $"Replication setup incomplete. Publication exists: {pubExists}, Slot exists: {slotExists}"
             );
+        }
+    }
+
+    /// <summary>
+    /// Tests if we can actually connect to the replication slot.
+    /// </summary>
+    protected async Task TestReplicationConnection()
+    {
+        try
+        {
+            _logger.LogInformation("Testing direct replication connection...");
+            await using var replicationConn = new LogicalReplicationConnection(
+                Client.GetDataSource().ConnectionString
+            );
+            await replicationConn.Open();
+            _logger.LogInformation("Successfully opened replication connection");
+
+            var slot = new PgOutputReplicationSlot("age_slot");
+            _logger.LogInformation("Created replication slot object");
+
+            // Try to create the replication stream (this is where it might fail)
+            var options = new PgOutputReplicationOptions("age_pub", PgOutputProtocolVersion.V4);
+            _logger.LogInformation("Created replication options");
+
+            var messages = replicationConn.StartReplication(slot, options, CancellationToken.None);
+            _logger.LogInformation("Successfully started replication stream");
+
+            _logger.LogInformation("Replication connection test completed successfully");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Replication connection test failed: {Message}", ex.Message);
+            throw new InvalidOperationException($"Cannot connect to replication: {ex.Message}", ex);
         }
     }
 
@@ -134,15 +185,19 @@ public class EventsTestBase : IAsyncDisposable
             timeout = TimeSpan.FromSeconds(30); // Increased timeout
 
         // First, verify the replication setup
-        Console.WriteLine("Verifying replication setup...");
+        _logger.LogInformation("Verifying replication setup...");
         await VerifyReplicationSetup();
 
         var endTime = DateTime.UtcNow.Add(timeout);
         var checkCount = 0;
 
-        Console.WriteLine(
-            $"Starting to wait for replication health. Task status: {_replicationTask.Status}"
+        _logger.LogInformation(
+            "Starting to wait for replication health. Task status: {TaskStatus}",
+            _replicationTask.Status
         );
+
+        // Try to manually test replication connection first
+        await TestReplicationConnection();
 
         while (DateTime.UtcNow < endTime)
         {
@@ -152,8 +207,11 @@ public class EventsTestBase : IAsyncDisposable
             if (_replicationTask.IsFaulted)
             {
                 var exception = _replicationTask.Exception?.GetBaseException();
-                Console.WriteLine($"Replication task faulted: {exception?.Message}");
-                Console.WriteLine($"Exception details: {exception}");
+                _logger.LogError(
+                    exception,
+                    "Replication task faulted: {Message}",
+                    exception?.Message
+                );
                 throw new InvalidOperationException(
                     $"Replication task faulted: {exception?.Message}",
                     exception
@@ -163,8 +221,9 @@ public class EventsTestBase : IAsyncDisposable
             // Check if replication task completed unexpectedly
             if (_replicationTask.IsCompleted && !_replicationTask.IsCompletedSuccessfully)
             {
-                Console.WriteLine(
-                    $"Replication task completed unexpectedly. Status: {_replicationTask.Status}"
+                _logger.LogError(
+                    "Replication task completed unexpectedly. Status: {TaskStatus}",
+                    _replicationTask.Status
                 );
                 throw new InvalidOperationException(
                     $"Replication task completed unexpectedly with status: {_replicationTask.Status}"
@@ -173,21 +232,26 @@ public class EventsTestBase : IAsyncDisposable
 
             if (Replication.IsHealthy)
             {
-                Console.WriteLine($"Replication became healthy after {checkCount} checks");
+                _logger.LogInformation(
+                    "Replication became healthy after {CheckCount} checks",
+                    checkCount
+                );
                 return;
             }
 
             if (checkCount % 50 == 0) // Log every 5 seconds
             {
-                Console.WriteLine(
-                    $"Waiting for replication health... (check #{checkCount}, task status: {_replicationTask.Status})"
+                _logger.LogInformation(
+                    "Waiting for replication health... (check #{CheckCount}, task status: {TaskStatus})",
+                    checkCount,
+                    _replicationTask.Status
                 );
             }
 
             await Task.Delay(100);
         }
 
-        Console.WriteLine($"Final task status: {_replicationTask.Status}");
+        _logger.LogError("Final task status: {TaskStatus}", _replicationTask.Status);
         throw new TimeoutException(
             $"Replication did not become healthy within {timeout.TotalSeconds} seconds after {checkCount} checks. "
                 + $"Task Status: {_replicationTask.Status}"
