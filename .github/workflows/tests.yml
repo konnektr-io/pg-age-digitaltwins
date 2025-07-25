@@ -53,15 +53,6 @@ jobs:
           echo "PostgreSQL did not become ready in time";
           exit 1;
 
-      - name: Verify replication setup
-        run: |
-          echo "Checking replication setup..."
-          docker exec postgres-test psql -U app -d app -c "SELECT EXISTS(SELECT 1 FROM pg_publication WHERE pubname = 'age_pub');"
-          docker exec postgres-test psql -U app -d app -c "SELECT EXISTS(SELECT 1 FROM pg_replication_slots WHERE slot_name = 'age_slot');"
-          docker exec postgres-test psql -U app -d app -c "SHOW wal_level;"
-          docker exec postgres-test psql -U app -d app -c "SHOW max_replication_slots;"
-          docker exec postgres-test psql -U app -d app -c "SHOW max_wal_senders;"
-
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
         with:

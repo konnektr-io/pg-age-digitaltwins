@@ -34,7 +34,14 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         await _fixture.WaitForReplicationHealthy();
 
         string[] models = [SampleData.DtdlCrater];
-        await Client.CreateModelsAsync(models);
+        try
+        {
+            await Client.CreateModelsAsync(models);
+        }
+        catch (Exceptions.ModelAlreadyExistsException)
+        {
+            // Model already exists, ignore
+        }
 
         var uniqueTwinId = $"crater_{Guid.NewGuid():N}";
         var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinCrater);
@@ -71,7 +78,14 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         await _fixture.WaitForReplicationHealthy();
 
         string[] models = [SampleData.DtdlCrater];
-        await Client.CreateModelsAsync(models);
+        try
+        {
+            await Client.CreateModelsAsync(models);
+        }
+        catch (Exceptions.ModelAlreadyExistsException)
+        {
+            // Model already exists, ignore
+        }
 
         var uniqueTwinId = $"crater_{Guid.NewGuid():N}";
         var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinCrater);
@@ -111,7 +125,14 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         await _fixture.WaitForReplicationHealthy();
 
         string[] models = [SampleData.DtdlCrater];
-        await Client.CreateModelsAsync(models);
+        try
+        {
+            await Client.CreateModelsAsync(models);
+        }
+        catch (Exceptions.ModelAlreadyExistsException)
+        {
+            // Model already exists, ignore
+        }
 
         var uniqueTwinId = $"crater_{Guid.NewGuid():N}";
         var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinCrater);
@@ -149,19 +170,28 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         // Arrange
         await _fixture.WaitForReplicationHealthy();
 
-        string[] models = [SampleData.DtdlCrater, SampleData.DtdlRoom];
-        await Client.CreateModelsAsync(models);
+        string[] models = [SampleData.DtdlRoom, SampleData.DtdlTemperatureSensor];
+        try
+        {
+            await Client.CreateModelsAsync(models);
+        }
+        catch (Exceptions.ModelAlreadyExistsException)
+        {
+            // Model already exists, ignore
+        }
 
-        var sourceTwinId = $"crater_{Guid.NewGuid():N}";
-        var targetTwinId = $"room_{Guid.NewGuid():N}";
+        var sourceTwinId = $"room_{Guid.NewGuid():N}";
+        var targetTwinId = $"sensor_{Guid.NewGuid():N}";
         var relationshipId = $"rel_{Guid.NewGuid():N}";
 
         // Create twins
-        var sourceTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinCrater);
+        var sourceTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinRoom1);
         sourceTwin!.Id = sourceTwinId;
         await Client.CreateOrReplaceDigitalTwinAsync(sourceTwin.Id, sourceTwin);
 
-        var targetTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinRoom1);
+        var targetTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(
+            SampleData.TwinTemperatureSensor1
+        );
         targetTwin!.Id = targetTwinId;
         await Client.CreateOrReplaceDigitalTwinAsync(targetTwin.Id, targetTwin);
 
@@ -174,9 +204,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
             Id = relationshipId,
             SourceId = sourceTwinId,
             TargetId = targetTwinId,
-            Name =
-                "contains" // Assuming crater can contain room for test purposes
-            ,
+            Name = "rel_has_sensors",
         };
 
         await Client.CreateOrReplaceRelationshipAsync(sourceTwinId, relationshipId, relationship);
@@ -207,7 +235,14 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         await _fixture.WaitForReplicationHealthy();
 
         string[] models = [SampleData.DtdlCrater];
-        await Client.CreateModelsAsync(models);
+        try
+        {
+            await Client.CreateModelsAsync(models);
+        }
+        catch (Exceptions.ModelAlreadyExistsException)
+        {
+            // Model already exists, ignore
+        }
 
         var twin1Id = $"crater1_{Guid.NewGuid():N}";
         var twin2Id = $"crater2_{Guid.NewGuid():N}";
@@ -251,7 +286,14 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         await _fixture.WaitForReplicationHealthy();
 
         string[] models = [SampleData.DtdlCrater];
-        await Client.CreateModelsAsync(models);
+        try
+        {
+            await Client.CreateModelsAsync(models);
+        }
+        catch (Exceptions.ModelAlreadyExistsException)
+        {
+            // Model already exists, ignore
+        }
 
         var uniqueTwinId = $"crater_{Guid.NewGuid():N}";
         var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinCrater);
@@ -309,7 +351,14 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         await _fixture.WaitForReplicationHealthy();
 
         string[] models = [SampleData.DtdlCrater];
-        await Client.CreateModelsAsync(models);
+        try
+        {
+            await Client.CreateModelsAsync(models);
+        }
+        catch (Exceptions.ModelAlreadyExistsException)
+        {
+            // Model already exists, ignore
+        }
 
         var uniqueTwinId = $"crater_{Guid.NewGuid():N}";
         var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinCrater);
@@ -368,19 +417,28 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         // Arrange
         await _fixture.WaitForReplicationHealthy();
 
-        string[] models = [SampleData.DtdlCrater, SampleData.DtdlRoom];
-        await Client.CreateModelsAsync(models);
+        string[] models = [SampleData.DtdlRoom, SampleData.DtdlTemperatureSensor];
+        try
+        {
+            await Client.CreateModelsAsync(models);
+        }
+        catch (Exceptions.ModelAlreadyExistsException)
+        {
+            // Model already exists, ignore
+        }
 
-        var sourceTwinId = $"crater_{Guid.NewGuid():N}";
-        var targetTwinId = $"room_{Guid.NewGuid():N}";
+        var sourceTwinId = $"room_{Guid.NewGuid():N}";
+        var targetTwinId = $"sensor_{Guid.NewGuid():N}";
         var relationshipId = $"rel_{Guid.NewGuid():N}";
 
         // Create twins
-        var sourceTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinCrater);
+        var sourceTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinRoom1);
         sourceTwin!.Id = sourceTwinId;
         await Client.CreateOrReplaceDigitalTwinAsync(sourceTwin.Id, sourceTwin);
 
-        var targetTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinRoom1);
+        var targetTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(
+            SampleData.TwinTemperatureSensor1
+        );
         targetTwin!.Id = targetTwinId;
         await Client.CreateOrReplaceDigitalTwinAsync(targetTwin.Id, targetTwin);
 
@@ -393,7 +451,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
             Id = relationshipId,
             SourceId = sourceTwinId,
             TargetId = targetTwinId,
-            Name = "contains",
+            Name = "rel_has_sensors",
         };
 
         await Client.CreateOrReplaceRelationshipAsync(sourceTwinId, relationshipId, relationship);
