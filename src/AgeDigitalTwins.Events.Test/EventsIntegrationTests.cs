@@ -12,12 +12,18 @@ public class EventsIntegrationCollection;
 
 [Collection("EventsIntegration")]
 [Trait("Category", "Integration")]
-public class EventsIntegrationTests : EventsTestBase
+public class EventsIntegrationTests : IClassFixture<EventsFixture>
 {
     private readonly ITestOutputHelper _output;
+    private readonly EventsFixture _fixture;
 
-    public EventsIntegrationTests(ITestOutputHelper output)
+    // Convenience properties to access fixture members
+    protected AgeDigitalTwinsClient Client => _fixture.Client;
+    protected TestingEventSink TestSink => _fixture.TestSink;
+
+    public EventsIntegrationTests(EventsFixture fixture, ITestOutputHelper output)
     {
+        _fixture = fixture;
         _output = output;
     }
 
@@ -25,7 +31,7 @@ public class EventsIntegrationTests : EventsTestBase
     public async Task CreateDigitalTwin_ShouldGenerateTwinCreateEvent()
     {
         // Arrange
-        await WaitForReplicationHealthy();
+        await _fixture.WaitForReplicationHealthy();
 
         string[] models = [SampleData.DtdlCrater];
         await Client.CreateModelsAsync(models);
@@ -62,7 +68,7 @@ public class EventsIntegrationTests : EventsTestBase
     public async Task UpdateDigitalTwin_ShouldGenerateTwinUpdateEvent()
     {
         // Arrange
-        await WaitForReplicationHealthy();
+        await _fixture.WaitForReplicationHealthy();
 
         string[] models = [SampleData.DtdlCrater];
         await Client.CreateModelsAsync(models);
@@ -102,7 +108,7 @@ public class EventsIntegrationTests : EventsTestBase
     public async Task DeleteDigitalTwin_ShouldGenerateTwinDeleteEvent()
     {
         // Arrange
-        await WaitForReplicationHealthy();
+        await _fixture.WaitForReplicationHealthy();
 
         string[] models = [SampleData.DtdlCrater];
         await Client.CreateModelsAsync(models);
@@ -141,7 +147,7 @@ public class EventsIntegrationTests : EventsTestBase
     public async Task CreateRelationship_ShouldGenerateRelationshipCreateEvent()
     {
         // Arrange
-        await WaitForReplicationHealthy();
+        await _fixture.WaitForReplicationHealthy();
 
         string[] models = [SampleData.DtdlCrater, SampleData.DtdlRoom];
         await Client.CreateModelsAsync(models);
@@ -198,7 +204,7 @@ public class EventsIntegrationTests : EventsTestBase
     public async Task BatchOperations_ShouldGenerateMultipleEvents()
     {
         // Arrange
-        await WaitForReplicationHealthy();
+        await _fixture.WaitForReplicationHealthy();
 
         string[] models = [SampleData.DtdlCrater];
         await Client.CreateModelsAsync(models);
@@ -242,7 +248,7 @@ public class EventsIntegrationTests : EventsTestBase
     public async Task CreateDigitalTwinWithProperties_ShouldGenerateDataHistoryEvents()
     {
         // Arrange
-        await WaitForReplicationHealthy();
+        await _fixture.WaitForReplicationHealthy();
 
         string[] models = [SampleData.DtdlCrater];
         await Client.CreateModelsAsync(models);
@@ -300,7 +306,7 @@ public class EventsIntegrationTests : EventsTestBase
     public async Task UpdateDigitalTwinProperty_ShouldGeneratePropertyEvent()
     {
         // Arrange
-        await WaitForReplicationHealthy();
+        await _fixture.WaitForReplicationHealthy();
 
         string[] models = [SampleData.DtdlCrater];
         await Client.CreateModelsAsync(models);
@@ -360,7 +366,7 @@ public class EventsIntegrationTests : EventsTestBase
     public async Task CreateRelationship_ShouldGenerateRelationshipLifecycleEvent()
     {
         // Arrange
-        await WaitForReplicationHealthy();
+        await _fixture.WaitForReplicationHealthy();
 
         string[] models = [SampleData.DtdlCrater, SampleData.DtdlRoom];
         await Client.CreateModelsAsync(models);
