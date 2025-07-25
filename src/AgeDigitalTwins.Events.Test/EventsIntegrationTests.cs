@@ -563,6 +563,23 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         var jobId = $"test-import-events-{Guid.NewGuid().ToString("N")[..8]}";
         var result = await Client.ImportGraphAsync(jobId, inputStream, outputStream, options);
 
+        // Log result details BEFORE assertions for debugging
+        outputStream.Position = 0;
+        using var logReader = new StreamReader(outputStream);
+        var logContent = await logReader.ReadToEndAsync();
+
+        _output.WriteLine("Import Job Result:");
+        _output.WriteLine($"Job ID: {result.Id}");
+        _output.WriteLine($"Status: {result.Status}");
+        _output.WriteLine($"Start Time: {result.CreatedDateTime}");
+        _output.WriteLine($"End Time: {result.FinishedDateTime}");
+        _output.WriteLine($"Models Created: {result.ModelsCreated}");
+        _output.WriteLine($"Twins Created: {result.TwinsCreated}");
+        _output.WriteLine($"Relationships Created: {result.RelationshipsCreated}");
+        _output.WriteLine($"Error Count: {result.ErrorCount}");
+        _output.WriteLine("Log Output:");
+        _output.WriteLine(logContent);
+
         // Wait for events to be processed
         await Task.Delay(5000); // Give more time for all events to be processed
 
