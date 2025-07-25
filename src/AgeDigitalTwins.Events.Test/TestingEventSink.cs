@@ -56,9 +56,6 @@ public class TestingEventSink : IEventSink
             expectedEventType,
             expectedSubject
         );
-        Console.WriteLine(
-            $"TestingEventSink: Waiting for event {expectedEventType} with subject {expectedSubject}"
-        );
 
         while (DateTime.UtcNow < endTime)
         {
@@ -72,18 +69,6 @@ public class TestingEventSink : IEventSink
                     checkCount,
                     events.Count()
                 );
-                Console.WriteLine(
-                    $"TestingEventSink: Check #{checkCount}, have {events.Count()} total events"
-                );
-
-                if (events.Any())
-                {
-                    Console.WriteLine("Current events:");
-                    foreach (var evt in events.Take(5)) // Show first 5 events
-                    {
-                        Console.WriteLine($"  - {evt.Type} for {evt.Subject}");
-                    }
-                }
             }
 
             var matchingEvent = events.FirstOrDefault(e =>
@@ -94,9 +79,6 @@ public class TestingEventSink : IEventSink
                 _logger.LogInformation(
                     "Found matching event after {CheckCount} checks",
                     checkCount
-                );
-                Console.WriteLine(
-                    $"TestingEventSink: Found matching event after {checkCount} checks"
                 );
                 return matchingEvent;
             }
@@ -109,9 +91,6 @@ public class TestingEventSink : IEventSink
             expectedEventType,
             expectedSubject,
             checkCount
-        );
-        Console.WriteLine(
-            $"TestingEventSink: Timeout waiting for event {expectedEventType} with subject {expectedSubject} after {checkCount} checks"
         );
         return null;
     }
