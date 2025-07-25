@@ -14,6 +14,9 @@ on:
           - AgeDigitalTwins.ApiService.Test
           - AgeDigitalTwins.Events.Test
           - AgeDigitalTwins.MCPServerSSE.Test
+      filter:
+        description: "Additional dotnet test filter"
+        type: string
   pull_request:
     branches:
       - "main"
@@ -62,10 +65,15 @@ jobs:
 
       - name: Test
         run: |
+          FILTER_ARG=""
+          if [ -n "${{ github.event.inputs.filter }}" ]; then
+            FILTER_ARG="--filter \"${{ github.event.inputs.filter }}\""
+          fi
+
           if [ "${{ github.event.inputs.test_project }}" == "All" ]; then
-            dotnet test './src' --logger 'GitHubActions' --logger 'console;verbosity=normal' --blame-hang --blame-hang-timeout 5m
+            eval dotnet test './src' --logger 'GitHubActions' --logger 'console;verbosity=normal' --blame-hang --blame-hang-timeout 5m $FILTER_ARG
           else
-            dotnet test './src/${{ github.event.inputs.test_project }}' --logger 'GitHubActions' --logger 'console;verbosity=normal' --blame-hang --blame-hang-timeout 5m
+            eval dotnet test './src/${{ github.event.inputs.test_project }}' --logger 'GitHubActions' --logger 'console;verbosity=normal' --blame-hang --blame-hang-timeout 5m $FILTER_ARG
           fi
 
       - name: Stop PostgreSQL container
