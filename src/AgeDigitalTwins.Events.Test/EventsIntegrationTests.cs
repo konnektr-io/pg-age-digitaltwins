@@ -6,6 +6,11 @@ using Xunit.Abstractions;
 
 namespace AgeDigitalTwins.Events.Test;
 
+// Define a collection to ensure Events tests run sequentially (not in parallel)
+[CollectionDefinition("EventsIntegration", DisableParallelization = true)]
+public class EventsIntegrationCollection;
+
+[Collection("EventsIntegration")]
 [Trait("Category", "Integration")]
 public class EventsIntegrationTests : EventsTestBase
 {
