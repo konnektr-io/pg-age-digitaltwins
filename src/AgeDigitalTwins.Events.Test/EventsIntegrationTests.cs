@@ -386,7 +386,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
             _output.WriteLine($"Event: {evt.Type} - Subject: {evt.Subject} - ID: {evt.Id}");
         }
 
-        // Check for Property Event
+        // Check for Property Event - specifically look for the update event (value: 200)
         var propertyEvents = allEvents
             .Where(e =>
                 e.Subject == uniqueTwinId && e.Type == "Konnektr.DigitalTwins.Property.Event"
@@ -394,11 +394,26 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
             .ToList();
         Assert.True(propertyEvents.Count > 0, "Should have at least one property event");
 
+        // Find the property event with the updated value (200)
         var diameterPropertyEvent = propertyEvents.FirstOrDefault(e =>
         {
             var data = e.Data as JsonObject;
-            return data != null && data["key"]?.ToString() == "diameter";
+            return data != null
+                && data["key"]?.ToString() == "diameter"
+                && data["value"]?.ToString() == "200";
         });
+
+        // If we didn't find the 200 value, let's check what values we do have
+        if (diameterPropertyEvent == null)
+        {
+            _output.WriteLine("Property events found:");
+            foreach (var evt in propertyEvents)
+            {
+                var data = evt.Data as JsonObject;
+                _output.WriteLine($"  Key: {data?["key"]}, Value: {data?["value"]}");
+            }
+        }
+
         Assert.NotNull(diameterPropertyEvent);
 
         // Verify property event data structure

@@ -50,7 +50,7 @@ public class EventsFixture : IAsyncDisposable
 
         // Setup logging
         _loggerFactory = LoggerFactory.Create(builder =>
-            builder.AddConsole().SetMinimumLevel(LogLevel.Information)
+            builder.AddConsole().SetMinimumLevel(LogLevel.Debug)
         );
         _logger = _loggerFactory.CreateLogger<EventsFixture>();
 
