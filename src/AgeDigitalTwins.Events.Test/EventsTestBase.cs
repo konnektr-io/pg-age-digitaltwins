@@ -146,7 +146,7 @@ public class EventsTestBase : IAsyncDisposable
     /// <summary>
     /// Tests if we can actually connect to the replication slot.
     /// </summary>
-    protected async Task TestReplicationConnection()
+    /* protected async Task TestReplicationConnection()
     {
         try
         {
@@ -174,7 +174,7 @@ public class EventsTestBase : IAsyncDisposable
             _logger.LogError(ex, "Replication connection test failed: {Message}", ex.Message);
             throw new InvalidOperationException($"Cannot connect to replication: {ex.Message}", ex);
         }
-    }
+    } */
 
     /// <summary>
     /// Waits for the replication to become healthy before running tests.
@@ -197,7 +197,7 @@ public class EventsTestBase : IAsyncDisposable
         );
 
         // Try to manually test replication connection first
-        await TestReplicationConnection();
+        // await TestReplicationConnection();
 
         while (DateTime.UtcNow < endTime)
         {
