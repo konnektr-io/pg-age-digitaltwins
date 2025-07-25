@@ -270,6 +270,12 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                     var newEntityId = GetEntityIdentifier(newValue);
                     var currentEntityId = GetCurrentEventEntityId(currentEvent);
 
+                    _logger.LogDebug(
+                        "Update message - Current entity: {CurrentEntityId}, New entity: {NewEntityId}",
+                        currentEntityId,
+                        newEntityId
+                    );
+
                     // Check if we're starting a new entity operation
                     if (
                         currentEntityId != null
@@ -277,6 +283,11 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                         && currentEntityId != newEntityId
                     )
                     {
+                        _logger.LogDebug(
+                            "Entity transition detected in update, enqueueing current event for {CurrentEntityId} and starting new event for {NewEntityId}",
+                            currentEntityId,
+                            newEntityId
+                        );
                         // Enqueue the current event and start a new one
                         EnqueueCurrentEventIfValid(currentEvent);
                         currentEvent = new EventData();
@@ -287,6 +298,33 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                     currentEvent.OldValue ??= oldValue;
                     currentEvent.NewValue = newValue;
 
+                    // For relationships created with MERGE/SET pattern:
+                    // If the old value doesn't have complete relationship data but new value does,
+                    // treat this as a creation event
+                    bool isRelationshipCreation = false;
+                    if (newValue.ContainsKey("$relationshipId"))
+                    {
+                        // Check if this is actually a creation (MERGE/SET pattern)
+                        // Old value might be incomplete/empty from MERGE, new value has full data from SET
+                        var oldHasCompleteData =
+                            oldValue.ContainsKey("$sourceId")
+                            && oldValue.ContainsKey("$targetId")
+                            && oldValue.ContainsKey("$relationshipId");
+                        var newHasCompleteData =
+                            newValue.ContainsKey("$sourceId")
+                            && newValue.ContainsKey("$targetId")
+                            && newValue.ContainsKey("$relationshipId");
+
+                        if (!oldHasCompleteData && newHasCompleteData)
+                        {
+                            isRelationshipCreation = true;
+                            _logger.LogDebug(
+                                "Detected relationship creation via MERGE/SET pattern for {RelationshipId}",
+                                newValue["$relationshipId"]?.ToString()
+                            );
+                        }
+                    }
+
                     if (currentEvent.EventType == null && newValue != null)
                     {
                         if (newValue.ContainsKey("$dtId"))
@@ -295,7 +333,10 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                         }
                         else if (newValue.ContainsKey("$relationshipId"))
                         {
-                            currentEvent.EventType = EventType.RelationshipUpdate;
+                            // Use creation event type if this is detected as a creation
+                            currentEvent.EventType = isRelationshipCreation
+                                ? EventType.RelationshipCreate
+                                : EventType.RelationshipUpdate;
                         }
                     }
                 }
