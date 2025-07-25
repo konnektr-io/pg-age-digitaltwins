@@ -663,18 +663,18 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                 // This could be either:
                 // 1. A genuine new relationship creation
                 // 2. An existing relationship update where we missed the complete → incomplete transition
-                
+
                 // Try to determine by checking if the newValue looks like an update vs creation
                 // For updates via import jobs, there are usually ETag values and other metadata
                 // For true creations, the data is usually cleaner
-                
+
                 bool looksLikeUpdate =
                     newValue.ContainsKey("$etag")
                     || (
                         newValue.TryGetPropertyValue("Distance", out var distanceNode)
                         && distanceNode?.ToString().Contains(".") == true
                     ); // Updated distances often have decimals
-                
+
                 if (looksLikeUpdate)
                 {
                     // Treat as update - the old value was likely lost in MERGE/SET
