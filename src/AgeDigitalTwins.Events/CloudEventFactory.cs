@@ -472,6 +472,15 @@ public static class CloudEventFactory
     )
     {
         ArgumentNullException.ThrowIfNull(eventData);
+        if (
+            eventData == null
+            || eventData.EventType != EventType.TwinUpdate
+            || eventData.NewValue == null
+            || eventData.OldValue == null
+        )
+        {
+            throw new ArgumentNullException(nameof(eventData));
+        }
         List<CloudEvent> cloudEvents = [];
         // Data model changes should also generate lifecycle events, not only property events.
         // Generate this additional lifecycle event here if the model changed.
