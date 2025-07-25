@@ -473,7 +473,8 @@ public static class CloudEventFactory
     {
         ArgumentNullException.ThrowIfNull(eventData);
         List<CloudEvent> cloudEvents = [];
-        // Data model changes generate lifecycle events, not property events.
+        // Data model changes should also generate lifecycle events, not only property events.
+        // Generate this additional lifecycle event here if the model changed.
         if (
             eventData.NewValue?["$metadata"]?["$model"]?.ToString()
             != eventData.OldValue?["$metadata"]?["$model"]?.ToString()
@@ -504,6 +505,7 @@ public static class CloudEventFactory
                 };
             cloudEvents.Add(cloudEvent);
         }
+        // Now create property events for each changed property
         cloudEvents.AddRange(CreateCloudEventsFromPatch(eventData, source, typeMapping));
         return cloudEvents;
     }

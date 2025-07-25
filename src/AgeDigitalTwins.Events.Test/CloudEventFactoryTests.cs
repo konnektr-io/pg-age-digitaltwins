@@ -459,6 +459,62 @@ public class CloudEventFactoryTests
     }
 
     [Fact]
+    public void CreateDataHistoryEvents_ValueUpdate_CreatesPropertyEvent()
+    {
+        // Arrange - Property 'humidity' updated with new value
+        var eventData = new EventData
+        {
+            EventType = EventType.TwinUpdate,
+            NewValue = JsonNode
+                .Parse(
+                    @"{
+                    ""$dtId"": ""twin1"",
+                    ""$metadata"": {
+                        ""$model"": ""model1"",
+                        ""humidity"": {
+                            ""lastUpdateTime"": ""2024-01-15T10:30:00Z""
+                        }
+                    },
+                    ""humidity"": 60.0
+                }"
+                )!
+                .AsObject(),
+            OldValue = JsonNode
+                .Parse(
+                    @"{
+                    ""$dtId"": ""twin1"",
+                    ""$metadata"": {
+                        ""$model"": ""model1"",
+                        ""humidity"": {
+                            ""lastUpdateTime"": ""2024-01-15T10:00:00Z""
+                        }
+                    },
+                    ""humidity"": 50.0
+                }"
+                )!
+                .AsObject(),
+            Timestamp = DateTime.UtcNow,
+        };
+        var source = new Uri("http://example.com");
+
+        // Act
+        var result = CloudEventFactory.CreateDataHistoryEvents(eventData, source, []);
+
+        // Assert
+        Assert.Single(result); // Should have 1 property event for the same-value update
+        var propertyEvent = result[0];
+        Assert.Equal("Konnektr.DigitalTwins.Property.Event", propertyEvent.Type);
+        Assert.Equal("twin1", propertyEvent.Subject);
+
+        var data = propertyEvent.Data as JsonObject;
+        Assert.NotNull(data);
+        Assert.Equal("twin1", data["id"]?.ToString());
+        Assert.Equal("humidity", data["key"]?.ToString());
+        Assert.Equal("60.0", data["value"]?.ToString());
+        Assert.Equal("Update", data["action"]?.ToString());
+    }
+
+    [Fact]
     public void CreateDataHistoryEvents_SameValueUpdate_CreatesPropertyEvent()
     {
         // Arrange - Property 'humidity' updated with same value, but lastUpdateTime changed

@@ -243,16 +243,13 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                         continue;
                     }
 
-                    // Convert both rows at once to avoid "already been read" issues
-                    var newValue = await ConvertRowToJsonAsync(updateMessage.NewRow);
-                    JsonObject? oldValue = null;
-
-                    // Only try to convert old row if new row conversion succeeded
-                    if (newValue != null)
+                    var oldValue = await ConvertRowToJsonAsync(updateMessage.OldRow);
+                    if (oldValue == null)
                     {
-                        oldValue = await ConvertRowToJsonAsync(updateMessage.OldRow);
+                        _logger.LogDebug("Skipping update message without an old JSON value");
+                        continue;
                     }
-
+                    var newValue = await ConvertRowToJsonAsync(updateMessage.NewRow);
                     if (newValue == null)
                     {
                         _logger.LogDebug("Skipping update message without a new JSON value");
