@@ -87,7 +87,7 @@ public class EventsTestBase : IAsyncDisposable
     protected async Task VerifyReplicationSetup()
     {
         await using var connection = await Client.GetDataSource().OpenConnectionAsync();
-        
+
         // Check if the publication exists
         await using var pubCommand = new NpgsqlCommand(
             "SELECT EXISTS(SELECT 1 FROM pg_publication WHERE pubname = 'age_pub')",
@@ -95,7 +95,7 @@ public class EventsTestBase : IAsyncDisposable
         );
         var pubExists = (bool)(await pubCommand.ExecuteScalarAsync() ?? false);
         Console.WriteLine($"Publication 'age_pub' exists: {pubExists}");
-        
+
         // Check if the replication slot exists
         await using var slotCommand = new NpgsqlCommand(
             "SELECT EXISTS(SELECT 1 FROM pg_replication_slots WHERE slot_name = 'age_slot')",
@@ -103,15 +103,12 @@ public class EventsTestBase : IAsyncDisposable
         );
         var slotExists = (bool)(await slotCommand.ExecuteScalarAsync() ?? false);
         Console.WriteLine($"Replication slot 'age_slot' exists: {slotExists}");
-        
+
         // Check WAL level
-        await using var walCommand = new NpgsqlCommand(
-            "SHOW wal_level",
-            connection
-        );
+        await using var walCommand = new NpgsqlCommand("SHOW wal_level", connection);
         var walLevel = await walCommand.ExecuteScalarAsync();
         Console.WriteLine($"WAL level: {walLevel}");
-        
+
         // Check max_replication_slots
         await using var maxSlotsCommand = new NpgsqlCommand(
             "SHOW max_replication_slots",
@@ -119,10 +116,12 @@ public class EventsTestBase : IAsyncDisposable
         );
         var maxSlots = await maxSlotsCommand.ExecuteScalarAsync();
         Console.WriteLine($"Max replication slots: {maxSlots}");
-        
+
         if (!pubExists || !slotExists)
         {
-            throw new InvalidOperationException($"Replication setup incomplete. Publication exists: {pubExists}, Slot exists: {slotExists}");
+            throw new InvalidOperationException(
+                $"Replication setup incomplete. Publication exists: {pubExists}, Slot exists: {slotExists}"
+            );
         }
     }
 
@@ -141,7 +140,9 @@ public class EventsTestBase : IAsyncDisposable
         var endTime = DateTime.UtcNow.Add(timeout);
         var checkCount = 0;
 
-        Console.WriteLine($"Starting to wait for replication health. Task status: {_replicationTask.Status}");
+        Console.WriteLine(
+            $"Starting to wait for replication health. Task status: {_replicationTask.Status}"
+        );
 
         while (DateTime.UtcNow < endTime)
         {
@@ -154,14 +155,17 @@ public class EventsTestBase : IAsyncDisposable
                 Console.WriteLine($"Replication task faulted: {exception?.Message}");
                 Console.WriteLine($"Exception details: {exception}");
                 throw new InvalidOperationException(
-                    $"Replication task faulted: {exception?.Message}", exception
+                    $"Replication task faulted: {exception?.Message}",
+                    exception
                 );
             }
 
             // Check if replication task completed unexpectedly
             if (_replicationTask.IsCompleted && !_replicationTask.IsCompletedSuccessfully)
             {
-                Console.WriteLine($"Replication task completed unexpectedly. Status: {_replicationTask.Status}");
+                Console.WriteLine(
+                    $"Replication task completed unexpectedly. Status: {_replicationTask.Status}"
+                );
                 throw new InvalidOperationException(
                     $"Replication task completed unexpectedly with status: {_replicationTask.Status}"
                 );
@@ -175,7 +179,9 @@ public class EventsTestBase : IAsyncDisposable
 
             if (checkCount % 50 == 0) // Log every 5 seconds
             {
-                Console.WriteLine($"Waiting for replication health... (check #{checkCount}, task status: {_replicationTask.Status})");
+                Console.WriteLine(
+                    $"Waiting for replication health... (check #{checkCount}, task status: {_replicationTask.Status})"
+                );
             }
 
             await Task.Delay(100);
