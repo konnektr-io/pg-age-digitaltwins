@@ -690,7 +690,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         if (crater1DiameterEvent != null)
         {
             var crater1DiameterData = crater1DiameterEvent.Data as JsonObject;
-            Assert.Equal("150", crater1DiameterData?["value"]?.ToString());
+            Assert.Equal("150.0", crater1DiameterData?["value"]?.ToString());
             _output.WriteLine("✓ Crater1 diameter property event verified");
         }
 
