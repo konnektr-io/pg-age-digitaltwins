@@ -755,16 +755,33 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         await _fixture.WaitForReplicationHealthy();
 
         // Step 1: Create models first
-        string[] models =
-        [
-            SampleData.DtdlCelestialBody,
-            SampleData.DtdlPlanet,
-            SampleData.DtdlMoon,
-            SampleData.DtdlCrater,
-        ];
         try
         {
-            await Client.CreateModelsAsync(models);
+            await Client.CreateModelsAsync([SampleData.DtdlCelestialBody]);
+        }
+        catch (Exceptions.ModelAlreadyExistsException)
+        {
+            // Models already exist, ignore
+        }
+        try
+        {
+            await Client.CreateModelsAsync([SampleData.DtdlPlanet]);
+        }
+        catch (Exceptions.ModelAlreadyExistsException)
+        {
+            // Models already exist, ignore
+        }
+        try
+        {
+            await Client.CreateModelsAsync([SampleData.DtdlMoon]);
+        }
+        catch (Exceptions.ModelAlreadyExistsException)
+        {
+            // Models already exist, ignore
+        }
+        try
+        {
+            await Client.CreateModelsAsync([SampleData.DtdlCrater]);
         }
         catch (Exceptions.ModelAlreadyExistsException)
         {
