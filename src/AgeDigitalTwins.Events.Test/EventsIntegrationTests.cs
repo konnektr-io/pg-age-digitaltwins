@@ -380,6 +380,12 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
 
         var allEvents = TestSink.GetCapturedEvents().ToList();
 
+        _output.WriteLine($"Total events captured: {allEvents.Count}");
+        foreach (var evt in allEvents)
+        {
+            _output.WriteLine($"Event: {evt.Type} - Subject: {evt.Subject} - ID: {evt.Id}");
+        }
+
         // Check for Property Event
         var propertyEvents = allEvents
             .Where(e =>
@@ -462,6 +468,12 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         var allEvents = TestSink.GetCapturedEvents().ToList();
         var expectedSubject = $"{sourceTwinId}/relationships/{relationshipId}";
 
+        _output.WriteLine($"Total events captured: {allEvents.Count}");
+        foreach (var evt in allEvents)
+        {
+            _output.WriteLine($"Event: {evt.Type} - Subject: {evt.Subject} - ID: {evt.Id}");
+        }
+
         // Check for Relationship Lifecycle event
         var relationshipLifecycleEvent = allEvents.FirstOrDefault(e =>
             e.Subject == expectedSubject && e.Type == "Konnektr.DigitalTwins.Relationship.Lifecycle"
@@ -474,7 +486,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         Assert.NotNull(relationshipEventData);
         Assert.Equal(sourceTwinId, relationshipEventData["source"]?.ToString());
         Assert.Equal(targetTwinId, relationshipEventData["target"]?.ToString());
-        Assert.Equal("contains", relationshipEventData["name"]?.ToString());
+        Assert.Equal("rel_has_sensors", relationshipEventData["name"]?.ToString());
         Assert.Equal(relationshipId, relationshipEventData["relationshipId"]?.ToString());
         Assert.Equal("Create", relationshipEventData["action"]?.ToString());
 
