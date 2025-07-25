@@ -908,58 +908,29 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
             _output.WriteLine($"Event: {evt.Type} - Subject: {evt.Subject} - ID: {evt.Id}");
         }
 
-        // Verify Twin events - should have both Create and Update events
+        // Event Notification Events
         var twinCreateEvents = allEvents
             .Where(e => e.Type == "Konnektr.DigitalTwins.Twin.Create")
             .ToList();
         var twinUpdateEvents = allEvents
             .Where(e => e.Type == "Konnektr.DigitalTwins.Twin.Update")
             .ToList();
-        var twinLifecycleEvents = allEvents
-            .Where(e => e.Type == "Konnektr.DigitalTwins.Twin.Lifecycle")
-            .ToList();
-
-        // Should have Create events for new twins (jupiter, europa)
-        var jupiterCreateEvent = twinCreateEvents.FirstOrDefault(e => e.Subject == "jupiter");
-        var europaCreateEvent = twinCreateEvents.FirstOrDefault(e => e.Subject == "europa");
-        Assert.NotNull(jupiterCreateEvent);
-        Assert.NotNull(europaCreateEvent);
-
-        // Should have Update events for existing twins (earth, mars)
-        var earthUpdateEvent = twinUpdateEvents.FirstOrDefault(e => e.Subject == "earth");
-        var marsUpdateEvent = twinUpdateEvents.FirstOrDefault(e => e.Subject == "mars");
-        Assert.NotNull(earthUpdateEvent);
-        Assert.NotNull(marsUpdateEvent);
-
-        // Verify Lifecycle events have correct actions
-        var earthLifecycleEvent = twinLifecycleEvents.FirstOrDefault(e => e.Subject == "earth");
-        var jupiterLifecycleEvent = twinLifecycleEvents.FirstOrDefault(e => e.Subject == "jupiter");
-
-        if (earthLifecycleEvent != null)
-        {
-            var earthEventData = earthLifecycleEvent.Data as JsonObject;
-            if (earthEventData?.ContainsKey("action") == true)
-            {
-                _output.WriteLine($"Earth lifecycle action: {earthEventData["action"]}");
-            }
-        }
-
-        if (jupiterLifecycleEvent != null)
-        {
-            var jupiterEventData = jupiterLifecycleEvent.Data as JsonObject;
-            if (jupiterEventData?.ContainsKey("action") == true)
-            {
-                Assert.Equal("Create", jupiterEventData["action"]?.ToString());
-                _output.WriteLine($"✓ Jupiter lifecycle event verified as Create");
-            }
-        }
-
-        // Verify Relationship events
         var relationshipCreateEvents = allEvents
             .Where(e => e.Type == "Konnektr.DigitalTwins.Relationship.Create")
             .ToList();
         var relationshipUpdateEvents = allEvents
             .Where(e => e.Type == "Konnektr.DigitalTwins.Relationship.Update")
+            .ToList();
+
+        // Data History Events
+        var twinLifecycleEvents = allEvents
+            .Where(e => e.Type == "Konnektr.DigitalTwins.Twin.Lifecycle")
+            .ToList();
+        var twinPropertyEvents = allEvents
+            .Where(e =>
+                e.Type == "Konnektr.DigitalTwins.Property.Event"
+                && e.Subject?.Contains("/relationships/") == false
+            )
             .ToList();
         var relationshipLifecycleEvents = allEvents
             .Where(e => e.Type == "Konnektr.DigitalTwins.Relationship.Lifecycle")
@@ -971,10 +942,46 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
             )
             .ToList();
 
-        _output.WriteLine($"Relationship Create Events: {relationshipCreateEvents.Count}");
-        _output.WriteLine($"Relationship Update Events: {relationshipUpdateEvents.Count}");
-        _output.WriteLine($"Relationship Lifecycle Events: {relationshipLifecycleEvents.Count}");
-        _output.WriteLine($"Relationship Property Events: {relationshipPropertyEvents.Count}");
+        // Should have Create events for new twins (jupiter, europa)
+        var jupiterCreateEvent = twinCreateEvents.FirstOrDefault(e => e.Subject == "jupiter");
+        var europaCreateEvent = twinCreateEvents.FirstOrDefault(e => e.Subject == "europa");
+        Assert.NotNull(jupiterCreateEvent);
+        Assert.NotNull(europaCreateEvent);
+
+        // Should not have Create events for existing twins (earth, mars)
+        var earthCreateEvent = twinCreateEvents.FirstOrDefault(e => e.Subject == "earth");
+        var marsCreateEvent = twinCreateEvents.FirstOrDefault(e => e.Subject == "mars");
+        Assert.Null(earthCreateEvent);
+        Assert.Null(marsCreateEvent);
+
+        // Should have Update events for existing twins (earth, mars)
+        var earthUpdateEvent = twinUpdateEvents.FirstOrDefault(e => e.Subject == "earth");
+        var marsUpdateEvent = twinUpdateEvents.FirstOrDefault(e => e.Subject == "mars");
+        Assert.NotNull(earthUpdateEvent);
+        Assert.NotNull(marsUpdateEvent);
+
+        // Verify Lifecycle events have correct actions
+        var earthLifecycleEvent = twinLifecycleEvents.FirstOrDefault(e => e.Subject == "earth");
+        var jupiterLifecycleEvent = twinLifecycleEvents.FirstOrDefault(e => e.Subject == "jupiter");
+        Assert.NotNull(earthLifecycleEvent);
+        Assert.NotNull(jupiterLifecycleEvent);
+
+        // Should have property events for updated name and new temperature property
+        var earthNamePropertyEvent = twinPropertyEvents.FirstOrDefault(e =>
+        {
+            var data = e.Data as JsonObject;
+            return e.Subject == "earth" && data?["key"]?.ToString() == "name";
+        });
+        Assert.NotNull(earthNamePropertyEvent);
+
+        var earthTempPropertyEvent = twinPropertyEvents.FirstOrDefault(e =>
+        {
+            var data = e.Data as JsonObject;
+            return e.Subject == "earth" && data?["key"]?.ToString() == "temperature";
+        });
+        Assert.NotNull(earthTempPropertyEvent);
+        var earthTempData = earthTempPropertyEvent.Data as JsonObject;
+        Assert.Equal("15.0", earthTempData?["value"]?.ToString());
 
         // Should have Create event for new relationship (jupiter_europa_satellite)
         var jupiterEuropaCreateEvent = relationshipCreateEvents.FirstOrDefault(e =>
@@ -982,13 +989,24 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         );
         Assert.NotNull(jupiterEuropaCreateEvent);
 
+        // Should have Lifecycle event for new relationship (jupiter_europa_satellite)
+        var jupiterEuropaLifecycleEvent = relationshipLifecycleEvents.FirstOrDefault(e =>
+            e.Subject?.Contains("jupiter_europa_satellite") == true
+        );
+        Assert.NotNull(jupiterEuropaLifecycleEvent);
+        var jupiterEuropaEventData = jupiterEuropaLifecycleEvent.Data as JsonObject;
+        Assert.Equal("Create", jupiterEuropaEventData!["action"]?.ToString());
+
+        // Should NOT have a lifecycle event for existing relationship (earth_moon_satellite)
+        var earthMoonLifecycleEvent = relationshipLifecycleEvents.FirstOrDefault(e =>
+            e.Subject?.Contains("earth_moon_satellite") == true
+        );
+        Assert.Null(earthMoonLifecycleEvent);
+
         // For existing relationship (earth_moon_satellite), we should have a Property Event for the Distance update
-        // NOT a Relationship Update or Lifecycle event since the relationship already existed
         var earthMoonPropertyEvent = relationshipPropertyEvents.FirstOrDefault(e =>
             e.Subject?.Contains("earth_moon_satellite") == true
         );
-
-        // This should NOT be optional - relationship property updates MUST generate events
         Assert.NotNull(earthMoonPropertyEvent);
 
         var earthMoonPropertyData = earthMoonPropertyEvent.Data as JsonObject;
@@ -1000,89 +1018,16 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         Assert.Equal("earth_moon_satellite", earthMoonPropertyData["relationshipId"]?.ToString());
         _output.WriteLine("✓ Earth-Moon relationship property update event verified");
 
-        // Verify Relationship Lifecycle events have correct actions
-        var earthMoonLifecycleEvent = relationshipLifecycleEvents.FirstOrDefault(e =>
-            e.Subject?.Contains("earth_moon_satellite") == true
-        );
-        var jupiterEuropaLifecycleEvent = relationshipLifecycleEvents.FirstOrDefault(e =>
-            e.Subject?.Contains("jupiter_europa_satellite") == true
-        );
-
-        // For existing relationships, we should NOT expect lifecycle events since they already existed
-        if (earthMoonLifecycleEvent != null)
-        {
-            _output.WriteLine(
-                "⚠ Unexpected: Earth-Moon relationship lifecycle event found - this relationship already existed"
-            );
-            var earthMoonEventData = earthMoonLifecycleEvent.Data as JsonObject;
-            if (earthMoonEventData?.ContainsKey("action") == true)
-            {
-                _output.WriteLine(
-                    $"Earth-Moon relationship lifecycle action: {earthMoonEventData["action"]}"
-                );
-            }
-        }
-        else
-        {
-            _output.WriteLine(
-                "✓ No Earth-Moon relationship lifecycle event (expected for existing relationship)"
-            );
-        }
-
-        if (jupiterEuropaLifecycleEvent != null)
-        {
-            var jupiterEuropaEventData = jupiterEuropaLifecycleEvent.Data as JsonObject;
-            if (jupiterEuropaEventData?.ContainsKey("action") == true)
-            {
-                Assert.Equal("Create", jupiterEuropaEventData["action"]?.ToString());
-                _output.WriteLine(
-                    $"✓ Jupiter-Europa relationship lifecycle event verified as Create"
-                );
-            }
-        }
-
-        // Verify Property events for updated properties
-        var propertyEvents = allEvents
-            .Where(e => e.Type == "Konnektr.DigitalTwins.Property.Event")
-            .ToList();
-
-        // Should have property events for updated name and new temperature property
-        var earthNamePropertyEvent = propertyEvents.FirstOrDefault(e =>
-        {
-            var data = e.Data as JsonObject;
-            return e.Subject == "earth" && data?["key"]?.ToString() == "name";
-        });
-
-        var earthTempPropertyEvent = propertyEvents.FirstOrDefault(e =>
-        {
-            var data = e.Data as JsonObject;
-            return e.Subject == "earth" && data?["key"]?.ToString() == "temperature";
-        });
-
-        if (earthNamePropertyEvent != null)
-        {
-            var earthNameData = earthNamePropertyEvent.Data as JsonObject;
-            _output.WriteLine($"✓ Earth name property event: {earthNameData?["value"]}");
-        }
-
-        if (earthTempPropertyEvent != null)
-        {
-            var earthTempData = earthTempPropertyEvent.Data as JsonObject;
-            Assert.Equal("15.0", earthTempData?["value"]?.ToString());
-            _output.WriteLine(
-                $"✓ Earth temperature property event verified: {earthTempData?["value"]}"
-            );
-        }
-
         // Summary
         _output.WriteLine("\n=== UPDATE/CREATE EVENT VERIFICATION SUMMARY ===");
         _output.WriteLine($"Twin Create Events: {twinCreateEvents.Count}");
         _output.WriteLine($"Twin Update Events: {twinUpdateEvents.Count}");
-        _output.WriteLine($"Twin Lifecycle Events: {twinLifecycleEvents.Count}");
         _output.WriteLine($"Relationship Create Events: {relationshipCreateEvents.Count}");
         _output.WriteLine($"Relationship Update Events: {relationshipUpdateEvents.Count}");
+        _output.WriteLine($"Twin Lifecycle Events: {twinLifecycleEvents.Count}");
+        _output.WriteLine($"Twin Property Events: {twinPropertyEvents.Count}");
         _output.WriteLine($"Relationship Lifecycle Events: {relationshipLifecycleEvents.Count}");
-        _output.WriteLine($"Property Events: {propertyEvents.Count}");
+        _output.WriteLine($"Relationship Property Events: {relationshipPropertyEvents.Count}");
         _output.WriteLine("✓ All update and create event types successfully verified!");
     }
 }
