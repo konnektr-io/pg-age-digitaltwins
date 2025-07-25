@@ -1,5 +1,8 @@
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using AgeDigitalTwins.Jobs;
+using AgeDigitalTwins.Models;
 using AgeDigitalTwins.Test;
 using Azure.DigitalTwins.Core;
 using Xunit.Abstractions;
@@ -515,5 +518,182 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         _output.WriteLine(
             $"Source: {relationshipEventData["source"]} -> Target: {relationshipEventData["target"]}"
         );
+    }
+
+    [Fact]
+    public async Task ImportJob_WithMultipleTwinsAndRelationships_ShouldGenerateAllEventTypes()
+    {
+        // Arrange
+        await _fixture.WaitForReplicationHealthy();
+
+        // Clear any existing events
+        TestSink.ClearEvents();
+
+        // Expanded ND-JSON data with multiple twins and relationships
+        var sampleData =
+            @"{""Section"": ""Header""}
+{""fileVersion"": ""1.0.0"", ""author"": ""test"", ""organization"": ""contoso""}
+{""Section"": ""Models""}
+{""@id"":""dtmi:com:contoso:Room;1"",""@type"":""Interface"",""contents"":[{""@type"":""Property"",""name"":""Temperature"",""schema"":""double""},{""@type"":""Property"",""name"":""Humidity"",""schema"":""double""},{""@type"":""Relationship"",""name"":""rel_has_sensors"",""target"":""dtmi:com:contoso:TemperatureSensor;1""}],""description"":{""en"":""A room in a building""},""displayName"":{""en"":""Room""},""@context"":""dtmi:dtdl:context;2""}
+{""@id"":""dtmi:com:contoso:TemperatureSensor;1"",""@type"":""Interface"",""contents"":[{""@type"":""Property"",""name"":""Temperature"",""schema"":""double""},{""@type"":""Property"",""name"":""Location"",""schema"":""string""}],""description"":{""en"":""A temperature sensor""},""displayName"":{""en"":""Temperature Sensor""},""@context"":""dtmi:dtdl:context;2""}
+{""@id"":""dtmi:com:contoso:Crater;1"",""@type"":""Interface"",""contents"":[{""@type"":""Property"",""name"":""diameter"",""schema"":""double""},{""@type"":""Property"",""name"":""depth"",""schema"":""double""}],""description"":{""en"":""A crater on a surface""},""displayName"":{""en"":""Crater""},""@context"":""dtmi:dtdl:context;2""}
+{""Section"": ""Twins""}
+{""$dtId"":""room1"",""$metadata"":{""$model"":""dtmi:com:contoso:Room;1""},""Temperature"":22.5,""Humidity"":45.0}
+{""$dtId"":""room2"",""$metadata"":{""$model"":""dtmi:com:contoso:Room;1""},""Temperature"":21.0,""Humidity"":50.0}
+{""$dtId"":""sensor1"",""$metadata"":{""$model"":""dtmi:com:contoso:TemperatureSensor;1""},""Temperature"":22.3,""Location"":""North Wall""}
+{""$dtId"":""sensor2"",""$metadata"":{""$model"":""dtmi:com:contoso:TemperatureSensor;1""},""Temperature"":21.8,""Location"":""South Wall""}
+{""$dtId"":""crater1"",""$metadata"":{""$model"":""dtmi:com:contoso:Crater;1""},""diameter"":150.0,""depth"":30.0}
+{""$dtId"":""crater2"",""$metadata"":{""$model"":""dtmi:com:contoso:Crater;1""},""diameter"":200.0,""depth"":45.0}
+{""Section"": ""Relationships""}
+{""$sourceId"":""room1"",""$relationshipId"":""room1_sensor1"",""$targetId"":""sensor1"",""$relationshipName"":""rel_has_sensors""}
+{""$sourceId"":""room1"",""$relationshipId"":""room1_sensor2"",""$targetId"":""sensor2"",""$relationshipName"":""rel_has_sensors""}
+{""$sourceId"":""room2"",""$relationshipId"":""room2_sensor1"",""$targetId"":""sensor1"",""$relationshipName"":""rel_has_sensors""}";
+
+        using var inputStream = new MemoryStream(Encoding.UTF8.GetBytes(sampleData));
+        using var outputStream = new MemoryStream();
+
+        var options = new ImportJobOptions
+        {
+            ContinueOnFailure = true,
+            OperationTimeout = TimeSpan.FromSeconds(60),
+            LeaveOpen = true,
+        };
+
+        // Act
+        var jobId = $"test-import-events-{Guid.NewGuid().ToString("N")[..8]}";
+        var result = await Client.ImportGraphAsync(jobId, inputStream, outputStream, options);
+
+        // Wait for events to be processed
+        await Task.Delay(5000); // Give more time for all events to be processed
+
+        // Assert import was successful
+        Assert.NotNull(result);
+        Assert.Equal(JobStatus.Succeeded, result.Status);
+        Assert.Equal(3, result.ModelsCreated); // Room, TemperatureSensor, Crater
+        Assert.Equal(6, result.TwinsCreated); // room1, room2, sensor1, sensor2, crater1, crater2
+        Assert.Equal(3, result.RelationshipsCreated); // 3 relationships
+        Assert.Equal(0, result.ErrorCount);
+
+        // Get all captured events
+        var allEvents = TestSink.GetCapturedEvents().ToList();
+
+        _output.WriteLine($"Total events captured: {allEvents.Count}");
+        foreach (var evt in allEvents)
+        {
+            _output.WriteLine($"Event: {evt.Type} - Subject: {evt.Subject} - ID: {evt.Id}");
+        }
+
+        // Verify Twin Lifecycle events (one for each twin created)
+        var twinLifecycleEvents = allEvents
+            .Where(e => e.Type == "Konnektr.DigitalTwins.Twin.Lifecycle")
+            .ToList();
+        var expectedTwinIds = new[]
+        {
+            "room1",
+            "room2",
+            "sensor1",
+            "sensor2",
+            "crater1",
+            "crater2",
+        };
+
+        Assert.True(
+            twinLifecycleEvents.Count >= 6,
+            $"Expected at least 6 twin lifecycle events, got {twinLifecycleEvents.Count}"
+        );
+
+        foreach (var twinId in expectedTwinIds)
+        {
+            var twinEvent = twinLifecycleEvents.FirstOrDefault(e => e.Subject == twinId);
+            Assert.NotNull(twinEvent);
+
+            var eventData = twinEvent.Data as JsonObject;
+            Assert.NotNull(eventData);
+            Assert.Equal(twinId, eventData["id"]?.ToString());
+            Assert.Equal("Create", eventData["action"]?.ToString());
+
+            _output.WriteLine($"✓ Twin Lifecycle event verified for {twinId}");
+        }
+
+        // Verify Property events (one for each property of each twin)
+        var propertyEvents = allEvents
+            .Where(e => e.Type == "Konnektr.DigitalTwins.Property.Event")
+            .ToList();
+        Assert.True(
+            propertyEvents.Count >= 12,
+            $"Expected at least 12 property events, got {propertyEvents.Count}"
+        ); // Each twin has 2 properties
+
+        // Verify specific property events for some twins
+        var room1TempEvent = propertyEvents.FirstOrDefault(e =>
+        {
+            var data = e.Data as JsonObject;
+            return e.Subject == "room1" && data?["key"]?.ToString() == "Temperature";
+        });
+        Assert.NotNull(room1TempEvent);
+        var room1TempData = room1TempEvent.Data as JsonObject;
+        Assert.Equal("22.5", room1TempData?["value"]?.ToString());
+
+        var crater1DiameterEvent = propertyEvents.FirstOrDefault(e =>
+        {
+            var data = e.Data as JsonObject;
+            return e.Subject == "crater1" && data?["key"]?.ToString() == "diameter";
+        });
+        Assert.NotNull(crater1DiameterEvent);
+        var crater1DiameterData = crater1DiameterEvent.Data as JsonObject;
+        Assert.Equal("150", crater1DiameterData?["value"]?.ToString());
+
+        _output.WriteLine($"✓ Property events verified: {propertyEvents.Count} total");
+
+        // Verify Relationship Lifecycle events
+        var relationshipLifecycleEvents = allEvents
+            .Where(e => e.Type == "Konnektr.DigitalTwins.Relationship.Lifecycle")
+            .ToList();
+        Assert.True(
+            relationshipLifecycleEvents.Count >= 3,
+            $"Expected at least 3 relationship lifecycle events, got {relationshipLifecycleEvents.Count}"
+        );
+
+        var expectedRelationships = new[]
+        {
+            ("room1", "room1_sensor1", "sensor1"),
+            ("room1", "room1_sensor2", "sensor2"),
+            ("room2", "room2_sensor1", "sensor1"),
+        };
+
+        foreach (var (sourceId, relationshipId, targetId) in expectedRelationships)
+        {
+            var expectedSubject = $"{sourceId}/relationships/{relationshipId}";
+            var relEvent = relationshipLifecycleEvents.FirstOrDefault(e =>
+                e.Subject == expectedSubject
+            );
+            Assert.NotNull(relEvent);
+
+            var eventData = relEvent.Data as JsonObject;
+            Assert.NotNull(eventData);
+            Assert.Equal(sourceId, eventData["source"]?.ToString());
+            Assert.Equal(targetId, eventData["target"]?.ToString());
+            Assert.Equal("rel_has_sensors", eventData["name"]?.ToString());
+            Assert.Equal(relationshipId, eventData["relationshipId"]?.ToString());
+            Assert.Equal("Create", eventData["action"]?.ToString());
+
+            _output.WriteLine($"✓ Relationship Lifecycle event verified for {relationshipId}");
+        }
+
+        // Verify we have events for all expected subjects
+        var subjects = allEvents.Select(e => e.Subject).Distinct().ToList();
+        _output.WriteLine($"Event subjects found: {string.Join(", ", subjects)}");
+
+        // Summary
+        _output.WriteLine("\n=== EVENT GENERATION SUMMARY ===");
+        _output.WriteLine($"Import Job Result: {result.Status}");
+        _output.WriteLine($"Models Created: {result.ModelsCreated}");
+        _output.WriteLine($"Twins Created: {result.TwinsCreated}");
+        _output.WriteLine($"Relationships Created: {result.RelationshipsCreated}");
+        _output.WriteLine($"Total Events Generated: {allEvents.Count}");
+        _output.WriteLine($"Twin Lifecycle Events: {twinLifecycleEvents.Count}");
+        _output.WriteLine($"Property Events: {propertyEvents.Count}");
+        _output.WriteLine($"Relationship Lifecycle Events: {relationshipLifecycleEvents.Count}");
+        _output.WriteLine("✓ All event types successfully generated and verified!");
     }
 }
