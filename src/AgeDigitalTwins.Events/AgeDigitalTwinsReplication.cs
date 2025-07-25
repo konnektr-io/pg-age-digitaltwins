@@ -276,31 +276,9 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                         newEntityId
                     );
 
-                    // Check if we're starting a new entity operation
-                    if (
-                        currentEntityId != null
-                        && newEntityId != null
-                        && currentEntityId != newEntityId
-                    )
-                    {
-                        _logger.LogDebug(
-                            "Entity transition detected in update, enqueueing current event for {CurrentEntityId} and starting new event for {NewEntityId}",
-                            currentEntityId,
-                            newEntityId
-                        );
-                        // Enqueue the current event and start a new one
-                        EnqueueCurrentEventIfValid(currentEvent);
-                        currentEvent = new EventData();
-                    }
-
-                    currentEvent.GraphName = updateMessage.Relation.Namespace;
-                    currentEvent.TableName = updateMessage.Relation.RelationName;
-                    currentEvent.OldValue ??= oldValue;
-                    currentEvent.NewValue = newValue;
-
                     // For relationships created with MERGE/SET pattern:
                     // If the old value doesn't have complete relationship data but new value does,
-                    // treat this as a creation event
+                    // treat this as a creation event and enqueue immediately
                     bool isRelationshipCreation = false;
                     if (newValue.ContainsKey("$relationshipId"))
                     {
@@ -325,6 +303,28 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                         }
                     }
 
+                    // Check if we're starting a new entity operation AFTER we have the complete data
+                    if (
+                        currentEntityId != null
+                        && newEntityId != null
+                        && currentEntityId != newEntityId
+                    )
+                    {
+                        _logger.LogDebug(
+                            "Entity transition detected in update, enqueueing current event for {CurrentEntityId} and starting new event for {NewEntityId}",
+                            currentEntityId,
+                            newEntityId
+                        );
+                        // Enqueue the current event and start a new one
+                        EnqueueCurrentEventIfValid(currentEvent);
+                        currentEvent = new EventData();
+                    }
+
+                    currentEvent.GraphName = updateMessage.Relation.Namespace;
+                    currentEvent.TableName = updateMessage.Relation.RelationName;
+                    currentEvent.OldValue ??= oldValue;
+                    currentEvent.NewValue = newValue;
+
                     if (currentEvent.EventType == null && newValue != null)
                     {
                         if (newValue.ContainsKey("$dtId"))
@@ -338,6 +338,23 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                                 ? EventType.RelationshipCreate
                                 : EventType.RelationshipUpdate;
                         }
+                    }
+
+                    // For relationship creation via MERGE/SET, enqueue immediately after processing
+                    // This ensures we don't lose events due to the entity transition logic
+                    if (
+                        isRelationshipCreation
+                        && currentEvent.EventType == EventType.RelationshipCreate
+                    )
+                    {
+                        _logger.LogDebug(
+                            "Immediately enqueueing relationship creation event for {RelationshipId}",
+                            newValue.TryGetPropertyValue("$relationshipId", out var relIdNode)
+                                ? relIdNode?.ToString() ?? "unknown"
+                                : "unknown"
+                        );
+                        EnqueueCurrentEventIfValid(currentEvent);
+                        currentEvent = new EventData(); // Reset for next entity
                     }
                 }
                 else if (message is FullDeleteMessage deleteMessage)
