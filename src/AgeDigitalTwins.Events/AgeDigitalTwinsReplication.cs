@@ -277,34 +277,7 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                         newEntityId
                     );
 
-                    // For relationships created with MERGE/SET pattern:
-                    // If the old value doesn't have complete relationship data but new value does,
-                    // treat this as a creation event and enqueue immediately
-                    bool isRelationshipCreation = false;
-                    if (newValue.ContainsKey("$relationshipId"))
-                    {
-                        // Check if this is actually a creation (MERGE/SET pattern)
-                        // Old value might be incomplete/empty from MERGE, new value has full data from SET
-                        var oldHasCompleteData =
-                            oldValue.ContainsKey("$sourceId")
-                            && oldValue.ContainsKey("$targetId")
-                            && oldValue.ContainsKey("$relationshipId");
-                        var newHasCompleteData =
-                            newValue.ContainsKey("$sourceId")
-                            && newValue.ContainsKey("$targetId")
-                            && newValue.ContainsKey("$relationshipId");
-
-                        if (!oldHasCompleteData && newHasCompleteData)
-                        {
-                            isRelationshipCreation = true;
-                            _logger.LogDebug(
-                                "Detected relationship creation via MERGE/SET pattern for {RelationshipId}",
-                                newValue["$relationshipId"]?.ToString()
-                            );
-                        }
-                    }
-
-                    // Check if we're starting a new entity operation AFTER we have the complete data
+                    // Check if we're starting a new entity operation
                     if (
                         currentEntityId != null
                         && newEntityId != null
@@ -321,42 +294,29 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                         currentEvent = new EventData();
                     }
 
-                    currentEvent.GraphName = updateMessage.Relation.Namespace;
-                    currentEvent.TableName = updateMessage.Relation.RelationName;
-                    currentEvent.OldValue ??= oldValue;
-                    currentEvent.NewValue = newValue;
-
-                    if (currentEvent.EventType == null && newValue != null)
+                    // Handle relationship MERGE/SET pattern logic
+                    if (newValue.ContainsKey("$relationshipId"))
                     {
-                        if (newValue.ContainsKey("$dtId"))
+                        var eventWasEnqueued = HandleRelationshipUpdate(
+                            currentEvent,
+                            oldValue,
+                            newValue,
+                            updateMessage
+                        );
+                        if (eventWasEnqueued)
                         {
-                            currentEvent.EventType = EventType.TwinUpdate;
-                        }
-                        else if (newValue.ContainsKey("$relationshipId"))
-                        {
-                            // Use creation event type if this is detected as a creation
-                            currentEvent.EventType = isRelationshipCreation
-                                ? EventType.RelationshipCreate
-                                : EventType.RelationshipUpdate;
+                            // Reset currentEvent since it was enqueued
+                            currentEvent = new EventData();
                         }
                     }
-
-                    // For relationship creation via MERGE/SET, enqueue immediately after processing
-                    // This ensures we don't lose events due to the entity transition logic
-                    if (
-                        isRelationshipCreation
-                        && currentEvent.EventType == EventType.RelationshipCreate
-                    )
+                    else
                     {
-                        _logger.LogDebug(
-                            "Immediately enqueueing relationship creation event for {RelationshipId}",
-                            newValue != null
-                            && newValue.TryGetPropertyValue("$relationshipId", out var relIdNode)
-                                ? relIdNode?.ToString() ?? "unknown"
-                                : "unknown"
-                        );
-                        EnqueueCurrentEventIfValid(currentEvent);
-                        currentEvent = new EventData(); // Reset for next entity
+                        // Regular twin update
+                        currentEvent.GraphName = updateMessage.Relation.Namespace;
+                        currentEvent.TableName = updateMessage.Relation.RelationName;
+                        currentEvent.OldValue ??= oldValue;
+                        currentEvent.NewValue = newValue;
+                        currentEvent.EventType ??= EventType.TwinUpdate;
                     }
                 }
                 else if (message is FullDeleteMessage deleteMessage)
@@ -642,6 +602,137 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
             return null;
 
         return GetEntityIdentifier(eventData.NewValue) ?? GetEntityIdentifier(eventData.OldValue);
+    }
+
+    /// <summary>
+    /// Handles relationship updates with MERGE/SET pattern detection.
+    ///
+    /// Scenarios:
+    /// 1. New relationship creation:
+    ///    - InsertMessage (incomplete) → FullUpdateMessage (incomplete → complete)
+    /// 2. Existing relationship replacement:
+    ///    - FullUpdateMessage (complete → incomplete) → FullUpdateMessage (incomplete → complete)
+    /// </summary>
+    /// <returns>True if an event was enqueued immediately, false otherwise</returns>
+    private bool HandleRelationshipUpdate(
+        EventData currentEvent,
+        JsonObject oldValue,
+        JsonObject newValue,
+        FullUpdateMessage updateMessage
+    )
+    {
+        var relationshipId = newValue["$relationshipId"]?.ToString();
+
+        // Check if old and new values have complete relationship data
+        var oldHasCompleteData = IsCompleteRelationshipData(oldValue);
+        var newHasCompleteData = IsCompleteRelationshipData(newValue);
+
+        _logger.LogDebug(
+            "Relationship update - ID: {RelationshipId}, Old complete: {OldComplete}, New complete: {NewComplete}",
+            relationshipId,
+            oldHasCompleteData,
+            newHasCompleteData
+        );
+
+        currentEvent.GraphName = updateMessage.Relation.Namespace;
+        currentEvent.TableName = updateMessage.Relation.RelationName;
+
+        if (!oldHasCompleteData && newHasCompleteData)
+        {
+            // Case: incomplete → complete (final step of MERGE/SET)
+            // This could be either:
+            // 1. New relationship creation (no prior OldValue in event)
+            // 2. Existing relationship replacement (prior OldValue exists in event)
+
+            if (currentEvent.OldValue == null || !IsCompleteRelationshipData(currentEvent.OldValue))
+            {
+                // New relationship creation - set OldValue to empty and mark as creation
+                currentEvent.OldValue = new JsonObject();
+                currentEvent.EventType = EventType.RelationshipCreate;
+
+                _logger.LogDebug(
+                    "Detected new relationship creation for {RelationshipId}",
+                    relationshipId
+                );
+            }
+            else
+            {
+                // Existing relationship replacement - keep existing OldValue and mark as update
+                currentEvent.EventType = EventType.RelationshipUpdate;
+
+                _logger.LogDebug(
+                    "Detected existing relationship replacement for {RelationshipId}",
+                    relationshipId
+                );
+            }
+
+            currentEvent.NewValue = newValue;
+
+            // Enqueue immediately since we have complete data
+            _logger.LogDebug(
+                "Immediately enqueueing relationship event for {RelationshipId}",
+                relationshipId
+            );
+            EnqueueCurrentEventIfValid(currentEvent);
+            return true; // Event was enqueued
+        }
+        else if (oldHasCompleteData && !newHasCompleteData)
+        {
+            // Case: complete → incomplete (first step of replacement MERGE)
+            // Store the complete old value and wait for the next update
+            currentEvent.OldValue = oldValue;
+            currentEvent.NewValue = null; // Don't set yet, wait for complete data
+            currentEvent.EventType = null; // Don't set yet, wait for complete data
+
+            _logger.LogDebug(
+                "Detected start of relationship replacement for {RelationshipId}, waiting for complete data",
+                relationshipId
+            );
+            return false; // No event enqueued yet
+        }
+        else if (oldHasCompleteData && newHasCompleteData)
+        {
+            // Case: complete → complete (direct update without MERGE/SET)
+            // This shouldn't happen with our MERGE/SET pattern, but handle it just in case
+            currentEvent.OldValue ??= oldValue;
+            currentEvent.NewValue = newValue;
+            currentEvent.EventType = EventType.RelationshipUpdate;
+
+            _logger.LogDebug(
+                "Detected direct relationship update for {RelationshipId}",
+                relationshipId
+            );
+            return false; // Will be enqueued later at commit
+        }
+        else
+        {
+            // Case: incomplete → incomplete (shouldn't happen, but log for debugging)
+            _logger.LogWarning(
+                "Unexpected incomplete → incomplete relationship update for {RelationshipId}",
+                relationshipId
+            );
+
+            // Continue accumulating data
+            currentEvent.OldValue ??= oldValue;
+            currentEvent.NewValue = newValue;
+            return false; // No event enqueued yet
+        }
+    }
+
+    /// <summary>
+    /// Checks if a JsonObject contains complete relationship data.
+    /// </summary>
+    private static bool IsCompleteRelationshipData(JsonObject? jsonData)
+    {
+        if (jsonData == null)
+            return false;
+
+        return jsonData.ContainsKey("$sourceId")
+            && jsonData.ContainsKey("$targetId")
+            && jsonData.ContainsKey("$relationshipId")
+            && jsonData["$sourceId"] != null
+            && jsonData["$targetId"] != null
+            && jsonData["$relationshipId"] != null;
     }
 
     /// <summary>
