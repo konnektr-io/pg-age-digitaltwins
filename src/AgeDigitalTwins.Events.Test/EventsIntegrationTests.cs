@@ -536,14 +536,14 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
 {""Section"": ""Models""}
 {""@id"":""dtmi:com:adt:dtsample:room;2"",""@type"":""Interface"",""@context"":[""dtmi:dtdl:context;3"",""dtmi:dtdl:extension:quantitativeTypes;1""],""displayName"":""Room v2"",""contents"":[{""@type"":""Property"",""name"":""name"",""schema"":""string""},{""@type"":""Property"",""name"":""temperature"",""schema"":""double""},{""@type"":[""Property"",""Humidity""],""name"":""humidity"",""schema"":""double"",""unit"":""gramPerCubicMetre""},{""@type"":""Relationship"",""@id"":""dtmi:com:adt:dtsample:room:rel_has_sensors;2"",""name"":""rel_has_sensors"",""displayName"":""Room has sensors""}]}
 {""@id"":""dtmi:com:adt:dtsample:tempsensor;2"",""@type"":""Interface"",""@context"":[""dtmi:dtdl:context;3"",""dtmi:dtdl:extension:quantitativeTypes;1""],""displayName"":""Temperature Sensor v2"",""contents"":[{""@type"":""Property"",""name"":""name"",""schema"":""string""},{""@type"":""Property"",""name"":""temperature"",""schema"":""double""}]}
-{""@id"":""dtmi:com:contoso:ImportTestCrater;1"",""@type"":""Interface"",""@context"":""dtmi:dtdl:context;3"",""displayName"":""Import Test Crater"",""contents"":[{""@type"":""Property"",""name"":""diameter"",""schema"":""double""},{""@type"":""Property"",""name"":""depth"",""schema"":""double""}]}
+{""@id"":""dtmi:com:contoso:Crater;2"",""@type"":""Interface"",""@context"":""dtmi:dtdl:context;3"",""displayName"":""Import Test Crater"",""contents"":[{""@type"":""Property"",""name"":""diameter"",""schema"":""double""},{""@type"":""Property"",""name"":""depth"",""schema"":""double""}]}
 {""Section"": ""Twins""}
 {""$dtId"":""room1"",""$metadata"":{""$model"":""dtmi:com:adt:dtsample:room;2""},""name"":""Room 1"",""temperature"":22.5,""humidity"":45.0}
 {""$dtId"":""room2"",""$metadata"":{""$model"":""dtmi:com:adt:dtsample:room;2""},""name"":""Room 2"",""temperature"":21.0,""humidity"":50.0}
 {""$dtId"":""sensor1"",""$metadata"":{""$model"":""dtmi:com:adt:dtsample:tempsensor;2""},""name"":""Temperature Sensor 1"",""temperature"":22.3}
 {""$dtId"":""sensor2"",""$metadata"":{""$model"":""dtmi:com:adt:dtsample:tempsensor;2""},""name"":""Temperature Sensor 2"",""temperature"":21.8}
-{""$dtId"":""crater1"",""$metadata"":{""$model"":""dtmi:com:contoso:ImportTestCrater;1""},""diameter"":150.0,""depth"":30.0}
-{""$dtId"":""crater2"",""$metadata"":{""$model"":""dtmi:com:contoso:ImportTestCrater;1""},""diameter"":200.0,""depth"":45.0}
+{""$dtId"":""crater1"",""$metadata"":{""$model"":""dtmi:com:contoso:Crater;2""},""diameter"":150.0,""depth"":30.0}
+{""$dtId"":""crater2"",""$metadata"":{""$model"":""dtmi:com:contoso:Crater;2""},""diameter"":200.0,""depth"":45.0}
 {""Section"": ""Relationships""}
 {""$sourceId"":""room1"",""$relationshipId"":""room1_sensor1"",""$targetId"":""sensor1"",""$relationshipName"":""rel_has_sensors""}
 {""$sourceId"":""room1"",""$relationshipId"":""room1_sensor2"",""$targetId"":""sensor2"",""$relationshipName"":""rel_has_sensors""}
