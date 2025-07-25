@@ -948,23 +948,29 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         Assert.NotNull(jupiterCreateEvent);
         Assert.NotNull(europaCreateEvent);
 
+        // Verify Lifecycle events
+        var jupiterLifecycleEvent = twinLifecycleEvents.FirstOrDefault(e => e.Subject == "jupiter");
+        var europaLifecycleEvent = twinLifecycleEvents.FirstOrDefault(e => e.Subject == "europa");
+        Assert.NotNull(jupiterLifecycleEvent);
+        Assert.NotNull(europaLifecycleEvent);
+
         // Should not have Create events for existing twins (earth, mars)
         var earthCreateEvent = twinCreateEvents.FirstOrDefault(e => e.Subject == "earth");
         var marsCreateEvent = twinCreateEvents.FirstOrDefault(e => e.Subject == "mars");
         Assert.Null(earthCreateEvent);
         Assert.Null(marsCreateEvent);
 
+        // Should not have lifecycle events for existing twins (earth, mars)
+        var earthLifecycleEvent = twinLifecycleEvents.FirstOrDefault(e => e.Subject == "earth");
+        var marsLifecycleEvent = twinLifecycleEvents.FirstOrDefault(e => e.Subject == "mars");
+        Assert.Null(earthLifecycleEvent);
+        Assert.Null(marsLifecycleEvent);
+
         // Should have Update events for existing twins (earth, mars)
         var earthUpdateEvent = twinUpdateEvents.FirstOrDefault(e => e.Subject == "earth");
         var marsUpdateEvent = twinUpdateEvents.FirstOrDefault(e => e.Subject == "mars");
         Assert.NotNull(earthUpdateEvent);
         Assert.NotNull(marsUpdateEvent);
-
-        // Verify Lifecycle events have correct actions
-        var earthLifecycleEvent = twinLifecycleEvents.FirstOrDefault(e => e.Subject == "earth");
-        var jupiterLifecycleEvent = twinLifecycleEvents.FirstOrDefault(e => e.Subject == "jupiter");
-        Assert.NotNull(earthLifecycleEvent);
-        Assert.NotNull(jupiterLifecycleEvent);
 
         // Should have property events for updated name and new temperature property
         var earthNamePropertyEvent = twinPropertyEvents.FirstOrDefault(e =>
