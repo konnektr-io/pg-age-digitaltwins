@@ -990,6 +990,14 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         Assert.NotNull(jupiterEuropaCreateEvent);
 
         // Should have Lifecycle event for new relationship (jupiter_europa_satellite)
+        _output.WriteLine(
+            $"Relationship Lifecycle Events found: {relationshipLifecycleEvents.Count}"
+        );
+        foreach (var relEvent in relationshipLifecycleEvents)
+        {
+            _output.WriteLine($"  Relationship Lifecycle: {relEvent.Subject} - {relEvent.Type}");
+        }
+
         var jupiterEuropaLifecycleEvent = relationshipLifecycleEvents.FirstOrDefault(e =>
             e.Subject?.Contains("jupiter_europa_satellite") == true
         );

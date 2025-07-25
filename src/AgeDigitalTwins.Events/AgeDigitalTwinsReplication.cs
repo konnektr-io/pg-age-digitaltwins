@@ -255,6 +255,7 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                     }
 
                     var oldValue = await ConvertRowToJsonAsync(updateMessage.OldRow);
+                    // In case oldValue is null, we should already have an oldValue in the current event
                     if (oldValue == null)
                     {
                         _logger.LogDebug("Skipping update message without an old JSON value");
