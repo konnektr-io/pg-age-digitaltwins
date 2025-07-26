@@ -1027,7 +1027,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         Assert.NotNull(earthMoonPropertyData);
         Assert.Equal("Distance", earthMoonPropertyData["key"]?.ToString());
         Assert.Equal("384400.5", earthMoonPropertyData["value"]?.ToString());
-        Assert.Equal("earth", earthMoonPropertyData["relationshipSource"]?.ToString());
+        Assert.Equal("earth", earthMoonPropertyData["Id"]?.ToString());
         Assert.Equal("moon", earthMoonPropertyData["relationshipTarget"]?.ToString());
         Assert.Equal("earth_moon_satellite", earthMoonPropertyData["relationshipId"]?.ToString());
         _output.WriteLine("✓ Earth-Moon relationship property update event verified");
