@@ -183,56 +183,58 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                         ActivityKind.Consumer
                     );
                     transactionActivity?.SetTag("transaction.xid", beginMessage.TransactionXid);
-                    currentEvent = new EventData();
                     continue;
                 }
                 else if (message is InsertMessage insertMessage)
                 {
-                    if (currentEvent == null)
+                    var (id, newValue) = await ConvertRowToJsonAsync(insertMessage.NewRow);
+
+                    if (id == null || newValue == null)
                     {
-                        _logger.LogDebug("Skipping insert message without a transaction");
+                        _logger.LogInformation(
+                            "Skipping insert message without a valid id or JSON value - Id: {NewEntityId}, Value: {NewValue}",
+                            id,
+                            newValue
+                        );
                         continue;
                     }
-
-                    var newValue = await ConvertRowToJsonAsync(insertMessage.NewRow);
-                    if (newValue == null)
-                    {
-                        _logger.LogDebug("Skipping insert message without a JSON value");
-                        continue;
-                    }
-
-                    var newEntityId = GetEntityIdentifier(newValue);
-                    var currentEntityId = GetCurrentEventEntityId(currentEvent);
 
                     _logger.LogDebug(
-                        "Insert message - Current entity: {CurrentEntityId}, New entity: {NewEntityId}",
-                        currentEntityId,
-                        newEntityId
+                        "Insert message - Id: {NewEntityId}, Value: {NewValue}",
+                        id,
+                        newValue
                     );
 
-                    // Check if we're starting a new entity operation
                     if (
-                        currentEntityId != null
-                        && newEntityId != null
-                        && currentEntityId != newEntityId
+                        currentEvent != null
+                        && (
+                            currentEvent.Id != id
+                            || currentEvent.TableName != insertMessage.Relation.RelationName
+                        )
                     )
                     {
                         _logger.LogDebug(
-                            "Entity transition detected, enqueueing current event for {CurrentEntityId} and starting new event for {NewEntityId}",
-                            currentEntityId,
-                            newEntityId
+                            "Entity transition detected in insert, enqueueing current event for {CurrentEntityId} and starting new event for {NewEntityId}",
+                            currentEvent.Id,
+                            id
                         );
                         // Enqueue the current event and start a new one
                         EnqueueCurrentEventIfValid(currentEvent);
-                        currentEvent = new EventData();
                     }
 
-                    currentEvent.GraphName = insertMessage.Relation.Namespace;
-                    currentEvent.TableName = insertMessage.Relation.RelationName;
-                    currentEvent.OldValue = [];
-                    currentEvent.NewValue = newValue;
+                    // Start a new event for the insert
+                    currentEvent = new EventData(
+                        id: id,
+                        graphName: insertMessage.Relation.Namespace,
+                        tableName: insertMessage.Relation.RelationName,
+                        timestamp: insertMessage.ServerClock
+                    )
+                    {
+                        OldValue = [],
+                        NewValue = newValue,
+                    };
 
-                    if (newValue.ContainsKey("$dtId"))
+                    if (newValue.ContainsKey("$dtId") || currentEvent.TableName == "Twin")
                     {
                         currentEvent.EventType = EventType.TwinCreate;
                     }
@@ -240,140 +242,151 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                     {
                         currentEvent.EventType = EventType.RelationshipCreate;
                     }
-                    else
-                    {
-                        _logger.LogDebug("Skipping insert message without a valid JSON value");
-                        continue;
-                    }
                 }
                 else if (message is FullUpdateMessage updateMessage)
                 {
-                    if (currentEvent == null)
-                    {
-                        _logger.LogDebug("Skipping update message without a transaction");
-                        continue;
-                    }
+                    var (oldId, oldValue) = await ConvertRowToJsonAsync(updateMessage.OldRow);
+                    var (newId, newValue) = await ConvertRowToJsonAsync(updateMessage.NewRow);
 
-                    var oldValue = await ConvertRowToJsonAsync(updateMessage.OldRow);
-                    // In case oldValue is null, we should already have an oldValue in the current event
-                    if (oldValue == null)
+                    if (oldId == null || newId == null || !string.Equals(oldId, newId))
                     {
-                        _logger.LogDebug("Skipping update message without an old JSON value");
+                        _logger.LogInformation(
+                            "Skipping update message without valid IDs - Old ID: {OldEntityId}, New ID: {NewEntityId}, Old Value: {OldValue}, New Value: {NewValue}",
+                            oldId,
+                            newId,
+                            oldValue,
+                            newValue
+                        );
                         continue;
                     }
-                    var newValue = await ConvertRowToJsonAsync(updateMessage.NewRow);
-                    if (newValue == null)
-                    {
-                        _logger.LogDebug("Skipping update message without a new JSON value");
-                        continue;
-                    }
-
-                    var newEntityId = GetEntityIdentifier(newValue);
-                    var currentEntityId = GetCurrentEventEntityId(currentEvent);
 
                     _logger.LogDebug(
-                        "Update message - Current entity: {CurrentEntityId}, New entity: {NewEntityId}",
-                        currentEntityId,
-                        newEntityId
+                        "Update message - OldId: {OldEntityId}, OldValue: {OldValue}, NewId: {NewEntityId}, NewValue: {NewValue}",
+                        oldId,
+                        newId,
+                        oldValue,
+                        newValue
                     );
 
-                    // Check if we're starting a new entity operation
+                    // Check if we're starting a new entity operation (and enqueue current event if needed)
                     if (
-                        currentEntityId != null
-                        && newEntityId != null
-                        && currentEntityId != newEntityId
+                        currentEvent != null
+                        && (
+                            currentEvent.Id != newId
+                            || currentEvent.TableName != updateMessage.Relation.RelationName
+                        )
                     )
                     {
                         _logger.LogDebug(
                             "Entity transition detected in update, enqueueing current event for {CurrentEntityId} and starting new event for {NewEntityId}",
-                            currentEntityId,
-                            newEntityId
+                            currentEvent.Id,
+                            newId
                         );
                         // Enqueue the current event and start a new one
                         EnqueueCurrentEventIfValid(currentEvent);
-                        currentEvent = new EventData();
+                        currentEvent = null;
                     }
 
-                    // Handle relationship MERGE/SET pattern logic
-                    if (newValue.ContainsKey("$relationshipId"))
+                    // If currentEvent is null, we need to create a new one
+                    currentEvent ??= new EventData(
+                        id: newId,
+                        graphName: updateMessage.Relation.Namespace,
+                        tableName: updateMessage.Relation.RelationName,
+                        timestamp: updateMessage.ServerClock
+                    );
+
+                    currentEvent.OldValue ??= oldValue;
+                    currentEvent.NewValue = newValue;
+
+                    if (currentEvent.EventType == null && currentEvent.OldValue != null)
                     {
-                        var eventWasEnqueued = HandleRelationshipUpdate(
-                            currentEvent,
-                            oldValue,
-                            newValue,
-                            updateMessage
-                        );
-                        if (eventWasEnqueued)
+                        if (
+                            newValue?.ContainsKey("$dtId") == true
+                            || currentEvent.OldValue.ContainsKey("$dtId")
+                            || currentEvent.TableName == "Twin"
+                        )
                         {
-                            // Reset currentEvent since it was enqueued
-                            currentEvent = new EventData();
+                            currentEvent.EventType = EventType.TwinUpdate;
                         }
-                    }
-                    else
-                    {
-                        // Regular twin update
-                        currentEvent.GraphName = updateMessage.Relation.Namespace;
-                        currentEvent.TableName = updateMessage.Relation.RelationName;
-                        currentEvent.OldValue ??= oldValue;
-                        currentEvent.NewValue = newValue;
-                        currentEvent.EventType ??= EventType.TwinUpdate;
+                        else if (
+                            newValue?.ContainsKey("$relationshipId") == true
+                            || currentEvent.OldValue.ContainsKey("$relationshipId")
+                        )
+                        {
+                            currentEvent.EventType = EventType.RelationshipUpdate;
+                        }
                     }
                 }
                 else if (message is FullDeleteMessage deleteMessage)
                 {
-                    if (currentEvent == null)
+                    var (oldId, oldValue) = await ConvertRowToJsonAsync(deleteMessage.OldRow);
+                    if (oldId == null)
                     {
-                        _logger.LogDebug("Skipping delete message without a transaction");
+                        _logger.LogInformation(
+                            "Skipping delete message without valid ID - Old ID: {OldEntityId}, Old Value: {OldValue}",
+                            oldId,
+                            oldValue
+                        );
                         continue;
                     }
 
-                    var oldValue = await ConvertRowToJsonAsync(deleteMessage.OldRow);
-                    if (oldValue == null)
-                    {
-                        _logger.LogDebug("Skipping delete message without an old JSON value");
-                        continue;
-                    }
-
-                    var deleteEntityId = GetEntityIdentifier(oldValue);
-                    var currentEntityId = GetCurrentEventEntityId(currentEvent);
-
-                    // Check if we're starting a new entity operation
+                    // Check if we're starting a new entity operation (and enqueue current event if needed)
                     if (
-                        currentEntityId != null
-                        && deleteEntityId != null
-                        && currentEntityId != deleteEntityId
+                        currentEvent != null
+                        && (
+                            currentEvent.Id != oldId
+                            || currentEvent.TableName != deleteMessage.Relation.RelationName
+                        )
                     )
                     {
+                        _logger.LogDebug(
+                            "Entity transition detected in delete, enqueueing current event for {CurrentEntityId} and starting new event for {OldEntityId}",
+                            currentEvent.Id,
+                            oldId
+                        );
                         // Enqueue the current event and start a new one
                         EnqueueCurrentEventIfValid(currentEvent);
-                        currentEvent = new EventData();
+                        currentEvent = null;
                     }
 
-                    currentEvent.GraphName = deleteMessage.Relation.Namespace;
-                    currentEvent.TableName = deleteMessage.Relation.RelationName;
-                    currentEvent.OldValue = oldValue;
+                    // If currentEvent is null, we need to create a new one
+                    currentEvent ??= new EventData(
+                        id: oldId,
+                        graphName: deleteMessage.Relation.Namespace,
+                        tableName: deleteMessage.Relation.RelationName,
+                        timestamp: deleteMessage.ServerClock
+                    );
 
-                    if (oldValue.ContainsKey("$dtId"))
+                    currentEvent.OldValue ??= oldValue;
+
+                    if (currentEvent.EventType == null && currentEvent.OldValue != null)
                     {
-                        currentEvent.EventType = EventType.TwinDelete;
-                    }
-                    else if (oldValue.ContainsKey("$relationshipId"))
-                    {
-                        currentEvent.EventType = EventType.RelationshipDelete;
+                        if (
+                            currentEvent.OldValue.ContainsKey("$dtId")
+                            || currentEvent.TableName == "Twin"
+                        )
+                        {
+                            currentEvent.EventType = EventType.TwinDelete;
+                        }
+                        else if (currentEvent.OldValue.ContainsKey("$relationshipId"))
+                        {
+                            currentEvent.EventType = EventType.RelationshipDelete;
+                        }
                     }
                 }
                 else if (message is CommitMessage commitMessage)
                 {
-                    if (currentEvent == null)
+                    if (currentEvent != null)
                     {
-                        _logger.LogDebug("Skipping commit message without a transaction");
-                        continue;
-                    }
-                    currentEvent.Timestamp = commitMessage.TransactionCommitTimestamp;
+                        _logger.LogDebug(
+                            "Transaction commited, enqueueing current event for {CurrentEntityId}",
+                            currentEvent.Id
+                        );
 
-                    // Enqueue the final event in this transaction
-                    EnqueueCurrentEventIfValid(currentEvent);
-                    currentEvent = null;
+                        // Enqueue the final event in this transaction
+                        EnqueueCurrentEventIfValid(currentEvent);
+                        currentEvent = null;
+                    }
 
                     transactionActivity?.Stop();
                     transactionActivity?.Dispose();
@@ -529,262 +542,32 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
         GC.SuppressFinalize(this);
     }
 
-    public static async Task<JsonObject?> ConvertRowToJsonAsync(ReplicationTuple row)
+    public static async Task<(string?, JsonObject?)> ConvertRowToJsonAsync(ReplicationTuple row)
     {
-        try
+        string? id = null;
+        JsonObject? properties = null;
+        await foreach (var value in row)
         {
-            await foreach (var value in row)
+            if (value.GetFieldName() == "id" && value.GetDataTypeName() == "ag_catalog.graphid")
             {
-                if (
-                    value.GetFieldName() != "properties"
-                    || value.GetDataTypeName() != "ag_catalog.agtype"
-                )
-                {
-                    continue;
-                }
+                using Stream stream = value.GetStream();
+                var bytes = new byte[stream.Length];
+                await stream.ReadExactlyAsync(bytes.AsMemory(0, (int)stream.Length));
+                id = System.Text.Encoding.UTF8.GetString(bytes);
+            }
+            if (
+                value.GetFieldName() == "properties"
+                && value.GetDataTypeName() != "ag_catalog.agtype"
+            )
+            {
                 using Stream stream = value.GetStream();
                 var bytes = new byte[stream.Length];
                 await stream.ReadExactlyAsync(bytes.AsMemory(0, (int)stream.Length));
                 var sValue = System.Text.Encoding.UTF8.GetString(bytes);
-                return JsonSerializer.Deserialize<JsonObject>(sValue);
+                properties = JsonSerializer.Deserialize<JsonObject>(sValue);
             }
         }
-        catch (InvalidOperationException ex) when (ex.Message.Contains("already been read"))
-        {
-            // Row has already been enumerated, return null and log the issue
-            // This can happen when the same ReplicationTuple is processed multiple times
-            return null;
-        }
-        return null;
-    }
-
-    /// <summary>
-    /// Extracts a unique entity identifier from JSON data.
-    /// For twins: returns $dtId
-    /// For relationships: returns $relationshipId + $sourceId (concatenated)
-    /// For models: returns id (future support)
-    /// </summary>
-    private static string? GetEntityIdentifier(JsonObject? jsonData)
-    {
-        if (jsonData == null)
-            return null;
-
-        // Twin identifier
-        if (jsonData.ContainsKey("$dtId"))
-        {
-            return jsonData["$dtId"]?.ToString();
-        }
-
-        // Relationship identifier (combination of $relationshipId and $sourceId)
-        if (jsonData.ContainsKey("$relationshipId") && jsonData.ContainsKey("$sourceId"))
-        {
-            var relationshipId = jsonData["$relationshipId"]?.ToString();
-            var sourceId = jsonData["$sourceId"]?.ToString();
-            return $"{sourceId}/{relationshipId}";
-        }
-
-        // Future: DTDL model identifier
-        if (jsonData.ContainsKey("id"))
-        {
-            return jsonData["id"]?.ToString();
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    /// Gets the current entity identifier from an EventData object.
-    /// Checks NewValue first, then OldValue.
-    /// </summary>
-    private static string? GetCurrentEventEntityId(EventData? eventData)
-    {
-        if (eventData == null)
-            return null;
-
-        return GetEntityIdentifier(eventData.NewValue) ?? GetEntityIdentifier(eventData.OldValue);
-    }
-
-    /// <summary>
-    /// Handles relationship updates with MERGE/SET pattern detection.
-    ///
-    /// Scenarios:
-    /// 1. New relationship creation:
-    ///    - InsertMessage (incomplete) → FullUpdateMessage (incomplete → complete)
-    /// 2. Existing relationship replacement:
-    ///    - FullUpdateMessage (complete → incomplete) → FullUpdateMessage (incomplete → complete)
-    ///    OR
-    ///    - FullUpdateMessage (complete → complete) [direct update without MERGE/SET]
-    /// </summary>
-    /// <returns>True if an event was enqueued immediately, false otherwise</returns>
-    private bool HandleRelationshipUpdate(
-        EventData currentEvent,
-        JsonObject oldValue,
-        JsonObject newValue,
-        FullUpdateMessage updateMessage
-    )
-    {
-        var relationshipId = newValue["$relationshipId"]?.ToString();
-
-        // Check if old and new values have complete relationship data
-        var oldHasCompleteData = IsCompleteRelationshipData(oldValue);
-        var newHasCompleteData = IsCompleteRelationshipData(newValue);
-
-        _logger.LogDebug(
-            "Relationship update - ID: {RelationshipId}, Old complete: {OldComplete}, New complete: {NewComplete}, CurrentEvent.OldValue complete: {CurrentOldComplete}, CurrentEvent.EventType: {CurrentEventType}",
-            relationshipId,
-            oldHasCompleteData,
-            newHasCompleteData,
-            IsCompleteRelationshipData(currentEvent.OldValue),
-            currentEvent.EventType
-        );
-
-        currentEvent.GraphName = updateMessage.Relation.Namespace;
-        currentEvent.TableName = updateMessage.Relation.RelationName;
-
-        if (!oldHasCompleteData && newHasCompleteData)
-        {
-            // Case: incomplete → complete (final step of MERGE/SET or creation)
-
-            // Check if we already have a complete OldValue stored from a previous message
-            // This would indicate an existing relationship replacement
-            if (currentEvent.OldValue != null && IsCompleteRelationshipData(currentEvent.OldValue))
-            {
-                // Existing relationship replacement - we have the original complete old value
-                currentEvent.NewValue = newValue;
-                currentEvent.EventType = EventType.RelationshipUpdate;
-
-                _logger.LogDebug(
-                    "Detected existing relationship replacement for {RelationshipId} (using stored complete old value)",
-                    relationshipId
-                );
-            }
-            else
-            {
-                // This could be either:
-                // 1. A genuine new relationship creation
-                // 2. An existing relationship update where we missed the complete → incomplete transition
-
-                // Try to determine by checking if the newValue looks like an update vs creation
-                // For updates via import jobs, there are usually ETag values and other metadata
-                // For true creations, the data is usually cleaner
-
-                bool looksLikeUpdate =
-                    newValue.ContainsKey("$etag")
-                    || (
-                        newValue.TryGetPropertyValue("Distance", out var distanceNode)
-                        && distanceNode?.ToString().Contains(".") == true
-                    ); // Updated distances often have decimals
-
-                if (looksLikeUpdate)
-                {
-                    // Treat as update - the old value was likely lost in MERGE/SET
-                    // We'll create a synthetic old value or use empty for property diffing
-                    currentEvent.OldValue = new JsonObject(); // Empty old value will show all properties as new/changed
-                    currentEvent.NewValue = newValue;
-                    currentEvent.EventType = EventType.RelationshipUpdate;
-
-                    _logger.LogDebug(
-                        "Detected likely relationship update for {RelationshipId} (inferred from ETag/metadata)",
-                        relationshipId
-                    );
-                }
-                else
-                {
-                    // Treat as creation
-                    currentEvent.OldValue = new JsonObject();
-                    currentEvent.NewValue = newValue;
-                    currentEvent.EventType = EventType.RelationshipCreate;
-
-                    _logger.LogDebug(
-                        "Detected new relationship creation for {RelationshipId}",
-                        relationshipId
-                    );
-                }
-            }
-
-            // Enqueue immediately since we have complete data
-            _logger.LogDebug(
-                "Immediately enqueueing relationship event for {RelationshipId}",
-                relationshipId
-            );
-            EnqueueCurrentEventIfValid(currentEvent);
-            return true; // Event was enqueued
-        }
-        else if (oldHasCompleteData && !newHasCompleteData)
-        {
-            // Case: complete → incomplete (first step of replacement MERGE)
-            // Store the complete old value and wait for the next update
-            currentEvent.OldValue = oldValue;
-            currentEvent.NewValue = null; // Don't set yet, wait for complete data
-            currentEvent.EventType = null; // Don't set yet, wait for complete data
-
-            _logger.LogDebug(
-                "Detected start of relationship replacement for {RelationshipId}, storing complete old value",
-                relationshipId
-            );
-            return false; // No event enqueued yet
-        }
-        else if (oldHasCompleteData && newHasCompleteData)
-        {
-            // Case: complete → complete (direct update without MERGE/SET)
-            // This can happen if the relationship is updated directly without going through MERGE/SET
-
-            // Only treat this as an update if the values are actually different
-            bool valuesAreDifferent = !JsonNode.DeepEquals(oldValue, newValue);
-
-            if (valuesAreDifferent)
-            {
-                currentEvent.OldValue ??= oldValue;
-                currentEvent.NewValue = newValue;
-                currentEvent.EventType = EventType.RelationshipUpdate;
-
-                _logger.LogDebug(
-                    "Detected direct relationship update for {RelationshipId}",
-                    relationshipId
-                );
-            }
-            else
-            {
-                _logger.LogDebug(
-                    "Ignoring relationship update for {RelationshipId} - values are identical",
-                    relationshipId
-                );
-            }
-
-            return false; // Will be enqueued later at commit
-        }
-        else
-        {
-            // Case: incomplete → incomplete (shouldn't happen often, but handle gracefully)
-            _logger.LogWarning(
-                "Unexpected incomplete → incomplete relationship update for {RelationshipId}",
-                relationshipId
-            );
-
-            // Continue accumulating data, but don't overwrite a complete old value if we have one
-            if (currentEvent.OldValue == null || !IsCompleteRelationshipData(currentEvent.OldValue))
-            {
-                currentEvent.OldValue = oldValue;
-            }
-            currentEvent.NewValue = newValue;
-            return false; // No event enqueued yet
-        }
-    }
-
-    /// <summary>
-    /// Checks if a JsonObject contains complete relationship data.
-    /// </summary>
-    private static bool IsCompleteRelationshipData(JsonObject? jsonData)
-    {
-        if (jsonData == null)
-            return false;
-
-        return jsonData.ContainsKey("$sourceId")
-            && jsonData.ContainsKey("$targetId")
-            && jsonData.ContainsKey("$relationshipId")
-            && jsonData["$sourceId"] != null
-            && jsonData["$targetId"] != null
-            && jsonData["$relationshipId"] != null;
+        return (id, properties);
     }
 
     /// <summary>
@@ -794,25 +577,23 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
     {
         if (currentEvent?.EventType != null && IsValidEventData(currentEvent))
         {
-            var entityId = GetCurrentEventEntityId(currentEvent);
             _logger.LogDebug(
-                "Enqueuing event: {EventType} for entity {EntityId}",
+                "Enqueuing event: Type: {EventType}, EntityId: {EntityId}, TableName: {TableName}, GraphName: {GraphName}",
                 currentEvent.EventType,
-                entityId
+                currentEvent.Id,
+                currentEvent.TableName,
+                currentEvent.GraphName
             );
             _eventQueue.Enqueue(currentEvent);
-            _logger.LogDebug(
-                "Enqueued event: {Event}",
-                JsonSerializer.Serialize(currentEvent, _jsonSerializerOptions)
-            );
         }
         else
         {
-            var entityId = GetCurrentEventEntityId(currentEvent);
             _logger.LogDebug(
-                "Skipping enqueue for invalid event - Type: {EventType}, EntityId: {EntityId}",
+                "Skipping enqueue for invalid event - Type: {EventType}, EntityId: {EntityId}, TableName: {TableName}, GraphName: {GraphName}",
                 currentEvent?.EventType,
-                entityId
+                currentEvent?.Id,
+                currentEvent?.TableName,
+                currentEvent?.GraphName
             );
         }
     }
@@ -822,32 +603,36 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
     /// </summary>
     private static bool IsValidEventData(EventData eventData)
     {
-        if (eventData.NewValue == null)
-            return false;
-
-        // For twin events, must have $dtId
+        // For Create or Update, NewValue must be present
         if (
             eventData.EventType
             is EventType.TwinCreate
                 or EventType.TwinUpdate
-                or EventType.TwinDelete
+                or EventType.RelationshipCreate
+                or EventType.RelationshipUpdate
         )
         {
-            return eventData.NewValue.ContainsKey("$dtId")
-                && !string.IsNullOrEmpty(eventData.NewValue["$dtId"]?.ToString());
+            if (eventData.NewValue == null)
+            {
+                return false;
+            }
         }
 
-        // For relationship events, must have complete relationship data
+        // For Update and Delete, OldValue must be present
         if (
             eventData.EventType
-            is EventType.RelationshipCreate
+            is EventType.TwinUpdate
+                or EventType.TwinDelete
                 or EventType.RelationshipUpdate
                 or EventType.RelationshipDelete
         )
         {
-            return IsCompleteRelationshipData(eventData.NewValue);
+            if (eventData.OldValue == null)
+            {
+                return false;
+            }
         }
 
-        return false;
+        return true;
     }
 }
