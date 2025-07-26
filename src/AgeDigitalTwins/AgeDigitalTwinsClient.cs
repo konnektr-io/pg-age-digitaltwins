@@ -95,7 +95,7 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
     /// Gets the data source for connecting to the database.
     /// </summary>
     /// <returns>The NpgsqlMultiHostDataSource instance used by this client.</returns>
-    internal NpgsqlMultiHostDataSource GetDataSource()
+    public NpgsqlMultiHostDataSource GetDataSource()
     {
         return _dataSource;
     }
@@ -104,7 +104,7 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
     /// Gets the graph name used by this client.
     /// </summary>
     /// <returns>The graph name.</returns>
-    internal string GetGraphName()
+    public string GetGraphName()
     {
         return _graphName;
     }

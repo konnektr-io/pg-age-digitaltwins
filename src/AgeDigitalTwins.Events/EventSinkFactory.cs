@@ -7,7 +7,7 @@ public class EventSinkFactory(IConfiguration configuration, ILoggerFactory logge
     private readonly IConfiguration _configuration = configuration;
     private readonly ILoggerFactory _loggerFactory = loggerFactory;
 
-    public List<IEventSink> CreateEventSinks()
+    public virtual List<IEventSink> CreateEventSinks()
     {
         var sinks = new List<IEventSink>();
 
@@ -78,7 +78,7 @@ public class EventSinkFactory(IConfiguration configuration, ILoggerFactory logge
         return sinks;
     }
 
-    public List<EventRoute> GetEventRoutes()
+    public virtual List<EventRoute> GetEventRoutes()
     {
         return _configuration.GetSection("EventRoutes").Get<List<EventRoute>>() ?? [];
     }

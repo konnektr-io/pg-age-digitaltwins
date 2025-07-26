@@ -8,7 +8,7 @@ builder
     .WithReference(ageConnectionString)
     .WithEnvironment("AgeGraphName", ageGraphName);
 
-builder.AddProject<Projects.AgeDigitalTwins_Events>("events").WithReference(ageConnectionString);
+// builder.AddProject<Projects.AgeDigitalTwins_Events>("events").WithReference(ageConnectionString);
 
 // var mcp = builder.AddProject<Projects.MCPServerSSE>("server").WithReference(agedb);
 // builder.AddMCPInspector().WithSSE(mcp);
