@@ -65,15 +65,18 @@ jobs:
 
       - name: Test
         run: |
-          FILTER_ARG=""
-          if [ -n "${{ github.event.inputs.filter }}" ]; then
-            FILTER_ARG="--filter \"${{ github.event.inputs.filter }}\""
-          fi
-
           if [ "${{ github.event.inputs.test_project }}" == "All" ]; then
-            eval dotnet test './src' --logger 'GitHubActions' --logger 'console;verbosity=normal' --blame-hang --blame-hang-timeout 5m $FILTER_ARG
+            if [ -n "${{ github.event.inputs.filter }}" ]; then
+              dotnet test './src' --logger 'GitHubActions' --logger 'console;verbosity=normal' --blame-hang --blame-hang-timeout 5m --filter "${{ github.event.inputs.filter }}"
+            else
+              dotnet test './src' --logger 'GitHubActions' --logger 'console;verbosity=normal' --blame-hang --blame-hang-timeout 5m
+            fi
           else
-            eval dotnet test './src/${{ github.event.inputs.test_project }}' --logger 'GitHubActions' --logger 'console;verbosity=normal' --blame-hang --blame-hang-timeout 5m $FILTER_ARG
+            if [ -n "${{ github.event.inputs.filter }}" ]; then
+              dotnet test './src/${{ github.event.inputs.test_project }}' --logger 'GitHubActions' --logger 'console;verbosity=normal' --blame-hang --blame-hang-timeout 5m --filter "${{ github.event.inputs.filter }}"
+            else
+              dotnet test './src/${{ github.event.inputs.test_project }}' --logger 'GitHubActions' --logger 'console;verbosity=normal' --blame-hang --blame-hang-timeout 5m
+            fi
           fi
 
       - name: Stop PostgreSQL container
