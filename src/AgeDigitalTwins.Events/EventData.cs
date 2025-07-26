@@ -10,5 +10,5 @@ public class EventData(string id, string graphName, string tableName, DateTime? 
     public JsonObject? OldValue { get; set; }
     public JsonObject? NewValue { get; set; }
     public EventType? EventType { get; set; }
-    public DateTime? Timestamp { get; } = timestamp ?? DateTime.UtcNow;
+    public DateTime? Timestamp { get; set; } = timestamp ?? DateTime.UtcNow;
 }

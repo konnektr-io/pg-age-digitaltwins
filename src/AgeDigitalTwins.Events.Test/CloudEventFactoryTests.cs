@@ -1,4 +1,5 @@
-﻿using System.Text.Json.Nodes;
+﻿using System.Data.Common;
+using System.Text.Json.Nodes;
 
 namespace AgeDigitalTwins.Events.Test;
 
@@ -9,7 +10,7 @@ public class CloudEventFactoryTests
     public void CreateDigitalTwinChangeNotificationEvents_ValidEventData_ReturnsCloudEvent()
     {
         // Arrange
-        var eventData = new EventData
+        var eventData = new EventData(Guid.NewGuid().ToString(), "digitaltwins", "Twin")
         {
             EventType = EventType.TwinUpdate,
             NewValue = JsonNode
@@ -61,7 +62,7 @@ public class CloudEventFactoryTests
     public void CreateDigitalTwinChangeNotificationEvents_InvalidEventType_ThrowsArgumentNullException()
     {
         // Arrange
-        var eventData = new EventData
+        var eventData = new EventData(Guid.NewGuid().ToString(), "digitaltwins", "Twin")
         {
             EventType = EventType.TwinCreate,
             NewValue = JsonNode.Parse("{\"$dtId\": \"twin1\"}")!.AsObject(),
@@ -80,7 +81,7 @@ public class CloudEventFactoryTests
     public void CreateDigitalTwinChangeNotificationEvents_MissingDtId_ThrowsArgumentException()
     {
         // Arrange
-        var eventData = new EventData
+        var eventData = new EventData(Guid.NewGuid().ToString(), "digitaltwins", "Twin")
         {
             EventType = EventType.TwinUpdate,
             NewValue = JsonNode.Parse("{\"$metadata\": {\"$model\": \"model1\"}}")!.AsObject(),
@@ -101,7 +102,7 @@ public class CloudEventFactoryTests
     public void CreateDigitalTwinChangeNotificationEvents_WithCustomTypeMapping_UsesCustomType()
     {
         // Arrange
-        var eventData = new EventData
+        var eventData = new EventData(Guid.NewGuid().ToString(), "digitaltwins", "Twin")
         {
             EventType = EventType.TwinUpdate,
             NewValue = JsonNode
@@ -135,7 +136,7 @@ public class CloudEventFactoryTests
     public void CreateEventNotificationEvents_WithTypeMapping_UsesCustomType()
     {
         // Arrange
-        var eventData = new EventData
+        var eventData = new EventData(Guid.NewGuid().ToString(), "digitaltwins", "Twin")
         {
             EventType = EventType.TwinUpdate,
             NewValue = JsonNode
@@ -165,7 +166,7 @@ public class CloudEventFactoryTests
     public void CreateDataHistoryEvents_WithTypeMapping_UsesCustomType()
     {
         // Arrange
-        var eventData = new EventData
+        var eventData = new EventData(Guid.NewGuid().ToString(), "digitaltwins", "Twin")
         {
             EventType = EventType.TwinUpdate,
             NewValue = JsonNode
@@ -195,7 +196,7 @@ public class CloudEventFactoryTests
     public void CreateDataHistoryEventsModelChange_WithTypeMapping_UsesCustomType()
     {
         // Arrange
-        var eventData = new EventData
+        var eventData = new EventData(Guid.NewGuid().ToString(), "digitaltwins", "Twin")
         {
             EventType = EventType.TwinUpdate,
             NewValue = JsonNode
@@ -232,10 +233,8 @@ public class CloudEventFactoryTests
     public void CreateDataHistoryEvents_HandlesTwinDeleteEvent()
     {
         // Arrange
-        var eventData = new EventData
+        var eventData = new EventData(Guid.NewGuid().ToString(), "digitaltwins", "Twin")
         {
-            GraphName = "digitaltwins",
-            TableName = "twin",
             EventType = EventType.TwinDelete,
             NewValue = null,
             OldValue = JsonNode
@@ -261,10 +260,8 @@ public class CloudEventFactoryTests
     public void CreateDataHistoryEvents_HandlesTwinDeleteEventWithProperties()
     {
         // Arrange
-        var eventData = new EventData
+        var eventData = new EventData(Guid.NewGuid().ToString(), "digitaltwins", "Twin")
         {
-            GraphName = "digitaltwins",
-            TableName = "twin",
             EventType = EventType.TwinDelete,
             NewValue = null,
             OldValue = JsonNode
@@ -292,10 +289,8 @@ public class CloudEventFactoryTests
     public void CreateDataHistoryEvents_HandlesTwinCreateEventWithProperties()
     {
         // Arrange
-        var eventData = new EventData
+        var eventData = new EventData(Guid.NewGuid().ToString(), "digitaltwins", "Twin")
         {
-            GraphName = "digitaltwins",
-            TableName = "twin",
             EventType = EventType.TwinCreate,
             NewValue = JsonNode
                 .Parse(
@@ -333,10 +328,8 @@ public class CloudEventFactoryTests
     public void CreateDataHistoryEvents_HandlesRelationshipCreateEvent()
     {
         // Arrange
-        var eventData = new EventData
+        var eventData = new EventData(Guid.NewGuid().ToString(), "digitaltwins", "has")
         {
-            GraphName = "digitaltwins",
-            TableName = "has",
             EventType = EventType.RelationshipCreate,
             NewValue = JsonNode
                 .Parse(
@@ -371,7 +364,7 @@ public class CloudEventFactoryTests
     public void CreateDigitalTwinChangeNotificationEvents_SameValueUpdate_IncludesPropertyInPatch()
     {
         // Arrange - Property 'temperature' updated with same value, but lastUpdateTime changed
-        var eventData = new EventData
+        var eventData = new EventData(Guid.NewGuid().ToString(), "digitaltwins", "Twin")
         {
             EventType = EventType.TwinUpdate,
             NewValue = JsonNode
@@ -462,7 +455,7 @@ public class CloudEventFactoryTests
     public void CreateDataHistoryEvents_ValueUpdate_CreatesPropertyEvent()
     {
         // Arrange - Property 'humidity' updated with new value
-        var eventData = new EventData
+        var eventData = new EventData(Guid.NewGuid().ToString(), "digitaltwins", "Twin")
         {
             EventType = EventType.TwinUpdate,
             NewValue = JsonNode
@@ -518,7 +511,7 @@ public class CloudEventFactoryTests
     public void CreateDataHistoryEvents_SameValueUpdate_CreatesPropertyEvent()
     {
         // Arrange - Property 'humidity' updated with same value, but lastUpdateTime changed
-        var eventData = new EventData
+        var eventData = new EventData(Guid.NewGuid().ToString(), "digitaltwins", "Twin")
         {
             EventType = EventType.TwinUpdate,
             NewValue = JsonNode
