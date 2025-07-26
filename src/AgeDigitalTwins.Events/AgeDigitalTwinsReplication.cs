@@ -187,12 +187,18 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                 }
                 else if (message is InsertMessage insertMessage)
                 {
+                    if (insertMessage.Relation.Namespace == "ag_catalog")
+                    {
+                        // Skip messages from ag_catalog relations
+                        continue;
+                    }
+
                     var (id, newValue) = await ConvertRowToJsonAsync(insertMessage.NewRow);
 
-                    if (id == null || newValue == null)
+                    if (id == null)
                     {
                         _logger.LogInformation(
-                            "Skipping insert message without a valid id or JSON value - Id: {NewEntityId}, Value: {NewValue}",
+                            "Skipping insert message without a valid id - Id: {NewEntityId}, Value: {NewValue}",
                             id,
                             newValue
                         );
@@ -234,17 +240,23 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                         NewValue = newValue,
                     };
 
-                    if (newValue.ContainsKey("$dtId") || currentEvent.TableName == "Twin")
+                    if (newValue?.ContainsKey("$dtId") == true || currentEvent.TableName == "Twin")
                     {
                         currentEvent.EventType = EventType.TwinCreate;
                     }
-                    else if (newValue.ContainsKey("$relationshipId"))
+                    else if (newValue?.ContainsKey("$relationshipId") == true)
                     {
                         currentEvent.EventType = EventType.RelationshipCreate;
                     }
                 }
                 else if (message is FullUpdateMessage updateMessage)
                 {
+                    if (updateMessage.Relation.Namespace == "ag_catalog")
+                    {
+                        // Skip messages from ag_catalog relations
+                        continue;
+                    }
+
                     var (oldId, oldValue) = await ConvertRowToJsonAsync(updateMessage.OldRow);
                     var (newId, newValue) = await ConvertRowToJsonAsync(updateMessage.NewRow);
 
@@ -319,6 +331,12 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                 }
                 else if (message is FullDeleteMessage deleteMessage)
                 {
+                    if (deleteMessage.Relation.Namespace == "ag_catalog")
+                    {
+                        // Skip messages from ag_catalog relations
+                        continue;
+                    }
+
                     var (oldId, oldValue) = await ConvertRowToJsonAsync(deleteMessage.OldRow);
                     if (oldId == null)
                     {
@@ -557,7 +575,7 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
             }
             if (
                 value.GetFieldName() == "properties"
-                && value.GetDataTypeName() != "ag_catalog.agtype"
+                && value.GetDataTypeName() == "ag_catalog.agtype"
             )
             {
                 using Stream stream = value.GetStream();
@@ -588,7 +606,7 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
         }
         else
         {
-            _logger.LogDebug(
+            _logger.LogWarning(
                 "Skipping enqueue for invalid event - Type: {EventType}, EntityId: {EntityId}, TableName: {TableName}, GraphName: {GraphName}",
                 currentEvent?.EventType,
                 currentEvent?.Id,
@@ -618,14 +636,8 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
             }
         }
 
-        // For Update and Delete, OldValue must be present
-        if (
-            eventData.EventType
-            is EventType.TwinUpdate
-                or EventType.TwinDelete
-                or EventType.RelationshipUpdate
-                or EventType.RelationshipDelete
-        )
+        // For Update, OldValue must be present
+        if (eventData.EventType is EventType.TwinUpdate or EventType.RelationshipUpdate)
         {
             if (eventData.OldValue == null)
             {
