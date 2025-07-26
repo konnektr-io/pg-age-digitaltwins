@@ -361,6 +361,103 @@ public class CloudEventFactoryTests
     }
 
     [Fact]
+    public void CreateDataHistoryEvents_HandlesRelationshipCreateEventWithProperty()
+    {
+        // Arrange
+        var eventData = new EventData(Guid.NewGuid().ToString(), "digitaltwins", "has")
+        {
+            EventType = EventType.RelationshipCreate,
+            NewValue = JsonNode
+                .Parse(
+                    "{\"$relationshipId\": \"rel1\", \"$sourceId\": \"twin1\", \"$targetId\": \"twin2\", \"$relationshipName\": \"has\", \"diameter\": 6.0}"
+                )!
+                .AsObject(),
+            OldValue = new JsonObject(),
+            Timestamp = DateTime.UtcNow,
+        };
+        var source = new Uri("http://example.com");
+
+        // Act
+        var result = CloudEventFactory.CreateDataHistoryEvents(eventData, source, []);
+
+        // Assert
+        Assert.Equal(2, result.Count);
+
+        var lifeCycleEvent = result.FirstOrDefault(ce =>
+            ce.Type == "Konnektr.DigitalTwins.Relationship.Lifecycle"
+        );
+        Assert.NotNull(lifeCycleEvent);
+        Assert.Equal("Konnektr.DigitalTwins.Relationship.Lifecycle", lifeCycleEvent.Type);
+        Assert.Equal("application/json", lifeCycleEvent.DataContentType);
+        Assert.Equal("twin1/relationships/rel1", lifeCycleEvent.Subject);
+        Assert.Equal(source, lifeCycleEvent.Source);
+        var lifeCycleData = lifeCycleEvent.Data as JsonObject;
+        Assert.NotNull(lifeCycleData);
+        Assert.Equal("twin1", lifeCycleData["source"]?.ToString());
+        Assert.Equal("twin2", lifeCycleData["target"]?.ToString());
+        Assert.Equal("has", lifeCycleData["name"]?.ToString());
+        Assert.Equal("rel1", lifeCycleData["relationshipId"]?.ToString());
+        Assert.Equal("Create", lifeCycleData["action"]?.ToString());
+
+        var propertyEvent = result.FirstOrDefault(ce =>
+            ce.Type == "Konnektr.DigitalTwins.Property.Event"
+        );
+        Assert.NotNull(propertyEvent);
+        Assert.Equal("Konnektr.DigitalTwins.Property.Event", propertyEvent.Type);
+        Assert.Equal("application/json", propertyEvent.DataContentType);
+        Assert.Equal("twin1/relationships/rel1", propertyEvent.Subject);
+        var propertyData = propertyEvent.Data as JsonObject;
+        Assert.NotNull(propertyData);
+        Assert.Equal("twin1", propertyData["id"]?.ToString());
+        Assert.Equal("diameter", propertyData["key"]?.ToString());
+        Assert.Equal("6.0", propertyData["value"]?.ToString());
+        Assert.Equal("Create", propertyData["action"]?.ToString());
+        Assert.Equal("rel1", propertyData["relationshipId"]?.ToString());
+        Assert.Equal("twin2", propertyData["relationshipTarget"]?.ToString());
+    }
+
+    [Fact]
+    public void CreateDataHistoryEvents_HandlesRelationshipUpdateEvent()
+    {
+        // Arrange
+        var eventData = new EventData(Guid.NewGuid().ToString(), "digitaltwins", "has")
+        {
+            EventType = EventType.RelationshipUpdate,
+            OldValue = JsonNode
+                .Parse(
+                    "{\"$relationshipId\": \"rel1\", \"$sourceId\": \"twin1\", \"$targetId\": \"twin2\", \"$relationshipName\": \"has\", \"diameter\": 6.0}"
+                )!
+                .AsObject(),
+            NewValue = JsonNode
+                .Parse(
+                    "{\"$relationshipId\": \"rel1\", \"$sourceId\": \"twin1\", \"$targetId\": \"twin2\", \"$relationshipName\": \"has\", \"diameter\": 5.0}"
+                )!
+                .AsObject(),
+            Timestamp = DateTime.UtcNow,
+        };
+        var source = new Uri("http://example.com");
+
+        // Act
+        var result = CloudEventFactory.CreateDataHistoryEvents(eventData, source, []);
+
+        // Assert
+        Assert.Single(result);
+        var cloudEvent = result[0];
+        Assert.Equal("Konnektr.DigitalTwins.Property.Event", cloudEvent.Type);
+        Assert.Equal("application/json", cloudEvent.DataContentType);
+        Assert.Equal("twin1/relationships/rel1", cloudEvent.Subject);
+        Assert.Equal(source, cloudEvent.Source);
+        var data = cloudEvent.Data as JsonObject;
+        Assert.NotNull(data);
+        Assert.Equal("twin1", data["id"]?.ToString());
+        Assert.Equal("diameter", data["key"]?.ToString());
+        Assert.Equal("5.0", data["value"]?.ToString());
+        Assert.Equal("Update", data["action"]?.ToString());
+        Assert.Equal("rel1", data["relationshipId"]?.ToString());
+        Assert.Equal("twin2", data["relationshipTarget"]?.ToString());
+    }
+
+    [Fact]
     public void CreateDigitalTwinChangeNotificationEvents_SameValueUpdate_IncludesPropertyInPatch()
     {
         // Arrange - Property 'temperature' updated with same value, but lastUpdateTime changed

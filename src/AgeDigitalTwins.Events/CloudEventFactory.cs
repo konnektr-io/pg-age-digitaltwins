@@ -474,7 +474,10 @@ public static class CloudEventFactory
         ArgumentNullException.ThrowIfNull(eventData);
         if (
             eventData == null
-            || eventData.EventType != EventType.TwinUpdate
+            || (
+                eventData.EventType != EventType.TwinUpdate
+                && eventData.EventType != EventType.RelationshipUpdate
+            )
             || eventData.NewValue == null
             || eventData.OldValue == null
         )
