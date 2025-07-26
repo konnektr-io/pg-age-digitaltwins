@@ -165,6 +165,11 @@ namespace AgeDigitalTwins.Test
                         ]
                     },
                     {
+                        ""@type"": ""Component"",
+                        ""name"": ""deepestCrater"",
+                        ""schema"": ""dtmi:com:contoso:Crater;1""
+                    },
+                    {
                         ""@type"": ""Property"",
                         ""name"": ""hasLife"",
                         ""schema"": ""boolean""
