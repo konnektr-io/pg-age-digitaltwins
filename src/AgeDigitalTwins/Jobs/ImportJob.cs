@@ -142,25 +142,7 @@ public static class StreamingImportJob
             );
 
             // Determine final status
-            if (result.ErrorCount == 0)
-            {
-                result.Status = JobStatus.Succeeded;
-            }
-            else if (
-                result.ErrorCount > 0
-                && (
-                    result.ModelsCreated > 0
-                    || result.TwinsCreated > 0
-                    || result.RelationshipsCreated > 0
-                )
-            )
-            {
-                result.Status = JobStatus.PartiallySucceeded;
-            }
-            else
-            {
-                result.Status = JobStatus.Failed;
-            }
+            DetermineFinalJobStatus(result);
 
             result.FinishedDateTime = DateTime.UtcNow;
             result.LastActionDateTime = DateTime.UtcNow;
@@ -191,16 +173,20 @@ public static class StreamingImportJob
         }
         catch (Exception ex)
         {
-            result.Status = JobStatus.Failed;
+            // Don't change status to Failed here - let the final status determination logic handle it
+            // The job should remain as Running until it's actually finished processing
             result.FinishedDateTime = DateTime.UtcNow;
             result.LastActionDateTime = DateTime.UtcNow;
             result.ErrorCount++;
+
+            // Determine final status based on results
+            DetermineFinalJobStatus(result);
 
             await LogAsync(
                 outputStream,
                 jobId,
                 "Error",
-                new { error = ex.Message },
+                new { error = ex.Message, finalStatus = result.Status.ToString() },
                 cancellationToken
             );
 
@@ -592,30 +578,6 @@ public static class StreamingImportJob
         }
     }
 
-    private static async Task LogAsync(
-        Stream outputStream,
-        string jobId,
-        string logType,
-        object details,
-        CancellationToken cancellationToken
-    )
-    {
-        var logEntry = new
-        {
-            timestamp = DateTime.UtcNow.ToString("o"),
-            jobId,
-            jobType = "Import",
-            logType,
-            details,
-        };
-
-        var logJson = JsonSerializer.Serialize(logEntry, JsonOptions);
-        var logBytes = Encoding.UTF8.GetBytes(logJson + Environment.NewLine);
-
-        await outputStream.WriteAsync(logBytes, cancellationToken);
-        await outputStream.FlushAsync(cancellationToken);
-    }
-
     private static async Task ProcessTwinsBatchAsync(
         AgeDigitalTwinsClient client,
         NpgsqlConnection connection,
@@ -793,5 +755,56 @@ public static class StreamingImportJob
                 cancellationToken
             );
         }
+    }
+
+    /// <summary>
+    /// Determines the final job status based on the results.
+    /// </summary>
+    /// <param name="result">The job result to update.</param>
+    private static void DetermineFinalJobStatus(JobRecord result)
+    {
+        if (result.ErrorCount == 0)
+        {
+            result.Status = JobStatus.Succeeded;
+        }
+        else if (
+            result.ErrorCount > 0
+            && (
+                result.ModelsCreated > 0
+                || result.TwinsCreated > 0
+                || result.RelationshipsCreated > 0
+            )
+        )
+        {
+            result.Status = JobStatus.PartiallySucceeded;
+        }
+        else
+        {
+            result.Status = JobStatus.Failed;
+        }
+    }
+
+    private static async Task LogAsync(
+        Stream outputStream,
+        string jobId,
+        string logType,
+        object details,
+        CancellationToken cancellationToken
+    )
+    {
+        var logEntry = new
+        {
+            timestamp = DateTime.UtcNow.ToString("o"),
+            jobId,
+            jobType = "Import",
+            logType,
+            details,
+        };
+
+        var logJson = JsonSerializer.Serialize(logEntry, JsonOptions);
+        var logBytes = Encoding.UTF8.GetBytes(logJson + Environment.NewLine);
+
+        await outputStream.WriteAsync(logBytes, cancellationToken);
+        await outputStream.FlushAsync(cancellationToken);
     }
 }
