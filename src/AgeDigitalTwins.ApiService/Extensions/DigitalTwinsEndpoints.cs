@@ -1,5 +1,4 @@
 using System.Text.Json;
-using AgeDigitalTwins;
 using AgeDigitalTwins.ApiService.Helpers;
 using Json.Patch;
 using Microsoft.AspNetCore.Authorization;

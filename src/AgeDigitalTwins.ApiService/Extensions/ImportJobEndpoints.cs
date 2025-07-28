@@ -24,6 +24,7 @@ public static class ImportJobEndpoints
 
         // Create/Start Import Job
         jobs.MapPut("/{id}", CreateImportJobAsync)
+            .RequireAuthorization()
             .WithName("CreateImportJob")
             .WithSummary("Create and start a new import job")
             .WithDescription(
@@ -40,10 +41,12 @@ public static class ImportJobEndpoints
             .WithSummary("Get import job by ID")
             .WithDescription("Retrieves the status and details of an import job by its ID.")
             .Produces<ImportJob>()
-            .ProducesProblem(StatusCodes.Status404NotFound);
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .RequireAuthorization();
 
         // List Import Jobs
         jobs.MapGet("/", ListImportJobsAsync)
+            .RequireAuthorization()
             .WithName("ListImportJobs")
             .WithSummary("List all import jobs")
             .WithDescription("Retrieves a list of all import jobs with optional pagination.")
@@ -51,6 +54,7 @@ public static class ImportJobEndpoints
 
         // Cancel Import Job
         jobs.MapPost("/{id}/cancel", CancelImportJobAsync)
+            .RequireAuthorization()
             .WithName("CancelImportJob")
             .WithSummary("Cancel an import job")
             .WithDescription(
@@ -62,6 +66,7 @@ public static class ImportJobEndpoints
 
         // Delete Import Job
         jobs.MapDelete("/{id}", DeleteImportJobAsync)
+            .RequireAuthorization()
             .WithName("DeleteImportJob")
             .WithSummary("Delete an import job")
             .WithDescription(
@@ -72,6 +77,7 @@ public static class ImportJobEndpoints
 
         // Resume Import Job
         jobs.MapPost("/{id}/resume", ResumeImportJobAsync)
+            .RequireAuthorization()
             .WithName("ResumeImportJob")
             .WithSummary("Resume an import job")
             .WithDescription(
