@@ -52,8 +52,9 @@ public class MqttEventSink : IEventSink, IDisposable
                 );
 
                 await _mqttClient.PublishAsync(message);
-                _logger.LogDebug(
-                    "Published message of type {EventType} with source {EventSource} to sink '{SinkName}' on topic '{Topic}'",
+                _logger.LogInformation(
+                    "Published message {MessageId} of type {EventType} with source {EventSource} to sink '{SinkName}' on topic '{Topic}'",
+                    cloudEvent.Id,
                     cloudEvent.Type,
                     cloudEvent.Source,
                     Name,

@@ -180,13 +180,20 @@ public class KustoEventSink : IEventSink, IDisposable
                 var eventType = eventGroup.Key;
                 if (eventType is null)
                 {
-                    _logger.LogWarning("Event type must be specified");
+                    _logger.LogWarning(
+                        "Skipping event for sink '{SinkName}': Event type is null",
+                        Name
+                    );
                     continue;
                 }
 
                 if (!_ingestionProperties.TryGetValue(eventType, out var ingestionProperties))
                 {
-                    _logger.LogWarning("Unsupported event type: {EventType}", eventType);
+                    _logger.LogWarning(
+                        "Skipping event for sink '{SinkName}': Unsupported event type: {EventType}",
+                        Name,
+                        eventType
+                    );
                     continue;
                 }
 
@@ -197,7 +204,10 @@ public class KustoEventSink : IEventSink, IDisposable
                     {
                         if (cloudEvent.Data is not JsonObject data)
                         {
-                            _logger.LogError("Data must be a JSON object");
+                            _logger.LogError(
+                                "Skipping event for sink '{SinkName}': Data must be a JSON object",
+                                Name
+                            );
                             continue;
                         }
 
@@ -233,7 +243,7 @@ public class KustoEventSink : IEventSink, IDisposable
                             );
                         }
                     });
-                _logger.LogDebug(
+                _logger.LogInformation(
                     "Ingested {EventCount} event(s) of type {EventType} with source {EventSource} to Kusto sink '{SinkName}'",
                     eventGroup.Count(),
                     eventType,
