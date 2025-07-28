@@ -578,30 +578,6 @@ public static class StreamingImportJob
         }
     }
 
-    private static async Task LogAsync(
-        Stream outputStream,
-        string jobId,
-        string logType,
-        object details,
-        CancellationToken cancellationToken
-    )
-    {
-        var logEntry = new
-        {
-            timestamp = DateTime.UtcNow.ToString("o"),
-            jobId,
-            jobType = "Import",
-            logType,
-            details,
-        };
-
-        var logJson = JsonSerializer.Serialize(logEntry, JsonOptions);
-        var logBytes = Encoding.UTF8.GetBytes(logJson + Environment.NewLine);
-
-        await outputStream.WriteAsync(logBytes, cancellationToken);
-        await outputStream.FlushAsync(cancellationToken);
-    }
-
     private static async Task ProcessTwinsBatchAsync(
         AgeDigitalTwinsClient client,
         NpgsqlConnection connection,
@@ -806,5 +782,29 @@ public static class StreamingImportJob
         {
             result.Status = JobStatus.Failed;
         }
+    }
+
+    private static async Task LogAsync(
+        Stream outputStream,
+        string jobId,
+        string logType,
+        object details,
+        CancellationToken cancellationToken
+    )
+    {
+        var logEntry = new
+        {
+            timestamp = DateTime.UtcNow.ToString("o"),
+            jobId,
+            jobType = "Import",
+            logType,
+            details,
+        };
+
+        var logJson = JsonSerializer.Serialize(logEntry, JsonOptions);
+        var logBytes = Encoding.UTF8.GetBytes(logJson + Environment.NewLine);
+
+        await outputStream.WriteAsync(logBytes, cancellationToken);
+        await outputStream.FlushAsync(cancellationToken);
     }
 }
