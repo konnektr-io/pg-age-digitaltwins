@@ -24,9 +24,16 @@ public class DefaultBlobStorageService(ILogger<DefaultBlobStorageService> logger
 
     public Task<Stream> GetWriteStreamAsync(Uri blobUri)
     {
+        // Default behavior is to overwrite for backward compatibility
+        return GetWriteStreamAsync(blobUri, appendMode: false);
+    }
+
+    public Task<Stream> GetWriteStreamAsync(Uri blobUri, bool appendMode)
+    {
         _logger.LogWarning(
-            "Blob URI access not yet implemented for URI scheme. Using memory stream: {BlobUri}",
-            blobUri
+            "Blob URI access not yet implemented for URI scheme. Using memory stream: {BlobUri} (append mode: {AppendMode})",
+            blobUri,
+            appendMode
         );
 
         // For testing purposes, return a memory stream

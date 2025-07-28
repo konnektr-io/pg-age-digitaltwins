@@ -21,4 +21,12 @@ public interface IBlobStorageService
     /// <param name="blobUri">The blob URI.</param>
     /// <returns>A stream for writing to the blob.</returns>
     Task<Stream> GetWriteStreamAsync(Uri blobUri);
+
+    /// <summary>
+    /// Gets a write stream to a blob URI with specified write mode.
+    /// </summary>
+    /// <param name="blobUri">The blob URI.</param>
+    /// <param name="appendMode">If true, appends to existing blob; if false, overwrites the blob.</param>
+    /// <returns>A stream for writing to the blob.</returns>
+    Task<Stream> GetWriteStreamAsync(Uri blobUri, bool appendMode);
 }

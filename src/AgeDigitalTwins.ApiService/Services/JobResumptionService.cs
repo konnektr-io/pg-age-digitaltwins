@@ -117,9 +117,11 @@ public class JobResumptionService : BackgroundService
                                     await _blobStorageService.GetReadStreamAsync(
                                         new Uri(inputBlobUri)
                                     );
+                                // For job resumption, use append mode to continue writing where we left off
                                 await using var outputStream =
                                     await _blobStorageService.GetWriteStreamAsync(
-                                        new Uri(outputBlobUri)
+                                        new Uri(outputBlobUri),
+                                        appendMode: true
                                     );
 
                                 // Resume the job execution
