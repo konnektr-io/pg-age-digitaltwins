@@ -99,6 +99,14 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                 {
                     try
                     {
+                        // Ensure replication slot exists, create if missing
+                        await EnsureReplicationSlotExistsAsync(cancellationToken);
+
+                        // Start the replication process
+                        _logger.LogInformation(
+                            "Starting replication on slot {ReplicationSlot}",
+                            _replicationSlot
+                        );
                         await StartReplicationAsync(cancellationToken);
                     }
                     catch (Exception ex)
@@ -646,5 +654,67 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Ensures the replication slot exists, creating it if necessary.
+    /// This handles cases where failover occurred and the slot doesn't exist on the new primary.
+    /// </summary>
+    private async Task EnsureReplicationSlotExistsAsync(
+        CancellationToken cancellationToken = default
+    )
+    {
+        try
+        {
+            // Check if replication slot exists
+            using var checkConn = new NpgsqlConnection(_connectionString);
+            await checkConn.OpenAsync(cancellationToken);
+
+            using var cmd = new NpgsqlCommand(
+                "SELECT COUNT(*) FROM pg_replication_slots WHERE slot_name = @slotName",
+                checkConn
+            );
+            cmd.Parameters.AddWithValue("slotName", _replicationSlot);
+
+            var count = (long)(await cmd.ExecuteScalarAsync(cancellationToken) ?? 0);
+
+            if (count == 0)
+            {
+                _logger.LogWarning(
+                    "Replication slot {ReplicationSlot} does not exist. Creating it now...",
+                    _replicationSlot
+                );
+
+                // Create the replication slot
+                using var createCmd = new NpgsqlCommand(
+                    "SELECT * FROM pg_create_logical_replication_slot(@slotName, 'pgoutput')",
+                    checkConn
+                );
+                createCmd.Parameters.AddWithValue("slotName", _replicationSlot);
+
+                await createCmd.ExecuteNonQueryAsync(cancellationToken);
+
+                _logger.LogInformation(
+                    "Successfully created replication slot {ReplicationSlot}",
+                    _replicationSlot
+                );
+            }
+            else
+            {
+                _logger.LogDebug(
+                    "Replication slot {ReplicationSlot} already exists",
+                    _replicationSlot
+                );
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Failed to ensure replication slot {ReplicationSlot} exists",
+                _replicationSlot
+            );
+            throw;
+        }
     }
 }
