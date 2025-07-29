@@ -1,8 +1,5 @@
-using System.ComponentModel;
 using System.Text.Json;
-using AgeDigitalTwins;
 using Json.Patch;
-using ModelContextProtocol.Server;
 
 namespace AgeDigitalTwins.MCPServerSSE.Tools;
 

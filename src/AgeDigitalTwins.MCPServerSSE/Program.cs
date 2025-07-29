@@ -1,9 +1,11 @@
 using AgeDigitalTwins;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using ModelContextProtocol.AspNetCore.Authentication;
 using Npgsql;
 using Npgsql.Age;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddMcpServer().WithToolsFromAssembly();
 
 // Add Npgsql multihost data source with custom settings.
 builder.AddNpgsqlMultihostDataSource(
@@ -41,6 +43,59 @@ builder.Services.AddSingleton(sp =>
     return new AgeDigitalTwinsClient(dataSource, graphName);
 });
 
+// Add authentication only if the environment variable is set
+var enableAuthentication = builder.Configuration.GetValue<bool>("Authentication:Enabled");
+
+if (enableAuthentication)
+{
+    builder
+        .Services.AddAuthentication(options =>
+        {
+            options.DefaultChallengeScheme = McpAuthenticationDefaults.AuthenticationScheme;
+            options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+        })
+        .AddJwtBearer(jwtOptions =>
+        {
+            string? metadataAddress = builder.Configuration["Authentication:MetadataAddress"];
+            if (!string.IsNullOrEmpty(metadataAddress))
+            {
+                jwtOptions.MetadataAddress = metadataAddress;
+            }
+            jwtOptions.Authority = builder.Configuration["Authentication:Authority"];
+            jwtOptions.Audience = builder.Configuration["Authentication:Audience"];
+            jwtOptions.TokenValidationParameters = new TokenValidationParameters
+            {
+                ValidateIssuer = true,
+                ValidateAudience = true,
+                ValidateIssuerSigningKey = true,
+                ValidIssuer = builder.Configuration["Authentication:Issuer"],
+            };
+
+            jwtOptions.MapInboundClaims = false;
+        })
+        .AddMcp();
+
+    builder.Services.AddAuthorization();
+}
+
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddMcpServer().WithToolsFromAssembly().WithHttpTransport();
+
 var app = builder.Build();
-app.MapMcp();
+
+if (enableAuthentication)
+{
+    app.UseAuthentication();
+    app.UseAuthorization();
+}
+
+if (enableAuthentication)
+{
+    app.MapMcp().RequireAuthorization();
+}
+else
+{
+    app.MapMcp();
+}
+
 app.Run();

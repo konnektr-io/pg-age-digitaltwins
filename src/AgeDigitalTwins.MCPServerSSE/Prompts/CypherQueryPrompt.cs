@@ -1,5 +1,3 @@
-using ModelContextProtocol.Server;
-
 namespace AgeDigitalTwins.MCPServerSSE.Prompts;
 
 [McpServerPromptType]
