@@ -125,14 +125,8 @@ public static class StreamingImportJob
                 await ValidateStreamHeaderAsync(inputStream, cancellationToken);
             }
 
-            // Open a single connection for the entire import job
-            await using var connection = await client
-                .GetDataSource()
-                .OpenConnectionAsync(TargetSessionAttributes.ReadWrite, cancellationToken);
-
             await ProcessStreamWithCheckpointAsync(
                 client,
-                connection,
                 inputStream,
                 outputStream,
                 jobId,
@@ -252,7 +246,6 @@ public static class StreamingImportJob
 
     private static async Task ProcessStreamWithCheckpointAsync(
         AgeDigitalTwinsClient client,
-        NpgsqlConnection connection,
         Stream inputStream,
         Stream outputStream,
         string jobId,
@@ -291,6 +284,11 @@ public static class StreamingImportJob
         const int checkpointInterval = 50;
         int itemsSinceLastCheckpoint = 0;
 
+        // Open a single connection for the entire import job
+        await using var connection = await client
+            .GetDataSource()
+            .OpenConnectionAsync(TargetSessionAttributes.ReadWrite, cancellationToken);
+
         string? line;
         while ((line = await reader.ReadLineAsync(cancellationToken)) != null)
         {
@@ -301,6 +299,16 @@ public static class StreamingImportJob
 
             try
             {
+                if (connection.State == ConnectionState.Closed)
+                {
+                    await connection.OpenAsync(cancellationToken);
+                }
+                else if (connection.State == ConnectionState.Broken)
+                {
+                    await connection.CloseAsync();
+                    await connection.OpenAsync(cancellationToken);
+                }
+
                 var jsonNode = JsonNode.Parse(line);
 
                 // Check if this is a section header
