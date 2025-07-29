@@ -608,9 +608,6 @@ public static class StreamingImportJob
         CancellationToken cancellationToken
     )
     {
-        if (twinsBatch.Count == 0)
-            return;
-
         try
         {
             await LogAsync(
