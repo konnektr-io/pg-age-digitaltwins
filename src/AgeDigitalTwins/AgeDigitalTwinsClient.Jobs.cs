@@ -206,6 +206,7 @@ public partial class AgeDigitalTwinsClient
                                         relationshipsCreated = result.RelationshipsCreated,
                                         errorCount = result.ErrorCount,
                                     },
+                                    errorData: result.Error,
                                     cancellationToken: cancellationToken
                                 );
                             }
@@ -216,7 +217,16 @@ public partial class AgeDigitalTwinsClient
                             await JobService.UpdateJobStatusAsync(
                                 jobId,
                                 JobStatus.Failed,
-                                errorData: new { error = ex.Message },
+                                errorData: new ImportJobError
+                                {
+                                    Code = ex.GetType().Name,
+                                    Message = ex.Message,
+                                    Details = new Dictionary<string, object>
+                                    {
+                                        { "stackTrace", ex.StackTrace ?? string.Empty },
+                                        { "timestamp", DateTime.UtcNow.ToString("o") },
+                                    }
+                                },
                                 cancellationToken: cancellationToken
                             );
                         }
@@ -263,6 +273,7 @@ public partial class AgeDigitalTwinsClient
                                 relationshipsCreated = result.RelationshipsCreated,
                                 errorCount = result.ErrorCount,
                             },
+                            errorData: result.Error,
                             cancellationToken: cancellationToken
                         );
 
@@ -294,6 +305,7 @@ public partial class AgeDigitalTwinsClient
                             relationshipsCreated = result.RelationshipsCreated,
                             errorCount = result.ErrorCount,
                         },
+                        errorData: result.Error,
                         cancellationToken: cancellationToken
                     );
 
@@ -309,7 +321,16 @@ public partial class AgeDigitalTwinsClient
             await JobService.UpdateJobStatusAsync(
                 jobId,
                 JobStatus.Failed,
-                errorData: new { error = ex.Message },
+                errorData: new ImportJobError
+                {
+                    Code = ex.GetType().Name,
+                    Message = ex.Message,
+                    Details = new Dictionary<string, object>
+                    {
+                        { "stackTrace", ex.StackTrace ?? string.Empty },
+                        { "timestamp", DateTime.UtcNow.ToString("o") },
+                    }
+                },
                 cancellationToken: cancellationToken
             );
 
@@ -581,6 +602,7 @@ public partial class AgeDigitalTwinsClient
         );
 
         // Update job record with final result
+        // Update job record with final result
         await JobService.UpdateJobStatusAsync(
             jobId,
             result.Status,
@@ -593,6 +615,7 @@ public partial class AgeDigitalTwinsClient
                 resumed = true,
                 resumedAt = DateTime.UtcNow,
             },
+            errorData: result.Error,
             cancellationToken: cancellationToken
         );
 

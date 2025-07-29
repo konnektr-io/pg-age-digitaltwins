@@ -179,6 +179,18 @@ public static class StreamingImportJob
             result.LastActionDateTime = DateTime.UtcNow;
             result.ErrorCount++;
 
+            // Set the error information in the result
+            result.Error = new ImportJobError
+            {
+                Code = ex.GetType().Name,
+                Message = ex.Message,
+                Details = new Dictionary<string, object>
+                {
+                    { "stackTrace", ex.StackTrace ?? string.Empty },
+                    { "timestamp", DateTime.UtcNow.ToString("o") },
+                }
+            };
+
             // Determine final status based on results
             DetermineFinalJobStatus(result);
 
