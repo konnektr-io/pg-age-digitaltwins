@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
+using AgeDigitalTwins.Exceptions;
 using AgeDigitalTwins.Models;
 using Npgsql;
 
@@ -165,6 +166,41 @@ public static class StreamingImportJob
             // Always re-throw validation exceptions regardless of ContinueOnFailure
             throw;
         }
+        catch (DatabaseConnectivityException ex)
+        {
+            // Database connectivity issues should keep the job in Running status for resumption
+            result.LastActionDateTime = DateTime.UtcNow;
+            // Do NOT set FinishedDateTime - job is not finished, just paused
+            // Do NOT change status from Running - this allows JobResumptionService to pick it up
+
+            // Set the error information but don't count it as a processing error
+            result.Error = new ImportJobError
+            {
+                Code = ex.GetType().Name,
+                Message = ex.Message,
+                Details = new Dictionary<string, object>
+                {
+                    { "connectivityIssue", true },
+                    { "resumable", true },
+                    { "timestamp", DateTime.UtcNow.ToString("o") },
+                },
+            };
+
+            await LogAsync(
+                outputStream,
+                jobId,
+                "Warning",
+                new
+                {
+                    error = ex.Message,
+                    status = "Suspended due to connectivity issues",
+                    resumable = true,
+                },
+                cancellationToken
+            );
+
+            return result; // Return job with Running status for resumption
+        }
         catch (Exception ex)
         {
             // Don't change status to Failed here - let the final status determination logic handle it
@@ -299,15 +335,8 @@ public static class StreamingImportJob
 
             try
             {
-                if (connection.State == ConnectionState.Closed)
-                {
-                    await connection.OpenAsync(cancellationToken);
-                }
-                else if (connection.State == ConnectionState.Broken)
-                {
-                    await connection.CloseAsync();
-                    await connection.OpenAsync(cancellationToken);
-                }
+                // Check and restore connection health before processing each line
+                await EnsureConnectionHealthyAsync(connection, cancellationToken);
 
                 var jsonNode = JsonNode.Parse(line);
 
@@ -468,6 +497,34 @@ public static class StreamingImportJob
                     await client.JobService.SaveCheckpointAsync(checkpoint, cancellationToken);
                     itemsSinceLastCheckpoint = 0;
                 }
+            }
+            catch (DatabaseConnectivityException ex)
+            {
+                // Database connectivity issues should stop processing and allow job resumption
+                await LogAsync(
+                    outputStream,
+                    jobId,
+                    "Warning",
+                    new
+                    {
+                        section = currentSection.ToString(),
+                        issue = "Database connectivity problem detected",
+                        error = ex.Message,
+                        lineNumber = reader.LineNumber,
+                        action = "Stopping job for resumption when database is available",
+                    },
+                    cancellationToken
+                );
+
+                // Save current progress before stopping
+                checkpoint.LineNumber = reader.LineNumber;
+                checkpoint.UpdateProgress(result);
+
+                // Don't try to save checkpoint to database since we have connectivity issues
+                // The job will remain in Running status and be resumed by JobResumptionService
+
+                // Re-throw to stop processing but keep job status as Running
+                throw;
             }
             catch (Exception ex)
             {
@@ -823,5 +880,98 @@ public static class StreamingImportJob
 
         await outputStream.WriteAsync(logBytes, cancellationToken);
         await outputStream.FlushAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Ensures the database connection is healthy and ready for operations.
+    /// Attempts to restore connection if it's in a bad state.
+    /// Throws DatabaseConnectivityException if connection cannot be restored.
+    /// </summary>
+    private static async Task EnsureConnectionHealthyAsync(
+        NpgsqlConnection connection,
+        CancellationToken cancellationToken
+    )
+    {
+        // If connection is already open and functioning, no need to do anything
+        if (connection.State == ConnectionState.Open)
+        {
+            return;
+        }
+
+        // Handle closed connection
+        if (connection.State == ConnectionState.Closed)
+        {
+            try
+            {
+                await Task.Delay(60000, cancellationToken); // Wait before retrying
+                await connection.OpenAsync(cancellationToken);
+
+                // Verify the connection is actually open after the attempt
+                if (connection.State != ConnectionState.Open)
+                {
+                    throw new DatabaseConnectivityException(
+                        $"Failed to open database connection. Connection state after retry: {connection.State}"
+                    );
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                throw; // Let cancellation bubble up
+            }
+            catch (Exception ex) when (!(ex is DatabaseConnectivityException))
+            {
+                throw new DatabaseConnectivityException(
+                    "Failed to open database connection due to underlying connectivity issue",
+                    ex
+                );
+            }
+        }
+        // Handle broken connection
+        else if (connection.State == ConnectionState.Broken)
+        {
+            try
+            {
+                await connection.CloseAsync();
+                await Task.Delay(60000, cancellationToken); // Wait before retrying
+                await connection.OpenAsync(cancellationToken);
+
+                // Verify the connection is actually open after the attempt
+                if (connection.State != ConnectionState.Open)
+                {
+                    throw new DatabaseConnectivityException(
+                        $"Failed to restore broken database connection. Connection state after retry: {connection.State}"
+                    );
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                throw; // Let cancellation bubble up
+            }
+            catch (Exception ex) when (!(ex is DatabaseConnectivityException))
+            {
+                throw new DatabaseConnectivityException(
+                    "Failed to restore broken database connection due to underlying connectivity issue",
+                    ex
+                );
+            }
+        }
+        // Handle other potentially problematic states
+        else if (
+            connection.State == ConnectionState.Connecting
+            || connection.State == ConnectionState.Executing
+        )
+        {
+            // These states might be temporary, but if we're here it suggests something is wrong
+            // Wait a bit to see if the state resolves itself
+            await Task.Delay(5000, cancellationToken);
+
+            // If still not open, treat as connectivity issue
+            if (connection.State != ConnectionState.Open)
+            {
+                throw new DatabaseConnectivityException(
+                    $"Database connection is in an unstable state: {connection.State}. Cannot proceed with processing."
+                );
+            }
+        }
     }
 }
