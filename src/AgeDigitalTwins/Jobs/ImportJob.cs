@@ -188,7 +188,7 @@ public static class StreamingImportJob
                 {
                     { "stackTrace", ex.StackTrace ?? string.Empty },
                     { "timestamp", DateTime.UtcNow.ToString("o") },
-                }
+                },
             };
 
             // Determine final status based on results

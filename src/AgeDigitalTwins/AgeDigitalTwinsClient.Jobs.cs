@@ -225,7 +225,7 @@ public partial class AgeDigitalTwinsClient
                                     {
                                         { "stackTrace", ex.StackTrace ?? string.Empty },
                                         { "timestamp", DateTime.UtcNow.ToString("o") },
-                                    }
+                                    },
                                 },
                                 cancellationToken: cancellationToken
                             );
@@ -329,7 +329,7 @@ public partial class AgeDigitalTwinsClient
                     {
                         { "stackTrace", ex.StackTrace ?? string.Empty },
                         { "timestamp", DateTime.UtcNow.ToString("o") },
-                    }
+                    },
                 },
                 cancellationToken: cancellationToken
             );
