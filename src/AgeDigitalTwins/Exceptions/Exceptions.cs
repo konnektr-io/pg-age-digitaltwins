@@ -103,3 +103,12 @@ public class InvalidAdtQueryException : AgeDigitalTwinsException
         StatusCode = HttpStatusCode.BadRequest;
     }
 }
+
+public class DatabaseConnectivityException : Exception
+{
+    public DatabaseConnectivityException(string message)
+        : base(message) { }
+
+    public DatabaseConnectivityException(string message, Exception innerException)
+        : base(message, innerException) { }
+}
