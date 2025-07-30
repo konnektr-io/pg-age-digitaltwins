@@ -22,7 +22,8 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
         string replicationSlot,
         string? source,
         EventSinkFactory eventSinkFactory,
-        ILogger<AgeDigitalTwinsReplication> logger
+        ILogger<AgeDigitalTwinsReplication> logger,
+        int maxBatchSize = 50
     )
     {
         _connectionString = connectionString;
@@ -30,6 +31,7 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
         _replicationSlot = replicationSlot;
         _eventSinkFactory = eventSinkFactory;
         _logger = logger;
+        _maxBatchSize = maxBatchSize > 0 ? maxBatchSize : 50; // Ensure positive value with fallback
 
         if (!string.IsNullOrEmpty(source))
         {
@@ -78,9 +80,9 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
     private readonly ConcurrentQueue<EventData> _eventQueue = new();
 
     /// <summary>
-    /// Maximum number of cloud events to batch together before sending to a sink.
+    /// Maximum number of event data objects to batch together before processing.
     /// </summary>
-    private const int MaxBatchSize = 50;
+    private readonly int _maxBatchSize;
 
     /// <summary>
     /// Indicates whether the replication connection is currently healthy.
@@ -568,7 +570,9 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
         while (!cancellationToken.IsCancellationRequested)
         {
             // Try to dequeue events and batch them
-            while (eventDataBatch.Count < MaxBatchSize && _eventQueue.TryDequeue(out var eventData))
+            while (
+                eventDataBatch.Count < _maxBatchSize && _eventQueue.TryDequeue(out var eventData)
+            )
             {
                 if (eventData.EventType != null)
                 {

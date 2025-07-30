@@ -31,6 +31,12 @@ builder.Services.AddSingleton(sp =>
         ?? builder.Configuration["Parameters:CustomEventSource"]
         ?? builder.Configuration["CustomEventSource"];
 
+    int maxBatchSize =
+        builder.Configuration.GetSection("Parameters").GetValue<int?>("MaxBatchSize")
+        ?? builder.Configuration.GetValue<int?>("Parameters:MaxBatchSize")
+        ?? builder.Configuration.GetValue<int?>("MaxBatchSize")
+        ?? 50;
+
     ILogger<AgeDigitalTwinsReplication> subscriptionLogger = sp.GetRequiredService<
         ILogger<AgeDigitalTwinsReplication>
     >();
@@ -44,7 +50,8 @@ builder.Services.AddSingleton(sp =>
         replicationSlot,
         source,
         eventSinkFactory,
-        subscriptionLogger
+        subscriptionLogger,
+        maxBatchSize
     );
 });
 
