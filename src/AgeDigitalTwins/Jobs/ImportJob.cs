@@ -93,13 +93,34 @@ public static class StreamingImportJob
             );
         }
 
-        // Create a timer for periodic heartbeat updates
+        // Create a cancellation token source that can be triggered by database status
+        using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var combinedToken = combinedCts.Token;
+
+        // Create a timer for periodic heartbeat updates and cancellation checks
         using var heartbeatTimer = new Timer(
             async _ =>
             {
                 try
                 {
                     await client.JobService.RenewJobLockHeartbeatAsync(jobId, cancellationToken);
+
+                    // Check if cancellation has been requested in the database
+                    var currentJob = await client.JobService.GetJobAsync(
+                        jobId,
+                        CancellationToken.None
+                    );
+                    if (currentJob?.Status == JobStatus.Cancelling)
+                    {
+                        await LogAsync(
+                            outputStream,
+                            jobId,
+                            "Info",
+                            new { status = "Cancellation detected from database" },
+                            CancellationToken.None
+                        );
+                        combinedCts.Cancel();
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -109,7 +130,7 @@ public static class StreamingImportJob
                         jobId,
                         "Warning",
                         new { warning = $"Heartbeat renewal failed: {ex.Message}" },
-                        cancellationToken
+                        CancellationToken.None
                     );
                 }
             },
@@ -123,7 +144,7 @@ public static class StreamingImportJob
             // Only validate stream header if starting from beginning
             if (checkpoint == null)
             {
-                await ValidateStreamHeaderAsync(inputStream, cancellationToken);
+                await ValidateStreamHeaderAsync(inputStream, combinedToken);
             }
 
             await ProcessStreamWithCheckpointAsync(
@@ -133,7 +154,7 @@ public static class StreamingImportJob
                 jobId,
                 result,
                 currentCheckpoint,
-                cancellationToken
+                combinedToken
             );
 
             // Determine final status
@@ -158,6 +179,75 @@ public static class StreamingImportJob
                 new { status = result.Status.ToString() },
                 cancellationToken
             );
+
+            return result;
+        }
+        catch (OperationCanceledException)
+            when (combinedToken.IsCancellationRequested
+                && !cancellationToken.IsCancellationRequested
+            )
+        {
+            // Job was cancelled via database status change
+            result.Status = JobStatus.Cancelled;
+            result.FinishedDateTime = DateTime.UtcNow;
+            result.LastActionDateTime = DateTime.UtcNow;
+
+            await LogAsync(
+                outputStream,
+                jobId,
+                "Info",
+                new { status = "Job cancelled via database request" },
+                CancellationToken.None
+            );
+
+            // Clear checkpoint since job is cancelled
+            try
+            {
+                await client.JobService.ClearCheckpointAsync(jobId, CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                await LogAsync(
+                    outputStream,
+                    jobId,
+                    "Warning",
+                    new { warning = $"Failed to clear checkpoint: {ex.Message}" },
+                    CancellationToken.None
+                );
+            }
+
+            return result;
+        }
+        catch (OperationCanceledException)
+        {
+            // Job was cancelled via the original cancellation token
+            result.Status = JobStatus.Cancelled;
+            result.FinishedDateTime = DateTime.UtcNow;
+            result.LastActionDateTime = DateTime.UtcNow;
+
+            await LogAsync(
+                outputStream,
+                jobId,
+                "Info",
+                new { status = "Job cancelled" },
+                CancellationToken.None
+            );
+
+            // Clear checkpoint since job is cancelled
+            try
+            {
+                await client.JobService.ClearCheckpointAsync(jobId, CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                await LogAsync(
+                    outputStream,
+                    jobId,
+                    "Warning",
+                    new { warning = $"Failed to clear checkpoint: {ex.Message}" },
+                    CancellationToken.None
+                );
+            }
 
             return result;
         }
@@ -236,8 +326,9 @@ public static class StreamingImportJob
         }
         finally
         {
-            // Dispose the heartbeat timer
+            // Dispose the heartbeat timer and combined cancellation token source
             heartbeatTimer?.Dispose();
+            combinedCts?.Dispose();
         }
     }
 

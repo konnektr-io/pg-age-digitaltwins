@@ -395,7 +395,9 @@ public partial class AgeDigitalTwinsClient
     {
         try
         {
-            await JobService.UpdateJobStatusAsync(jobId, JobStatus.Cancelled);
+            // Set status to Cancelling to signal the running job to stop gracefully
+            // The job itself will set the status to Cancelled when it actually stops
+            await JobService.UpdateJobStatusAsync(jobId, JobStatus.Cancelling);
             return true;
         }
         catch
