@@ -78,6 +78,11 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
     private readonly ConcurrentQueue<EventData> _eventQueue = new();
 
     /// <summary>
+    /// Maximum number of cloud events to batch together before sending to a sink.
+    /// </summary>
+    private const int MaxBatchSize = 50;
+
+    /// <summary>
     /// Indicates whether the replication connection is currently healthy.
     /// Used by health checks to determine service status.
     /// </summary>
@@ -558,82 +563,165 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
             return;
         }
 
-        while (true)
+        var eventDataBatch = new List<EventData>();
+
+        while (!cancellationToken.IsCancellationRequested)
         {
-            if (_eventQueue.TryDequeue(out var eventData) && eventData.EventType != null)
+            // Try to dequeue events and batch them
+            while (eventDataBatch.Count < MaxBatchSize && _eventQueue.TryDequeue(out var eventData))
             {
-                foreach (EventRoute route in eventRoutes)
+                if (eventData.EventType != null)
                 {
-                    try
-                    {
-                        _logger.LogDebug(
-                            "Processing {EventType} with {EventFormat} from {Source} to sink {SinkName} \n{EventData}",
-                            Enum.GetName(typeof(EventType), eventData.EventType),
-                            route.EventFormat,
-                            _sourceUri,
-                            route.SinkName,
-                            JsonSerializer.Serialize(eventData, _jsonSerializerOptions)
-                        );
-                        // Removed EventTypes filter: always process event for this route
-                        var sink = eventSinks.FirstOrDefault(s => s.Name == route.SinkName);
-                        if (sink != null)
-                        {
-                            List<CloudEvent> cloudEvents;
-                            // Get the typeMapping from the sink's EventTypeMappings property
-                            var sinkOptions = sink as SinkOptions;
-                            var typeMapping = sinkOptions?.EventTypeMappings;
-                            if (route.EventFormat == EventFormat.EventNotification)
-                            {
-                                cloudEvents = CloudEventFactory.CreateEventNotificationEvents(
-                                    eventData,
-                                    _sourceUri,
-                                    typeMapping
-                                );
-                            }
-                            else if (route.EventFormat == EventFormat.DataHistory)
-                            {
-                                cloudEvents = CloudEventFactory.CreateDataHistoryEvents(
-                                    eventData,
-                                    _sourceUri,
-                                    typeMapping
-                                );
-                            }
-                            else
-                            {
-                                _logger.LogDebug(
-                                    "Skipping event route for {SinkName} with unsupported event format {EventFormat}",
-                                    route.SinkName,
-                                    route.EventFormat
-                                );
-                                continue;
-                            }
-                            if (cloudEvents.Count == 0)
-                            {
-                                _logger.LogDebug(
-                                    "Skipping event route for {SinkName} without any events",
-                                    route.SinkName
-                                );
-                                continue;
-                            }
-                            await sink.SendEventsAsync(cloudEvents).ConfigureAwait(false);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(
-                            ex,
-                            "Error while processing event route {Route}: {Message}",
-                            JsonSerializer.Serialize(route, _jsonSerializerOptions),
-                            ex.Message
-                        );
-                    }
+                    eventDataBatch.Add(eventData);
                 }
+            }
+
+            // Process the batch if we have events
+            if (eventDataBatch.Count > 0)
+            {
+                await ProcessEventDataBatchAsync(eventDataBatch, eventSinks, eventRoutes);
+                eventDataBatch.Clear();
             }
             else
             {
-                await Task.Delay(100, cancellationToken); // Wait before checking the queue again
+                // No events to process, wait before checking again
+                await Task.Delay(100, cancellationToken);
             }
         }
+
+        // Process any remaining events when cancellation is requested
+        if (eventDataBatch.Count > 0)
+        {
+            await ProcessEventDataBatchAsync(eventDataBatch, eventSinks, eventRoutes);
+        }
+    }
+
+    private async Task ProcessEventDataBatchAsync(
+        List<EventData> eventDataBatch,
+        List<IEventSink> eventSinks,
+        List<EventRoute> eventRoutes
+    )
+    {
+        // Group cloud events by sink for efficient batch sending
+        var sinkEventGroups = new Dictionary<IEventSink, List<CloudEvent>>();
+
+        foreach (var eventData in eventDataBatch)
+        {
+            foreach (EventRoute route in eventRoutes)
+            {
+                try
+                {
+                    _logger.LogDebug(
+                        "Processing {EventType} with {EventFormat} from {Source} to sink {SinkName} \n{EventData}",
+                        Enum.GetName(typeof(EventType), eventData.EventType!),
+                        route.EventFormat,
+                        _sourceUri,
+                        route.SinkName,
+                        JsonSerializer.Serialize(eventData, _jsonSerializerOptions)
+                    );
+
+                    var sink = eventSinks.FirstOrDefault(s => s.Name == route.SinkName);
+                    if (sink == null)
+                    {
+                        continue;
+                    }
+
+                    List<CloudEvent> cloudEvents;
+                    // Get the typeMapping from the sink's EventTypeMappings property
+                    var sinkOptions = sink as SinkOptions;
+                    var typeMapping = sinkOptions?.EventTypeMappings;
+
+                    if (route.EventFormat == EventFormat.EventNotification)
+                    {
+                        cloudEvents = CloudEventFactory.CreateEventNotificationEvents(
+                            eventData,
+                            _sourceUri,
+                            typeMapping
+                        );
+                    }
+                    else if (route.EventFormat == EventFormat.DataHistory)
+                    {
+                        cloudEvents = CloudEventFactory.CreateDataHistoryEvents(
+                            eventData,
+                            _sourceUri,
+                            typeMapping
+                        );
+                    }
+                    else
+                    {
+                        _logger.LogDebug(
+                            "Skipping event route for {SinkName} with unsupported event format {EventFormat}",
+                            route.SinkName,
+                            route.EventFormat
+                        );
+                        continue;
+                    }
+
+                    if (cloudEvents.Count == 0)
+                    {
+                        _logger.LogDebug(
+                            "Skipping event route for {SinkName} without any events",
+                            route.SinkName
+                        );
+                        continue;
+                    }
+
+                    // Add cloud events to the sink's batch
+                    if (!sinkEventGroups.TryGetValue(sink, out List<CloudEvent>? value))
+                    {
+                        value = new List<CloudEvent>();
+                        sinkEventGroups[sink] = value;
+                    }
+
+                    value.AddRange(cloudEvents);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(
+                        ex,
+                        "Error while processing event route {Route}: {Message}",
+                        JsonSerializer.Serialize(route, _jsonSerializerOptions),
+                        ex.Message
+                    );
+                }
+            }
+        }
+
+        // Send all batched events to each sink
+        var sendTasks = sinkEventGroups.Select(async kvp =>
+        {
+            var sink = kvp.Key;
+            var events = kvp.Value;
+
+            try
+            {
+                _logger.LogDebug(
+                    "Sending batch of {EventCount} events to sink {SinkName}",
+                    events.Count,
+                    sink.Name
+                );
+
+                await sink.SendEventsAsync(events).ConfigureAwait(false);
+
+                _logger.LogDebug(
+                    "Successfully sent batch of {EventCount} events to sink {SinkName}",
+                    events.Count,
+                    sink.Name
+                );
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Error sending batch of {EventCount} events to sink {SinkName}: {Message}",
+                    events.Count,
+                    sink.Name,
+                    ex.Message
+                );
+            }
+        });
+
+        await Task.WhenAll(sendTasks);
     }
 
     public async ValueTask DisposeAsync()
