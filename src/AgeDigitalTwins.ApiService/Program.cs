@@ -57,10 +57,17 @@ builder.Services.AddSingleton(sp =>
         "Parameters:ModelCacheExpirationSeconds",
         10
     );
+    int defaultBatchSize = builder.Configuration.GetValue<int>("Parameters:DefaultBatchSize", 50);
+    int defaultCheckpointInterval = builder.Configuration.GetValue<int>(
+        "Parameters:DefaultCheckpointInterval",
+        50
+    );
     var options = new AgeDigitalTwinsClientOptions
     {
         GraphName = graphName,
         ModelCacheExpiration = TimeSpan.FromSeconds(modelCacheExpiration),
+        DefaultBatchSize = defaultBatchSize,
+        DefaultCheckpointInterval = defaultCheckpointInterval,
     };
     var client = new AgeDigitalTwinsClient(dataSource, options);
 
