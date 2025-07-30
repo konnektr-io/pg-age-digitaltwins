@@ -92,7 +92,11 @@ public class BackgroundJobTests : TestBase
             @"{""Section"": ""Header""}
 {""fileVersion"": ""1.0.0"", ""author"": ""test"", ""organization"": ""test""}
 {""Section"": ""Models""}
-{""@id"":""dtmi:example:Model;1"",""@type"":""Interface"",""@context"":""dtmi:dtdl:context;2""}
+{""@id"":""dtmi:example:Model1;1"",""@type"":""Interface"",""@context"":""dtmi:dtdl:context;2""}
+{""@id"":""dtmi:example:Model2;1"",""@type"":""Interface"",""@context"":""dtmi:dtdl:context;2""}
+{""@id"":""dtmi:example:Model3;1"",""@type"":""Interface"",""@context"":""dtmi:dtdl:context;2""}
+{""@id"":""dtmi:example:Model4;1"",""@type"":""Interface"",""@context"":""dtmi:dtdl:context;2""}
+{""@id"":""dtmi:example:Model5;1"",""@type"":""Interface"",""@context"":""dtmi:dtdl:context;2""}
 ";
 
         using var inputStream = new MemoryStream(Encoding.UTF8.GetBytes(testData));
