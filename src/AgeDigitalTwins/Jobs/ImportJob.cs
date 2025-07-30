@@ -39,6 +39,7 @@ public static class StreamingImportJob
         Stream outputStream,
         string jobId,
         ImportJobCheckpoint? checkpoint,
+        ImportJobOptions? options = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -141,6 +142,13 @@ public static class StreamingImportJob
 
         try
         {
+            // Use the options if provided, otherwise create default options with client defaults
+            options ??= new ImportJobOptions
+            {
+                BatchSize = client.DefaultBatchSize,
+                CheckpointInterval = client.DefaultCheckpointInterval,
+            };
+
             // Only validate stream header if starting from beginning
             if (checkpoint == null)
             {
@@ -154,6 +162,7 @@ public static class StreamingImportJob
                 jobId,
                 result,
                 currentCheckpoint,
+                options,
                 combinedToken
             );
 
@@ -378,6 +387,7 @@ public static class StreamingImportJob
         string jobId,
         JobRecord result,
         ImportJobCheckpoint checkpoint,
+        ImportJobOptions options,
         CancellationToken cancellationToken
     )
     {
@@ -405,10 +415,10 @@ public static class StreamingImportJob
         // Batch processing for twins and relationships
         List<string> twinsBatch = new();
         List<string> relationshipsBatch = new();
-        const int batchSize = 50;
+        int batchSize = options.BatchSize;
 
-        // Checkpoint save interval (save every 50 items)
-        const int checkpointInterval = 50;
+        // Checkpoint save interval
+        int checkpointInterval = options.CheckpointInterval;
         int itemsSinceLastCheckpoint = 0;
 
         // Open a single connection for the entire import job

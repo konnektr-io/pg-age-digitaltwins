@@ -192,6 +192,7 @@ public partial class AgeDigitalTwinsClient
                                     outputStream,
                                     jobId,
                                     checkpoint,
+                                    options,
                                     cancellationToken
                                 );
 
@@ -259,6 +260,7 @@ public partial class AgeDigitalTwinsClient
                             outputStream,
                             jobId,
                             checkpoint,
+                            options,
                             cancellationToken
                         );
 
@@ -291,6 +293,7 @@ public partial class AgeDigitalTwinsClient
                         outputStream,
                         jobId,
                         checkpoint,
+                        options,
                         cancellationToken
                     );
 
@@ -594,12 +597,19 @@ public partial class AgeDigitalTwinsClient
         }
 
         // Resume execution from checkpoint
+        var options = new ImportJobOptions
+        {
+            BatchSize = DefaultBatchSize,
+            CheckpointInterval = DefaultCheckpointInterval,
+        };
+
         var result = await StreamingImportJob.ExecuteWithCheckpointAsync(
             this,
             inputStream,
             outputStream,
             jobId,
             checkpoint,
+            options,
             cancellationToken
         );
 

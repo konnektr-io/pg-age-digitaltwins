@@ -30,6 +30,16 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
     private static readonly ActivitySource ActivitySource = new("AgeDigitalTwins.SDK", "1.0.0");
 
     /// <summary>
+    /// Gets the default batch size for import operations.
+    /// </summary>
+    public int DefaultBatchSize { get; }
+
+    /// <summary>
+    /// Gets the default checkpoint interval for import operations.
+    /// </summary>
+    public int DefaultCheckpointInterval { get; }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="AgeDigitalTwinsClient"/> class with a data source and graph name.
     /// </summary>
     /// <param name="dataSource">The data source for connecting to the database.</param>
@@ -44,6 +54,8 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
         options ??= new AgeDigitalTwinsClientOptions();
         _graphName = options.GraphName;
         _modelCacheExpiration = options.ModelCacheExpiration;
+        DefaultBatchSize = options.DefaultBatchSize;
+        DefaultCheckpointInterval = options.DefaultCheckpointInterval;
         _modelParser = new(
             new ParsingOptions()
             {
@@ -73,6 +85,8 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
         _dataSource = dataSource;
         _graphName = graphName;
         _modelCacheExpiration = TimeSpan.FromSeconds(10); // Default to 10 seconds if not set
+        DefaultBatchSize = 50; // Default batch size
+        DefaultCheckpointInterval = 50; // Default checkpoint interval
         _modelParser = new(
             new ParsingOptions()
             {
@@ -136,4 +150,14 @@ public class AgeDigitalTwinsClientOptions
     /// Gets or sets the expiration time for the model cache.
     /// </summary>
     public TimeSpan ModelCacheExpiration { get; set; } = TimeSpan.FromSeconds(10); // Default to 10 seconds if not set
+
+    /// <summary>
+    /// Gets or sets the default batch size for import operations.
+    /// </summary>
+    public int DefaultBatchSize { get; set; } = 50;
+
+    /// <summary>
+    /// Gets or sets the default checkpoint interval for import operations.
+    /// </summary>
+    public int DefaultCheckpointInterval { get; set; } = 50;
 }
