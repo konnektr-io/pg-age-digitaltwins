@@ -112,11 +112,46 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                     catch (Exception ex)
                     {
                         IsHealthy = false; // Mark as unhealthy on connection failure
-                        _logger.LogError(
-                            ex,
-                            "Error during replication: {Message}\nRetrying in 5 seconds...",
-                            ex.Message
-                        );
+
+                        // Check if this is a replication slot invalidation error
+                        if (
+                            ex.Message.Contains("can no longer get changes from replication slot")
+                            || ex.Message.Contains("replication slot")
+                                && ex.Message.Contains("invalidated")
+                        )
+                        {
+                            _logger.LogError(
+                                ex,
+                                "Replication slot invalidation detected: {Message}. Attempting to recreate slot...",
+                                ex.Message
+                            );
+
+                            try
+                            {
+                                await HandleInvalidatedSlotAsync(cancellationToken);
+                                _logger.LogInformation(
+                                    "Replication slot recreated successfully. Retrying immediately..."
+                                );
+                                continue; // Retry immediately after successful slot recreation
+                            }
+                            catch (Exception handleEx)
+                            {
+                                _logger.LogError(
+                                    handleEx,
+                                    "Failed to handle invalidated slot: {Message}. Will retry in 5 seconds...",
+                                    handleEx.Message
+                                );
+                            }
+                        }
+                        else
+                        {
+                            _logger.LogError(
+                                ex,
+                                "Error during replication: {Message}\nRetrying in 5 seconds...",
+                                ex.Message
+                            );
+                        }
+
                         await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken); // Wait before retrying
                     }
                 }
@@ -657,8 +692,8 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
     }
 
     /// <summary>
-    /// Ensures the replication slot exists, creating it if necessary.
-    /// This handles cases where failover occurred and the slot doesn't exist on the new primary.
+    /// Ensures the replication slot exists and is valid, creating/recreating it if necessary.
+    /// This handles cases where failover occurred, the slot doesn't exist, or the slot is invalidated.
     /// </summary>
     private async Task EnsureReplicationSlotExistsAsync(
         CancellationToken cancellationToken = default
@@ -666,52 +701,131 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
     {
         try
         {
-            // Check if replication slot exists
             using var checkConn = new NpgsqlConnection(_connectionString);
             await checkConn.OpenAsync(cancellationToken);
 
+            // Check if replication slot exists and get its status
             using var cmd = new NpgsqlCommand(
-                "SELECT COUNT(*) FROM pg_replication_slots WHERE slot_name = @slotName",
+                @"SELECT slot_name, active, restart_lsn, confirmed_flush_lsn
+                  FROM pg_replication_slots 
+                  WHERE slot_name = @slotName",
                 checkConn
             );
             cmd.Parameters.AddWithValue("slotName", _replicationSlot);
 
-            var count = (long)(await cmd.ExecuteScalarAsync(cancellationToken) ?? 0);
+            using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
 
-            if (count == 0)
+            bool slotExists = false;
+
+            if (await reader.ReadAsync(cancellationToken))
             {
-                _logger.LogWarning(
-                    "Replication slot {ReplicationSlot} does not exist. Creating it now...",
-                    _replicationSlot
-                );
-
-                // Create the replication slot
-                using var createCmd = new NpgsqlCommand(
-                    "SELECT * FROM pg_create_logical_replication_slot(@slotName, 'pgoutput')",
-                    checkConn
-                );
-                createCmd.Parameters.AddWithValue("slotName", _replicationSlot);
-
-                await createCmd.ExecuteNonQueryAsync(cancellationToken);
-
-                _logger.LogInformation(
-                    "Successfully created replication slot {ReplicationSlot}",
-                    _replicationSlot
-                );
+                slotExists = true;
+                _logger.LogDebug("Replication slot {ReplicationSlot} exists", _replicationSlot);
             }
-            else
+
+            await reader.CloseAsync();
+
+            // If slot exists, we'll try to use it and let any invalidation errors be caught
+            // by the retry logic in the calling method
+            if (slotExists)
             {
                 _logger.LogDebug(
-                    "Replication slot {ReplicationSlot} already exists",
+                    "Replication slot {ReplicationSlot} exists, will attempt to use it",
                     _replicationSlot
                 );
+                return;
             }
+
+            // Create the replication slot since it doesn't exist
+            _logger.LogWarning(
+                "Replication slot {ReplicationSlot} does not exist. Creating it now...",
+                _replicationSlot
+            );
+
+            using var createCmd = new NpgsqlCommand(
+                "SELECT * FROM pg_create_logical_replication_slot(@slotName, 'pgoutput')",
+                checkConn
+            );
+            createCmd.Parameters.AddWithValue("slotName", _replicationSlot);
+
+            await createCmd.ExecuteNonQueryAsync(cancellationToken);
+
+            _logger.LogInformation(
+                "Successfully created replication slot {ReplicationSlot}",
+                _replicationSlot
+            );
         }
         catch (Exception ex)
         {
             _logger.LogError(
                 ex,
                 "Failed to ensure replication slot {ReplicationSlot} exists",
+                _replicationSlot
+            );
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Handles invalidated replication slots by dropping and recreating them.
+    /// This should be called when encountering slot invalidation errors.
+    /// </summary>
+    private async Task HandleInvalidatedSlotAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogWarning(
+                "Handling invalidated replication slot {ReplicationSlot}. Dropping and recreating...",
+                _replicationSlot
+            );
+
+            using var conn = new NpgsqlConnection(_connectionString);
+            await conn.OpenAsync(cancellationToken);
+
+            // First, try to drop the slot
+            try
+            {
+                using var dropCmd = new NpgsqlCommand(
+                    "SELECT pg_drop_replication_slot(@slotName)",
+                    conn
+                );
+                dropCmd.Parameters.AddWithValue("slotName", _replicationSlot);
+                await dropCmd.ExecuteNonQueryAsync(cancellationToken);
+
+                _logger.LogInformation(
+                    "Successfully dropped invalidated replication slot {ReplicationSlot}",
+                    _replicationSlot
+                );
+            }
+            catch (Exception dropEx)
+            {
+                // Slot might not exist anymore, log but continue
+                _logger.LogWarning(
+                    dropEx,
+                    "Failed to drop replication slot {ReplicationSlot}, it may not exist: {Message}",
+                    _replicationSlot,
+                    dropEx.Message
+                );
+            }
+
+            // Recreate the slot
+            using var createCmd = new NpgsqlCommand(
+                "SELECT * FROM pg_create_logical_replication_slot(@slotName, 'pgoutput')",
+                conn
+            );
+            createCmd.Parameters.AddWithValue("slotName", _replicationSlot);
+            await createCmd.ExecuteNonQueryAsync(cancellationToken);
+
+            _logger.LogInformation(
+                "Successfully recreated replication slot {ReplicationSlot}",
+                _replicationSlot
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Failed to handle invalidated replication slot {ReplicationSlot}",
                 _replicationSlot
             );
             throw;
