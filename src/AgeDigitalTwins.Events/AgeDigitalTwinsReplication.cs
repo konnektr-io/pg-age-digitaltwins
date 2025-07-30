@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Net.Sockets;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
@@ -113,8 +114,40 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                     {
                         IsHealthy = false; // Mark as unhealthy on connection failure
 
+                        // Check for connection-related errors that are common under high load
+                        if (IsConnectionError(ex))
+                        {
+                            _logger.LogWarning(
+                                ex,
+                                "Connection error detected during replication: {Message}. This is common under high load. Retrying with backoff...",
+                                ex.Message
+                            );
+
+                            // Dispose the current connection before retrying
+                            if (_conn != null)
+                            {
+                                try
+                                {
+                                    await _conn.DisposeAsync();
+                                }
+                                catch (Exception disposeEx)
+                                {
+                                    _logger.LogDebug(
+                                        disposeEx,
+                                        "Error disposing connection during retry"
+                                    );
+                                }
+                                finally
+                                {
+                                    _conn = null;
+                                }
+                            }
+
+                            // Use exponential backoff for connection errors
+                            await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
+                        }
                         // Check if this is a replication slot invalidation error
-                        if (
+                        else if (
                             ex.Message.Contains("can no longer get changes from replication slot")
                             || ex.Message.Contains("replication slot")
                                 && ex.Message.Contains("invalidated")
@@ -187,7 +220,15 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
 
     private async Task StartReplicationAsync(CancellationToken cancellationToken = default)
     {
-        _conn = new LogicalReplicationConnection(_connectionString);
+        // Create connection with enhanced timeout settings for high load scenarios
+        var connectionStringBuilder = new NpgsqlConnectionStringBuilder(_connectionString)
+        {
+            Timeout = 0, // Disable command timeout for replication (replication is long-running)
+            KeepAlive = 30, // TCP keepalive interval in seconds - this IS supported
+            TcpKeepAlive = true, // Enable TCP keepalive - this IS supported
+        };
+
+        _conn = new LogicalReplicationConnection(connectionStringBuilder.ToString());
         await _conn.Open(cancellationToken);
 
         PgOutputReplicationSlot slot = new(_replicationSlot);
@@ -209,11 +250,14 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
 
         EventData? currentEvent = null;
         Activity? transactionActivity = null;
+        DateTime lastMessageTime = DateTime.UtcNow;
 
         await foreach (PgOutputReplicationMessage message in messages)
         {
             try
             {
+                lastMessageTime = DateTime.UtcNow; // Update last message timestamp
+
                 _logger.LogDebug(
                     "Received message type: {ReplicationMessageType}",
                     message.GetType().Name
@@ -830,5 +874,31 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
             );
             throw;
         }
+    }
+
+    /// <summary>
+    /// Determines if an exception is a connection-related error that's commonly seen under high load.
+    /// These errors typically indicate network issues, timeouts, or connection drops that can be retried.
+    /// </summary>
+    private static bool IsConnectionError(Exception ex)
+    {
+        // Check for common connection-related exceptions
+        return ex is EndOfStreamException
+            || ex is NpgsqlException npgsqlEx
+                && (
+                    npgsqlEx.Message.Contains("Exception while reading from stream")
+                    || npgsqlEx.Message.Contains("Connection is not open")
+                    || npgsqlEx.Message.Contains("The connection is broken")
+                    || npgsqlEx.Message.Contains("timeout")
+                    || npgsqlEx.Message.Contains("Connection terminated")
+                    || npgsqlEx.Message.Contains("server closed the connection")
+                    || npgsqlEx.InnerException is EndOfStreamException
+                    || npgsqlEx.InnerException is SocketException
+                    || npgsqlEx.InnerException is TimeoutException
+                )
+            || ex is SocketException
+            || ex is TimeoutException
+            || ex.Message.Contains("Exception while reading from stream")
+            || ex.Message.Contains("Attempted to read past the end of the stream");
     }
 }
