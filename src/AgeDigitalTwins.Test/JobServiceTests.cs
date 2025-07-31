@@ -627,38 +627,27 @@ public class DeleteJobSystemTests : TestBase
     {
         try
         {
-            // Create a simple model for testing using JSON string
-            var testModelJson = JsonSerializer.Serialize(
-                new
-                {
-                    Id = "dtmi:example:TestModel;1",
-                    Type = "Interface",
-                    Context = "dtmi:dtdl:context;2",
-                    Contents = new object[]
+            // Create a simple model for testing using correct DTDL format
+            var testModelJson =
+                @"{
+                ""@id"": ""dtmi:example:TestModel;1"",
+                ""@type"": ""Interface"",
+                ""@context"": ""dtmi:dtdl:context;2"",
+                ""contents"": [
                     {
-                        new
-                        {
-                            Type = "Property",
-                            Name = "testProperty",
-                            Schema = "string",
-                        },
-                    },
-                }
-            );
+                        ""@type"": ""Property"",
+                        ""name"": ""testProperty"",
+                        ""schema"": ""string""
+                    }
+                ]
+            }";
 
             await Client.CreateModelsAsync(new[] { testModelJson });
 
-            // Create a test twin using JSON string
-            var testTwinJson = JsonSerializer.Serialize(
-                new
-                {
-                    DtId = "test-twin-for-deletion",
-                    Metadata = new { Model = "dtmi:example:TestModel;1" },
-                    TestProperty = "test-value",
-                }
-            );
+            // Create a test twin
+            var testTwin = new { testProperty = "test-value" };
 
-            await Client.CreateOrReplaceDigitalTwinAsync("test-twin-for-deletion", testTwinJson);
+            await Client.CreateOrReplaceDigitalTwinAsync("test-twin-for-deletion", testTwin);
         }
         catch (Exception ex)
         {
