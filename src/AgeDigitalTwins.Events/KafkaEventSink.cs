@@ -54,10 +54,9 @@ public class KafkaEventSink : IEventSink, IDisposable
                 // Performance settings optimized for batching
                 BatchSize = 65536, // 64KB - larger batches for better throughput
                 LingerMs = 10, // Wait up to 10ms to collect more messages
-                CompressionType = CompressionType.Snappy,
                 // Producer buffer settings
-                QueueBufferingMaxMessages = 100000, // Allow more messages in producer queue
-                QueueBufferingMaxKbytes = 1048576, // 1GB producer buffer
+                QueueBufferingMaxMessages = 10000, // Allow more messages in producer queue
+                QueueBufferingMaxKbytes = 524288, // 512MB producer buffer
             };
 
         if (saslMechanism == SaslMechanism.Plain)
