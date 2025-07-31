@@ -644,10 +644,15 @@ public class DeleteJobSystemTests : TestBase
 
             await Client.CreateModelsAsync(new[] { testModelJson });
 
-            // Create a test twin
-            var testTwin = new { testProperty = "test-value" };
+            // Create a test twin using JSON string with proper structure
+            var testTwinJson =
+                @"{
+                ""$dtId"": ""test-twin-for-deletion"",
+                ""$metadata"": { ""$model"": ""dtmi:example:TestModel;1"" },
+                ""testProperty"": ""test-value""
+            }";
 
-            await Client.CreateOrReplaceDigitalTwinAsync("test-twin-for-deletion", testTwin);
+            await Client.CreateOrReplaceDigitalTwinAsync("test-twin-for-deletion", testTwinJson);
         }
         catch (Exception ex)
         {
