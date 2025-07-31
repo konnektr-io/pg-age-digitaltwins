@@ -214,22 +214,33 @@ public partial class AgeDigitalTwinsClient
                         }
                         catch (Exception ex)
                         {
-                            // Update job status to failed if an exception occurs
-                            await JobService.UpdateJobStatusAsync(
-                                jobId,
-                                JobStatus.Failed,
-                                errorData: new ImportJobError
-                                {
-                                    Code = ex.GetType().Name,
-                                    Message = ex.Message,
-                                    Details = new Dictionary<string, object>
+                            // Only mark job as failed for truly fatal exceptions
+                            // Other exceptions should be handled by the job itself and result in proper status determination
+                            if (IsFatalException(ex))
+                            {
+                                await JobService.UpdateJobStatusAsync(
+                                    jobId,
+                                    JobStatus.Failed,
+                                    errorData: new ImportJobError
                                     {
-                                        { "stackTrace", ex.StackTrace ?? string.Empty },
-                                        { "timestamp", DateTime.UtcNow.ToString("o") },
+                                        Code = ex.GetType().Name,
+                                        Message = ex.Message,
+                                        Details = new Dictionary<string, object>
+                                        {
+                                            { "stackTrace", ex.StackTrace ?? string.Empty },
+                                            { "timestamp", DateTime.UtcNow.ToString("o") },
+                                            { "fatal", true },
+                                        },
                                     },
-                                },
-                                cancellationToken: cancellationToken
-                            );
+                                    cancellationToken: cancellationToken
+                                );
+                            }
+                            else
+                            {
+                                // For non-fatal exceptions, let the job result determine the final status
+                                // This includes processing errors that should result in PartiallySucceeded
+                                // The job itself will have already determined the appropriate status
+                            }
                         }
                         finally
                         {
@@ -632,5 +643,42 @@ public partial class AgeDigitalTwinsClient
         );
 
         return result;
+    }
+
+    /// <summary>
+    /// Determines if an exception is fatal and should immediately mark the job as failed.
+    /// Fatal exceptions are those that prevent the job from continuing or indicate system-level failures.
+    /// </summary>
+    /// <param name="ex">The exception to evaluate.</param>
+    /// <returns>True if the exception is fatal; otherwise false.</returns>
+    private static bool IsFatalException(Exception ex)
+    {
+        // Configuration and validation errors are fatal
+        if (ex is ArgumentException)
+            return true;
+
+        if (ex is InvalidOperationException invalidOp)
+        {
+            if (
+                invalidOp.Message.Contains("Job service is not configured")
+                || invalidOp.Message.Contains("Failed to acquire lock")
+            )
+            {
+                return true;
+            }
+        }
+
+        // Database connectivity issues are NOT fatal - they should allow resumption
+        if (ex is Exceptions.DatabaseConnectivityException)
+            return false;
+
+        // Processing exceptions from batch operations are NOT fatal
+        // These should be handled by the job's error counting logic
+        if (ex.Message.Contains("batch"))
+            return false;
+
+        // All other exceptions are considered non-fatal by default
+        // This allows the job's own error handling to determine the final status
+        return false;
     }
 }
