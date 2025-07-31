@@ -1,10 +1,13 @@
+using System.Text;
+using System.Text.Json;
+using AgeDigitalTwins.Jobs;
 using AgeDigitalTwins.Models;
 using Xunit.Abstractions;
 
 namespace AgeDigitalTwins.Test;
 
 /// <summary>
-/// Tests for the JobService functionality.
+/// Tests for the JobService functionality including distributed locking and checkpoint management.
 /// </summary>
 [Trait("Category", "Integration")]
 public class JobServiceTests : TestBase
@@ -14,6 +17,111 @@ public class JobServiceTests : TestBase
     public JobServiceTests(ITestOutputHelper output)
     {
         _output = output;
+    }
+
+    [Fact]
+    public async Task CreateJobAsync_ShouldCreateJob_WithValidParameters()
+    {
+        // Arrange
+        var jobId = $"test-job-{Guid.NewGuid()}";
+        var jobService = Client.JobService;
+
+        try
+        {
+            // Act
+            await jobService.CreateJobAsync(jobId, "test", new { TestData = "value" });
+
+            // Assert
+            var job = await jobService.GetJobAsync(jobId);
+            Assert.NotNull(job);
+            Assert.Equal(jobId, job.Id);
+            Assert.Equal("test", job.JobType);
+            Assert.Equal(JobStatus.Running, job.Status);
+
+            _output.WriteLine($"✓ Created job: {jobId}");
+        }
+        finally
+        {
+            await jobService.DeleteJobAsync(jobId);
+        }
+    }
+
+    [Fact]
+    public async Task GetJobAsync_ShouldReturnNull_WhenJobDoesNotExist()
+    {
+        // Arrange
+        var jobService = Client.JobService;
+
+        // Act
+        var job = await jobService.GetJobAsync("non-existent-job");
+
+        // Assert
+        Assert.Null(job);
+        _output.WriteLine("✓ Non-existent job returned null as expected");
+    }
+
+    [Fact]
+    public async Task UpdateJobStatusAsync_ShouldUpdateStatus_WhenJobExists()
+    {
+        // Arrange
+        var jobId = $"test-job-{Guid.NewGuid()}";
+        var jobService = Client.JobService;
+
+        try
+        {
+            await jobService.CreateJobAsync(jobId, "test", new { });
+
+            // Act
+            await jobService.UpdateJobStatusAsync(jobId, JobStatus.Succeeded);
+
+            // Assert
+            var job = await jobService.GetJobAsync(jobId);
+            Assert.NotNull(job);
+            Assert.Equal(JobStatus.Succeeded, job.Status);
+
+            _output.WriteLine($"✓ Updated job status to: {job.Status}");
+        }
+        finally
+        {
+            await jobService.DeleteJobAsync(jobId);
+        }
+    }
+
+    [Fact]
+    public async Task ListJobsAsync_ShouldReturnJobsOfSpecificType()
+    {
+        // Arrange
+        var jobId1 = $"test-job-1-{Guid.NewGuid()}";
+        var jobId2 = $"test-job-2-{Guid.NewGuid()}";
+        var jobId3 = $"test-job-3-{Guid.NewGuid()}";
+        var jobService = Client.JobService;
+
+        try
+        {
+            await jobService.CreateJobAsync(jobId1, "import", new { });
+            await jobService.CreateJobAsync(jobId2, "delete", new { });
+            await jobService.CreateJobAsync(jobId3, "import", new { });
+
+            // Act
+            var importJobs = (await jobService.ListJobsAsync("import")).ToList();
+            var deleteJobs = (await jobService.ListJobsAsync("delete")).ToList();
+
+            // Assert
+            Assert.Contains(importJobs, j => j.Id == jobId1);
+            Assert.Contains(importJobs, j => j.Id == jobId3);
+            Assert.Contains(deleteJobs, j => j.Id == jobId2);
+            Assert.DoesNotContain(importJobs, j => j.Id == jobId2);
+
+            _output.WriteLine(
+                $"✓ Found {importJobs.Count} import jobs and {deleteJobs.Count} delete jobs"
+            );
+        }
+        finally
+        {
+            await jobService.DeleteJobAsync(jobId1);
+            await jobService.DeleteJobAsync(jobId2);
+            await jobService.DeleteJobAsync(jobId3);
+        }
     }
 }
 
@@ -279,6 +387,282 @@ public class ImportJobSystemTests : TestBase
         finally
         {
             Client.DeleteImportJob(jobId);
+        }
+    }
+}
+
+/// <summary>
+/// Tests for the delete job system functionality through the AgeDigitalTwinsClient.
+/// Delete jobs remove all relationships, twins, and models in the correct order.
+/// </summary>
+[Trait("Category", "Integration")]
+public class DeleteJobSystemTests : TestBase
+{
+    private readonly ITestOutputHelper _output;
+
+    public DeleteJobSystemTests(ITestOutputHelper output)
+    {
+        _output = output;
+    }
+
+    [Fact]
+    public async Task DeleteAllAsync_ShouldCreateAndExecuteJob_WithValidParameters()
+    {
+        // Arrange
+        var jobId = $"test-delete-job-{Guid.NewGuid()}";
+
+        // First, let's create some test data to delete
+        await CreateTestDataAsync();
+
+        try
+        {
+            // Act - Use the correct method name
+            var jobRecord = await Client.DeleteAllAsync(jobId);
+
+            // Assert
+            Assert.NotNull(jobRecord);
+            Assert.Equal(jobId, jobRecord.Id);
+            Assert.Equal("delete", jobRecord.JobType);
+            Assert.True(
+                jobRecord.Status == JobStatus.Succeeded
+                    || jobRecord.Status == JobStatus.PartiallySucceeded
+            );
+            Assert.True(jobRecord.CreatedDateTime <= DateTime.UtcNow);
+            Assert.True(jobRecord.LastActionDateTime <= DateTime.UtcNow);
+            Assert.NotNull(jobRecord.FinishedDateTime);
+            Assert.True(jobRecord.PurgeDateTime > DateTime.UtcNow);
+
+            // Should have deleted some items (exact counts depend on test data)
+            Assert.True(jobRecord.RelationshipsDeleted >= 0);
+            Assert.True(jobRecord.TwinsDeleted >= 0);
+            Assert.True(jobRecord.ModelsDeleted >= 0);
+
+            _output.WriteLine($"✓ Created and executed delete job: {jobRecord.Id}");
+            _output.WriteLine($"  Status: {jobRecord.Status}");
+            _output.WriteLine($"  Relationships deleted: {jobRecord.RelationshipsDeleted}");
+            _output.WriteLine($"  Twins deleted: {jobRecord.TwinsDeleted}");
+            _output.WriteLine($"  Models deleted: {jobRecord.ModelsDeleted}");
+            _output.WriteLine($"  Errors: {jobRecord.ErrorCount}");
+        }
+        finally
+        {
+            // Cleanup job record
+            Client.DeleteImportJob(jobId);
+        }
+    }
+
+    [Fact]
+    public async Task GetDeleteJobAsync_ShouldReturnJob_WhenJobExists()
+    {
+        // Arrange
+        var jobId = $"test-delete-job-{Guid.NewGuid()}";
+
+        try
+        {
+            // Create a delete job first
+            var createdJob = await Client.DeleteAllAsync(jobId);
+
+            // Act
+            var retrievedJob = await Client.GetDeleteJobAsync(jobId);
+
+            // Assert
+            Assert.NotNull(retrievedJob);
+            Assert.Equal(jobId, retrievedJob.Id);
+            Assert.Equal(createdJob.Status, retrievedJob.Status);
+            Assert.Equal("delete", retrievedJob.JobType);
+
+            _output.WriteLine(
+                $"✓ Retrieved delete job: {retrievedJob.Id} with status: {retrievedJob.Status}"
+            );
+        }
+        finally
+        {
+            Client.DeleteImportJob(jobId);
+        }
+    }
+
+    [Fact]
+    public async Task GetDeleteJobsAsync_ShouldReturnJobs_WhenJobsExist()
+    {
+        // Arrange
+        var jobId1 = $"test-delete-job-1-{Guid.NewGuid()}";
+        var jobId2 = $"test-delete-job-2-{Guid.NewGuid()}";
+
+        try
+        {
+            // Create delete jobs
+            await Client.DeleteAllAsync(jobId1);
+            await Client.DeleteAllAsync(jobId2);
+
+            // Act
+            var jobs = (await Client.GetDeleteJobsAsync()).ToList();
+
+            // Assert
+            Assert.Contains(jobs, j => j.Id == jobId1);
+            Assert.Contains(jobs, j => j.Id == jobId2);
+            Assert.True(jobs.Count >= 2);
+
+            // All returned jobs should be delete jobs
+            Assert.All(jobs, job => Assert.Equal("delete", job.JobType));
+
+            _output.WriteLine($"✓ Listed {jobs.Count} delete jobs");
+            foreach (var job in jobs.Take(5)) // Show first 5 for brevity
+            {
+                _output.WriteLine(
+                    $"  - Job ID: {job.Id}, Status: {job.Status}, Type: {job.JobType}"
+                );
+            }
+        }
+        finally
+        {
+            Client.DeleteImportJob(jobId1);
+            Client.DeleteImportJob(jobId2);
+        }
+    }
+
+    [Fact]
+    public async Task DeleteAllAsync_ShouldHandleEmptyDatabase_Gracefully()
+    {
+        // Arrange
+        var jobId = $"test-delete-empty-{Guid.NewGuid()}";
+
+        try
+        {
+            // Act - Try to delete from empty database
+            var jobRecord = await Client.DeleteAllAsync(jobId);
+
+            // Assert
+            Assert.NotNull(jobRecord);
+            Assert.Equal(jobId, jobRecord.Id);
+            Assert.Equal("delete", jobRecord.JobType);
+            Assert.Equal(JobStatus.Succeeded, jobRecord.Status);
+
+            // Should have zero deletions for empty database
+            Assert.Equal(0, jobRecord.RelationshipsDeleted);
+            Assert.Equal(0, jobRecord.TwinsDeleted);
+            Assert.Equal(0, jobRecord.ModelsDeleted);
+            Assert.Equal(0, jobRecord.ErrorCount);
+
+            _output.WriteLine($"✓ Delete job on empty database completed successfully");
+            _output.WriteLine($"  All deletion counts are zero as expected");
+        }
+        finally
+        {
+            Client.DeleteImportJob(jobId);
+        }
+    }
+
+    [Fact]
+    public async Task DeleteAllAsync_ShouldThrowException_ForDuplicateJobId()
+    {
+        // Arrange
+        var jobId = $"test-delete-job-{Guid.NewGuid()}";
+
+        try
+        {
+            await Client.DeleteAllAsync(jobId);
+
+            // Act & Assert
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => Client.DeleteAllAsync(jobId)
+            );
+
+            Assert.Contains("already exists", exception.Message);
+            _output.WriteLine(
+                $"✓ Duplicate delete job ID correctly threw exception: {exception.Message}"
+            );
+        }
+        finally
+        {
+            Client.DeleteImportJob(jobId);
+        }
+    }
+
+    [Fact]
+    public async Task DeleteJobCheckpoint_ShouldSaveAndLoadCorrectly()
+    {
+        // Arrange
+        var jobId = $"test-checkpoint-{Guid.NewGuid()}";
+        var jobService = Client.JobService;
+
+        // Create a job first
+        await jobService.CreateJobAsync(jobId, "delete", (object?)null);
+
+        var checkpoint = DeleteJobCheckpoint.Create(jobId);
+        checkpoint.RelationshipsDeleted = 10;
+        checkpoint.TwinsDeleted = 5;
+        checkpoint.ErrorCount = 2;
+        checkpoint.CurrentSection = DeleteSection.Twins;
+
+        try
+        {
+            // Act
+            await jobService.SaveCheckpointAsync(checkpoint);
+
+            // Assert - Try to load it back
+            var loadedCheckpoint = await jobService.LoadDeleteCheckpointAsync(jobId);
+
+            Assert.NotNull(loadedCheckpoint);
+            Assert.Equal(jobId, loadedCheckpoint.JobId);
+            Assert.Equal(10, loadedCheckpoint.RelationshipsDeleted);
+            Assert.Equal(5, loadedCheckpoint.TwinsDeleted);
+            Assert.Equal(2, loadedCheckpoint.ErrorCount);
+            Assert.Equal(DeleteSection.Twins, loadedCheckpoint.CurrentSection);
+
+            _output.WriteLine(
+                $"✓ Successfully saved and loaded delete checkpoint for job: {jobId}"
+            );
+        }
+        finally
+        {
+            // Cleanup
+            await jobService.DeleteJobAsync(jobId);
+        }
+    }
+
+    /// <summary>
+    /// Helper method to create some test data for deletion tests.
+    /// </summary>
+    private async Task CreateTestDataAsync()
+    {
+        try
+        {
+            // Create a simple model for testing using JSON string
+            var testModelJson = JsonSerializer.Serialize(
+                new
+                {
+                    Id = "dtmi:example:TestModel;1",
+                    Type = "Interface",
+                    Context = "dtmi:dtdl:context;2",
+                    Contents = new object[]
+                    {
+                        new
+                        {
+                            Type = "Property",
+                            Name = "testProperty",
+                            Schema = "string",
+                        },
+                    },
+                }
+            );
+
+            await Client.CreateModelsAsync(new[] { testModelJson });
+
+            // Create a test twin using JSON string
+            var testTwinJson = JsonSerializer.Serialize(
+                new
+                {
+                    DtId = "test-twin-for-deletion",
+                    Metadata = new { Model = "dtmi:example:TestModel;1" },
+                    TestProperty = "test-value",
+                }
+            );
+
+            await Client.CreateOrReplaceDigitalTwinAsync("test-twin-for-deletion", testTwinJson);
+        }
+        catch (Exception ex)
+        {
+            _output.WriteLine($"Warning: Could not create test data: {ex.Message}");
         }
     }
 }

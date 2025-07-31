@@ -468,7 +468,7 @@ public partial class AgeDigitalTwinsClient
     /// <returns>The delete job result.</returns>
     /// <exception cref="InvalidOperationException">Thrown when job service is not configured or job ID already exists.</exception>
     /// <exception cref="ArgumentException">Thrown when job ID is null or empty.</exception>
-    public async virtual Task<JobRecord> DeleteImportJobAsync(
+    public async virtual Task<JobRecord> DeleteAllAsync(
         string jobId,
         CancellationToken cancellationToken = default
     )
