@@ -257,14 +257,11 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
 
         EventData? currentEvent = null;
         Activity? transactionActivity = null;
-        DateTime lastMessageTime = DateTime.UtcNow;
 
         await foreach (PgOutputReplicationMessage message in messages)
         {
             try
             {
-                lastMessageTime = DateTime.UtcNow; // Update last message timestamp
-
                 _logger.LogDebug(
                     "Received message type: {ReplicationMessageType}",
                     message.GetType().Name
