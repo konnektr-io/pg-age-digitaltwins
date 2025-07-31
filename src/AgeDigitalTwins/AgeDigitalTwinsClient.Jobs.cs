@@ -479,7 +479,17 @@ public partial class AgeDigitalTwinsClient
         if (JobService == null)
             throw new InvalidOperationException("Job service is not configured");
 
-        // Acquire distributed lock for the job
+        // Check if job already exists
+        var existingJob = await JobService.GetJobAsync(jobId, cancellationToken);
+        if (existingJob != null)
+        {
+            throw new InvalidOperationException($"Job with ID {jobId} already exists");
+        }
+
+        // Create job record first
+        await JobService.CreateJobAsync(jobId, "delete", new { }, cancellationToken);
+
+        // Then acquire distributed lock for the job
         if (!await JobService.TryAcquireJobLockAsync(jobId, cancellationToken: cancellationToken))
         {
             throw new InvalidOperationException($"Failed to acquire lock for job {jobId}");
@@ -487,16 +497,6 @@ public partial class AgeDigitalTwinsClient
 
         try
         {
-            // Check if job already exists
-            var existingJob = await JobService.GetJobAsync(jobId, cancellationToken);
-            if (existingJob != null)
-            {
-                throw new InvalidOperationException($"Job with ID {jobId} already exists");
-            }
-
-            // Create job record
-            await JobService.CreateJobAsync(jobId, "delete", new { }, cancellationToken);
-
             // Execute the delete job
             return await DeleteJob.ExecuteWithCheckpointAsync(
                 this,

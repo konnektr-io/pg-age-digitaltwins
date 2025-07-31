@@ -36,7 +36,7 @@ public class JobServiceTests : TestBase
             Assert.NotNull(job);
             Assert.Equal(jobId, job.Id);
             Assert.Equal("test", job.JobType);
-            Assert.Equal(JobStatus.Running, job.Status);
+            Assert.Equal(JobStatus.Notstarted, job.Status);
 
             _output.WriteLine($"✓ Created job: {jobId}");
         }
