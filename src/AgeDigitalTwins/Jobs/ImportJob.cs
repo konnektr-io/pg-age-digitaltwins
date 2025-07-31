@@ -303,10 +303,15 @@ public static class StreamingImportJob
         catch (Exception ex)
         {
             // Don't change status to Failed here - let the final status determination logic handle it
-            // The job should remain as Running until it's actually finished processing
+            // The job should only be marked as Failed if it truly cannot continue
             result.FinishedDateTime = DateTime.UtcNow;
             result.LastActionDateTime = DateTime.UtcNow;
-            result.ErrorCount++;
+
+            // Only increment error count if this is a processing error, not a system error
+            if (!IsFatalProcessingException(ex))
+            {
+                result.ErrorCount++;
+            }
 
             // Set the error information in the result
             result.Error = new ImportJobError
@@ -317,17 +322,23 @@ public static class StreamingImportJob
                 {
                     { "stackTrace", ex.StackTrace ?? string.Empty },
                     { "timestamp", DateTime.UtcNow.ToString("o") },
+                    { "processingError", !IsFatalProcessingException(ex) },
                 },
             };
 
-            // Determine final status based on results
+            // Determine final status based on results - this will properly handle partial success
             DetermineFinalJobStatus(result);
 
             await LogAsync(
                 outputStream,
                 jobId,
                 "Error",
-                new { error = ex.Message, finalStatus = result.Status.ToString() },
+                new
+                {
+                    error = ex.Message,
+                    finalStatus = result.Status.ToString(),
+                    errorType = ex.GetType().Name,
+                },
                 cancellationToken
             );
 
@@ -826,6 +837,7 @@ public static class StreamingImportJob
         }
         catch (Exception ex)
         {
+            // Batch processing failure - add errors but continue based on ContinueOnFailure setting
             result.ErrorCount += twinsBatch.Count;
             await LogAsync(
                 outputStream,
@@ -836,9 +848,12 @@ public static class StreamingImportJob
                     section = "Twins",
                     error = ex.Message,
                     batchSize = twinsBatch.Count,
+                    continueOnFailure = true, // We always log but don't throw
                 },
                 cancellationToken
             );
+
+            // Don't throw here - let the job continue and final status will be determined by DetermineFinalJobStatus
         }
     }
 
@@ -916,6 +931,7 @@ public static class StreamingImportJob
         }
         catch (Exception ex)
         {
+            // Batch processing failure - add errors but continue based on ContinueOnFailure setting
             result.ErrorCount += relationshipsBatch.Count;
             await LogAsync(
                 outputStream,
@@ -926,9 +942,12 @@ public static class StreamingImportJob
                     section = "Relationships",
                     error = ex.Message,
                     batchSize = relationshipsBatch.Count,
+                    continueOnFailure = true, // We always log but don't throw
                 },
                 cancellationToken
             );
+
+            // Don't throw here - let the job continue and final status will be determined by DetermineFinalJobStatus
         }
     }
 
@@ -957,6 +976,29 @@ public static class StreamingImportJob
         {
             result.Status = JobStatus.Failed;
         }
+    }
+
+    /// <summary>
+    /// Determines if an exception represents a fatal processing error that should prevent further processing.
+    /// </summary>
+    /// <param name="ex">The exception to evaluate.</param>
+    /// <returns>True if the exception is fatal to processing; otherwise false.</returns>
+    private static bool IsFatalProcessingException(Exception ex)
+    {
+        // Configuration and validation errors should stop processing
+        if (ex is ArgumentException)
+            return true;
+
+        // Database connectivity issues are not fatal - they allow resumption
+        if (ex is Exceptions.DatabaseConnectivityException)
+            return true; // Fatal to current execution but allows resumption
+
+        // Cancellation is not an error
+        if (ex is OperationCanceledException)
+            return true;
+
+        // All other exceptions are considered processing errors that should count toward error totals
+        return false;
     }
 
     private static async Task LogAsync(

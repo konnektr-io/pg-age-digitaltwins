@@ -188,6 +188,7 @@ public class JobService
         DateTime? finishedAt = null;
         if (
             status == JobStatus.Succeeded
+            || status == JobStatus.PartiallySucceeded
             || status == JobStatus.Failed
             || status == JobStatus.Cancelled
         )

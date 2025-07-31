@@ -10,7 +10,7 @@ public class ImportJobOptions
     /// <summary>
     /// Gets or sets a value indicating whether to continue processing on failure.
     /// </summary>
-    public bool ContinueOnFailure { get; set; } = false;
+    public bool ContinueOnFailure { get; set; } = true;
 
     /// <summary>
     /// Gets or sets the maximum number of items to process per batch.
