@@ -273,7 +273,7 @@ public static class StreamingImportJob
             // Do NOT change status from Running - this allows JobResumptionService to pick it up
 
             // Set the error information but don't count it as a processing error
-            result.Error = new ImportJobError
+            result.Error = new JobError
             {
                 Code = ex.GetType().Name,
                 Message = ex.Message,
@@ -314,7 +314,7 @@ public static class StreamingImportJob
             }
 
             // Set the error information in the result
-            result.Error = new ImportJobError
+            result.Error = new JobError
             {
                 Code = ex.GetType().Name,
                 Message = ex.Message,

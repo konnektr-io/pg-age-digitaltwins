@@ -5,7 +5,7 @@ namespace AgeDigitalTwins.Models;
 /// <summary>
 /// Represents an error that occurred during an import job.
 /// </summary>
-public class ImportJobError
+public class JobError
 {
     /// <summary>
     /// Gets or sets the error code.
@@ -20,7 +20,7 @@ public class ImportJobError
     /// <summary>
     /// Gets or sets the inner error details.
     /// </summary>
-    public ImportJobError? InnerError { get; set; }
+    public JobError? InnerError { get; set; }
 
     /// <summary>
     /// Gets or sets additional error details.
