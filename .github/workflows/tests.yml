@@ -38,7 +38,7 @@ jobs:
             -p 5432:5432 \
             ghcr.io/konnektr-io/age:16-bookworm-4 \
             -c wal_level=logical \
-            -c max_connections=200 \
+            -c max_connections=500 \
             -c max_replication_slots=10 \
             -c max_wal_senders=10 &
 
