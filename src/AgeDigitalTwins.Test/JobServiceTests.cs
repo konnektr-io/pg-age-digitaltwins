@@ -447,7 +447,7 @@ public class DeleteJobSystemTests : TestBase
         finally
         {
             // Cleanup job record
-            Client.DeleteImportJob(jobId);
+            Client.DeleteDeleteJob(jobId);
         }
     }
 
@@ -477,7 +477,7 @@ public class DeleteJobSystemTests : TestBase
         }
         finally
         {
-            Client.DeleteImportJob(jobId);
+            Client.DeleteDeleteJob(jobId);
         }
     }
 
@@ -515,8 +515,8 @@ public class DeleteJobSystemTests : TestBase
         }
         finally
         {
-            Client.DeleteImportJob(jobId1);
-            Client.DeleteImportJob(jobId2);
+            Client.DeleteDeleteJob(jobId1);
+            Client.DeleteDeleteJob(jobId2);
         }
     }
 
@@ -548,7 +548,7 @@ public class DeleteJobSystemTests : TestBase
         }
         finally
         {
-            Client.DeleteImportJob(jobId);
+            Client.DeleteDeleteJob(jobId);
         }
     }
 
@@ -574,7 +574,7 @@ public class DeleteJobSystemTests : TestBase
         }
         finally
         {
-            Client.DeleteImportJob(jobId);
+            Client.DeleteDeleteJob(jobId);
         }
     }
 

@@ -20,7 +20,7 @@ public class DeleteJobTests : TestBase
     }
 
     [Fact]
-    public async Task DeleteImportJobAsync_ShouldCreateAndExecuteJob_WithValidParameters()
+    public async Task DeleteAllAsync_ShouldCreateAndExecuteJob_WithValidParameters()
     {
         // Arrange
         var jobId = $"test-delete-job-{Guid.NewGuid()}";
@@ -61,7 +61,7 @@ public class DeleteJobTests : TestBase
         finally
         {
             // Cleanup job record
-            Client.DeleteImportJob(jobId);
+            Client.DeleteDeleteJob(jobId);
         }
     }
 
@@ -91,7 +91,7 @@ public class DeleteJobTests : TestBase
         }
         finally
         {
-            Client.DeleteImportJob(jobId);
+            Client.DeleteDeleteJob(jobId);
         }
     }
 
@@ -121,7 +121,7 @@ public class DeleteJobTests : TestBase
         }
         finally
         {
-            Client.DeleteImportJob(jobId);
+            Client.DeleteDeleteJob(jobId);
         }
     }
 
@@ -181,13 +181,13 @@ public class DeleteJobTests : TestBase
         }
         finally
         {
-            Client.DeleteImportJob(jobId1);
-            Client.DeleteImportJob(jobId2);
+            Client.DeleteDeleteJob(jobId1);
+            Client.DeleteDeleteJob(jobId2);
         }
     }
 
     [Fact]
-    public async Task DeleteImportJobAsync_ShouldThrowException_ForDuplicateJobId()
+    public async Task DeleteAllAsync_ShouldThrowException_ForDuplicateJobId()
     {
         // Arrange
         var jobId = $"test-delete-job-{Guid.NewGuid()}";
@@ -208,12 +208,12 @@ public class DeleteJobTests : TestBase
         }
         finally
         {
-            Client.DeleteImportJob(jobId);
+            Client.DeleteDeleteJob(jobId);
         }
     }
 
     [Fact]
-    public async Task DeleteImportJobAsync_ShouldHandleEmptyDatabase_Gracefully()
+    public async Task DeleteAllAsync_ShouldHandleEmptyDatabase_Gracefully()
     {
         // Arrange
         var jobId = $"test-delete-empty-{Guid.NewGuid()}";
@@ -240,12 +240,12 @@ public class DeleteJobTests : TestBase
         }
         finally
         {
-            Client.DeleteImportJob(jobId);
+            Client.DeleteDeleteJob(jobId);
         }
     }
 
     [Fact]
-    public async Task DeleteImportJobAsync_ShouldDelete_InCorrectOrder()
+    public async Task DeleteAllAsync_ShouldDelete_InCorrectOrder()
     {
         // Arrange
         var jobId = $"test-delete-order-{Guid.NewGuid()}";
@@ -276,7 +276,7 @@ public class DeleteJobTests : TestBase
         }
         finally
         {
-            Client.DeleteImportJob(jobId);
+            Client.DeleteDeleteJob(jobId);
         }
     }
 
