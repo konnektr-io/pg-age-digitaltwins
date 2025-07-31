@@ -201,6 +201,40 @@ public static class StreamingImportJob
             result.FinishedDateTime = DateTime.UtcNow;
             result.LastActionDateTime = DateTime.UtcNow;
 
+            // Update database status immediately
+            try
+            {
+                await client.JobService.UpdateJobStatusAsync(
+                    jobId,
+                    JobStatus.Cancelled,
+                    errorData: new JobError
+                    {
+                        Code = "OperationCanceledException",
+                        Message = "Job was cancelled via database request",
+                        Details = new Dictionary<string, object>
+                        {
+                            { "cancelled", true },
+                            { "cancelledVia", "database" },
+                            { "timestamp", DateTime.UtcNow.ToString("o") },
+                        },
+                    },
+                    cancellationToken: CancellationToken.None
+                );
+            }
+            catch (Exception updateEx)
+            {
+                await LogAsync(
+                    outputStream,
+                    jobId,
+                    "Warning",
+                    new
+                    {
+                        warning = $"Failed to update job status to Cancelled: {updateEx.Message}",
+                    },
+                    CancellationToken.None
+                );
+            }
+
             await LogAsync(
                 outputStream,
                 jobId,
@@ -233,6 +267,40 @@ public static class StreamingImportJob
             result.Status = JobStatus.Cancelled;
             result.FinishedDateTime = DateTime.UtcNow;
             result.LastActionDateTime = DateTime.UtcNow;
+
+            // Update database status immediately
+            try
+            {
+                await client.JobService.UpdateJobStatusAsync(
+                    jobId,
+                    JobStatus.Cancelled,
+                    errorData: new JobError
+                    {
+                        Code = "OperationCanceledException",
+                        Message = "Job was cancelled",
+                        Details = new Dictionary<string, object>
+                        {
+                            { "cancelled", true },
+                            { "cancelledVia", "cancellation_token" },
+                            { "timestamp", DateTime.UtcNow.ToString("o") },
+                        },
+                    },
+                    cancellationToken: CancellationToken.None
+                );
+            }
+            catch (Exception updateEx)
+            {
+                await LogAsync(
+                    outputStream,
+                    jobId,
+                    "Warning",
+                    new
+                    {
+                        warning = $"Failed to update job status to Cancelled: {updateEx.Message}",
+                    },
+                    CancellationToken.None
+                );
+            }
 
             await LogAsync(
                 outputStream,

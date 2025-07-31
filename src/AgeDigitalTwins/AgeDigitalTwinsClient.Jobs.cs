@@ -212,6 +212,25 @@ public partial class AgeDigitalTwinsClient
                                 );
                             }
                         }
+                        catch (OperationCanceledException)
+                        {
+                            // Job was cancelled - update status to Cancelled in database
+                            await JobService.UpdateJobStatusAsync(
+                                jobId,
+                                JobStatus.Cancelled,
+                                errorData: new JobError
+                                {
+                                    Code = "OperationCanceledException",
+                                    Message = "Job was cancelled",
+                                    Details = new Dictionary<string, object>
+                                    {
+                                        { "cancelled", true },
+                                        { "timestamp", DateTime.UtcNow.ToString("o") },
+                                    },
+                                },
+                                cancellationToken: CancellationToken.None // Use None since job is being cancelled
+                            );
+                        }
                         catch (Exception ex)
                         {
                             // Only mark job as failed for truly fatal exceptions
