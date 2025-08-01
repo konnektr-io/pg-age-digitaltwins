@@ -761,11 +761,13 @@ public partial class AgeDigitalTwinsClient
             );
         }
 
-        // Load checkpoint for this job
+        // Load checkpoint for this job - if none exists, start from the beginning
         var checkpoint = await JobService.LoadCheckpointAsync(jobId, cancellationToken);
         if (checkpoint == null)
         {
-            throw new InvalidOperationException($"No checkpoint found for job {jobId}");
+            // No checkpoint found - restart the job from the beginning
+            // This can happen if the job was interrupted before any checkpoint was saved
+            checkpoint = new ImportJobCheckpoint { JobId = jobId };
         }
 
         // Resume execution from checkpoint

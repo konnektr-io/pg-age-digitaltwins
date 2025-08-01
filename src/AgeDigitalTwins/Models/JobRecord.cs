@@ -101,7 +101,7 @@ public class JobRecord
     /// </summary>
     public DateTimeOffset PurgeDateTime
     {
-        get => PurgeAt ?? DateTimeOffset.MinValue;
+        get => PurgeAt ?? CreatedAt.AddHours(24); // If null, default to 24 hours after creation
         set => PurgeAt = value;
     }
 
