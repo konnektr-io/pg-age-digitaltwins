@@ -151,9 +151,7 @@ public class BackgroundJobTests : ImportJobTestBase
         var otherWorkCompleted = await SimulateOtherWork();
         Assert.True(otherWorkCompleted);
 
-        Output.WriteLine(
-            $"✓ Background job {backgroundResult.Id} started without blocking caller"
-        );
+        Output.WriteLine($"✓ Background job {backgroundResult.Id} started without blocking caller");
         Output.WriteLine("✓ Caller was able to perform other work while job executes");
 
         // Wait for background job to complete
@@ -175,7 +173,9 @@ public class BackgroundJobTests : ImportJobTestBase
                 || finalResult.Status == JobStatus.PartiallySucceeded
         );
 
-        Output.WriteLine($"✓ Background job eventually completed with status: {finalResult.Status}");
+        Output.WriteLine(
+            $"✓ Background job eventually completed with status: {finalResult.Status}"
+        );
     }
 
     [Fact]
@@ -186,7 +186,7 @@ public class BackgroundJobTests : ImportJobTestBase
         {
             GenerateJobId("concurrent-1"),
             GenerateJobId("concurrent-2"),
-            GenerateJobId("concurrent-3")
+            GenerateJobId("concurrent-3"),
         };
 
         var testData = TestDataFactory.ImportData.CreateValidNdJson();
@@ -195,14 +195,13 @@ public class BackgroundJobTests : ImportJobTestBase
         var startTime = DateTime.UtcNow;
         var tasks = jobIds.Select(async jobId =>
         {
-            Func<CancellationToken, Task<(Stream inputStream, Stream outputStream)>> streamFactory = (
-                ct
-            ) =>
-            {
-                var inputStream = new MemoryStream(Encoding.UTF8.GetBytes(testData));
-                var outputStream = new MemoryStream();
-                return Task.FromResult<(Stream, Stream)>((inputStream, outputStream));
-            };
+            Func<CancellationToken, Task<(Stream inputStream, Stream outputStream)>> streamFactory =
+                (ct) =>
+                {
+                    var inputStream = new MemoryStream(Encoding.UTF8.GetBytes(testData));
+                    var outputStream = new MemoryStream();
+                    return Task.FromResult<(Stream, Stream)>((inputStream, outputStream));
+                };
 
             return await Client.ImportGraphAsync<JobRecord>(
                 jobId,
@@ -218,11 +217,14 @@ public class BackgroundJobTests : ImportJobTestBase
         var launchDuration = DateTime.UtcNow - startTime;
 
         // Assert - All jobs should start quickly
-        Assert.All(results, result =>
-        {
-            Assert.NotNull(result);
-            Assert.Equal(JobStatus.Running, result.Status);
-        });
+        Assert.All(
+            results,
+            result =>
+            {
+                Assert.NotNull(result);
+                Assert.Equal(JobStatus.Running, result.Status);
+            }
+        );
 
         // Should launch all jobs very quickly
         Assert.True(
@@ -247,14 +249,14 @@ public class BackgroundJobTests : ImportJobTestBase
     {
         // Simulate some work that takes time
         await Task.Delay(100);
-        
+
         // Simulate some computation
         var sum = 0;
         for (int i = 0; i < 1000; i++)
         {
             sum += i;
         }
-        
+
         return sum > 0;
     }
 
