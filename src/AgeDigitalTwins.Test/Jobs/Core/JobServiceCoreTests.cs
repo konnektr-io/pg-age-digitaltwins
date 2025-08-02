@@ -219,9 +219,14 @@ public class JobServiceCoreTests : JobTestBase
             // Wait for the import task to complete (should be cancelled)
             var finalResult = await importTask;
 
-            // Assert - Job should be cancelled
-            Assert.Equal(JobStatus.Cancelled, finalResult.Status);
-            Output.WriteLine($"✓ Job completed with status: {finalResult.Status}");
+            // The task result might not reflect the final database status for background jobs
+            // So let's check the actual database status
+            var finalJobFromDb = await Client.GetImportJobAsync(jobId);
+
+            // Assert - Job should be cancelled in the database
+            Assert.NotNull(finalJobFromDb);
+            Assert.Equal(JobStatus.Cancelled, finalJobFromDb.Status);
+            Output.WriteLine($"✓ Job completed with status: {finalJobFromDb.Status}");
 
             // Verify the stream factory was cancelled before creating streams
             Assert.False(
