@@ -35,7 +35,7 @@ public abstract class ImportJobTestBase : JobTestBase
         {
             ContinueOnFailure = true,
             OperationTimeout = TimeSpan.FromSeconds(30),
-            LeaveOpen = false, // Fixed: Don't leave streams open when we're disposing them
+            LeaveOpen = true, // Let test using statements handle stream disposal
         };
     }
 
