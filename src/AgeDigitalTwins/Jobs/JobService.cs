@@ -263,6 +263,40 @@ public class JobService
     }
 
     /// <summary>
+    /// Saves a checkpoint for the specified delete job.
+    /// </summary>
+    /// <param name="checkpoint">The checkpoint data to save.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>True if the checkpoint was saved successfully; otherwise false.</returns>
+    public async Task<bool> SaveCheckpointAsync(
+        DeleteJobCheckpoint checkpoint,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (checkpoint == null || string.IsNullOrEmpty(checkpoint.JobId))
+            return false;
+
+        var checkpointJson = JsonSerializer.SerializeToDocument(checkpoint, _jsonOptions);
+
+        var sql =
+            $@"
+            UPDATE {_schemaName}.jobs
+            SET checkpoint_data = @checkpointData,
+                updated_at = @updatedAt
+            WHERE id = @jobId";
+
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var command = new NpgsqlCommand(sql, connection);
+
+        command.Parameters.AddWithValue("@jobId", checkpoint.JobId);
+        command.Parameters.AddWithValue("@checkpointData", (object?)checkpointJson ?? DBNull.Value);
+        command.Parameters.AddWithValue("@updatedAt", DateTime.UtcNow);
+
+        var rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken);
+        return rowsAffected > 0;
+    }
+
+    /// <summary>
     /// Loads a checkpoint for the specified job.
     /// </summary>
     /// <param name="jobId">The job identifier.</param>
@@ -293,6 +327,46 @@ public class JobService
             {
                 var checkpointJson = reader.GetString(0);
                 return JsonSerializer.Deserialize<ImportJobCheckpoint>(
+                    checkpointJson,
+                    _jsonOptions
+                );
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Loads a delete job checkpoint for the specified job.
+    /// </summary>
+    /// <param name="jobId">The job identifier.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The checkpoint data if found; otherwise null.</returns>
+    public async Task<DeleteJobCheckpoint?> LoadDeleteCheckpointAsync(
+        string jobId,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (string.IsNullOrEmpty(jobId))
+            return null;
+
+        var sql =
+            $@"
+            SELECT checkpoint_data
+            FROM {_schemaName}.jobs
+            WHERE id = @jobId";
+
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("@jobId", jobId);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (await reader.ReadAsync(cancellationToken))
+        {
+            if (!reader.IsDBNull(0))
+            {
+                var checkpointJson = reader.GetString(0);
+                return JsonSerializer.Deserialize<DeleteJobCheckpoint>(
                     checkpointJson,
                     _jsonOptions
                 );
@@ -759,5 +833,33 @@ public class JobService
 
         _logger?.LogInformation("Found {JobCount} jobs to resume", jobs.Count);
         return jobs;
+    }
+
+    /// <summary>
+    /// Purges expired jobs from the database based on their purge_at timestamp.
+    /// </summary>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The number of jobs purged.</returns>
+    public async Task<int> PurgeExpiredJobsAsync(CancellationToken cancellationToken = default)
+    {
+        var now = DateTime.UtcNow;
+
+        var sql =
+            $@"
+            DELETE FROM {_schemaName}.jobs
+            WHERE purge_at < @now";
+
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("@now", now);
+
+        var rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken);
+
+        if (rowsAffected > 0)
+        {
+            _logger?.LogInformation("Purged {ExpiredJobCount} expired jobs", rowsAffected);
+        }
+
+        return rowsAffected;
     }
 }

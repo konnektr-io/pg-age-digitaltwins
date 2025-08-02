@@ -101,7 +101,7 @@ public class JobRecord
     /// </summary>
     public DateTimeOffset PurgeDateTime
     {
-        get => PurgeAt ?? DateTimeOffset.MinValue;
+        get => PurgeAt ?? CreatedAt.AddHours(24); // If null, default to 24 hours after creation
         set => PurgeAt = value;
     }
 
@@ -126,9 +126,9 @@ public class JobRecord
     /// <summary>
     /// Gets or sets details of the error(s) that occurred executing the import job.
     /// </summary>
-    public ImportJobError? Error
+    public JobError? Error
     {
-        get => GetErrorProperty<ImportJobError>("error");
+        get => GetErrorProperty<JobError>("error");
         set => SetErrorProperty("error", value);
     }
 
@@ -194,6 +194,54 @@ public class JobRecord
             return GetResultProperty<int>("errorCount");
         }
         set => SetResultProperty("errorCount", value);
+    }
+
+    /// <summary>
+    /// Gets or sets the number of models successfully deleted (delete jobs).
+    /// Shows current progress from checkpoint during execution, final results when completed.
+    /// </summary>
+    public int ModelsDeleted
+    {
+        get
+        {
+            var checkpointValue = GetCheckpointProperty<int?>("modelsDeleted");
+            if (checkpointValue.HasValue)
+                return checkpointValue.Value;
+            return GetResultProperty<int>("modelsDeleted");
+        }
+        set => SetResultProperty("modelsDeleted", value);
+    }
+
+    /// <summary>
+    /// Gets or sets the number of twins successfully deleted (delete jobs).
+    /// Shows current progress from checkpoint during execution, final results when completed.
+    /// </summary>
+    public int TwinsDeleted
+    {
+        get
+        {
+            var checkpointValue = GetCheckpointProperty<int?>("twinsDeleted");
+            if (checkpointValue.HasValue)
+                return checkpointValue.Value;
+            return GetResultProperty<int>("twinsDeleted");
+        }
+        set => SetResultProperty("twinsDeleted", value);
+    }
+
+    /// <summary>
+    /// Gets or sets the number of relationships successfully deleted (delete jobs).
+    /// Shows current progress from checkpoint during execution, final results when completed.
+    /// </summary>
+    public int RelationshipsDeleted
+    {
+        get
+        {
+            var checkpointValue = GetCheckpointProperty<int?>("relationshipsDeleted");
+            if (checkpointValue.HasValue)
+                return checkpointValue.Value;
+            return GetResultProperty<int>("relationshipsDeleted");
+        }
+        set => SetResultProperty("relationshipsDeleted", value);
     }
 
     // Helper methods for JSON property access
@@ -297,10 +345,16 @@ public class JobRecord
 
     private void SetErrorProperty<T>(string propertyName, T value)
     {
-        var json = ErrorData?.RootElement.Clone() ?? new JsonElement();
-        var dict =
-            JsonSerializer.Deserialize<Dictionary<string, object>>(json.GetRawText() ?? "{}")
-            ?? new Dictionary<string, object>();
+        var dict = new Dictionary<string, object>();
+
+        // If ErrorData exists and has content, deserialize it
+        if (ErrorData?.RootElement.ValueKind == JsonValueKind.Object)
+        {
+            var json = ErrorData.RootElement;
+            dict =
+                JsonSerializer.Deserialize<Dictionary<string, object>>(json.GetRawText())
+                ?? new Dictionary<string, object>();
+        }
 
         if (value != null)
             dict[propertyName] = value;

@@ -181,6 +181,29 @@ public class JobResumptionService : BackgroundService
                         }
                     }
                 }
+
+                // Periodically purge expired jobs (every hour - check if we're at minute 0)
+                if (DateTime.UtcNow.Minute == 0)
+                {
+                    try
+                    {
+                        _logger.LogDebug("Purging expired jobs...");
+                        var purgedCount = await _client.JobService.PurgeExpiredJobsAsync(
+                            stoppingToken
+                        );
+                        if (purgedCount > 0)
+                        {
+                            _logger.LogInformation(
+                                "Purged {PurgedCount} expired jobs",
+                                purgedCount
+                            );
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Error during job purging");
+                    }
+                }
             }
             catch (Exception ex)
             {

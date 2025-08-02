@@ -3,14 +3,15 @@ using System;
 namespace AgeDigitalTwins.Jobs;
 
 /// <summary>
-/// Options for import job operations.
+/// Options for delete job operations.
 /// </summary>
-public class ImportJobOptions
+public class DeleteJobOptions
 {
     /// <summary>
     /// Gets or sets a value indicating whether to continue processing on failure.
+    /// Default is false for delete jobs since we want to stop on errors to avoid data inconsistency.
     /// </summary>
-    public bool ContinueOnFailure { get; set; } = true;
+    public bool ContinueOnFailure { get; set; } = false;
 
     /// <summary>
     /// Gets or sets the maximum number of items to process per batch.
@@ -31,10 +32,4 @@ public class ImportJobOptions
     /// Gets or sets the heartbeat and cancellation check interval.
     /// </summary>
     public TimeSpan HeartbeatInterval { get; set; } = TimeSpan.FromSeconds(30);
-
-    /// <summary>
-    /// Gets or sets a value indicating whether to leave the input and output streams open after processing.
-    /// When true, the streams will not be disposed automatically.
-    /// </summary>
-    public bool LeaveOpen { get; set; } = false;
 }
