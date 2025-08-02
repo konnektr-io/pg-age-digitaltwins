@@ -342,4 +342,36 @@ public class JobServiceCoreTests : JobTestBase
 
         Output.WriteLine($"✓ Cancellation correctly returned false for non-existent jobs");
     }
+
+    [Fact]
+    public async Task CancelExistingJob_ShouldReturnTrue_AndSetStatusToCancelling()
+    {
+        // Arrange - Create a job first
+        var jobId = GenerateJobId("cancel-test");
+        var jobService = Client.JobService;
+
+        try
+        {
+            // Create a job in "Running" status to simulate a running job
+            await jobService.CreateJobAsync(jobId, "import", new { TestData = "value" });
+            await jobService.UpdateJobStatusAsync(jobId, JobStatus.Running);
+
+            // Act - Cancel the job
+            var cancelResult = await Client.CancelImportJobAsync(jobId);
+
+            // Assert - Cancellation should succeed
+            Assert.True(cancelResult);
+
+            // Verify status was changed to Cancelling
+            var job = await jobService.GetJobAsync(jobId);
+            Assert.NotNull(job);
+            Assert.Equal(JobStatus.Cancelling, job.Status);
+
+            Output.WriteLine($"✓ Job {jobId} was successfully set to Cancelling status");
+        }
+        finally
+        {
+            await CleanupJobAsync(jobId, "import");
+        }
+    }
 }
