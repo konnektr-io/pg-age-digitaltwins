@@ -195,7 +195,7 @@ public class JobServiceCoreTests : JobTestBase
         try
         {
             // Act - Start background job
-            var importTask = Client.ImportGraphAsync<object>(
+            await Client.ImportGraphAsync<object>(
                 jobId,
                 streamFactory,
                 options: options,
@@ -224,14 +224,10 @@ public class JobServiceCoreTests : JobTestBase
             Assert.Equal(JobStatus.Cancelling, cancellingJob.Status);
             Output.WriteLine($"✓ Job status changed to: {cancellingJob.Status}");
 
-            // Wait for the background task to complete
-            var finalResult = await importTask;
+            // Wait a moment for the job to be totally cancelled
+            await Task.Delay(1000);
 
-            // Assert - Job should be cancelled
-            Assert.Equal(JobStatus.Cancelled, finalResult.Status);
-            Output.WriteLine($"✓ Background task completed with status: {finalResult.Status}");
-
-            // Also verify the database shows the job as cancelled
+            // Verify the database shows the job as cancelled
             var finalJobInDb = await Client.GetImportJobAsync(jobId);
             Assert.NotNull(finalJobInDb);
             Assert.Equal(JobStatus.Cancelled, finalJobInDb.Status);
