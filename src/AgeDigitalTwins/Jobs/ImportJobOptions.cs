@@ -28,6 +28,11 @@ public class ImportJobOptions
     public TimeSpan OperationTimeout { get; set; } = TimeSpan.FromMinutes(30);
 
     /// <summary>
+    /// Gets or sets the heartbeat and cancellation check interval.
+    /// </summary>
+    public TimeSpan HeartbeatInterval { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
     /// Gets or sets a value indicating whether to leave the input and output streams open after processing.
     /// When true, the streams will not be disposed automatically.
     /// </summary>

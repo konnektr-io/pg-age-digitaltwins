@@ -1,3 +1,4 @@
+using AgeDigitalTwins.Jobs;
 using AgeDigitalTwins.Models;
 using AgeDigitalTwins.Test.Infrastructure;
 using Xunit.Abstractions;
@@ -164,24 +165,53 @@ public class JobServiceCoreTests : JobTestBase
     [Fact]
     public async Task CancelImportJob_ShouldChangeStatus_FromRunningToCancellingToCancelled()
     {
-        // This test verifies that the cancellation mechanism works by testing
-        // the basic cancellation functionality rather than timing-dependent execution
+        // This test verifies that import job cancellation works end-to-end
+        // using a fast heartbeat interval to ensure cancellation is detected quickly
 
         // Arrange
         var jobId = GenerateJobId("cancel-import");
-        var jobService = Client.JobService;
+        var testData = TestDataFactory.ImportData.CreateComplexNdJson();
+
+        // Use a very fast heartbeat interval for testing (100ms)
+        var options = new ImportJobOptions
+        {
+            HeartbeatInterval = TimeSpan.FromMilliseconds(100),
+            BatchSize = 10,
+            CheckpointInterval = 10,
+        };
+
+        // Create a stream factory that introduces some delay to allow cancellation
+        Func<CancellationToken, Task<(Stream inputStream, Stream outputStream)>> streamFactory =
+            async (ct) =>
+            {
+                // Small delay to ensure job starts before we cancel
+                await Task.Delay(50, ct);
+
+                var inputStream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(testData));
+                var outputStream = new MemoryStream();
+                return (inputStream, outputStream);
+            };
 
         try
         {
-            // Create a job and set it to Running status to simulate a running job
-            await jobService.CreateJobAsync(jobId, "import", new { TestData = "value" });
-            await jobService.UpdateJobStatusAsync(jobId, JobStatus.Running);
+            // Act - Start background job
+            var importTask = Client.ImportGraphAsync<object>(
+                jobId,
+                streamFactory,
+                options: options,
+                request: null,
+                executeInBackground: true,
+                cancellationToken: default
+            );
+
+            // Wait a moment for the job to start
+            await Task.Delay(25);
 
             // Verify job is running
-            var runningJob = await jobService.GetJobAsync(jobId);
+            var runningJob = await Client.GetImportJobAsync(jobId);
             Assert.NotNull(runningJob);
             Assert.Equal(JobStatus.Running, runningJob.Status);
-            Output.WriteLine($"✓ Import job {jobId} is in Running status");
+            Output.WriteLine($"✓ Import job {jobId} started with status: {runningJob.Status}");
 
             // Act - Cancel the job
             var cancelRequested = await Client.CancelImportJobAsync(jobId);
@@ -189,15 +219,23 @@ public class JobServiceCoreTests : JobTestBase
             Output.WriteLine($"✓ Cancellation requested for job: {jobId}");
 
             // Verify status changed to Cancelling
-            var cancellingJob = await jobService.GetJobAsync(jobId);
+            var cancellingJob = await Client.GetImportJobAsync(jobId);
             Assert.NotNull(cancellingJob);
             Assert.Equal(JobStatus.Cancelling, cancellingJob.Status);
             Output.WriteLine($"✓ Job status changed to: {cancellingJob.Status}");
 
-            // For this test, we verify that the cancellation mechanism (setting status to Cancelling) works
-            // The actual background cancellation logic is complex and timing-dependent,
-            // so we test the core cancellation functionality here
-            Output.WriteLine($"✓ Cancellation mechanism verified - job can be cancelled");
+            // Wait for the background task to complete
+            var finalResult = await importTask;
+
+            // Assert - Job should be cancelled
+            Assert.Equal(JobStatus.Cancelled, finalResult.Status);
+            Output.WriteLine($"✓ Background task completed with status: {finalResult.Status}");
+
+            // Also verify the database shows the job as cancelled
+            var finalJobInDb = await Client.GetImportJobAsync(jobId);
+            Assert.NotNull(finalJobInDb);
+            Assert.Equal(JobStatus.Cancelled, finalJobInDb.Status);
+            Output.WriteLine($"✓ Database shows final status: {finalJobInDb.Status}");
         }
         finally
         {
@@ -218,10 +256,18 @@ public class JobServiceCoreTests : JobTestBase
         var twinId2 = await CreateTestTwinAsync(modelId: modelId2);
         await CreateTestRelationshipAsync(twinId1, twinId2);
 
+        // Use a fast heartbeat interval for testing (100ms)
+        var options = new DeleteJobOptions
+        {
+            HeartbeatInterval = TimeSpan.FromMilliseconds(100),
+            BatchSize = 10,
+            CheckpointInterval = 10,
+        };
+
         try
         {
             // Act - Start background delete job
-            var runningJob = await Client.DeleteAllAsync(jobId);
+            var runningJob = await Client.DeleteAllAsync(jobId, options);
 
             // Assert - Job should be running (or may complete very quickly)
             Assert.True(

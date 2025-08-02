@@ -98,48 +98,6 @@ public static class StreamingImportJob
         using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var combinedToken = combinedCts.Token;
 
-        // Create a timer for periodic heartbeat updates and cancellation checks
-        using var heartbeatTimer = new Timer(
-            async _ =>
-            {
-                try
-                {
-                    await client.JobService.RenewJobLockHeartbeatAsync(jobId, cancellationToken);
-
-                    // Check if cancellation has been requested in the database
-                    var currentJob = await client.JobService.GetJobAsync(
-                        jobId,
-                        CancellationToken.None
-                    );
-                    if (currentJob?.Status == JobStatus.Cancelling)
-                    {
-                        await LogAsync(
-                            outputStream,
-                            jobId,
-                            "Info",
-                            new { status = "Cancellation detected from database" },
-                            CancellationToken.None
-                        );
-                        combinedCts.Cancel();
-                    }
-                }
-                catch (Exception ex)
-                {
-                    // Log heartbeat failure but don't stop the job
-                    await LogAsync(
-                        outputStream,
-                        jobId,
-                        "Warning",
-                        new { warning = $"Heartbeat renewal failed: {ex.Message}" },
-                        CancellationToken.None
-                    );
-                }
-            },
-            null,
-            TimeSpan.FromMinutes(1), // First heartbeat after 1 minute
-            TimeSpan.FromMinutes(1) // Subsequent heartbeats every 1 minute
-        );
-
         try
         {
             // Use the options if provided, otherwise create default options with client defaults
@@ -147,7 +105,53 @@ public static class StreamingImportJob
             {
                 BatchSize = client.DefaultBatchSize,
                 CheckpointInterval = client.DefaultCheckpointInterval,
+                HeartbeatInterval = client.DefaultHeartbeatInterval,
             };
+
+            // Create a timer for periodic heartbeat updates and cancellation checks
+            using var heartbeatTimer = new Timer(
+                async _ =>
+                {
+                    try
+                    {
+                        await client.JobService.RenewJobLockHeartbeatAsync(
+                            jobId,
+                            cancellationToken
+                        );
+
+                        // Check if cancellation has been requested in the database
+                        var currentJob = await client.JobService.GetJobAsync(
+                            jobId,
+                            CancellationToken.None
+                        );
+                        if (currentJob?.Status == JobStatus.Cancelling)
+                        {
+                            await LogAsync(
+                                outputStream,
+                                jobId,
+                                "Info",
+                                new { status = "Cancellation detected from database" },
+                                CancellationToken.None
+                            );
+                            combinedCts.Cancel();
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        // Log heartbeat failure but don't stop the job
+                        await LogAsync(
+                            outputStream,
+                            jobId,
+                            "Warning",
+                            new { warning = $"Heartbeat renewal failed: {ex.Message}" },
+                            CancellationToken.None
+                        );
+                    }
+                },
+                null,
+                options.HeartbeatInterval, // First heartbeat after configured interval
+                options.HeartbeatInterval // Subsequent heartbeats every configured interval
+            );
 
             // Only validate stream header if starting from beginning
             if (checkpoint == null)
@@ -414,8 +418,7 @@ public static class StreamingImportJob
         }
         finally
         {
-            // Dispose the heartbeat timer and combined cancellation token source
-            heartbeatTimer?.Dispose();
+            // Dispose the combined cancellation token source
             combinedCts?.Dispose();
         }
     }

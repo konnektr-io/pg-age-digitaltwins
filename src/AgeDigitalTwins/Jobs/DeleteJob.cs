@@ -33,7 +33,12 @@ public static class DeleteJob
         CancellationToken cancellationToken = default
     )
     {
-        options ??= new DeleteJobOptions();
+        options ??= new DeleteJobOptions()
+        {
+            BatchSize = client.DefaultBatchSize,
+            CheckpointInterval = client.DefaultCheckpointInterval,
+            HeartbeatInterval = client.DefaultHeartbeatInterval,
+        };
         checkpoint ??= DeleteJobCheckpoint.Create(jobId);
 
         var result = new JobRecord
@@ -80,8 +85,8 @@ public static class DeleteJob
                 }
             },
             null,
-            TimeSpan.FromMinutes(1),
-            TimeSpan.FromMinutes(1)
+            options.HeartbeatInterval,
+            options.HeartbeatInterval
         );
 
         try
@@ -185,7 +190,6 @@ public static class DeleteJob
         }
         finally
         {
-            heartbeatTimer?.Dispose();
             combinedCts?.Dispose();
         }
     }
@@ -256,11 +260,11 @@ public static class DeleteJob
             );
 
             result.RelationshipsDeleted += relationshipsDeletedInBatch;
-            checkpoint.RelationshipsDeleted = result.RelationshipsDeleted;
-            batchCount++;
+            if (batchCount % (Math.Max(1, options.CheckpointInterval / options.BatchSize) + 1) == 0)
+                batchCount++;
 
             // Save checkpoint every CheckpointInterval batches
-            if (batchCount % (options.CheckpointInterval / options.BatchSize + 1) == 0)
+            if (batchCount % (Math.Max(1, options.CheckpointInterval / options.BatchSize) + 1) == 0)
             {
                 await SaveCheckpointAsync(client, checkpoint, cancellationToken);
             }
@@ -289,11 +293,11 @@ public static class DeleteJob
             );
 
             result.TwinsDeleted += twinsDeletedInBatch;
-            checkpoint.TwinsDeleted = result.TwinsDeleted;
-            batchCount++;
+            if (batchCount % (Math.Max(1, options.CheckpointInterval / options.BatchSize) + 1) == 0)
+                batchCount++;
 
             // Save checkpoint every CheckpointInterval batches
-            if (batchCount % (options.CheckpointInterval / options.BatchSize + 1) == 0)
+            if (batchCount % (Math.Max(1, options.CheckpointInterval / options.BatchSize) + 1) == 0)
             {
                 await SaveCheckpointAsync(client, checkpoint, cancellationToken);
             }

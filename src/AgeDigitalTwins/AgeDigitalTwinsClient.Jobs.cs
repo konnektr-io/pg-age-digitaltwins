@@ -491,6 +491,24 @@ public partial class AgeDigitalTwinsClient
         CancellationToken cancellationToken = default
     )
     {
+        return await DeleteAllAsync(jobId, options: null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Executes a delete job to remove all relationships, twins, and models.
+    /// </summary>
+    /// <param name="jobId">The job identifier.</param>
+    /// <param name="options">The delete job options.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The delete job result.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when job service is not configured or job ID already exists.</exception>
+    /// <exception cref="ArgumentException">Thrown when job ID is null or empty.</exception>
+    public async virtual Task<JobRecord> DeleteAllAsync(
+        string jobId,
+        DeleteJobOptions? options,
+        CancellationToken cancellationToken = default
+    )
+    {
         if (string.IsNullOrWhiteSpace(jobId))
             throw new ArgumentException("Job ID cannot be null or empty", nameof(jobId));
 
@@ -520,7 +538,7 @@ public partial class AgeDigitalTwinsClient
                 this,
                 jobId,
                 checkpoint: null,
-                options: new DeleteJobOptions(),
+                options: options ?? new DeleteJobOptions(),
                 cancellationToken
             );
         }
