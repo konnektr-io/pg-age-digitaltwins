@@ -345,10 +345,16 @@ public class JobRecord
 
     private void SetErrorProperty<T>(string propertyName, T value)
     {
-        var json = ErrorData?.RootElement.Clone() ?? new JsonElement();
-        var dict =
-            JsonSerializer.Deserialize<Dictionary<string, object>>(json.GetRawText() ?? "{}")
-            ?? new Dictionary<string, object>();
+        var dict = new Dictionary<string, object>();
+
+        // If ErrorData exists and has content, deserialize it
+        if (ErrorData?.RootElement.ValueKind == JsonValueKind.Object)
+        {
+            var json = ErrorData.RootElement;
+            dict =
+                JsonSerializer.Deserialize<Dictionary<string, object>>(json.GetRawText())
+                ?? new Dictionary<string, object>();
+        }
 
         if (value != null)
             dict[propertyName] = value;
