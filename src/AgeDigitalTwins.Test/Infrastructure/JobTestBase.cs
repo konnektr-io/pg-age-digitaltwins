@@ -152,21 +152,5 @@ public abstract class JobTestBase : TestBase
         }
 
         Output.WriteLine($"  Errors: {job.ErrorCount}");
-
-        // Log error details if there's an error
-        if (job.Error != null)
-        {
-            Output.WriteLine($"  Error Details:");
-            Output.WriteLine($"    Code: {job.Error.Code}");
-            Output.WriteLine($"    Message: {job.Error.Message}");
-            if (job.Error.Details != null && job.Error.Details.Count > 0)
-            {
-                Output.WriteLine($"    Details:");
-                foreach (var detail in job.Error.Details)
-                {
-                    Output.WriteLine($"      {detail.Key}: {detail.Value}");
-                }
-            }
-        }
     }
 }

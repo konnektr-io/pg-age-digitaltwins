@@ -348,7 +348,6 @@ public static class DeleteJob
                 if (relationshipElement == null)
                     continue;
 
-                // Try different ways to access the properties
                 string? sourceId = null;
                 string? relationshipId = null;
 
@@ -363,7 +362,7 @@ public static class DeleteJob
                     relationshipId = relIdProp.GetString();
                 }
 
-                // If direct access fails, try nested structure (relationship might be nested under 'r')
+                // If direct access fails, try nested structure
                 if (
                     sourceId == null
                     && relationshipElement.Value.TryGetProperty("r", out var rProp)
@@ -388,23 +387,14 @@ public static class DeleteJob
                     );
                     deletedCount++;
                 }
-                else
-                {
-                    // If we can't extract the required properties, throw an exception with diagnostic info
-                    var rawJson = relationshipElement.Value.GetRawText();
-                    throw new InvalidOperationException(
-                        $"Unable to extract sourceId or relationshipId from relationship. JSON structure: {rawJson}"
-                    );
-                }
             }
             catch (RelationshipNotFoundException)
             {
                 // Relationship already deleted, continue
             }
-            catch (Exception ex) when (ex is not InvalidOperationException)
+            catch (Exception)
             {
-                // Re-throw InvalidOperationException as-is for debugging
-                // Log other errors but continue if ContinueOnFailure is true
+                // Log error but continue if ContinueOnFailure is true
                 throw; // For now, always throw to be safe
             }
         }
