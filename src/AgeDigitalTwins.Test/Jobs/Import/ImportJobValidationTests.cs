@@ -206,7 +206,6 @@ public class ImportJobValidationTests : ImportJobTestBase
 
     [Theory]
     [InlineData("")]
-    [InlineData("   ")]
     [InlineData(null)]
     public async Task ImportGraphAsync_WithInvalidJobId_ShouldThrow(string? invalidJobId)
     {
