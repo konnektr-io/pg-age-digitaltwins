@@ -220,8 +220,18 @@ public class JobServiceCoreTests : JobTestBase
             var finalResult = await importTask;
 
             // The task result might not reflect the final database status for background jobs
-            // So let's check the actual database status
-            var finalJobFromDb = await Client.GetImportJobAsync(jobId);
+            // So let's check the actual database status, waiting for the background process to complete
+            var maxWaitTime = TimeSpan.FromSeconds(5);
+            var startTime = DateTime.UtcNow;
+            JobRecord? finalJobFromDb = null;
+
+            while (DateTime.UtcNow - startTime < maxWaitTime)
+            {
+                finalJobFromDb = await Client.GetImportJobAsync(jobId);
+                if (finalJobFromDb?.Status == JobStatus.Cancelled)
+                    break;
+                await Task.Delay(100);
+            }
 
             // Assert - Job should be cancelled in the database
             Assert.NotNull(finalJobFromDb);
