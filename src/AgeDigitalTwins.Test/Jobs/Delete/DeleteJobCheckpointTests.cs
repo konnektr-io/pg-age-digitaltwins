@@ -6,10 +6,10 @@ using Xunit.Abstractions;
 namespace AgeDigitalTwins.Test.Jobs.Delete;
 
 /// <summary>
-/// Unit tests for DeleteJobCheckpoint functionality and checkpoint-based resumption.
+/// Tests for DeleteJobCheckpoint functionality and checkpoint-based resumption.
 /// Migrated and enhanced from DeleteJobCheckpointTests.cs.
 /// </summary>
-[Trait("Category", "Unit")]
+[Trait("Category", "Integration")]
 public class DeleteJobCheckpointTests : DeleteJobTestBase
 {
     public DeleteJobCheckpointTests(ITestOutputHelper output)
