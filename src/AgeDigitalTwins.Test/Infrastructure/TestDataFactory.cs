@@ -176,5 +176,29 @@ public static class TestDataFactory
                 {"@id":"dtmi:example:Model2;1","@type":"Interface","@context":"dtmi:dtdl:context;2"}
                 """;
         }
+
+        /// <summary>
+        /// Creates complex ND-JSON data with multiple models, twins, and relationships for performance testing.
+        /// </summary>
+        public static string CreateComplexNdJson()
+        {
+            return """
+                {"Section": "Header"}
+                {"fileVersion": "1.0.0", "author": "test", "organization": "test"}
+                {"Section": "Models"}
+                {"@id":"dtmi:example:Model1;1","@type":"Interface","@context":"dtmi:dtdl:context;2"}
+                {"@id":"dtmi:example:Model2;1","@type":"Interface","@context":"dtmi:dtdl:context;2"}
+                {"@id":"dtmi:example:Model3;1","@type":"Interface","@context":"dtmi:dtdl:context;2"}
+                {"@id":"dtmi:example:Model4;1","@type":"Interface","@context":"dtmi:dtdl:context;2"}
+                {"@id":"dtmi:example:Model5;1","@type":"Interface","@context":"dtmi:dtdl:context;2"}
+                {"@id":"dtmi:com:microsoft:azure:iot:model0;1","@type":"Interface","contents":[{"@type":"Property","name":"property00","schema":"integer"},{"@type":"Property","name":"property01","schema":{"@type":"Map","mapKey":{"name":"subPropertyName","schema":"string"},"mapValue":{"name":"subPropertyValue","schema":"string"}}},{"@type":"Relationship","name":"has","target":"dtmi:com:microsoft:azure:iot:model1;1","properties":[{"@type":"Property","name":"relationshipproperty1","schema":"string"},{"@type":"Property","name":"relationshipproperty2","schema":"integer"}]}],"description":{"en":"This is the description of model"},"displayName":{"en":"This is the display name"},"@context":"dtmi:dtdl:context;2"}
+                {"@id":"dtmi:com:microsoft:azure:iot:model1;1","@type":"Interface","contents":[{"@type":"Property","name":"property10","schema":"string"},{"@type":"Property","name":"property11","schema":{"@type":"Map","mapKey":{"name":"subPropertyName","schema":"string"},"mapValue":{"name":"subPropertyValue","schema":"string"}}}],"description":{"en":"This is the description of model"},"displayName":{"en":"This is the display name"},"@context":"dtmi:dtdl:context;2"}
+                {"Section": "Twins"}
+                {"$dtId":"twin0","$metadata":{"$model":"dtmi:com:microsoft:azure:iot:model0;1"},"property00":10,"property01":{"subProperty1":"subProperty1Value","subProperty2":"subProperty2Value"}}
+                {"$dtId":"twin1","$metadata":{"$model":"dtmi:com:microsoft:azure:iot:model1;1"},"property10":"propertyValue1","property11":{"subProperty1":"subProperty1Value","subProperty2":"subProperty2Value"}}
+                {"Section": "Relationships"}
+                {"$sourceId":"twin0","$relationshipId":"relationship","$targetId":"twin1","$relationshipName":"has","relationshipProperty1":"propertyValue1","relationshipProperty2":10}
+                """;
+        }
     }
 }
