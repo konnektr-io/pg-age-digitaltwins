@@ -160,4 +160,164 @@ public class JobServiceCoreTests : JobTestBase
             await CleanupJobAsync(jobId, "test");
         }
     }
+
+    [Fact]
+    public async Task CancelImportJob_ShouldChangeStatus_FromRunningToCancellingToCancelled()
+    {
+        // Arrange
+        var jobId = GenerateJobId("cancel-import");
+        var testData = TestDataFactory.ImportData.CreateComplexNdJson();
+
+        // Start a background import job that will run long enough to be cancelled
+        Func<CancellationToken, Task<(Stream inputStream, Stream outputStream)>> streamFactory = (
+            ct
+        ) =>
+        {
+            var inputStream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(testData));
+            var outputStream = new MemoryStream();
+            return Task.FromResult<(Stream, Stream)>((inputStream, outputStream));
+        };
+
+        try
+        {
+            // Act - Start background job
+            var runningJob = await Client.ImportGraphAsync<object>(
+                jobId,
+                streamFactory,
+                options: null,
+                request: null,
+                executeInBackground: true,
+                cancellationToken: default
+            );
+
+            // Assert - Job should be running
+            Assert.Equal(JobStatus.Running, runningJob.Status);
+            Output.WriteLine($"✓ Import job {jobId} started with status: {runningJob.Status}");
+
+            // Act - Cancel the job
+            var cancelRequested = await Client.CancelImportJobAsync(jobId);
+
+            // Assert - Cancellation should be accepted
+            Assert.True(cancelRequested);
+            Output.WriteLine($"✓ Cancellation requested for job: {jobId}");
+
+            // Act - Check immediate status change to Cancelling
+            var cancellingJob = await Client.GetImportJobAsync(jobId);
+
+            // Assert - Status should change to Cancelling immediately
+            Assert.NotNull(cancellingJob);
+            Assert.Equal(JobStatus.Cancelling, cancellingJob.Status);
+            Output.WriteLine($"✓ Job status immediately changed to: {cancellingJob.Status}");
+
+            // Act - Wait for final cancellation (with timeout)
+            var maxWaitTime = TimeSpan.FromSeconds(10);
+            var startTime = DateTime.UtcNow;
+            JobRecord? finalJob = null;
+
+            while (DateTime.UtcNow - startTime < maxWaitTime)
+            {
+                finalJob = await Client.GetImportJobAsync(jobId);
+                if (finalJob?.Status == JobStatus.Cancelled)
+                    break;
+                await Task.Delay(500);
+            }
+
+            // Assert - Job should eventually be cancelled
+            Assert.NotNull(finalJob);
+            Assert.Equal(JobStatus.Cancelled, finalJob.Status);
+            Output.WriteLine($"✓ Job eventually completed with status: {finalJob.Status}");
+        }
+        finally
+        {
+            await CleanupJobAsync(jobId, "import");
+        }
+    }
+
+    [Fact]
+    public async Task CancelDeleteJob_ShouldChangeStatus_FromRunningToCancellingToCancelled()
+    {
+        // Arrange
+        var jobId = GenerateJobId("cancel-delete");
+
+        // Create some test data that will take time to delete
+        var modelId1 = await CreateTestModelAsync();
+        var modelId2 = await CreateTestModelAsync();
+        var twinId1 = await CreateTestTwinAsync(modelId: modelId1);
+        var twinId2 = await CreateTestTwinAsync(modelId: modelId2);
+        await CreateTestRelationshipAsync(twinId1, twinId2);
+
+        try
+        {
+            // Act - Start background delete job
+            var runningJob = await Client.DeleteAllAsync(jobId);
+
+            // Assert - Job should be running (or may complete very quickly)
+            Assert.True(
+                runningJob.Status == JobStatus.Running || runningJob.Status == JobStatus.Succeeded
+            );
+            Output.WriteLine($"✓ Delete job {jobId} started with status: {runningJob.Status}");
+
+            // Only test cancellation if the job is still running
+            if (runningJob.Status == JobStatus.Running)
+            {
+                // Act - Cancel the job
+                var cancelRequested = await Client.CancelDeleteJobAsync(jobId);
+
+                // Assert - Cancellation should be accepted
+                Assert.True(cancelRequested);
+                Output.WriteLine($"✓ Cancellation requested for job: {jobId}");
+
+                // Act - Check immediate status change to Cancelling
+                var cancellingJob = await Client.GetDeleteJobAsync(jobId);
+
+                // Assert - Status should change to Cancelling immediately
+                Assert.NotNull(cancellingJob);
+                Assert.Equal(JobStatus.Cancelling, cancellingJob.Status);
+                Output.WriteLine($"✓ Job status immediately changed to: {cancellingJob.Status}");
+
+                // Act - Wait for final cancellation (with timeout)
+                var maxWaitTime = TimeSpan.FromSeconds(10);
+                var startTime = DateTime.UtcNow;
+                JobRecord? finalJob = null;
+
+                while (DateTime.UtcNow - startTime < maxWaitTime)
+                {
+                    finalJob = await Client.GetDeleteJobAsync(jobId);
+                    if (finalJob?.Status == JobStatus.Cancelled)
+                        break;
+                    await Task.Delay(500);
+                }
+
+                // Assert - Job should eventually be cancelled
+                Assert.NotNull(finalJob);
+                Assert.Equal(JobStatus.Cancelled, finalJob.Status);
+                Output.WriteLine($"✓ Job eventually completed with status: {finalJob.Status}");
+            }
+            else
+            {
+                Output.WriteLine("✓ Delete job completed too quickly to test cancellation");
+            }
+        }
+        finally
+        {
+            await CleanupJobAsync(jobId, "delete");
+        }
+    }
+
+    [Fact]
+    public async Task CancelNonExistentJob_ShouldReturnFalse()
+    {
+        // Arrange
+        var nonExistentJobId = GenerateJobId("non-existent");
+
+        // Act
+        var importCancelResult = await Client.CancelImportJobAsync(nonExistentJobId);
+        var deleteCancelResult = await Client.CancelDeleteJobAsync(nonExistentJobId);
+
+        // Assert
+        Assert.False(importCancelResult);
+        Assert.False(deleteCancelResult);
+
+        Output.WriteLine($"✓ Cancellation correctly returned false for non-existent jobs");
+    }
 }
