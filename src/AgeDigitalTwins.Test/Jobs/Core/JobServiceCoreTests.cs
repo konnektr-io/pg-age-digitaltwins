@@ -166,24 +166,28 @@ public class JobServiceCoreTests : JobTestBase
     {
         // Arrange
         var jobId = GenerateJobId("cancel-import");
-        // Create a larger dataset by repeating the complex data multiple times
-        var baseData = TestDataFactory.ImportData.CreateComplexNdJson();
-        var largeTestData = string.Join("\n", Enumerable.Repeat(baseData, 50));
 
-        // Start a background import job that will run long enough to be cancelled
-        Func<CancellationToken, Task<(Stream inputStream, Stream outputStream)>> streamFactory = (
-            ct
-        ) =>
-        {
-            var inputStream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(largeTestData));
-            var outputStream = new MemoryStream();
-            return Task.FromResult<(Stream, Stream)>((inputStream, outputStream));
-        };
+        // Create a simple test data that should process quickly
+        var testData = TestDataFactory.ImportData.CreateComplexNdJson();
+
+        // Create a stream factory that will delay stream creation to give us time to cancel
+        var streamCreated = false;
+        Func<CancellationToken, Task<(Stream inputStream, Stream outputStream)>> streamFactory =
+            async (ct) =>
+            {
+                // Wait a bit before creating streams to allow cancellation
+                await Task.Delay(200, ct);
+                streamCreated = true;
+
+                var inputStream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(testData));
+                var outputStream = new MemoryStream();
+                return (inputStream, outputStream);
+            };
 
         try
         {
             // Act - Start background job
-            var runningJob = await Client.ImportGraphAsync<object>(
+            var importTask = Client.ImportGraphAsync<object>(
                 jobId,
                 streamFactory,
                 options: null,
@@ -192,62 +196,38 @@ public class JobServiceCoreTests : JobTestBase
                 cancellationToken: default
             );
 
-            // Assert - Job should be running
+            // Wait a moment for the job to start
+            await Task.Delay(50);
+
+            // Verify job is running
+            var runningJob = await Client.GetImportJobAsync(jobId);
+            Assert.NotNull(runningJob);
             Assert.Equal(JobStatus.Running, runningJob.Status);
             Output.WriteLine($"✓ Import job {jobId} started with status: {runningJob.Status}");
 
-            // Give the job a moment to start processing
-            await Task.Delay(100);
-
-            // Act - Cancel the job
+            // Act - Cancel the job quickly before stream creation completes
             var cancelRequested = await Client.CancelImportJobAsync(jobId);
+            Assert.True(cancelRequested);
+            Output.WriteLine($"✓ Cancellation requested for job: {jobId}");
 
-            // Check current job status to see if we can test cancellation
-            var currentJob = await Client.GetImportJobAsync(jobId);
+            // Verify status changed to Cancelling
+            var cancellingJob = await Client.GetImportJobAsync(jobId);
+            Assert.NotNull(cancellingJob);
+            Assert.Equal(JobStatus.Cancelling, cancellingJob.Status);
+            Output.WriteLine($"✓ Job status changed to: {cancellingJob.Status}");
 
-            if (
-                currentJob?.Status == JobStatus.Running
-                || currentJob?.Status == JobStatus.Cancelling
-            )
-            {
-                // Assert - Cancellation should be accepted for running jobs
-                Assert.True(cancelRequested);
-                Output.WriteLine($"✓ Cancellation requested for job: {jobId}");
+            // Wait for the import task to complete (should be cancelled)
+            var finalResult = await importTask;
 
-                // Act - Check status change to Cancelling
-                var cancellingJob = await Client.GetImportJobAsync(jobId);
+            // Assert - Job should be cancelled
+            Assert.Equal(JobStatus.Cancelled, finalResult.Status);
+            Output.WriteLine($"✓ Job completed with status: {finalResult.Status}");
 
-                // Assert - Status should change to Cancelling
-                Assert.NotNull(cancellingJob);
-                Assert.Equal(JobStatus.Cancelling, cancellingJob.Status);
-                Output.WriteLine($"✓ Job status changed to: {cancellingJob.Status}");
-
-                // Act - Wait for final cancellation (with timeout)
-                var maxWaitTime = TimeSpan.FromSeconds(10);
-                var startTime = DateTime.UtcNow;
-                JobRecord? finalJob = null;
-
-                while (DateTime.UtcNow - startTime < maxWaitTime)
-                {
-                    finalJob = await Client.GetImportJobAsync(jobId);
-                    if (finalJob?.Status == JobStatus.Cancelled)
-                        break;
-                    await Task.Delay(500);
-                }
-
-                // Assert - Job should eventually be cancelled
-                Assert.NotNull(finalJob);
-                Assert.Equal(JobStatus.Cancelled, finalJob.Status);
-                Output.WriteLine($"✓ Job eventually completed with status: {finalJob.Status}");
-            }
-            else
-            {
-                // Job completed before we could cancel it
-                Output.WriteLine(
-                    $"✓ Job completed too quickly to test cancellation, final status: {currentJob?.Status}"
-                );
-                // This is acceptable for this test since job execution speed can vary
-            }
+            // Verify the stream factory was cancelled before creating streams
+            Assert.False(
+                streamCreated,
+                "Stream factory should have been cancelled before creating streams"
+            );
         }
         finally
         {
