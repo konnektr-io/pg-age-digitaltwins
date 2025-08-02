@@ -348,10 +348,36 @@ public static class DeleteJob
                 if (relationshipElement == null)
                     continue;
 
-                var sourceId = relationshipElement.Value.GetProperty("$sourceId").GetString();
-                var relationshipId = relationshipElement
-                    .Value.GetProperty("$relationshipId")
-                    .GetString();
+                // Try different ways to access the properties
+                string? sourceId = null;
+                string? relationshipId = null;
+
+                // Try direct property access
+                if (relationshipElement.Value.TryGetProperty("$sourceId", out var sourceIdProp))
+                {
+                    sourceId = sourceIdProp.GetString();
+                }
+
+                if (relationshipElement.Value.TryGetProperty("$relationshipId", out var relIdProp))
+                {
+                    relationshipId = relIdProp.GetString();
+                }
+
+                // If direct access fails, try nested structure (relationship might be nested under 'r')
+                if (
+                    sourceId == null
+                    && relationshipElement.Value.TryGetProperty("r", out var rProp)
+                )
+                {
+                    if (rProp.TryGetProperty("$sourceId", out var nestedSourceIdProp))
+                    {
+                        sourceId = nestedSourceIdProp.GetString();
+                    }
+                    if (rProp.TryGetProperty("$relationshipId", out var nestedRelIdProp))
+                    {
+                        relationshipId = nestedRelIdProp.GetString();
+                    }
+                }
 
                 if (!string.IsNullOrEmpty(sourceId) && !string.IsNullOrEmpty(relationshipId))
                 {
@@ -362,14 +388,23 @@ public static class DeleteJob
                     );
                     deletedCount++;
                 }
+                else
+                {
+                    // If we can't extract the required properties, throw an exception with diagnostic info
+                    var rawJson = relationshipElement.Value.GetRawText();
+                    throw new InvalidOperationException(
+                        $"Unable to extract sourceId or relationshipId from relationship. JSON structure: {rawJson}"
+                    );
+                }
             }
             catch (RelationshipNotFoundException)
             {
                 // Relationship already deleted, continue
             }
-            catch (Exception)
+            catch (Exception ex) when (ex is not InvalidOperationException)
             {
-                // Log error but continue if ContinueOnFailure is true
+                // Re-throw InvalidOperationException as-is for debugging
+                // Log other errors but continue if ContinueOnFailure is true
                 throw; // For now, always throw to be safe
             }
         }
