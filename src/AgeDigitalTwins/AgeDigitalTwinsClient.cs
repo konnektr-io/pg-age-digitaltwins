@@ -40,6 +40,11 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
     public int DefaultCheckpointInterval { get; }
 
     /// <summary>
+    /// Gets the default heartbeat interval for import operations.
+    /// </summary>
+    public TimeSpan DefaultHeartbeatInterval { get; }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="AgeDigitalTwinsClient"/> class with a data source and graph name.
     /// </summary>
     /// <param name="dataSource">The data source for connecting to the database.</param>
@@ -56,6 +61,7 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
         _modelCacheExpiration = options.ModelCacheExpiration;
         DefaultBatchSize = options.DefaultBatchSize;
         DefaultCheckpointInterval = options.DefaultCheckpointInterval;
+        DefaultHeartbeatInterval = options.DefaultHeartbeatInterval;
         _modelParser = new(
             new ParsingOptions()
             {
@@ -87,6 +93,7 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
         _modelCacheExpiration = TimeSpan.FromSeconds(10); // Default to 10 seconds if not set
         DefaultBatchSize = 50; // Default batch size
         DefaultCheckpointInterval = 50; // Default checkpoint interval
+        DefaultHeartbeatInterval = TimeSpan.FromSeconds(30); // Default heartbeat interval
         _modelParser = new(
             new ParsingOptions()
             {
@@ -160,4 +167,9 @@ public class AgeDigitalTwinsClientOptions
     /// Gets or sets the default checkpoint interval for import operations.
     /// </summary>
     public int DefaultCheckpointInterval { get; set; } = 50;
+
+    /// <summary>
+    /// Gets or sets the default heartbeat interval for import operations.
+    /// </summary>
+    public TimeSpan DefaultHeartbeatInterval { get; set; } = TimeSpan.FromSeconds(30);
 }

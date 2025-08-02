@@ -212,6 +212,25 @@ public partial class AgeDigitalTwinsClient
                                 );
                             }
                         }
+                        catch (OperationCanceledException)
+                        {
+                            // Job was cancelled - update status to Cancelled in database
+                            await JobService.UpdateJobStatusAsync(
+                                jobId,
+                                JobStatus.Cancelled,
+                                errorData: new JobError
+                                {
+                                    Code = "OperationCanceledException",
+                                    Message = "Job was cancelled",
+                                    Details = new Dictionary<string, object>
+                                    {
+                                        { "cancelled", true },
+                                        { "timestamp", DateTime.UtcNow.ToString("o") },
+                                    },
+                                },
+                                cancellationToken: CancellationToken.None // Use None since job is being cancelled
+                            );
+                        }
                         catch (Exception ex)
                         {
                             // Only mark job as failed for truly fatal exceptions
@@ -221,7 +240,7 @@ public partial class AgeDigitalTwinsClient
                                 await JobService.UpdateJobStatusAsync(
                                     jobId,
                                     JobStatus.Failed,
-                                    errorData: new ImportJobError
+                                    errorData: new JobError
                                     {
                                         Code = ex.GetType().Name,
                                         Message = ex.Message,
@@ -335,7 +354,7 @@ public partial class AgeDigitalTwinsClient
             await JobService.UpdateJobStatusAsync(
                 jobId,
                 JobStatus.Failed,
-                errorData: new ImportJobError
+                errorData: new JobError
                 {
                     Code = ex.GetType().Name,
                     Message = ex.Message,
@@ -411,8 +430,7 @@ public partial class AgeDigitalTwinsClient
         {
             // Set status to Cancelling to signal the running job to stop gracefully
             // The job itself will set the status to Cancelled when it actually stops
-            await JobService.UpdateJobStatusAsync(jobId, JobStatus.Cancelling);
-            return true;
+            return await JobService.UpdateJobStatusAsync(jobId, JobStatus.Cancelling);
         }
         catch
         {
@@ -456,6 +474,165 @@ public partial class AgeDigitalTwinsClient
     public virtual bool DeleteImportJob(string jobId)
     {
         return DeleteImportJobAsync(jobId).GetAwaiter().GetResult();
+    }
+
+    // Delete Job Methods
+
+    /// <summary>
+    /// Creates and executes a delete job that removes all relationships, twins, and models.
+    /// </summary>
+    /// <param name="jobId">The job identifier.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The delete job result.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when job service is not configured or job ID already exists.</exception>
+    /// <exception cref="ArgumentException">Thrown when job ID is null or empty.</exception>
+    public async virtual Task<JobRecord> DeleteAllAsync(
+        string jobId,
+        CancellationToken cancellationToken = default
+    )
+    {
+        return await DeleteAllAsync(jobId, options: null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Executes a delete job to remove all relationships, twins, and models.
+    /// </summary>
+    /// <param name="jobId">The job identifier.</param>
+    /// <param name="options">The delete job options.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The delete job result.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when job service is not configured or job ID already exists.</exception>
+    /// <exception cref="ArgumentException">Thrown when job ID is null or empty.</exception>
+    public async virtual Task<JobRecord> DeleteAllAsync(
+        string jobId,
+        DeleteJobOptions? options,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (string.IsNullOrWhiteSpace(jobId))
+            throw new ArgumentException("Job ID cannot be null or empty", nameof(jobId));
+
+        if (JobService == null)
+            throw new InvalidOperationException("Job service is not configured");
+
+        // Check if job already exists
+        var existingJob = await JobService.GetJobAsync(jobId, cancellationToken);
+        if (existingJob != null)
+        {
+            throw new InvalidOperationException($"Job with ID {jobId} already exists");
+        }
+
+        // Create job record first
+        await JobService.CreateJobAsync(jobId, "delete", new { }, cancellationToken);
+
+        // Then acquire distributed lock for the job
+        if (!await JobService.TryAcquireJobLockAsync(jobId, cancellationToken: cancellationToken))
+        {
+            throw new InvalidOperationException($"Failed to acquire lock for job {jobId}");
+        }
+
+        try
+        {
+            // Execute the delete job
+            return await DeleteJob.ExecuteWithCheckpointAsync(
+                this,
+                jobId,
+                checkpoint: null,
+                options: options ?? new DeleteJobOptions(),
+                cancellationToken
+            );
+        }
+        finally
+        {
+            await JobService.ReleaseJobLockAsync(jobId, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Gets a delete job by ID.
+    /// </summary>
+    /// <param name="jobId">The job identifier.</param>
+    /// <returns>The job record if found; otherwise null.</returns>
+    public async virtual Task<JobRecord?> GetDeleteJobAsync(string jobId)
+    {
+        return await JobService.GetJobAsync(jobId);
+    }
+
+    /// <summary>
+    /// Gets a delete job by ID (synchronous version).
+    /// </summary>
+    /// <param name="jobId">The job identifier.</param>
+    /// <returns>The job record if found; otherwise null.</returns>
+    public virtual JobRecord? GetDeleteJob(string jobId)
+    {
+        return GetDeleteJobAsync(jobId).GetAwaiter().GetResult();
+    }
+
+    /// <summary>
+    /// Lists all delete jobs.
+    /// </summary>
+    /// <returns>A collection of all delete jobs.</returns>
+    public async virtual Task<IEnumerable<JobRecord>> GetDeleteJobsAsync()
+    {
+        return await JobService.ListJobsAsync("delete");
+    }
+
+    /// <summary>
+    /// Cancels a delete job.
+    /// </summary>
+    /// <param name="jobId">The job identifier.</param>
+    /// <returns>True if the job was found and cancellation was requested; otherwise false.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when job service is not configured.</exception>
+    public async virtual Task<bool> CancelDeleteJobAsync(string jobId)
+    {
+        try
+        {
+            // Set status to Cancelling to signal the running job to stop gracefully
+            // The job itself will set the status to Cancelled when it actually stops
+            return await JobService.UpdateJobStatusAsync(jobId, JobStatus.Cancelling);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Cancels a delete job (synchronous version).
+    /// </summary>
+    /// <param name="jobId">The job identifier.</param>
+    /// <returns>True if the job was found and cancellation was requested; otherwise false.</returns>
+    public virtual bool CancelDeleteJob(string jobId)
+    {
+        return CancelDeleteJobAsync(jobId).GetAwaiter().GetResult();
+    }
+
+    /// <summary>
+    /// Deletes a delete job from the job store.
+    /// </summary>
+    /// <param name="jobId">The job identifier.</param>
+    /// <returns>True if the job was found and deleted; otherwise false.</returns>
+    public async virtual Task<bool> DeleteDeleteJobAsync(string jobId)
+    {
+        try
+        {
+            await JobService.DeleteJobAsync(jobId);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Deletes a delete job from the job store (synchronous version).
+    /// </summary>
+    /// <param name="jobId">The job identifier.</param>
+    /// <returns>True if the job was found and deleted; otherwise false.</returns>
+    public virtual bool DeleteDeleteJob(string jobId)
+    {
+        return DeleteDeleteJobAsync(jobId).GetAwaiter().GetResult();
     }
 
     /// <summary>
@@ -600,11 +777,13 @@ public partial class AgeDigitalTwinsClient
             );
         }
 
-        // Load checkpoint for this job
+        // Load checkpoint for this job - if none exists, start from the beginning
         var checkpoint = await JobService.LoadCheckpointAsync(jobId, cancellationToken);
         if (checkpoint == null)
         {
-            throw new InvalidOperationException($"No checkpoint found for job {jobId}");
+            // No checkpoint found - restart the job from the beginning
+            // This can happen if the job was interrupted before any checkpoint was saved
+            checkpoint = new ImportJobCheckpoint { JobId = jobId };
         }
 
         // Resume execution from checkpoint
