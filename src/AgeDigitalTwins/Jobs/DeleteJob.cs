@@ -334,8 +334,8 @@ public static class DeleteJob
         CancellationToken cancellationToken
     )
     {
-        // Query for a batch of relationships and delete them
-        var query = $"MATCH ()-[r]->() RETURN r LIMIT {batchSize}";
+        // Query for a batch of relationships between twins and delete them
+        var query = $"MATCH (:Twin)-[r]->(:Twin) RETURN r LIMIT {batchSize}";
         int deletedCount = 0;
 
         await foreach (
