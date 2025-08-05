@@ -408,11 +408,79 @@ public class JobService
     }
 
     /// <summary>
+    /// Checks if the job storage schema exists asynchronously.
+    /// </summary>
+    /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result contains a boolean indicating whether the schema exists.</returns>
+    private async Task<bool> SchemaExistsAsync(CancellationToken cancellationToken = default)
+    {
+        var checkSchemaSql =
+            @"
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.schemata 
+                WHERE schema_name = @schemaName
+            )";
+
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var command = new NpgsqlCommand(checkSchemaSql, connection);
+        command.Parameters.AddWithValue("@schemaName", _schemaName);
+
+        var result = await command.ExecuteScalarAsync(cancellationToken);
+        return result is bool exists && exists;
+    }
+
+    /// <summary>
     /// Initializes the database schema and table for job storage.
     /// </summary>
     private async Task InitializeSchemaAsync()
     {
-        var createSchemaSql = $"CREATE SCHEMA IF NOT EXISTS {_schemaName}";
+        try
+        {
+            if (!await SchemaExistsAsync())
+            {
+                // When a new schema is created, it will also be initialized
+                // with tables and indexes
+                await CreateSchemaAsync();
+            }
+            else
+            {
+                // Schema exists, but ensure table and indexes are up to date
+                await EnsureTableAndIndexesAsync();
+            }
+
+            _logger?.LogDebug("Job storage schema initialized successfully");
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Failed to initialize job storage schema");
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Creates the job storage schema with tables and indexes.
+    /// </summary>
+    private async Task CreateSchemaAsync()
+    {
+        var createSchemaSql = $"CREATE SCHEMA {_schemaName}";
+
+        await using var connection = await _dataSource.OpenConnectionAsync();
+
+        // Create schema
+        await using (var command = new NpgsqlCommand(createSchemaSql, connection))
+        {
+            await command.ExecuteNonQueryAsync();
+        }
+
+        // Create table and indexes
+        await EnsureTableAndIndexesAsync();
+    }
+
+    /// <summary>
+    /// Ensures that the jobs table and indexes exist and are up to date.
+    /// </summary>
+    private async Task EnsureTableAndIndexesAsync()
+    {
         var createTableSql =
             $@"
             CREATE TABLE IF NOT EXISTS {_schemaName}.jobs (
@@ -442,34 +510,18 @@ public class JobService
             CREATE INDEX IF NOT EXISTS idx_jobs_lock_acquired_by ON {_schemaName}.jobs(lock_acquired_by);
             CREATE INDEX IF NOT EXISTS idx_jobs_lock_acquired_at ON {_schemaName}.jobs(lock_acquired_at)";
 
-        try
+        await using var connection = await _dataSource.OpenConnectionAsync();
+
+        // Create table
+        await using (var command = new NpgsqlCommand(createTableSql, connection))
         {
-            await using var connection = await _dataSource.OpenConnectionAsync();
-
-            // Create schema
-            await using (var command = new NpgsqlCommand(createSchemaSql, connection))
-            {
-                await command.ExecuteNonQueryAsync();
-            }
-
-            // Create table
-            await using (var command = new NpgsqlCommand(createTableSql, connection))
-            {
-                await command.ExecuteNonQueryAsync();
-            }
-
-            // Create indexes
-            await using (var command = new NpgsqlCommand(createIndexSql, connection))
-            {
-                await command.ExecuteNonQueryAsync();
-            }
-
-            _logger?.LogDebug("Job storage schema initialized successfully");
+            await command.ExecuteNonQueryAsync();
         }
-        catch (Exception ex)
+
+        // Create indexes
+        await using (var command = new NpgsqlCommand(createIndexSql, connection))
         {
-            _logger?.LogError(ex, "Failed to initialize job storage schema");
-            throw;
+            await command.ExecuteNonQueryAsync();
         }
     }
 
