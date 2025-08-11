@@ -17,7 +17,7 @@
     <PackageReference Include="CloudNative.CloudEvents.SystemTextJson" Version="2.8.0" />
     <PackageReference Include="Confluent.Kafka" Version="2.11.0" />
     <PackageReference Include="JsonPatch.Net" Version="3.3.0" />
-    <PackageReference Include="Microsoft.Azure.Kusto.Ingest" Version="13.0.2" />
+    <PackageReference Include="Microsoft.Azure.Kusto.Ingest" Version="14.0.1" />
     <PackageReference Include="MQTTnet" Version="5.0.1.1416" />
   </ItemGroup>
 
