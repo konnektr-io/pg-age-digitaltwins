@@ -13,6 +13,9 @@ public static class GraphInitialization
             new(
                 @$"CREATE UNIQUE INDEX twin_id_idx ON {graphName}.""Twin"" (ag_catalog.agtype_access_operator(properties, '""$dtId""'::agtype));"
             ),
+            new(
+                @$"CREATE INDEX twin_model_id_idx ON {graphName}.""Twin"" (ag_catalog.agtype_access_operator(properties,'""$metadata""'::agtype,'""$model""'::agtype));"
+            ),
             new(@$"CREATE INDEX twin_gin_idx ON {graphName}.""Twin"" USING gin (properties);"),
             new(@$"ALTER TABLE {graphName}.""Twin"" REPLICA IDENTITY FULL;"),
             new(@$"SELECT create_vlabel('{graphName}', 'Model');"),
