@@ -103,6 +103,7 @@ public class RelationshipTests : TestBase
         // Load required models
         string[] models =
         {
+            SampleData.DtdlCrater,
             SampleData.DtdlCelestialBody,
             SampleData.DtdlPlanet,
             SampleData.DtdlMoon,
