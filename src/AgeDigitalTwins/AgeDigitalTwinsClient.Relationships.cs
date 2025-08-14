@@ -499,8 +499,9 @@ RETURN rel";
                 .Serialize(patchedRel, serializerOptions)
                 .Replace("'", "\\'");
             string cypher =
-                $@"MATCH (:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})-[rel {{`$relationshipId`: '{relationshipId.Replace("'", "\\'")}'}}]->(:Twin)
-SET rel = '{updatedRelJson}'::agtype";
+                $@"WITH '{updatedRelJson}'::agtype AS relationship
+MATCH (:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})-[rel {{`$relationshipId`: '{relationshipId.Replace("'", "\\'")}'}}]->(:Twin)
+SET rel = relationship";
             await using var connection = await _dataSource.OpenConnectionAsync(
                 Npgsql.TargetSessionAttributes.ReadWrite,
                 cancellationToken

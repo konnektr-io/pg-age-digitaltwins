@@ -96,4 +96,44 @@ public class RelationshipTests : TestBase
             () => Client.CreateOrReplaceRelationshipAsync("room1", "rel1", relationship2, "*")
         );
     }
+
+    [Fact]
+    public async Task UpdateRelationshipAsync_SatellitesDistance_UpdatesDistanceProperty()
+    {
+        // Load required models
+        string[] models =
+        {
+            SampleData.DtdlCelestialBody,
+            SampleData.DtdlPlanet,
+            SampleData.DtdlMoon,
+        };
+        await Client.CreateModelsAsync(models);
+
+        // Create planet and moon twins
+        var planetTwin =
+            @"{""$dtId"": ""earth"", ""$metadata"": {""$model"": ""dtmi:com:contoso:Planet;1""}, ""name"": ""Earth""}";
+        var moonTwin =
+            @"{""$dtId"": ""moon1"", ""$metadata"": {""$model"": ""dtmi:com:contoso:Moon;1""}, ""name"": ""Moon""}";
+        await Client.CreateOrReplaceDigitalTwinAsync("earth", planetTwin);
+        await Client.CreateOrReplaceDigitalTwinAsync("moon1", moonTwin);
+
+        // Create satellites relationship with Distance property
+        var satellitesRel =
+            @"{""$relationshipId"": ""rel_sat1"", ""$sourceId"": ""earth"", ""$relationshipName"": ""satellites"", ""$targetId"": ""moon1"", ""Distance"": 384400}";
+        await Client.CreateOrReplaceRelationshipAsync("earth", "rel_sat1", satellitesRel);
+
+        // Patch: change Distance
+        JsonPatch patch = JsonSerializer.Deserialize<JsonPatch>(
+            @"[{""op"": ""replace"", ""path"": ""/Distance"", ""value"": 385000}]"
+        )!;
+        await Client.UpdateRelationshipAsync("earth", "rel_sat1", patch);
+
+        // Read back and verify
+        var relDoc = await Client.GetRelationshipAsync<JsonDocument>("earth", "rel_sat1");
+        Assert.NotNull(relDoc);
+        var relElem = relDoc.RootElement;
+        Assert.Equal(385000, relElem.GetProperty("Distance").GetInt32());
+        Assert.Equal("moon1", relElem.GetProperty("$targetId").GetString());
+        Assert.Equal("earth", relElem.GetProperty("$sourceId").GetString());
+    }
 }
