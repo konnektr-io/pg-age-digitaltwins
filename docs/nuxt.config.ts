@@ -2,8 +2,8 @@
 export default defineNuxtConfig({
   devtools: { enabled: true },
   extends: ['shadcn-docs-nuxt'],
-  site: {
-    url: 'https://digitaltwins.docs.konnektr.io/',
+  app: {
+    baseURL: process.env.NODE_ENV === 'production' ? '/pg-age-digitaltwins/' : '/'
   },
   i18n: { 
     defaultLocale: 'en', 
