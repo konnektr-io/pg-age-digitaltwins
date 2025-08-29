@@ -5,6 +5,7 @@ export default defineAppConfig({
       description: 'Digital Twins for Apache AGE allows to use Postgres with the Apache AGE extension as a backend for Digital Twins solutions using DTDL.',
     },
     theme: {
+      customizable: false,
       color: 'zinc',
       radius: 0.5,
     },

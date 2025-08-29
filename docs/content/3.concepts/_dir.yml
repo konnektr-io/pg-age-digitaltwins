@@ -1,5 +1,7 @@
 title: Concepts
-icon: lucide:folder
+icon: lightbulb
+label: Concepts
+order: 2
 navigation.redirect: /concepts/dtdl
 sidebar:
   style: default
