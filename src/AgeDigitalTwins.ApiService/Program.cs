@@ -26,13 +26,25 @@ builder.AddNpgsqlMultihostDataSource(
             ?? builder.Configuration["ConnectionStrings:agedb"]
             ?? builder.Configuration["AgeConnectionString"]
             ?? throw new InvalidOperationException("Connection string is required.");
+
+        // Helper function for env variable with fallback
+        static int GetIntEnv(string name, int defaultValue)
+        {
+            var value = Environment.GetEnvironmentVariable(name);
+            return int.TryParse(value, out var result) ? result : defaultValue;
+        }
+
         // Setting the search path allows to avoid setting this on every connection
         NpgsqlConnectionStringBuilder connectionStringBuilder =
             new(settings.ConnectionString)
             {
                 SearchPath = "ag_catalog, \"$user\", public",
-                ConnectionIdleLifetime = 60,
-                ConnectionLifetime = 300,
+                ConnectionIdleLifetime = GetIntEnv("PG_CONN_IDLE_LIFETIME", 60), // seconds
+                ConnectionLifetime = GetIntEnv("PG_CONN_LIFETIME", 300), // seconds
+                MaxPoolSize = GetIntEnv("PG_MAX_POOL_SIZE", 100),
+                MinPoolSize = GetIntEnv("PG_MIN_POOL_SIZE", 0),
+                Timeout = GetIntEnv("PG_CONN_TIMEOUT", 15), // seconds
+                CommandTimeout = GetIntEnv("PG_COMMAND_TIMEOUT", 30), // seconds
             };
         settings.ConnectionString = connectionStringBuilder.ConnectionString;
     },
