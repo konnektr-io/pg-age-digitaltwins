@@ -1,3 +1,3 @@
-icon: book-open
+icon: lucide:book-open
 label: How-to Guides
-order: 3
+navigation.redirect: /how-to-guides/migration-guide

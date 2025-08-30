@@ -24,10 +24,10 @@ export default defineAppConfig({
         target: '_blank',
       }],
     },
-    aside: {
+    /* aside: {
       useLevel: true,
       collapse: false,
-    },
+    }, */
     main: {
       breadCrumb: true,
       showTitle: true,

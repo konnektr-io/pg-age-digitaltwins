@@ -1,8 +1,7 @@
 title: Deployment & Installation
 icon: lucide:server
-navigation.redirect: /deployment-installation/installation-and-deployment
+navigation.redirect: /deployment-installation/self-host
 label: Deployment & Installation
-order: 3
 sidebar:
   style: default
 collapse: false

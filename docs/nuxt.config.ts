@@ -18,7 +18,7 @@ export default defineNuxtConfig({
   compatibilityDate: '2024-07-06',
   mdc: {
     highlight: {
-      langs: ['http','cypher','sql','csharp'],
+      langs: ['http','cypher','sql','csharp','python','javascript','json'],
     },
   },
 });
