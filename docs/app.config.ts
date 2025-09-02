@@ -14,8 +14,8 @@ export default defineAppConfig({
       showTitle: true,
       // darkModeToggle: true,
       logo: {
-        light: '/konnektr-logo-small.png',
-        dark: '/konnektr-logo-small.png',
+        light: '/konnektr.svg',
+        dark: '/konnektr.svg',
       },
       nav: [],
       links: [{
