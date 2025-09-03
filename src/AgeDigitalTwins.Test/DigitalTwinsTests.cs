@@ -398,6 +398,89 @@ public class DigitalTwinsTests : TestBase
     }
 
     [Fact]
+    public async Task UpdateDigitalTwinAsync_AddQueryWithSpecialCharacters_Updated()
+    {
+        // Load required models
+        string[] models = [SampleData.DtdlQueryable];
+        await Client.CreateModelsAsync(models);
+
+        // Create digital twin
+        var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinQueryable);
+        var createdTwin = await Client.CreateOrReplaceDigitalTwinAsync(
+            digitalTwin!.Id,
+            digitalTwin
+        );
+
+        // The query string with special characters that need proper escaping
+        string queryValue =
+            "MATCH (current:Twin)-[*1..2]->(T:Twin) WHERE current['$dtId']= '@_selectedAssessementGroupId' AND (digitaltwins.is_of_model(T,'dtmi:com:arcadis:climaterisk:Asset;1')) RETURN T.$dtId as Id, T.name as Name  ORDER BY Name ASC";
+
+        // Create JSON patch - the JsonPatch library should handle the escaping
+        JsonPatch jsonPatch = new(PatchOperation.Add(JsonPointer.Parse("/query"), queryValue));
+
+        await Client.UpdateDigitalTwinAsync(digitalTwin!.Id, jsonPatch);
+
+        // Read digital twin to verify the query was added correctly
+        var readTwin = await Client.GetDigitalTwinAsync<BasicDigitalTwin>(digitalTwin.Id);
+        Assert.NotNull(readTwin);
+        Assert.Equal(digitalTwin.Id, readTwin.Id);
+        Assert.True(readTwin.Contents.ContainsKey("query"));
+
+        // Verify the query value is exactly what we set (no escaping issues)
+        string actualQuery = readTwin.Contents["query"].ToString()!;
+        Assert.Equal(queryValue, actualQuery);
+
+        // Verify specific characters are preserved
+        Assert.Contains("'$dtId'", actualQuery);
+        Assert.Contains("'@_selectedAssessementGroupId'", actualQuery);
+        Assert.Contains("'dtmi:com:arcadis:climaterisk:Asset;1'", actualQuery);
+    }
+
+    [Fact]
+    public async Task UpdateDigitalTwinAsync_AddQueryWithSpecialCharacters_JsonDeserialization()
+    {
+        // Load required models
+        string[] models = [SampleData.DtdlQueryable];
+        await Client.CreateModelsAsync(models);
+
+        // Create digital twin
+        var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinQueryable);
+        var createdTwin = await Client.CreateOrReplaceDigitalTwinAsync(
+            digitalTwin!.Id,
+            digitalTwin
+        );
+
+        // Test with JsonSerializer.Deserialize approach to see if escaping is the issue
+        string jsonPatchString =
+            @"[{
+            ""op"": ""add"",
+            ""path"": ""/query"",
+            ""value"": ""MATCH (current:Twin)-[*1..2]->(T:Twin) WHERE current['$dtId']= '@_selectedAssessementGroupId' AND (digitaltwins.is_of_model(T,'dtmi:com:arcadis:climaterisk:Asset;1')) RETURN T.$dtId as Id, T.name as Name  ORDER BY Name ASC""
+        }]";
+
+        JsonPatch jsonPatch = JsonSerializer.Deserialize<JsonPatch>(jsonPatchString)!;
+
+        await Client.UpdateDigitalTwinAsync(digitalTwin!.Id, jsonPatch);
+
+        // Read digital twin to verify the query was added correctly
+        var readTwin = await Client.GetDigitalTwinAsync<BasicDigitalTwin>(digitalTwin.Id);
+        Assert.NotNull(readTwin);
+        Assert.Equal(digitalTwin.Id, readTwin.Id);
+        Assert.True(readTwin.Contents.ContainsKey("query"));
+
+        // Verify the query value is correctly stored
+        string actualQuery = readTwin.Contents["query"].ToString()!;
+        string expectedQuery =
+            "MATCH (current:Twin)-[*1..2]->(T:Twin) WHERE current['$dtId']= '@_selectedAssessementGroupId' AND (digitaltwins.is_of_model(T,'dtmi:com:arcadis:climaterisk:Asset;1')) RETURN T.$dtId as Id, T.name as Name  ORDER BY Name ASC";
+        Assert.Equal(expectedQuery, actualQuery);
+
+        // Check for proper handling of single quotes and special characters
+        Assert.Contains("'$dtId'", actualQuery);
+        Assert.Contains("'@_selectedAssessementGroupId'", actualQuery);
+        Assert.Contains("'dtmi:com:arcadis:climaterisk:Asset;1'", actualQuery);
+    }
+
+    [Fact]
     public async Task Benchmark_UpdateDigitalTwinAsync()
     {
         // Load required models

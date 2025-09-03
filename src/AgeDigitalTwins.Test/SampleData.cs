@@ -227,5 +227,34 @@ namespace AgeDigitalTwins.Test
                 },
                 ""diameter"": 100
             }";
+
+        public const string DtdlQueryable =
+            @"{
+                ""@context"": ""dtmi:dtdl:context;3"",
+                ""@id"": ""dtmi:com:contoso:Queryable;1"",
+                ""@type"": ""Interface"",
+                ""displayName"": ""Queryable"",
+                ""contents"": [
+                    {
+                        ""@type"": ""Property"",
+                        ""name"": ""name"",
+                        ""schema"": ""string""
+                    },
+                    {
+                        ""@type"": ""Property"",
+                        ""name"": ""query"",
+                        ""schema"": ""string""
+                    }
+                ]
+            }";
+
+        public const string TwinQueryable =
+            @"{
+                ""$dtId"": ""queryable1"",
+                ""$metadata"": {
+                    ""$model"": ""dtmi:com:contoso:Queryable;1""
+                },
+                ""name"": ""Test Queryable""
+            }";
     }
 }
