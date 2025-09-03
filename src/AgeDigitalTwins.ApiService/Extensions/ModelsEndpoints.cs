@@ -13,7 +13,7 @@ public static class ModelsEndpoints
     {
         var modelsGroup = app.MapGroup("/models")
             .WithTags("Models")
-            .RequireRateLimiting("ModelsApi");
+            .RequireRateLimiting("AdminOperations");
 
         modelsGroup
             .MapGet(

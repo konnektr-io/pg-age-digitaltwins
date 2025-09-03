@@ -21,7 +21,7 @@ public static class ImportJobEndpoints
         var jobs = app.MapGroup("/jobs/imports")
             .WithTags("Import Jobs")
             .WithDescription("Import job management endpoints")
-            .RequireRateLimiting("JobsApi");
+            .RequireRateLimiting("AdminOperations");
 
         // Create/Start Import Job
         jobs.MapPut("/{id}", CreateImportJobAsync)

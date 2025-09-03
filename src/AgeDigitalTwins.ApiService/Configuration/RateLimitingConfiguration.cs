@@ -5,6 +5,7 @@ namespace AgeDigitalTwins.ApiService.Configuration;
 
 /// <summary>
 /// Configuration for rate limiting policies to protect the API and database from overload.
+/// Policies are designed based on operation intensity and resource usage.
 /// </summary>
 public static class RateLimitingConfiguration
 {
@@ -18,7 +19,7 @@ public static class RateLimitingConfiguration
         IConfiguration configuration
     )
     {
-        // Global rate limit - applies to all endpoints
+        // Global rate limit - applies to all endpoints as a safety net
         options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
         {
             var userId = GetUserIdentifier(context);
@@ -27,45 +28,27 @@ public static class RateLimitingConfiguration
                 userId,
                 partition => new FixedWindowRateLimiterOptions
                 {
-                    PermitLimit = configuration.GetValue<int>(
-                        "Parameters:GlobalPermitLimit",
-                        10000
-                    ),
-                    Window = TimeSpan.FromMinutes(
-                        configuration.GetValue<int>("Parameters:GlobalWindowMinutes", 1)
+                    PermitLimit = configuration.GetValue<int>("Parameters:GlobalPermitLimit", 1000),
+                    Window = TimeSpan.FromSeconds(
+                        configuration.GetValue<int>("Parameters:GlobalWindowSeconds", 1)
                     ),
                     QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                    QueueLimit = configuration.GetValue<int>("Parameters:GlobalQueueLimit", 2000),
+                    QueueLimit = configuration.GetValue<int>("Parameters:GlobalQueueLimit", 200),
                 }
             );
         });
 
-        // Jobs API Policy
-        options.AddPolicy("JobsApi", CreateJobsApiPolicy(configuration));
+        // Light Operations - Read-only operations with low resource impact
+        options.AddPolicy("LightOperations", CreateLightOperationsPolicy(configuration));
 
-        // Models API Policy
-        options.AddPolicy("ModelsApi", CreateModelsApiPolicy(configuration));
+        // Medium Operations - Queries and batch operations with moderate resource impact
+        options.AddPolicy("MediumOperations", CreateMediumOperationsPolicy(configuration));
 
-        // Digital Twins API Read Policy
-        options.AddPolicy("DigitalTwinsApiRead", CreateDigitalTwinsApiReadPolicy(configuration));
+        // Heavy Operations - Create/Update/Delete operations with high resource impact
+        options.AddPolicy("HeavyOperations", CreateHeavyOperationsPolicy(configuration));
 
-        // Digital Twins API Write Policy
-        options.AddPolicy("DigitalTwinsApiWrite", CreateDigitalTwinsApiWritePolicy(configuration));
-
-        // Digital Twins API Create/Delete Policy
-        options.AddPolicy(
-            "DigitalTwinsApiCreateDelete",
-            CreateDigitalTwinsApiCreateDeletePolicy(configuration)
-        );
-
-        // Digital Twins API Single Twin Policy
-        options.AddPolicy(
-            "DigitalTwinsApiSingleTwin",
-            CreateDigitalTwinsApiSingleTwinPolicy(configuration)
-        );
-
-        // Query API Policy
-        options.AddPolicy("QueryApi", CreateQueryApiPolicy(configuration));
+        // Admin Operations - Administrative operations like model management and jobs
+        options.AddPolicy("AdminOperations", CreateAdminOperationsPolicy(configuration));
 
         // Custom rejection response
         options.OnRejected = CreateRejectionHandler();
@@ -83,35 +66,10 @@ public static class RateLimitingConfiguration
     }
 
     /// <summary>
-    /// Creates the Jobs API rate limiting policy.
+    /// Creates the Light Operations rate limiting policy.
+    /// Used for read-only operations with low resource impact (GET single items, list operations).
     /// </summary>
-    private static Func<HttpContext, RateLimitPartition<string>> CreateJobsApiPolicy(
-        IConfiguration configuration
-    )
-    {
-        return context =>
-        {
-            var userId = GetUserIdentifier(context);
-
-            return RateLimitPartition.GetFixedWindowLimiter(
-                userId,
-                partition => new FixedWindowRateLimiterOptions
-                {
-                    PermitLimit = configuration.GetValue<int>("Parameters:JobsApiPermitLimit", 10),
-                    Window = TimeSpan.FromSeconds(
-                        configuration.GetValue<int>("Parameters:JobsApiWindowSeconds", 1)
-                    ),
-                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                    QueueLimit = configuration.GetValue<int>("Parameters:JobsApiQueueLimit", 20),
-                }
-            );
-        };
-    }
-
-    /// <summary>
-    /// Creates the Models API rate limiting policy.
-    /// </summary>
-    private static Func<HttpContext, RateLimitPartition<string>> CreateModelsApiPolicy(
+    private static Func<HttpContext, RateLimitPartition<string>> CreateLightOperationsPolicy(
         IConfiguration configuration
     )
     {
@@ -124,48 +82,16 @@ public static class RateLimitingConfiguration
                 partition => new FixedWindowRateLimiterOptions
                 {
                     PermitLimit = configuration.GetValue<int>(
-                        "Parameters:ModelsApiPermitLimit",
-                        500
+                        "Parameters:LightOperationsPermitLimit",
+                        100
                     ),
                     Window = TimeSpan.FromSeconds(
-                        configuration.GetValue<int>("Parameters:ModelsApiWindowSeconds", 1)
-                    ),
-                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                    QueueLimit = configuration.GetValue<int>("Parameters:ModelsApiQueueLimit", 100),
-                }
-            );
-        };
-    }
-
-    /// <summary>
-    /// Creates the Digital Twins API Read policy.
-    /// </summary>
-    private static Func<HttpContext, RateLimitPartition<string>> CreateDigitalTwinsApiReadPolicy(
-        IConfiguration configuration
-    )
-    {
-        return context =>
-        {
-            var userId = GetUserIdentifier(context);
-
-            return RateLimitPartition.GetFixedWindowLimiter(
-                userId,
-                partition => new FixedWindowRateLimiterOptions
-                {
-                    PermitLimit = configuration.GetValue<int>(
-                        "Parameters:DigitalTwinsApiReadPermitLimit",
-                        5000
-                    ),
-                    Window = TimeSpan.FromSeconds(
-                        configuration.GetValue<int>(
-                            "Parameters:DigitalTwinsApiReadWindowSeconds",
-                            1
-                        )
+                        configuration.GetValue<int>("Parameters:LightOperationsWindowSeconds", 1)
                     ),
                     QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                     QueueLimit = configuration.GetValue<int>(
-                        "Parameters:DigitalTwinsApiReadQueueLimit",
-                        500
+                        "Parameters:LightOperationsQueueLimit",
+                        50
                     ),
                 }
             );
@@ -173,9 +99,10 @@ public static class RateLimitingConfiguration
     }
 
     /// <summary>
-    /// Creates the Digital Twins API Write policy.
+    /// Creates the Medium Operations rate limiting policy.
+    /// Used for queries and operations with moderate resource impact.
     /// </summary>
-    private static Func<HttpContext, RateLimitPartition<string>> CreateDigitalTwinsApiWritePolicy(
+    private static Func<HttpContext, RateLimitPartition<string>> CreateMediumOperationsPolicy(
         IConfiguration configuration
     )
     {
@@ -188,94 +115,15 @@ public static class RateLimitingConfiguration
                 partition => new FixedWindowRateLimiterOptions
                 {
                     PermitLimit = configuration.GetValue<int>(
-                        "Parameters:DigitalTwinsApiWritePermitLimit",
-                        5000
-                    ),
-                    Window = TimeSpan.FromSeconds(
-                        configuration.GetValue<int>(
-                            "Parameters:DigitalTwinsApiWriteWindowSeconds",
-                            1
-                        )
-                    ),
-                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                    QueueLimit = configuration.GetValue<int>(
-                        "Parameters:DigitalTwinsApiWriteQueueLimit",
-                        500
-                    ),
-                }
-            );
-        };
-    }
-
-    /// <summary>
-    /// Creates the Digital Twins API Create/Delete policy.
-    /// </summary>
-    private static Func<
-        HttpContext,
-        RateLimitPartition<string>
-    > CreateDigitalTwinsApiCreateDeletePolicy(IConfiguration configuration)
-    {
-        return context =>
-        {
-            var userId = GetUserIdentifier(context);
-
-            return RateLimitPartition.GetFixedWindowLimiter(
-                userId,
-                partition => new FixedWindowRateLimiterOptions
-                {
-                    PermitLimit = configuration.GetValue<int>(
-                        "Parameters:DigitalTwinsApiCreateDeletePermitLimit",
-                        2500
-                    ),
-                    Window = TimeSpan.FromSeconds(
-                        configuration.GetValue<int>(
-                            "Parameters:DigitalTwinsApiCreateDeleteWindowSeconds",
-                            1
-                        )
-                    ),
-                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                    QueueLimit = configuration.GetValue<int>(
-                        "Parameters:DigitalTwinsApiCreateDeleteQueueLimit",
-                        250
-                    ),
-                }
-            );
-        };
-    }
-
-    /// <summary>
-    /// Creates the Digital Twins API Single Twin policy.
-    /// This policy uses a combination of user ID and twin ID for partitioning.
-    /// </summary>
-    private static Func<
-        HttpContext,
-        RateLimitPartition<string>
-    > CreateDigitalTwinsApiSingleTwinPolicy(IConfiguration configuration)
-    {
-        return context =>
-        {
-            // Extract twin ID from route for per-twin limiting
-            var twinId = context.Request.RouteValues["id"]?.ToString() ?? "unknown";
-            var userId = GetUserIdentifier(context);
-            var partitionKey = $"{userId}:{twinId}";
-
-            return RateLimitPartition.GetFixedWindowLimiter(
-                partitionKey,
-                partition => new FixedWindowRateLimiterOptions
-                {
-                    PermitLimit = configuration.GetValue<int>(
-                        "Parameters:DigitalTwinsApiSingleTwinPermitLimit",
+                        "Parameters:MediumOperationsPermitLimit",
                         50
                     ),
                     Window = TimeSpan.FromSeconds(
-                        configuration.GetValue<int>(
-                            "Parameters:DigitalTwinsApiSingleTwinWindowSeconds",
-                            1
-                        )
+                        configuration.GetValue<int>("Parameters:MediumOperationsWindowSeconds", 1)
                     ),
                     QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                     QueueLimit = configuration.GetValue<int>(
-                        "Parameters:DigitalTwinsApiSingleTwinQueueLimit",
+                        "Parameters:MediumOperationsQueueLimit",
                         25
                     ),
                 }
@@ -284,9 +132,10 @@ public static class RateLimitingConfiguration
     }
 
     /// <summary>
-    /// Creates the Query API rate limiting policy.
+    /// Creates the Heavy Operations rate limiting policy.
+    /// Used for create/update/delete operations with high resource impact.
     /// </summary>
-    private static Func<HttpContext, RateLimitPartition<string>> CreateQueryApiPolicy(
+    private static Func<HttpContext, RateLimitPartition<string>> CreateHeavyOperationsPolicy(
         IConfiguration configuration
     )
     {
@@ -299,14 +148,50 @@ public static class RateLimitingConfiguration
                 partition => new FixedWindowRateLimiterOptions
                 {
                     PermitLimit = configuration.GetValue<int>(
-                        "Parameters:QueryApiPermitLimit",
-                        2500
+                        "Parameters:HeavyOperationsPermitLimit",
+                        20
                     ),
                     Window = TimeSpan.FromSeconds(
-                        configuration.GetValue<int>("Parameters:QueryApiWindowSeconds", 1)
+                        configuration.GetValue<int>("Parameters:HeavyOperationsWindowSeconds", 1)
                     ),
                     QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                    QueueLimit = configuration.GetValue<int>("Parameters:QueryApiQueueLimit", 500),
+                    QueueLimit = configuration.GetValue<int>(
+                        "Parameters:HeavyOperationsQueueLimit",
+                        10
+                    ),
+                }
+            );
+        };
+    }
+
+    /// <summary>
+    /// Creates the Admin Operations rate limiting policy.
+    /// Used for administrative operations like model management and job operations.
+    /// </summary>
+    private static Func<HttpContext, RateLimitPartition<string>> CreateAdminOperationsPolicy(
+        IConfiguration configuration
+    )
+    {
+        return context =>
+        {
+            var userId = GetUserIdentifier(context);
+
+            return RateLimitPartition.GetFixedWindowLimiter(
+                userId,
+                partition => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = configuration.GetValue<int>(
+                        "Parameters:AdminOperationsPermitLimit",
+                        50
+                    ),
+                    Window = TimeSpan.FromMinutes(
+                        configuration.GetValue<int>("Parameters:AdminOperationsWindowMinutes", 1)
+                    ),
+                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                    QueueLimit = configuration.GetValue<int>(
+                        "Parameters:AdminOperationsQueueLimit",
+                        25
+                    ),
                 }
             );
         };

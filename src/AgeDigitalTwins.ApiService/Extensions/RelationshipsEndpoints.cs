@@ -15,7 +15,7 @@ public static class RelationshipsEndpoints
             .WithTags("Relationships")
             .RequireAuthorization();
 
-        // GET Incoming Relationships - Read operations (1,000 requests per second)
+        // GET Incoming Relationships - Light read operation
         relationshipsGroup
             .MapGet(
                 "/{id}/incomingrelationships",
@@ -42,12 +42,11 @@ public static class RelationshipsEndpoints
                     );
                 }
             )
-            .RequireRateLimiting("DigitalTwinsApiRead")
-            .RequireRateLimiting("DigitalTwinsApiSingleTwin")
+            .RequireRateLimiting("LightOperations")
             .WithName("ListIncomingRelationships")
             .WithSummary("Lists all incoming relationships for a digital twin.");
 
-        // GET Relationships - Read operations (1,000 requests per second)
+        // GET Relationships - Light read operation
         relationshipsGroup
             .MapGet(
                 "/{id}/relationships",
@@ -78,12 +77,11 @@ public static class RelationshipsEndpoints
                     );
                 }
             )
-            .RequireRateLimiting("DigitalTwinsApiRead")
-            .RequireRateLimiting("DigitalTwinsApiSingleTwin")
+            .RequireRateLimiting("LightOperations")
             .WithName("ListRelationships")
             .WithSummary("Lists all relationships for a digital twin.");
 
-        // GET Single Relationship - Read operations (1,000 requests per second)
+        // GET Single Relationship - Light read operation
         relationshipsGroup
             .MapGet(
                 "/{id}/relationships/{relationshipId}",
@@ -101,12 +99,11 @@ public static class RelationshipsEndpoints
                     );
                 }
             )
-            .RequireRateLimiting("DigitalTwinsApiRead")
-            .RequireRateLimiting("DigitalTwinsApiSingleTwin")
+            .RequireRateLimiting("LightOperations")
             .WithName("GetRelationship")
             .WithSummary("Retrieves a specific relationship by its ID.");
 
-        // PUT Relationship - Create/Replace operations (500 create/delete per second)
+        // PUT Relationship - Heavy create/replace operation
         relationshipsGroup
             .MapPut(
                 "/{id}/relationships/{relationshipId}",
@@ -129,12 +126,11 @@ public static class RelationshipsEndpoints
                     );
                 }
             )
-            .RequireRateLimiting("DigitalTwinsApiCreateDelete")
-            .RequireRateLimiting("DigitalTwinsApiSingleTwin")
+            .RequireRateLimiting("HeavyOperations")
             .WithName("CreateOrReplaceRelationship")
             .WithSummary("Creates or replaces a relationship for a digital twin.");
 
-        // PATCH Relationship - Write operations (1,000 patch requests per second)
+        // PATCH Relationship - Heavy update operation
         relationshipsGroup
             .MapPatch(
                 "/{id}/relationships/{relationshipId}",
@@ -158,12 +154,11 @@ public static class RelationshipsEndpoints
                     return Results.NoContent();
                 }
             )
-            .RequireRateLimiting("DigitalTwinsApiWrite")
-            .RequireRateLimiting("DigitalTwinsApiSingleTwin")
+            .RequireRateLimiting("HeavyOperations")
             .WithName("UpdateRelationship")
             .WithSummary("Updates a specific relationship for a digital twin.");
 
-        // DELETE Relationship - Create/Delete operations (500 create/delete per second)
+        // DELETE Relationship - Heavy delete operation
         relationshipsGroup
             .MapDelete(
                 "/{id}/relationships/{relationshipId}",
@@ -178,8 +173,7 @@ public static class RelationshipsEndpoints
                     return Results.NoContent();
                 }
             )
-            .RequireRateLimiting("DigitalTwinsApiCreateDelete")
-            .RequireRateLimiting("DigitalTwinsApiSingleTwin")
+            .RequireRateLimiting("HeavyOperations")
             .WithName("DeleteRelationship")
             .WithSummary("Deletes a specific relationship for a digital twin.");
 

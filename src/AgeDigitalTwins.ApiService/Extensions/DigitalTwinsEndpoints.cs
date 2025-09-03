@@ -14,7 +14,7 @@ public static class DigitalTwinsEndpoints
             .WithTags("Digital Twins")
             .RequireAuthorization();
 
-        // GET Digital Twin - Read operations (1,000 requests per second)
+        // GET Digital Twin - Light read operation
         digitalTwinsGroup
             .MapGet(
                 "/{id}",
@@ -27,11 +27,11 @@ public static class DigitalTwinsEndpoints
                     return client.GetDigitalTwinAsync<JsonDocument>(id, cancellationToken);
                 }
             )
-            .RequireRateLimiting("DigitalTwinsApiRead")
+            .RequireRateLimiting("LightOperations")
             .WithName("GetDigitalTwin")
             .WithSummary("Retrieves a digital twin by its ID.");
 
-        // PUT Digital Twin - Create/Replace operations (500 create/delete per second + 10 per single twin)
+        // PUT Digital Twin - Heavy create/replace operation
         digitalTwinsGroup
             .MapPut(
                 "/{id}",
@@ -52,12 +52,11 @@ public static class DigitalTwinsEndpoints
                     );
                 }
             )
-            .RequireRateLimiting("DigitalTwinsApiCreateDelete")
-            .RequireRateLimiting("DigitalTwinsApiSingleTwin")
+            .RequireRateLimiting("HeavyOperations")
             .WithName("CreateOrReplaceDigitalTwin")
             .WithSummary("Creates or replaces a digital twin by its ID.");
 
-        // PATCH Digital Twin - Write operations (1,000 patch requests per second + 10 per single twin)
+        // PATCH Digital Twin - Heavy update operation
         digitalTwinsGroup
             .MapPatch(
                 "/{id}",
@@ -74,12 +73,11 @@ public static class DigitalTwinsEndpoints
                     return Results.NoContent();
                 }
             )
-            .RequireRateLimiting("DigitalTwinsApiWrite")
-            .RequireRateLimiting("DigitalTwinsApiSingleTwin")
+            .RequireRateLimiting("HeavyOperations")
             .WithName("UpdateDigitalTwin")
             .WithSummary("Updates a digital twin by its ID.");
 
-        // DELETE Digital Twin - Create/Delete operations (500 create/delete per second + 10 per single twin)
+        // DELETE Digital Twin - Heavy delete operation
         digitalTwinsGroup
             .MapDelete(
                 "/{id}",
@@ -93,8 +91,7 @@ public static class DigitalTwinsEndpoints
                     return Results.NoContent();
                 }
             )
-            .RequireRateLimiting("DigitalTwinsApiCreateDelete")
-            .RequireRateLimiting("DigitalTwinsApiSingleTwin")
+            .RequireRateLimiting("HeavyOperations")
             .WithName("DeleteDigitalTwin")
             .WithSummary("Deletes a digital twin by its ID.");
 
