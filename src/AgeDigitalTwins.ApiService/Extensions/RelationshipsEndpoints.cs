@@ -2,7 +2,6 @@ using System.Text.Json;
 using AgeDigitalTwins.ApiService.Helpers;
 using AgeDigitalTwins.ApiService.Models;
 using Json.Patch;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AgeDigitalTwins.ApiService.Extensions;

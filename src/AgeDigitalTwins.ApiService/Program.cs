@@ -1,6 +1,5 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Threading.RateLimiting;
 using AgeDigitalTwins;
 using AgeDigitalTwins.ApiService;
 using AgeDigitalTwins.ApiService.Configuration;
@@ -9,7 +8,6 @@ using AgeDigitalTwins.ApiService.Middleware;
 using AgeDigitalTwins.ApiService.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
 using Npgsql;
 using Npgsql.Age;
