@@ -20,7 +20,6 @@ public class JobService
     private readonly string _instanceId;
     private readonly TimeSpan _defaultJobRetention = TimeSpan.FromHours(24);
     private readonly TimeSpan _defaultLockDuration = TimeSpan.FromMinutes(5);
-    private readonly TimeSpan _heartbeatInterval = TimeSpan.FromMinutes(1);
     private readonly JsonSerializerOptions _jsonOptions =
         new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
@@ -63,7 +62,10 @@ public class JobService
             VALUES (@id, @jobType, @status, @createdAt, @updatedAt, @purgeAt, @requestData)
             RETURNING id, job_type, status, created_at, updated_at, finished_at, purge_at, request_data, result_data, error_data, checkpoint_data";
 
-        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var connection = await _dataSource.OpenConnectionAsync(
+            TargetSessionAttributes.ReadWrite,
+            cancellationToken
+        );
         await using var command = new NpgsqlCommand(sql, connection);
 
         command.Parameters.AddWithValue("@id", jobId);
@@ -107,7 +109,10 @@ public class JobService
             FROM {_schemaName}.jobs
             WHERE id = @id";
 
-        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var connection = await _dataSource.OpenConnectionAsync(
+            TargetSessionAttributes.ReadWrite,
+            cancellationToken
+        );
         await using var command = new NpgsqlCommand(sql, connection);
         command.Parameters.AddWithValue("@id", jobId);
 
@@ -138,7 +143,10 @@ public class JobService
 
         sql += whereClause + " ORDER BY created_at DESC";
 
-        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var connection = await _dataSource.OpenConnectionAsync(
+            TargetSessionAttributes.ReadWrite,
+            cancellationToken
+        );
         await using var command = new NpgsqlCommand(sql, connection);
 
         if (!string.IsNullOrEmpty(jobType))
@@ -196,7 +204,10 @@ public class JobService
             finishedAt = now;
         }
 
-        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var connection = await _dataSource.OpenConnectionAsync(
+            TargetSessionAttributes.ReadWrite,
+            cancellationToken
+        );
         await using var command = new NpgsqlCommand(sql, connection);
 
         command.Parameters.AddWithValue("@id", jobId);
@@ -220,7 +231,10 @@ public class JobService
 
         var sql = $"DELETE FROM {_schemaName}.jobs WHERE id = @id";
 
-        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var connection = await _dataSource.OpenConnectionAsync(
+            TargetSessionAttributes.ReadWrite,
+            cancellationToken
+        );
         await using var command = new NpgsqlCommand(sql, connection);
         command.Parameters.AddWithValue("@id", jobId);
 
@@ -251,7 +265,10 @@ public class JobService
                 updated_at = @updatedAt
             WHERE id = @jobId";
 
-        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var connection = await _dataSource.OpenConnectionAsync(
+            TargetSessionAttributes.ReadWrite,
+            cancellationToken
+        );
         await using var command = new NpgsqlCommand(sql, connection);
 
         command.Parameters.AddWithValue("@jobId", checkpoint.JobId);
@@ -285,7 +302,10 @@ public class JobService
                 updated_at = @updatedAt
             WHERE id = @jobId";
 
-        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var connection = await _dataSource.OpenConnectionAsync(
+            TargetSessionAttributes.ReadWrite,
+            cancellationToken
+        );
         await using var command = new NpgsqlCommand(sql, connection);
 
         command.Parameters.AddWithValue("@jobId", checkpoint.JobId);
@@ -316,7 +336,10 @@ public class JobService
             FROM {_schemaName}.jobs
             WHERE id = @jobId";
 
-        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var connection = await _dataSource.OpenConnectionAsync(
+            TargetSessionAttributes.ReadWrite,
+            cancellationToken
+        );
         await using var command = new NpgsqlCommand(sql, connection);
         command.Parameters.AddWithValue("@jobId", jobId);
 
@@ -356,7 +379,10 @@ public class JobService
             FROM {_schemaName}.jobs
             WHERE id = @jobId";
 
-        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var connection = await _dataSource.OpenConnectionAsync(
+            TargetSessionAttributes.ReadWrite,
+            cancellationToken
+        );
         await using var command = new NpgsqlCommand(sql, connection);
         command.Parameters.AddWithValue("@jobId", jobId);
 
@@ -397,7 +423,10 @@ public class JobService
                 updated_at = @updatedAt
             WHERE id = @jobId";
 
-        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var connection = await _dataSource.OpenConnectionAsync(
+            TargetSessionAttributes.ReadWrite,
+            cancellationToken
+        );
         await using var command = new NpgsqlCommand(sql, connection);
 
         command.Parameters.AddWithValue("@jobId", jobId);
@@ -421,7 +450,10 @@ public class JobService
                 WHERE schema_name = @schemaName
             )";
 
-        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var connection = await _dataSource.OpenConnectionAsync(
+            TargetSessionAttributes.ReadWrite,
+            cancellationToken
+        );
         await using var command = new NpgsqlCommand(checkSchemaSql, connection);
         command.Parameters.AddWithValue("@schemaName", _schemaName);
 
@@ -460,26 +492,29 @@ public class JobService
     /// <summary>
     /// Creates the job storage schema with tables and indexes.
     /// </summary>
-    private async Task CreateSchemaAsync()
+    private async Task CreateSchemaAsync(CancellationToken cancellationToken = default)
     {
         var createSchemaSql = $"CREATE SCHEMA {_schemaName}";
 
-        await using var connection = await _dataSource.OpenConnectionAsync();
+        await using var connection = await _dataSource.OpenConnectionAsync(
+            TargetSessionAttributes.ReadWrite,
+            cancellationToken
+        );
 
         // Create schema
         await using (var command = new NpgsqlCommand(createSchemaSql, connection))
         {
-            await command.ExecuteNonQueryAsync();
+            await command.ExecuteNonQueryAsync(cancellationToken);
         }
 
         // Create table and indexes
-        await EnsureTableAndIndexesAsync();
+        await EnsureTableAndIndexesAsync(cancellationToken);
     }
 
     /// <summary>
     /// Ensures that the jobs table and indexes exist and are up to date.
     /// </summary>
-    private async Task EnsureTableAndIndexesAsync()
+    private async Task EnsureTableAndIndexesAsync(CancellationToken cancellationToken = default)
     {
         var createTableSql =
             $@"
@@ -510,18 +545,21 @@ public class JobService
             CREATE INDEX IF NOT EXISTS idx_jobs_lock_acquired_by ON {_schemaName}.jobs(lock_acquired_by);
             CREATE INDEX IF NOT EXISTS idx_jobs_lock_acquired_at ON {_schemaName}.jobs(lock_acquired_at)";
 
-        await using var connection = await _dataSource.OpenConnectionAsync();
+        await using var connection = await _dataSource.OpenConnectionAsync(
+            TargetSessionAttributes.ReadWrite,
+            cancellationToken
+        );
 
         // Create table
         await using (var command = new NpgsqlCommand(createTableSql, connection))
         {
-            await command.ExecuteNonQueryAsync();
+            await command.ExecuteNonQueryAsync(cancellationToken);
         }
 
         // Create indexes
         await using (var command = new NpgsqlCommand(createIndexSql, connection))
         {
-            await command.ExecuteNonQueryAsync();
+            await command.ExecuteNonQueryAsync(cancellationToken);
         }
     }
 
@@ -564,7 +602,10 @@ public class JobService
         var lockDuration = leaseDuration ?? _defaultLockDuration;
         var now = DateTime.UtcNow;
 
-        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var connection = await _dataSource.OpenConnectionAsync(
+            TargetSessionAttributes.ReadWrite,
+            cancellationToken
+        );
 
         // Try to update existing job record to acquire lock
         var updateSql =
@@ -647,7 +688,10 @@ public class JobService
             AND lock_acquired_by = @lockAcquiredBy
             AND (lock_acquired_at + lock_lease_duration) > @now";
 
-        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var connection = await _dataSource.OpenConnectionAsync(
+            TargetSessionAttributes.ReadWrite,
+            cancellationToken
+        );
         await using var command = new NpgsqlCommand(sql, connection);
 
         command.Parameters.AddWithValue("@jobId", jobId);
@@ -703,7 +747,10 @@ public class JobService
             WHERE id = @jobId
             AND lock_acquired_by = @lockAcquiredBy";
 
-        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var connection = await _dataSource.OpenConnectionAsync(
+            TargetSessionAttributes.ReadWrite,
+            cancellationToken
+        );
         await using var command = new NpgsqlCommand(sql, connection);
 
         command.Parameters.AddWithValue("@jobId", jobId);
@@ -757,7 +804,10 @@ public class JobService
             AND lock_acquired_by = @lockAcquiredBy
             AND (lock_acquired_at + lock_lease_duration) > @now";
 
-        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var connection = await _dataSource.OpenConnectionAsync(
+            TargetSessionAttributes.ReadWrite,
+            cancellationToken
+        );
         await using var command = new NpgsqlCommand(sql, connection);
 
         command.Parameters.AddWithValue("@jobId", jobId);
@@ -789,7 +839,10 @@ public class JobService
             WHERE id = @jobId
             AND lock_acquired_at IS NOT NULL";
 
-        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var connection = await _dataSource.OpenConnectionAsync(
+            TargetSessionAttributes.ReadWrite,
+            cancellationToken
+        );
         await using var command = new NpgsqlCommand(sql, connection);
 
         command.Parameters.AddWithValue("@jobId", jobId);
@@ -836,7 +889,10 @@ public class JobService
             WHERE lock_acquired_at IS NOT NULL
             AND (lock_acquired_at + lock_lease_duration) < @now";
 
-        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var connection = await _dataSource.OpenConnectionAsync(
+            TargetSessionAttributes.ReadWrite,
+            cancellationToken
+        );
         await using var command = new NpgsqlCommand(sql, connection);
 
         command.Parameters.AddWithValue("@updatedAt", now);
@@ -872,7 +928,10 @@ public class JobService
             ORDER BY created_at;
             """;
 
-        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var connection = await _dataSource.OpenConnectionAsync(
+            TargetSessionAttributes.ReadWrite,
+            cancellationToken
+        );
         await using var command = new NpgsqlCommand(sql, connection);
 
         var jobs = new List<JobRecord>();
@@ -901,7 +960,10 @@ public class JobService
             DELETE FROM {_schemaName}.jobs
             WHERE purge_at < @now";
 
-        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var connection = await _dataSource.OpenConnectionAsync(
+            TargetSessionAttributes.ReadWrite,
+            cancellationToken
+        );
         await using var command = new NpgsqlCommand(sql, connection);
         command.Parameters.AddWithValue("@now", now);
 
