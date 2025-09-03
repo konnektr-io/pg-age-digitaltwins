@@ -1,4 +1,3 @@
-using System;
 using System.Text.Json.Serialization;
 
 namespace AgeDigitalTwins.ApiService.Models;

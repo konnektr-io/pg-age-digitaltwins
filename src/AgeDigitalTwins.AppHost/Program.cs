@@ -6,7 +6,7 @@ var ageGraphName = builder.AddParameter("AgeGraphName", args.Length > 0 ? args[0
 builder
     .AddProject<Projects.AgeDigitalTwins_ApiService>("apiservice")
     .WithReference(ageConnectionString)
-    .WithEnvironment("AgeGraphName", ageGraphName);
+    .WithEnvironment("Parameters:AgeGraphName", ageGraphName);
 
 // builder.AddProject<Projects.AgeDigitalTwins_Events>("events").WithReference(ageConnectionString);
 

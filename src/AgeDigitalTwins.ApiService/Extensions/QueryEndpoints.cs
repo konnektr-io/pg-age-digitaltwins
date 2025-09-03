@@ -48,6 +48,7 @@ public static class QueryEndpoints
                     return Results.Json(page);
                 }
             )
+            .RequireRateLimiting("MediumOperations")
             .WithName("Query")
             .WithTags("Query")
             .WithSummary("Executes a query against the digital twins graph with pagination.");

@@ -1,7 +1,6 @@
 using System.Text.Json;
 using AgeDigitalTwins.ApiService.Helpers;
 using Json.Patch;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AgeDigitalTwins.ApiService.Extensions;
@@ -10,9 +9,15 @@ public static class DigitalTwinsEndpoints
 {
     public static WebApplication MapDigitalTwinsEndpoints(this WebApplication app)
     {
-        app.MapGet(
-                "/digitaltwins/{id}",
-                [Authorize]
+        // Group for Digital Twins endpoints with single twin rate limiting
+        var digitalTwinsGroup = app.MapGroup("/digitaltwins")
+            .WithTags("Digital Twins")
+            .RequireAuthorization();
+
+        // GET Digital Twin - Light read operation
+        digitalTwinsGroup
+            .MapGet(
+                "/{id}",
                 (
                     string id,
                     [FromServices] AgeDigitalTwinsClient client,
@@ -22,13 +27,14 @@ public static class DigitalTwinsEndpoints
                     return client.GetDigitalTwinAsync<JsonDocument>(id, cancellationToken);
                 }
             )
+            .RequireRateLimiting("LightOperations")
             .WithName("GetDigitalTwin")
-            .WithTags("Digital Twins")
             .WithSummary("Retrieves a digital twin by its ID.");
 
-        app.MapPut(
-                "/digitaltwins/{id}",
-                [Authorize]
+        // PUT Digital Twin - Heavy create/replace operation
+        digitalTwinsGroup
+            .MapPut(
+                "/{id}",
                 (
                     string id,
                     JsonDocument digitalTwin,
@@ -46,13 +52,14 @@ public static class DigitalTwinsEndpoints
                     );
                 }
             )
+            .RequireRateLimiting("HeavyOperations")
             .WithName("CreateOrReplaceDigitalTwin")
-            .WithTags("Digital Twins")
             .WithSummary("Creates or replaces a digital twin by its ID.");
 
-        app.MapPatch(
-                "/digitaltwins/{id}",
-                [Authorize]
+        // PATCH Digital Twin - Heavy update operation
+        digitalTwinsGroup
+            .MapPatch(
+                "/{id}",
                 async (
                     string id,
                     JsonPatch patch,
@@ -66,13 +73,14 @@ public static class DigitalTwinsEndpoints
                     return Results.NoContent();
                 }
             )
+            .RequireRateLimiting("HeavyOperations")
             .WithName("UpdateDigitalTwin")
-            .WithTags("Digital Twins")
             .WithSummary("Updates a digital twin by its ID.");
 
-        app.MapDelete(
-                "/digitaltwins/{id}",
-                [Authorize]
+        // DELETE Digital Twin - Heavy delete operation
+        digitalTwinsGroup
+            .MapDelete(
+                "/{id}",
                 async (
                     string id,
                     [FromServices] AgeDigitalTwinsClient client,
@@ -83,8 +91,8 @@ public static class DigitalTwinsEndpoints
                     return Results.NoContent();
                 }
             )
+            .RequireRateLimiting("HeavyOperations")
             .WithName("DeleteDigitalTwin")
-            .WithTags("Digital Twins")
             .WithSummary("Deletes a digital twin by its ID.");
 
         return app;

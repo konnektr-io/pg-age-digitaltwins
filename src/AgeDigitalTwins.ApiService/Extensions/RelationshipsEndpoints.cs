@@ -2,7 +2,6 @@ using System.Text.Json;
 using AgeDigitalTwins.ApiService.Helpers;
 using AgeDigitalTwins.ApiService.Models;
 using Json.Patch;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AgeDigitalTwins.ApiService.Extensions;
@@ -11,9 +10,15 @@ public static class RelationshipsEndpoints
 {
     public static WebApplication MapRelationshipsEndpoints(this WebApplication app)
     {
-        app.MapGet(
-                "/digitaltwins/{id}/incomingrelationships",
-                [Authorize]
+        // Group for relationship endpoints - these are part of Digital Twins API
+        var relationshipsGroup = app.MapGroup("/digitaltwins")
+            .WithTags("Relationships")
+            .RequireAuthorization();
+
+        // GET Incoming Relationships - Light read operation
+        relationshipsGroup
+            .MapGet(
+                "/{id}/incomingrelationships",
                 async (
                     string id,
                     HttpContext httpContext,
@@ -37,13 +42,14 @@ public static class RelationshipsEndpoints
                     );
                 }
             )
+            .RequireRateLimiting("LightOperations")
             .WithName("ListIncomingRelationships")
-            .WithTags("Relationships")
             .WithSummary("Lists all incoming relationships for a digital twin.");
 
-        app.MapGet(
-                "/digitaltwins/{id}/relationships",
-                [Authorize]
+        // GET Relationships - Light read operation
+        relationshipsGroup
+            .MapGet(
+                "/{id}/relationships",
                 async (
                     string id,
                     HttpContext httpContext,
@@ -71,13 +77,14 @@ public static class RelationshipsEndpoints
                     );
                 }
             )
+            .RequireRateLimiting("LightOperations")
             .WithName("ListRelationships")
-            .WithTags("Relationships")
             .WithSummary("Lists all relationships for a digital twin.");
 
-        app.MapGet(
-                "/digitaltwins/{id}/relationships/{relationshipId}",
-                [Authorize]
+        // GET Single Relationship - Light read operation
+        relationshipsGroup
+            .MapGet(
+                "/{id}/relationships/{relationshipId}",
                 (
                     string id,
                     string relationshipId,
@@ -92,13 +99,14 @@ public static class RelationshipsEndpoints
                     );
                 }
             )
+            .RequireRateLimiting("LightOperations")
             .WithName("GetRelationship")
-            .WithTags("Relationships")
             .WithSummary("Retrieves a specific relationship by its ID.");
 
-        app.MapPut(
-                "/digitaltwins/{id}/relationships/{relationshipId}",
-                [Authorize]
+        // PUT Relationship - Heavy create/replace operation
+        relationshipsGroup
+            .MapPut(
+                "/{id}/relationships/{relationshipId}",
                 (
                     string id,
                     string relationshipId,
@@ -118,13 +126,14 @@ public static class RelationshipsEndpoints
                     );
                 }
             )
+            .RequireRateLimiting("HeavyOperations")
             .WithName("CreateOrReplaceRelationship")
-            .WithTags("Relationships")
             .WithSummary("Creates or replaces a relationship for a digital twin.");
 
-        app.MapPatch(
-                "/digitaltwins/{id}/relationships/{relationshipId}",
-                [Authorize]
+        // PATCH Relationship - Heavy update operation
+        relationshipsGroup
+            .MapPatch(
+                "/{id}/relationships/{relationshipId}",
                 async (
                     string id,
                     string relationshipId,
@@ -145,13 +154,14 @@ public static class RelationshipsEndpoints
                     return Results.NoContent();
                 }
             )
+            .RequireRateLimiting("HeavyOperations")
             .WithName("UpdateRelationship")
-            .WithTags("Relationships")
             .WithSummary("Updates a specific relationship for a digital twin.");
 
-        app.MapDelete(
-                "/digitaltwins/{id}/relationships/{relationshipId}",
-                [Authorize]
+        // DELETE Relationship - Heavy delete operation
+        relationshipsGroup
+            .MapDelete(
+                "/{id}/relationships/{relationshipId}",
                 async (
                     string id,
                     string relationshipId,
@@ -163,8 +173,8 @@ public static class RelationshipsEndpoints
                     return Results.NoContent();
                 }
             )
+            .RequireRateLimiting("HeavyOperations")
             .WithName("DeleteRelationship")
-            .WithTags("Relationships")
             .WithSummary("Deletes a specific relationship for a digital twin.");
 
         return app;

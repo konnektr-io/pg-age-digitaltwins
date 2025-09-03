@@ -1,7 +1,3 @@
-using AgeDigitalTwins;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-
 namespace AgeDigitalTwins.ApiService.Services;
 
 /// <summary>
