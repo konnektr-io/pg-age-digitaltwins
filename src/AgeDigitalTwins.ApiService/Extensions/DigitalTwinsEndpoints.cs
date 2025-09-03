@@ -10,9 +10,15 @@ public static class DigitalTwinsEndpoints
 {
     public static WebApplication MapDigitalTwinsEndpoints(this WebApplication app)
     {
-        app.MapGet(
-                "/digitaltwins/{id}",
-                [Authorize]
+        // Group for Digital Twins endpoints with single twin rate limiting
+        var digitalTwinsGroup = app.MapGroup("/digitaltwins")
+            .WithTags("Digital Twins")
+            .RequireAuthorization();
+
+        // GET Digital Twin - Read operations (1,000 requests per second)
+        digitalTwinsGroup
+            .MapGet(
+                "/{id}",
                 (
                     string id,
                     [FromServices] AgeDigitalTwinsClient client,
@@ -22,13 +28,14 @@ public static class DigitalTwinsEndpoints
                     return client.GetDigitalTwinAsync<JsonDocument>(id, cancellationToken);
                 }
             )
+            .RequireRateLimiting("DigitalTwinsApiRead")
             .WithName("GetDigitalTwin")
-            .WithTags("Digital Twins")
             .WithSummary("Retrieves a digital twin by its ID.");
 
-        app.MapPut(
-                "/digitaltwins/{id}",
-                [Authorize]
+        // PUT Digital Twin - Create/Replace operations (500 create/delete per second + 10 per single twin)
+        digitalTwinsGroup
+            .MapPut(
+                "/{id}",
                 (
                     string id,
                     JsonDocument digitalTwin,
@@ -46,13 +53,15 @@ public static class DigitalTwinsEndpoints
                     );
                 }
             )
+            .RequireRateLimiting("DigitalTwinsApiCreateDelete")
+            .RequireRateLimiting("DigitalTwinsApiSingleTwin")
             .WithName("CreateOrReplaceDigitalTwin")
-            .WithTags("Digital Twins")
             .WithSummary("Creates or replaces a digital twin by its ID.");
 
-        app.MapPatch(
-                "/digitaltwins/{id}",
-                [Authorize]
+        // PATCH Digital Twin - Write operations (1,000 patch requests per second + 10 per single twin)
+        digitalTwinsGroup
+            .MapPatch(
+                "/{id}",
                 async (
                     string id,
                     JsonPatch patch,
@@ -66,13 +75,15 @@ public static class DigitalTwinsEndpoints
                     return Results.NoContent();
                 }
             )
+            .RequireRateLimiting("DigitalTwinsApiWrite")
+            .RequireRateLimiting("DigitalTwinsApiSingleTwin")
             .WithName("UpdateDigitalTwin")
-            .WithTags("Digital Twins")
             .WithSummary("Updates a digital twin by its ID.");
 
-        app.MapDelete(
-                "/digitaltwins/{id}",
-                [Authorize]
+        // DELETE Digital Twin - Create/Delete operations (500 create/delete per second + 10 per single twin)
+        digitalTwinsGroup
+            .MapDelete(
+                "/{id}",
                 async (
                     string id,
                     [FromServices] AgeDigitalTwinsClient client,
@@ -83,8 +94,9 @@ public static class DigitalTwinsEndpoints
                     return Results.NoContent();
                 }
             )
+            .RequireRateLimiting("DigitalTwinsApiCreateDelete")
+            .RequireRateLimiting("DigitalTwinsApiSingleTwin")
             .WithName("DeleteDigitalTwin")
-            .WithTags("Digital Twins")
             .WithSummary("Deletes a digital twin by its ID.");
 
         return app;

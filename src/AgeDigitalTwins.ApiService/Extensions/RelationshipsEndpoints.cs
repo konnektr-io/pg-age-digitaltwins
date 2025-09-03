@@ -11,9 +11,15 @@ public static class RelationshipsEndpoints
 {
     public static WebApplication MapRelationshipsEndpoints(this WebApplication app)
     {
-        app.MapGet(
-                "/digitaltwins/{id}/incomingrelationships",
-                [Authorize]
+        // Group for relationship endpoints - these are part of Digital Twins API
+        var relationshipsGroup = app.MapGroup("/digitaltwins")
+            .WithTags("Relationships")
+            .RequireAuthorization();
+
+        // GET Incoming Relationships - Read operations (1,000 requests per second)
+        relationshipsGroup
+            .MapGet(
+                "/{id}/incomingrelationships",
                 async (
                     string id,
                     HttpContext httpContext,
@@ -37,13 +43,15 @@ public static class RelationshipsEndpoints
                     );
                 }
             )
+            .RequireRateLimiting("DigitalTwinsApiRead")
+            .RequireRateLimiting("DigitalTwinsApiSingleTwin")
             .WithName("ListIncomingRelationships")
-            .WithTags("Relationships")
             .WithSummary("Lists all incoming relationships for a digital twin.");
 
-        app.MapGet(
-                "/digitaltwins/{id}/relationships",
-                [Authorize]
+        // GET Relationships - Read operations (1,000 requests per second)
+        relationshipsGroup
+            .MapGet(
+                "/{id}/relationships",
                 async (
                     string id,
                     HttpContext httpContext,
@@ -71,13 +79,15 @@ public static class RelationshipsEndpoints
                     );
                 }
             )
+            .RequireRateLimiting("DigitalTwinsApiRead")
+            .RequireRateLimiting("DigitalTwinsApiSingleTwin")
             .WithName("ListRelationships")
-            .WithTags("Relationships")
             .WithSummary("Lists all relationships for a digital twin.");
 
-        app.MapGet(
-                "/digitaltwins/{id}/relationships/{relationshipId}",
-                [Authorize]
+        // GET Single Relationship - Read operations (1,000 requests per second)
+        relationshipsGroup
+            .MapGet(
+                "/{id}/relationships/{relationshipId}",
                 (
                     string id,
                     string relationshipId,
@@ -92,13 +102,15 @@ public static class RelationshipsEndpoints
                     );
                 }
             )
+            .RequireRateLimiting("DigitalTwinsApiRead")
+            .RequireRateLimiting("DigitalTwinsApiSingleTwin")
             .WithName("GetRelationship")
-            .WithTags("Relationships")
             .WithSummary("Retrieves a specific relationship by its ID.");
 
-        app.MapPut(
-                "/digitaltwins/{id}/relationships/{relationshipId}",
-                [Authorize]
+        // PUT Relationship - Create/Replace operations (500 create/delete per second)
+        relationshipsGroup
+            .MapPut(
+                "/{id}/relationships/{relationshipId}",
                 (
                     string id,
                     string relationshipId,
@@ -118,13 +130,15 @@ public static class RelationshipsEndpoints
                     );
                 }
             )
+            .RequireRateLimiting("DigitalTwinsApiCreateDelete")
+            .RequireRateLimiting("DigitalTwinsApiSingleTwin")
             .WithName("CreateOrReplaceRelationship")
-            .WithTags("Relationships")
             .WithSummary("Creates or replaces a relationship for a digital twin.");
 
-        app.MapPatch(
-                "/digitaltwins/{id}/relationships/{relationshipId}",
-                [Authorize]
+        // PATCH Relationship - Write operations (1,000 patch requests per second)
+        relationshipsGroup
+            .MapPatch(
+                "/{id}/relationships/{relationshipId}",
                 async (
                     string id,
                     string relationshipId,
@@ -145,13 +159,15 @@ public static class RelationshipsEndpoints
                     return Results.NoContent();
                 }
             )
+            .RequireRateLimiting("DigitalTwinsApiWrite")
+            .RequireRateLimiting("DigitalTwinsApiSingleTwin")
             .WithName("UpdateRelationship")
-            .WithTags("Relationships")
             .WithSummary("Updates a specific relationship for a digital twin.");
 
-        app.MapDelete(
-                "/digitaltwins/{id}/relationships/{relationshipId}",
-                [Authorize]
+        // DELETE Relationship - Create/Delete operations (500 create/delete per second)
+        relationshipsGroup
+            .MapDelete(
+                "/{id}/relationships/{relationshipId}",
                 async (
                     string id,
                     string relationshipId,
@@ -163,8 +179,9 @@ public static class RelationshipsEndpoints
                     return Results.NoContent();
                 }
             )
+            .RequireRateLimiting("DigitalTwinsApiCreateDelete")
+            .RequireRateLimiting("DigitalTwinsApiSingleTwin")
             .WithName("DeleteRelationship")
-            .WithTags("Relationships")
             .WithSummary("Deletes a specific relationship for a digital twin.");
 
         return app;

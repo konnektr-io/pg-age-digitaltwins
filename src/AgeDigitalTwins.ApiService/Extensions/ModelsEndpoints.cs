@@ -11,8 +11,13 @@ public static class ModelsEndpoints
 {
     public static WebApplication MapModelsEndpoints(this WebApplication app)
     {
-        app.MapGet(
-                "/models",
+        var modelsGroup = app.MapGroup("/models")
+            .WithTags("Models")
+            .RequireRateLimiting("ModelsApi");
+
+        modelsGroup
+            .MapGet(
+                "/",
                 [Authorize]
                 async (
                     HttpContext httpContext,
@@ -53,11 +58,11 @@ public static class ModelsEndpoints
                 }
             )
             .WithName("ListModels")
-            .WithTags("Models")
             .WithSummary("Lists all models in the digital twins graph.");
 
-        app.MapPost(
-                "/models",
+        modelsGroup
+            .MapPost(
+                "/",
                 [Authorize]
                 (
                     JsonElement[] models,
@@ -72,11 +77,11 @@ public static class ModelsEndpoints
                 }
             )
             .WithName("CreateModels")
-            .WithTags("Models")
             .WithSummary("Creates new models in the digital twins graph.");
 
-        app.MapDelete(
-                "/models",
+        modelsGroup
+            .MapDelete(
+                "/",
                 [Authorize]
                 async (
                     [FromServices] AgeDigitalTwinsClient client,
@@ -88,11 +93,11 @@ public static class ModelsEndpoints
                 }
             )
             .WithName("DeleteAllModels")
-            .WithTags("Models")
             .WithSummary("Deletes all models in the digital twins graph.");
 
-        app.MapDelete(
-                "/models/{id}",
+        modelsGroup
+            .MapDelete(
+                "/{id}",
                 [Authorize]
                 async (
                     string id,
@@ -105,7 +110,6 @@ public static class ModelsEndpoints
                 }
             )
             .WithName("DeleteModel")
-            .WithTags("Models")
             .WithSummary("Deletes a specific model by its ID.");
 
         return app;

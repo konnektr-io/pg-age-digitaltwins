@@ -1,11 +1,15 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
 using AgeDigitalTwins;
 using AgeDigitalTwins.ApiService;
+using AgeDigitalTwins.ApiService.Configuration;
 using AgeDigitalTwins.ApiService.Extensions;
+using AgeDigitalTwins.ApiService.Middleware;
 using AgeDigitalTwins.ApiService.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
 using Npgsql;
 using Npgsql.Age;
@@ -23,28 +27,29 @@ builder.AddNpgsqlMultihostDataSource(
     {
         settings.ConnectionString ??=
             builder.Configuration.GetConnectionString("agedb")
-            ?? builder.Configuration["ConnectionStrings:agedb"]
-            ?? builder.Configuration["AgeConnectionString"]
+            ?? builder.Configuration["Parameters:AgeConnectionString"]
             ?? throw new InvalidOperationException("Connection string is required.");
-
-        // Helper function for env variable with fallback
-        static int GetIntEnv(string name, int defaultValue)
-        {
-            var value = Environment.GetEnvironmentVariable(name);
-            return int.TryParse(value, out var result) ? result : defaultValue;
-        }
 
         // Setting the search path allows to avoid setting this on every connection
         NpgsqlConnectionStringBuilder connectionStringBuilder =
             new(settings.ConnectionString)
             {
                 SearchPath = "ag_catalog, \"$user\", public",
-                ConnectionIdleLifetime = GetIntEnv("PG_CONN_IDLE_LIFETIME", 60), // seconds
-                ConnectionLifetime = GetIntEnv("PG_CONN_LIFETIME", 300), // seconds
-                MaxPoolSize = GetIntEnv("PG_MAX_POOL_SIZE", 100),
-                MinPoolSize = GetIntEnv("PG_MIN_POOL_SIZE", 0),
-                Timeout = GetIntEnv("PG_CONN_TIMEOUT", 15), // seconds
-                CommandTimeout = GetIntEnv("PG_COMMAND_TIMEOUT", 30), // seconds
+                ConnectionIdleLifetime = builder.Configuration.GetValue<int>(
+                    "Parameters:ConnectionIdleLifetime",
+                    60
+                ), // seconds
+                ConnectionLifetime = builder.Configuration.GetValue<int>(
+                    "Parameters:ConnectionLifetime",
+                    300
+                ), // seconds
+                MaxPoolSize = builder.Configuration.GetValue<int>("Parameters:MaxPoolSize", 100),
+                MinPoolSize = builder.Configuration.GetValue<int>("Parameters:MinPoolSize", 0),
+                Timeout = builder.Configuration.GetValue<int>("Parameters:ConnectionTimeout", 15), // seconds
+                CommandTimeout = builder.Configuration.GetValue<int>(
+                    "Parameters:CommandTimeout",
+                    30
+                ), // seconds
             };
         settings.ConnectionString = connectionStringBuilder.ConnectionString;
     },
@@ -59,11 +64,7 @@ builder.Services.AddSingleton(sp =>
 {
     var logger = sp.GetRequiredService<ILogger<Program>>();
     NpgsqlMultiHostDataSource dataSource = sp.GetRequiredService<NpgsqlMultiHostDataSource>();
-    string graphName =
-        builder.Configuration.GetSection("Parameters")["AgeGraphName"]
-        ?? builder.Configuration["Parameters:AgeGraphName"]
-        ?? builder.Configuration["AgeGraphName"]
-        ?? "digitaltwins";
+    string graphName = builder.Configuration["Parameters:AgeGraphName"] ?? "digitaltwins";
     logger.LogInformation("Using graph: {GraphName}", graphName);
     int modelCacheExpiration = builder.Configuration.GetValue<int>(
         "Parameters:ModelCacheExpirationSeconds",
@@ -146,6 +147,9 @@ else
 // Add job resumption service
 builder.Services.AddHostedService<JobResumptionService>();
 
+// Add rate limiting to protect the API and database from overload
+builder.Services.AddRateLimiter(options => options.ConfigureRateLimiting(builder.Configuration));
+
 builder.Services.AddRequestTimeouts();
 builder.Services.AddOutputCache();
 
@@ -168,6 +172,9 @@ if (app.Environment.IsDevelopment() || app.Configuration["OpenApi:Enabled"] == "
 }
 
 app.UseExceptionHandler();
+
+app.UseMiddleware<DatabaseProtectionMiddleware>();
+app.UseRateLimiter();
 
 app.UseAuthentication();
 app.UseAuthorization();
