@@ -314,12 +314,104 @@ public partial class AgeDigitalTwinsClient
                     }
                 }
             }
-            /* else if (contentInfo is DTComponentInfo componentDef)
+            else if (contentInfo is DTComponentInfo componentDef)
             {
                 // kv.Value should be a JsonObject representing the component
-                // Get DTInterfaceInfo for the component
-                // Iterate over the properties of the component and validate them
-            } */
+                if (kv.Value is not JsonObject componentObject)
+                {
+                    violations.Add($"Component '{property}' must be a JSON object");
+                    continue;
+                }
+
+                // Get the component schema (DTInterfaceInfo)
+                if (componentDef.Schema is not DTInterfaceInfo componentSchema)
+                {
+                    violations.Add(
+                        $"Component '{property}' does not have a valid interface schema"
+                    );
+                    continue;
+                }
+
+                // Validate each property in the component against the component schema
+                foreach (var componentKv in componentObject)
+                {
+                    string componentProperty = componentKv.Key;
+
+                    // Skip metadata properties
+                    if (componentProperty == "$metadata")
+                    {
+                        continue;
+                    }
+
+                    // Check if the property is defined in the component schema
+                    if (
+                        !componentSchema.Contents.TryGetValue(
+                            componentProperty,
+                            out DTContentInfo? componentContentInfo
+                        )
+                    )
+                    {
+                        violations.Add(
+                            $"Component '{property}' property '{componentProperty}' is not defined in the component schema"
+                        );
+                        continue;
+                    }
+
+                    // Validate properties within the component
+                    if (
+                        componentContentInfo is DTPropertyInfo componentPropertyDef
+                        && componentKv.Value != null
+                    )
+                    {
+                        JsonElement componentValue = componentKv.Value.ToJsonDocument().RootElement;
+                        var componentValidationFailures =
+                            componentPropertyDef.Schema.ValidateInstance(componentValue);
+
+                        if (componentValidationFailures.Count != 0)
+                        {
+                            violations.AddRange(
+                                componentValidationFailures.Select(v =>
+                                    $"Component '{property}' property '{componentProperty}': {v}"
+                                )
+                            );
+                        }
+                    }
+                }
+
+                // Set component metadata
+                if (
+                    !componentObject.TryGetPropertyValue(
+                        "$metadata",
+                        out JsonNode? componentMetadataNode
+                    ) || componentMetadataNode is not JsonObject componentMetadataObject
+                )
+                {
+                    componentObject["$metadata"] = new JsonObject
+                    {
+                        ["lastUpdateTime"] = now.ToString("o"),
+                    };
+                }
+                else
+                {
+                    componentMetadataObject["lastUpdateTime"] = now.ToString("o");
+                }
+
+                // Set component metadata in the twin's metadata
+                if (
+                    metadataObject.TryGetPropertyValue(property, out JsonNode? metadataPropertyNode)
+                    && metadataPropertyNode is JsonObject metadataPropertyObject
+                )
+                {
+                    metadataPropertyObject["lastUpdateTime"] = now.ToString("o");
+                }
+                else
+                {
+                    metadataObject[property] = new JsonObject
+                    {
+                        ["lastUpdateTime"] = now.ToString("o"),
+                    };
+                }
+            }
             else
             {
                 violations.Add(

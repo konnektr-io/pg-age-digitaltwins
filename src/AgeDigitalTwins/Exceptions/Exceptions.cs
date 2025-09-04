@@ -86,6 +86,15 @@ public class RelationshipNotFoundException : AgeDigitalTwinsException
     }
 }
 
+public class ComponentNotFoundException : AgeDigitalTwinsException
+{
+    public ComponentNotFoundException(string message)
+        : base(message)
+    {
+        StatusCode = HttpStatusCode.NotFound;
+    }
+}
+
 public class ValidationFailedException : AgeDigitalTwinsException
 {
     public ValidationFailedException(string message)
