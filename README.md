@@ -30,8 +30,9 @@ AgeDigitalTwins is an SDK and API designed to support Digital Twins applications
   - [x] Error handling
   - [x] ETags
   - [x] Pagination
-  - [ ] Components
+  - [x] Components
   - [ ] Telemetry
+  - [ ] Commands
   - [x] Import Jobs
   - [x] Delete Jobs
   - [x] Diagnostics and Prometheus metrics
@@ -40,7 +41,7 @@ AgeDigitalTwins is an SDK and API designed to support Digital Twins applications
   - [x] Models CRUD operations
   - [x] Relationships CRUD operations
   - [x] Import Jobs
-  - [ ] Delete Jobs
+  - [x] Delete Jobs
   - [x] Error Handling
   - [x] ETags
   - [x] Authentication
