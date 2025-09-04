@@ -1122,7 +1122,12 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         // Arrange
         await _fixture.WaitForReplicationHealthy();
 
-        string[] models = [SampleData.DtdlRoom];
+        string[] models =
+        [
+            SampleData.DtdlPlanet,
+            SampleData.DtdlCelestialBody,
+            SampleData.DtdlCrater,
+        ];
         try
         {
             await Client.CreateModelsAsync(models);
@@ -1132,16 +1137,16 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
             // Model already exists, ignore
         }
 
-        var uniqueTwinId = $"room_{Guid.NewGuid():N}";
-        var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinRoom1);
+        var uniqueTwinId = $"planet_{Guid.NewGuid():N}";
+        var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinPlanetEarth);
         digitalTwin!.Id = uniqueTwinId;
 
-        // Add a thermostat component to the twin
-        digitalTwin.Contents["thermostat"] = new JsonObject
+        // Ensure the deepestCrater component exists (Planet model has this component)
+        digitalTwin.Contents["deepestCrater"] = new JsonObject
         {
             ["$metadata"] = new JsonObject(),
-            ["targetTemperature"] = 22.0,
-            ["actualTemperature"] = 21.5,
+            ["diameter"] = 150.0,
+            ["depth"] = 30.0,
         };
 
         // Create the twin first

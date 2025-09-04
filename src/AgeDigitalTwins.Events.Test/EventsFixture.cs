@@ -97,9 +97,18 @@ public class EventsFixture : IAsyncDisposable
         // Start all services
         _replicationTask = Replication.RunAsync(_cancellationTokenSource.Token);
         _telemetryTask = TelemetryListener.RunAsync(_cancellationTokenSource.Token);
+
+        // Create event routes for testing - capture all event types
+        var testRoutes = new List<EventRoute>
+        {
+            new() { SinkName = "test-sink", EventFormat = EventFormat.EventNotification },
+            new() { SinkName = "test-sink", EventFormat = EventFormat.DataHistory },
+            new() { SinkName = "test-sink", EventFormat = EventFormat.Telemetry },
+        };
+
         _consumerTask = SharedEventConsumer.ConsumeEventsAsync(
             new List<IEventSink> { TestSink },
-            new List<EventRoute>(), // Empty routes for tests - process all events
+            testRoutes,
             _cancellationTokenSource.Token
         );
 
