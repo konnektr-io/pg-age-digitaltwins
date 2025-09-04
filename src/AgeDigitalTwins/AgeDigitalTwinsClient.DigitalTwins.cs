@@ -319,9 +319,7 @@ public partial class AgeDigitalTwinsClient
                 // kv.Value should be a JsonObject representing the component
                 if (kv.Value is not JsonObject componentObject)
                 {
-                    violations.Add(
-                        $"Component '{property}' must be a JSON object"
-                    );
+                    violations.Add($"Component '{property}' must be a JSON object");
                     continue;
                 }
 
@@ -346,7 +344,12 @@ public partial class AgeDigitalTwinsClient
                     }
 
                     // Check if the property is defined in the component schema
-                    if (!componentSchema.Contents.TryGetValue(componentProperty, out DTContentInfo? componentContentInfo))
+                    if (
+                        !componentSchema.Contents.TryGetValue(
+                            componentProperty,
+                            out DTContentInfo? componentContentInfo
+                        )
+                    )
                     {
                         violations.Add(
                             $"Component '{property}' property '{componentProperty}' is not defined in the component schema"
@@ -355,10 +358,14 @@ public partial class AgeDigitalTwinsClient
                     }
 
                     // Validate properties within the component
-                    if (componentContentInfo is DTPropertyInfo componentPropertyDef && componentKv.Value != null)
+                    if (
+                        componentContentInfo is DTPropertyInfo componentPropertyDef
+                        && componentKv.Value != null
+                    )
                     {
                         JsonElement componentValue = componentKv.Value.ToJsonDocument().RootElement;
-                        var componentValidationFailures = componentPropertyDef.Schema.ValidateInstance(componentValue);
+                        var componentValidationFailures =
+                            componentPropertyDef.Schema.ValidateInstance(componentValue);
 
                         if (componentValidationFailures.Count != 0)
                         {
@@ -372,8 +379,12 @@ public partial class AgeDigitalTwinsClient
                 }
 
                 // Set component metadata
-                if (!componentObject.TryGetPropertyValue("$metadata", out JsonNode? componentMetadataNode)
-                    || componentMetadataNode is not JsonObject componentMetadataObject)
+                if (
+                    !componentObject.TryGetPropertyValue(
+                        "$metadata",
+                        out JsonNode? componentMetadataNode
+                    ) || componentMetadataNode is not JsonObject componentMetadataObject
+                )
                 {
                     componentObject["$metadata"] = new JsonObject
                     {
@@ -387,10 +398,8 @@ public partial class AgeDigitalTwinsClient
 
                 // Set component metadata in the twin's metadata
                 if (
-                    metadataObject.TryGetPropertyValue(
-                        property,
-                        out JsonNode? metadataPropertyNode
-                    ) && metadataPropertyNode is JsonObject metadataPropertyObject
+                    metadataObject.TryGetPropertyValue(property, out JsonNode? metadataPropertyNode)
+                    && metadataPropertyNode is JsonObject metadataPropertyObject
                 )
                 {
                     metadataPropertyObject["lastUpdateTime"] = now.ToString("o");
