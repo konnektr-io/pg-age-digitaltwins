@@ -20,7 +20,10 @@ public class TestingEventSink : IEventSink
         _logger = logger;
     }
 
-    public Task SendEventsAsync(IEnumerable<CloudEvent> events)
+    public Task SendEventsAsync(
+        IEnumerable<CloudEvent> events,
+        CancellationToken cancellationToken = default
+    )
     {
         foreach (var evt in events)
         {
