@@ -17,6 +17,7 @@ public static class CloudEventFactory
             { SinkEventType.RelationshipCreate, "Konnektr.DigitalTwins.Relationship.Create" },
             { SinkEventType.RelationshipUpdate, "Konnektr.DigitalTwins.Relationship.Update" },
             { SinkEventType.RelationshipDelete, "Konnektr.DigitalTwins.Relationship.Delete" },
+            { SinkEventType.Telemetry, "Konnektr.IoT.Telemetry" },
         };
 
     // Default CloudEvent type mappings for DataHistory
@@ -687,6 +688,72 @@ public static class CloudEventFactory
         }
 
         return originalPatch;
+    }
+
+    #endregion
+
+    #region Telemetry
+
+    public static List<CloudEvent> CreateTelemetryEvents(
+        EventData eventData,
+        Uri source,
+        Dictionary<SinkEventType, string>? typeMapping = null
+    )
+    {
+        var mapping = typeMapping ?? DefaultEventNotificationTypeMapping;
+        
+        if (eventData.EventType != EventType.Telemetry)
+        {
+            throw new ArgumentException(
+                "EventType must be Telemetry for telemetry events",
+                nameof(eventData)
+            );
+        }
+
+        if (eventData.NewValue == null)
+        {
+            throw new ArgumentException(
+                "NewValue cannot be null for telemetry events",
+                nameof(eventData)
+            );
+        }
+
+        var telemetryData = eventData.NewValue.AsObject();
+        
+        if (!telemetryData.TryGetPropertyValue("digitalTwinId", out var twinIdNode) || 
+            twinIdNode == null)
+        {
+            throw new ArgumentException(
+                "Telemetry data must contain 'digitalTwinId' property",
+                nameof(eventData)
+            );
+        }
+
+        var twinId = twinIdNode.ToString();
+        var messageId = telemetryData["messageId"]?.ToString() ?? Guid.NewGuid().ToString();
+        var componentName = telemetryData["componentName"]?.ToString();
+
+        // Create the subject based on whether this is component telemetry or not
+        var subject = componentName != null 
+            ? $"{twinId}/components/{componentName}" 
+            : twinId;
+
+        // Extract the actual telemetry payload
+        var telemetryPayload = telemetryData["telemetry"]?.AsObject() ?? telemetryData;
+
+        // Create CloudEvent for telemetry
+        var cloudEvent = new CloudEvent
+        {
+            Type = mapping.GetValueOrDefault(SinkEventType.Telemetry, "Konnektr.IoT.Telemetry"),
+            Source = source,
+            Id = messageId,
+            Time = eventData.Timestamp,
+            DataContentType = "application/json",
+            Subject = subject,
+            Data = telemetryPayload
+        };
+
+        return new List<CloudEvent> { cloudEvent };
     }
 
     #endregion

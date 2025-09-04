@@ -5,6 +5,9 @@ var builder = WebApplication.CreateBuilder(args);
 // Add service defaults & Aspire client integrations.
 builder.AddServiceDefaults();
 
+// Register the shared event queue as a singleton
+builder.Services.AddSingleton<IEventQueue, EventQueue>();
+
 // Register Subscription as a singleton
 builder.Services.AddSingleton(sp =>
 {
@@ -44,12 +47,16 @@ builder.Services.AddSingleton(sp =>
 
     EventSinkFactory eventSinkFactory = new(builder.Configuration, loggerFactory);
 
+    // Get the shared event queue from DI
+    var eventQueue = sp.GetRequiredService<IEventQueue>();
+
     return new AgeDigitalTwinsReplication(
         connectionString,
         publication,
         replicationSlot,
         source,
         eventSinkFactory,
+        eventQueue,
         subscriptionLogger,
         maxBatchSize
     );

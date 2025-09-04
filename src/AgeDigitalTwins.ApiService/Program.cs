@@ -145,6 +145,9 @@ else
 // Add job resumption service
 builder.Services.AddHostedService<JobResumptionService>();
 
+// Add telemetry listener service
+builder.Services.AddHostedService<TelemetryListenerService>();
+
 // Add rate limiting to protect the API and database from overload
 builder.Services.AddRateLimiter(options => options.ConfigureRateLimiting(builder.Configuration));
 
@@ -180,6 +183,7 @@ app.UseAuthorization();
 // Map endpoints for Age Digital Twins API
 app.MapDigitalTwinsEndpoints();
 app.MapComponentsEndpoints();
+app.MapTelemetryEndpoints();
 app.MapRelationshipsEndpoints();
 app.MapQueryEndpoints();
 app.MapModelsEndpoints();

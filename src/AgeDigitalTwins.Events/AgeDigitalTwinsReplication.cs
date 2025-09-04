@@ -22,6 +22,7 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
         string replicationSlot,
         string? source,
         EventSinkFactory eventSinkFactory,
+        IEventQueue eventQueue,
         ILogger<AgeDigitalTwinsReplication> logger,
         int maxBatchSize = 50
     )
@@ -30,6 +31,7 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
         _publication = publication;
         _replicationSlot = replicationSlot;
         _eventSinkFactory = eventSinkFactory;
+        _eventQueue = eventQueue;
         _logger = logger;
         _maxBatchSize = maxBatchSize > 0 ? maxBatchSize : 50; // Ensure positive value with fallback
 
@@ -77,7 +79,7 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
     private readonly EventSinkFactory _eventSinkFactory;
     private readonly ILogger<AgeDigitalTwinsReplication> _logger;
     private LogicalReplicationConnection? _conn;
-    private readonly ConcurrentQueue<EventData> _eventQueue = new();
+    private readonly IEventQueue _eventQueue;
 
     /// <summary>
     /// Maximum number of event data objects to batch together before processing.
@@ -562,38 +564,21 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
             return;
         }
 
-        var eventDataBatch = new List<EventData>();
-
         while (!cancellationToken.IsCancellationRequested)
         {
             // Try to dequeue events and batch them
-            while (
-                eventDataBatch.Count < _maxBatchSize && _eventQueue.TryDequeue(out var eventData)
-            )
-            {
-                if (eventData.EventType != null)
-                {
-                    eventDataBatch.Add(eventData);
-                }
-            }
+            var eventDataBatch = _eventQueue.DequeueBatch(_maxBatchSize);
 
             // Process the batch if we have events
             if (eventDataBatch.Count > 0)
             {
                 await ProcessEventDataBatchAsync(eventDataBatch, eventSinks, eventRoutes);
-                eventDataBatch.Clear();
             }
             else
             {
                 // No events to process, wait before checking again
                 await Task.Delay(100, cancellationToken);
             }
-        }
-
-        // Process any remaining events when cancellation is requested
-        if (eventDataBatch.Count > 0)
-        {
-            await ProcessEventDataBatchAsync(eventDataBatch, eventSinks, eventRoutes);
         }
     }
 
