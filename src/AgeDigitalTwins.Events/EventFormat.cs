@@ -8,5 +8,5 @@ public enum EventFormat
 {
     EventNotification,
     DataHistory,
-    Telemetry
+    Telemetry,
 }

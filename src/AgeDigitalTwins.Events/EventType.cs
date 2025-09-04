@@ -8,5 +8,5 @@ public enum EventType
     RelationshipCreate,
     RelationshipUpdate,
     RelationshipDelete,
-    Telemetry
+    Telemetry,
 }

@@ -25,7 +25,10 @@ public partial class AgeDigitalTwinsClient
         CancellationToken cancellationToken = default
     )
     {
-        using var activity = ActivitySource.StartActivity("PublishTelemetryAsync", ActivityKind.Client);
+        using var activity = ActivitySource.StartActivity(
+            "PublishTelemetryAsync",
+            ActivityKind.Client
+        );
         activity?.SetTag("digitalTwinId", digitalTwinId);
         activity?.SetTag("messageId", messageId);
 
@@ -60,7 +63,10 @@ public partial class AgeDigitalTwinsClient
         CancellationToken cancellationToken = default
     )
     {
-        using var activity = ActivitySource.StartActivity("PublishComponentTelemetryAsync", ActivityKind.Client);
+        using var activity = ActivitySource.StartActivity(
+            "PublishComponentTelemetryAsync",
+            ActivityKind.Client
+        );
         activity?.SetTag("digitalTwinId", digitalTwinId);
         activity?.SetTag("componentName", componentName);
         activity?.SetTag("messageId", messageId);
@@ -101,7 +107,7 @@ public partial class AgeDigitalTwinsClient
             ["messageId"] = messageId,
             ["timestamp"] = timestamp.ToString("o"),
             ["eventType"] = "Telemetry",
-            ["data"] = JsonSerializer.SerializeToNode(telemetry, serializerOptions)
+            ["data"] = JsonSerializer.SerializeToNode(telemetry, serializerOptions),
         };
 
         // Publish via PostgreSQL NOTIFY
@@ -138,7 +144,7 @@ public partial class AgeDigitalTwinsClient
             ["messageId"] = messageId,
             ["timestamp"] = timestamp.ToString("o"),
             ["eventType"] = "ComponentTelemetry",
-            ["data"] = JsonSerializer.SerializeToNode(telemetry, serializerOptions)
+            ["data"] = JsonSerializer.SerializeToNode(telemetry, serializerOptions),
         };
 
         // Publish via PostgreSQL NOTIFY

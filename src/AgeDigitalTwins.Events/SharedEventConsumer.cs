@@ -1,7 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using CloudNative.CloudEvents;
-using Microsoft.Extensions.Logging;
 
 namespace AgeDigitalTwins.Events;
 
@@ -27,7 +26,8 @@ public class SharedEventConsumer
         ILogger<SharedEventConsumer> logger,
         Uri sourceUri,
         int batchSize = 100,
-        TimeSpan? batchInterval = null)
+        TimeSpan? batchInterval = null
+    )
     {
         _eventQueue = eventQueue;
         _logger = logger;
@@ -42,12 +42,13 @@ public class SharedEventConsumer
     /// <summary>
     /// JSON serializer options for event processing
     /// </summary>
-    public static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        WriteIndented = false
-    };
+    public static readonly JsonSerializerOptions JsonOptions =
+        new()
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+            WriteIndented = false,
+        };
 
     /// <summary>
     /// Gets the current queue depth (number of events waiting to be processed)
@@ -75,7 +76,8 @@ public class SharedEventConsumer
     public async Task ConsumeEventsAsync(
         List<IEventSink> eventSinks,
         List<EventRoute> eventRoutes,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         while (!cancellationToken.IsCancellationRequested)
         {
@@ -102,7 +104,8 @@ public class SharedEventConsumer
     private async Task ProcessBatchAsync(
         List<IEventSink> eventSinks,
         List<EventRoute> eventRoutes,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         var batch = _eventQueue.DequeueBatch(_batchSize);
         if (batch.Count == 0)
@@ -112,7 +115,7 @@ public class SharedEventConsumer
 
         try
         {
-            await ProcessEventDataBatchAsync(batch, eventSinks, eventRoutes);
+            await ProcessEventDataBatchAsync(batch, eventSinks, eventRoutes, cancellationToken);
 
             Interlocked.Add(ref _totalEventsProcessed, batch.Count);
             _lastProcessedAt = DateTime.UtcNow;
@@ -132,7 +135,9 @@ public class SharedEventConsumer
     private async Task ProcessEventDataBatchAsync(
         List<EventData> eventDataBatch,
         List<IEventSink> eventSinks,
-        List<EventRoute> eventRoutes)
+        List<EventRoute> eventRoutes,
+        CancellationToken cancellationToken = default
+    )
     {
         // Group events by sink to optimize delivery
         var sinkEventGroups = new Dictionary<IEventSink, List<CloudEvent>>();
@@ -140,7 +145,9 @@ public class SharedEventConsumer
         foreach (var eventData in eventDataBatch)
         {
             // Find matching routes for this event
-            var matchingRoutes = eventRoutes.Where(route => ShouldRouteEvent(route, eventData)).ToList();
+            var matchingRoutes = eventRoutes
+                .Where(route => ShouldRouteEvent(route, eventData))
+                .ToList();
 
             foreach (var route in matchingRoutes)
             {
@@ -155,11 +162,12 @@ public class SharedEventConsumer
                 // Generate cloud events for this route
                 var cloudEvents = route.EventFormat switch
                 {
-                    EventFormat.EventNotification => CloudEventFactory.CreateEventNotificationEvents(
-                        eventData,
-                        _sourceUri,
-                        route.TypeMappings
-                    ),
+                    EventFormat.EventNotification =>
+                        CloudEventFactory.CreateEventNotificationEvents(
+                            eventData,
+                            _sourceUri,
+                            route.TypeMappings
+                        ),
                     EventFormat.DataHistory => CloudEventFactory.CreateDataHistoryEvents(
                         eventData,
                         _sourceUri,
@@ -170,7 +178,9 @@ public class SharedEventConsumer
                         _sourceUri,
                         route.TypeMappings
                     ),
-                    _ => throw new ArgumentException($"Unknown route event format: {route.EventFormat}")
+                    _ => throw new ArgumentException(
+                        $"Unknown route event format: {route.EventFormat}"
+                    ),
                 };
 
                 if (cloudEvents.Count == 0)
@@ -193,13 +203,26 @@ public class SharedEventConsumer
 
             try
             {
-                _logger.LogDebug("Sending {EventCount} events to sink {SinkName}", events.Count, sink.Name);
-                await sink.SendEventsAsync(events);
-                _logger.LogDebug("Successfully sent {EventCount} events to sink {SinkName}", events.Count, sink.Name);
+                _logger.LogDebug(
+                    "Sending {EventCount} events to sink {SinkName}",
+                    events.Count,
+                    sink.Name
+                );
+                await sink.SendEventsAsync(events, cancellationToken);
+                _logger.LogDebug(
+                    "Successfully sent {EventCount} events to sink {SinkName}",
+                    events.Count,
+                    sink.Name
+                );
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to send {EventCount} events to sink {SinkName}", events.Count, sink.Name);
+                _logger.LogError(
+                    ex,
+                    "Failed to send {EventCount} events to sink {SinkName}",
+                    events.Count,
+                    sink.Name
+                );
                 throw;
             }
         });

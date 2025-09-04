@@ -1,9 +1,5 @@
-using System;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
 using Npgsql;
 
 namespace AgeDigitalTwins.Events;
@@ -54,7 +50,10 @@ public class TelemetryListener
             await using var command = new NpgsqlCommand($"LISTEN {_channel}", connection);
             await command.ExecuteNonQueryAsync(cancellationToken);
 
-            _logger.LogInformation("Listening for telemetry events on channel: {Channel}", _channel);
+            _logger.LogInformation(
+                "Listening for telemetry events on channel: {Channel}",
+                _channel
+            );
 
             // Mark as healthy now that listening has started successfully
             IsHealthy = true;

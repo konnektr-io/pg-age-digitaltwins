@@ -27,7 +27,12 @@ public static class TelemetryEndpoints
                     // Extract optional message ID from headers
                     string? messageId = httpContext.Request.Headers["Message-Id"].FirstOrDefault();
 
-                    await client.PublishTelemetryAsync(twinId, telemetryData, messageId, cancellationToken);
+                    await client.PublishTelemetryAsync(
+                        twinId,
+                        telemetryData,
+                        messageId,
+                        cancellationToken
+                    );
                     return Results.NoContent();
                 }
             )
@@ -52,10 +57,10 @@ public static class TelemetryEndpoints
                     string? messageId = httpContext.Request.Headers["Message-Id"].FirstOrDefault();
 
                     await client.PublishComponentTelemetryAsync(
-                        twinId, 
-                        componentName, 
-                        telemetryData, 
-                        messageId, 
+                        twinId,
+                        componentName,
+                        telemetryData,
+                        messageId,
                         cancellationToken
                     );
                     return Results.NoContent();

@@ -701,7 +701,7 @@ public static class CloudEventFactory
     )
     {
         var mapping = typeMapping ?? DefaultEventNotificationTypeMapping;
-        
+
         if (eventData.EventType != EventType.Telemetry)
         {
             throw new ArgumentException(
@@ -719,9 +719,11 @@ public static class CloudEventFactory
         }
 
         var telemetryData = eventData.NewValue.AsObject();
-        
-        if (!telemetryData.TryGetPropertyValue("digitalTwinId", out var twinIdNode) || 
-            twinIdNode == null)
+
+        if (
+            !telemetryData.TryGetPropertyValue("digitalTwinId", out var twinIdNode)
+            || twinIdNode == null
+        )
         {
             throw new ArgumentException(
                 "Telemetry data must contain 'digitalTwinId' property",
@@ -734,9 +736,7 @@ public static class CloudEventFactory
         var componentName = telemetryData["componentName"]?.ToString();
 
         // Create the subject based on whether this is component telemetry or not
-        var subject = componentName != null 
-            ? $"{twinId}/components/{componentName}" 
-            : twinId;
+        var subject = componentName != null ? $"{twinId}/components/{componentName}" : twinId;
 
         // Extract the actual telemetry payload
         var telemetryPayload = telemetryData["telemetry"]?.AsObject() ?? telemetryData;
@@ -750,7 +750,7 @@ public static class CloudEventFactory
             Time = eventData.Timestamp,
             DataContentType = "application/json",
             Subject = subject,
-            Data = telemetryPayload
+            Data = telemetryPayload,
         };
 
         return new List<CloudEvent> { cloudEvent };

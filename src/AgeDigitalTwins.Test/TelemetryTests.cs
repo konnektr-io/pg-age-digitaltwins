@@ -25,14 +25,16 @@ public class TelemetryTests : TestBase
         {
             ["temperature"] = 23.5,
             ["humidity"] = 45.2,
-            ["timestamp"] = DateTime.UtcNow.ToString("o")
+            ["timestamp"] = DateTime.UtcNow.ToString("o"),
         };
         string messageId = Guid.NewGuid().ToString();
 
         // Act & Assert - Should not throw
         await Client.PublishTelemetryAsync(twinId, telemetryData, messageId);
 
-        _output.WriteLine($"✓ Successfully published telemetry for twin {twinId} with message ID {messageId}");
+        _output.WriteLine(
+            $"✓ Successfully published telemetry for twin {twinId} with message ID {messageId}"
+        );
     }
 
     [Fact]
@@ -45,14 +47,21 @@ public class TelemetryTests : TestBase
         {
             ["targetTemperature"] = 22.0,
             ["mode"] = "heating",
-            ["timestamp"] = DateTime.UtcNow.ToString("o")
+            ["timestamp"] = DateTime.UtcNow.ToString("o"),
         };
         string messageId = Guid.NewGuid().ToString();
 
         // Act & Assert - Should not throw
-        await Client.PublishComponentTelemetryAsync(twinId, componentName, telemetryData, messageId);
+        await Client.PublishComponentTelemetryAsync(
+            twinId,
+            componentName,
+            telemetryData,
+            messageId
+        );
 
-        _output.WriteLine($"✓ Successfully published component telemetry for twin {twinId}, component {componentName} with message ID {messageId}");
+        _output.WriteLine(
+            $"✓ Successfully published component telemetry for twin {twinId}, component {componentName} with message ID {messageId}"
+        );
     }
 
     [Fact]
@@ -60,16 +69,14 @@ public class TelemetryTests : TestBase
     {
         // Arrange
         string twinId = "test-twin-telemetry-3";
-        var telemetryData = new JsonObject
-        {
-            ["pressure"] = 1013.25,
-            ["altitude"] = 150.0
-        };
+        var telemetryData = new JsonObject { ["pressure"] = 1013.25, ["altitude"] = 150.0 };
 
         // Act & Assert - Should not throw and should auto-generate message ID
         await Client.PublishTelemetryAsync(twinId, telemetryData);
 
-        _output.WriteLine($"✓ Successfully published telemetry for twin {twinId} with auto-generated message ID");
+        _output.WriteLine(
+            $"✓ Successfully published telemetry for twin {twinId} with auto-generated message ID"
+        );
     }
 
     [Fact]
@@ -78,16 +85,14 @@ public class TelemetryTests : TestBase
         // Arrange
         string twinId = "test-twin-telemetry-4";
         string componentName = "sensor";
-        var telemetryData = new JsonObject
-        {
-            ["batteryLevel"] = 85,
-            ["signalStrength"] = -42
-        };
+        var telemetryData = new JsonObject { ["batteryLevel"] = 85, ["signalStrength"] = -42 };
 
         // Act & Assert - Should not throw and should auto-generate message ID
         await Client.PublishComponentTelemetryAsync(twinId, componentName, telemetryData);
 
-        _output.WriteLine($"✓ Successfully published component telemetry for twin {twinId}, component {componentName} with auto-generated message ID");
+        _output.WriteLine(
+            $"✓ Successfully published component telemetry for twin {twinId}, component {componentName} with auto-generated message ID"
+        );
     }
 
     [Fact]
@@ -103,27 +108,27 @@ public class TelemetryTests : TestBase
                 {
                     ["value"] = 24.3,
                     ["unit"] = "celsius",
-                    ["accuracy"] = 0.1
+                    ["accuracy"] = 0.1,
                 },
                 ["humidity"] = new JsonObject
                 {
                     ["value"] = 47.8,
                     ["unit"] = "percent",
-                    ["accuracy"] = 2.0
-                }
+                    ["accuracy"] = 2.0,
+                },
             },
             ["location"] = new JsonObject
             {
                 ["latitude"] = 40.7128,
                 ["longitude"] = -74.0060,
-                ["elevation"] = 10.0
+                ["elevation"] = 10.0,
             },
             ["metadata"] = new JsonObject
             {
                 ["deviceId"] = "sensor-001",
                 ["firmware"] = "1.2.3",
-                ["batteryLevel"] = 92
-            }
+                ["batteryLevel"] = 92,
+            },
         };
 
         // Act & Assert - Should not throw

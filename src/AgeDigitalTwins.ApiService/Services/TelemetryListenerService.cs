@@ -46,7 +46,10 @@ public class TelemetryListenerService : BackgroundService
             await using var command = new NpgsqlCommand($"LISTEN {_channel}", connection);
             await command.ExecuteNonQueryAsync(stoppingToken);
 
-            _logger.LogInformation("Listening for telemetry events on channel: {Channel}", _channel);
+            _logger.LogInformation(
+                "Listening for telemetry events on channel: {Channel}",
+                _channel
+            );
 
             // Keep the connection alive and listening
             while (!stoppingToken.IsCancellationRequested)
@@ -107,7 +110,7 @@ public class TelemetryListenerService : BackgroundService
             // TODO: Forward to configured sinks/endpoints
             // This is where you could integrate with your existing event infrastructure
             // or forward to external systems like Azure Event Hub, Service Bus, etc.
-            
+
             ProcessTelemetryEvent(telemetryEvent);
         }
         catch (Exception ex)
@@ -124,7 +127,7 @@ public class TelemetryListenerService : BackgroundService
         // 2. Send to message queues
         // 3. Trigger alerts or workflows
         // 4. Integrate with existing event sinks
-        
+
         _logger.LogDebug("Processing telemetry event: {Event}", telemetryEvent.ToJsonString());
     }
 }
