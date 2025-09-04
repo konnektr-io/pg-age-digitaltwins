@@ -734,6 +734,7 @@ public static class CloudEventFactory
         var twinId = twinIdNode.ToString();
         var messageId = telemetryData["messageId"]?.ToString() ?? Guid.NewGuid().ToString();
         var componentName = telemetryData["componentName"]?.ToString();
+        var modelId = telemetryData["modelId"]?.ToString();
 
         // Create the subject based on whether this is component telemetry or not
         var subject = componentName != null ? $"{twinId}/components/{componentName}" : twinId;
@@ -749,6 +750,7 @@ public static class CloudEventFactory
             Id = messageId,
             Time = eventData.Timestamp,
             DataContentType = "application/json",
+            DataSchema = modelId != null ? new Uri(modelId) : null,
             Subject = subject,
             Data = telemetryPayload,
         };

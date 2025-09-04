@@ -145,9 +145,6 @@ else
 // Add job resumption service
 builder.Services.AddHostedService<JobResumptionService>();
 
-// Add telemetry listener service
-builder.Services.AddHostedService<TelemetryListenerService>();
-
 // Add rate limiting to protect the API and database from overload
 builder.Services.AddRateLimiter(options => options.ConfigureRateLimiting(builder.Configuration));
 

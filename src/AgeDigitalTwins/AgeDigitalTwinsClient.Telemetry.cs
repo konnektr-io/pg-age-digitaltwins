@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
+using AgeDigitalTwins.Exceptions;
 using Npgsql;
 
 namespace AgeDigitalTwins;
@@ -100,6 +101,19 @@ public partial class AgeDigitalTwinsClient
         messageId ??= Guid.NewGuid().ToString();
         DateTime timestamp = DateTime.UtcNow;
 
+        // Get the model ID using the cached method
+        string modelId;
+        try
+        {
+            modelId = await GetModelIdByTwinIdCachedAsync(digitalTwinId, cancellationToken);
+        }
+        catch (DigitalTwinNotFoundException)
+        {
+            throw new DigitalTwinNotFoundException(
+                $"Digital Twin with ID {digitalTwinId} not found"
+            );
+        }
+
         // Create the telemetry event payload
         var telemetryEvent = new JsonObject
         {
@@ -107,7 +121,8 @@ public partial class AgeDigitalTwinsClient
             ["messageId"] = messageId,
             ["timestamp"] = timestamp.ToString("o"),
             ["eventType"] = "Telemetry",
-            ["data"] = JsonSerializer.SerializeToNode(telemetry, serializerOptions),
+            ["modelId"] = modelId,
+            ["telemetry"] = JsonSerializer.SerializeToNode(telemetry, serializerOptions),
         };
 
         // Publish via PostgreSQL NOTIFY
@@ -136,6 +151,19 @@ public partial class AgeDigitalTwinsClient
         messageId ??= Guid.NewGuid().ToString();
         DateTime timestamp = DateTime.UtcNow;
 
+        // Get the model ID using the cached method
+        string modelId;
+        try
+        {
+            modelId = await GetModelIdByTwinIdCachedAsync(digitalTwinId, cancellationToken);
+        }
+        catch (DigitalTwinNotFoundException)
+        {
+            throw new DigitalTwinNotFoundException(
+                $"Digital Twin with ID {digitalTwinId} not found"
+            );
+        }
+
         // Create the component telemetry event payload
         var telemetryEvent = new JsonObject
         {
@@ -144,7 +172,8 @@ public partial class AgeDigitalTwinsClient
             ["messageId"] = messageId,
             ["timestamp"] = timestamp.ToString("o"),
             ["eventType"] = "ComponentTelemetry",
-            ["data"] = JsonSerializer.SerializeToNode(telemetry, serializerOptions),
+            ["modelId"] = modelId,
+            ["telemetry"] = JsonSerializer.SerializeToNode(telemetry, serializerOptions),
         };
 
         // Publish via PostgreSQL NOTIFY

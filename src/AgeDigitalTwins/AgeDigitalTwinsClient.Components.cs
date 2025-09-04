@@ -356,33 +356,26 @@ RETURN t";
         CancellationToken cancellationToken = default
     )
     {
-        // Get the model ID from the digital twin
+        // Get the twin ID
         if (
-            !digitalTwin.TryGetPropertyValue("$metadata", out JsonNode? metadataNode)
-            || metadataNode is not JsonObject metadataObject
+            !digitalTwin.TryGetPropertyValue("$dtId", out JsonNode? dtIdNode)
+            || dtIdNode is not JsonValue dtIdValue
+            || dtIdValue.GetValueKind() != JsonValueKind.String
         )
         {
             throw new ValidationFailedException(
-                "Digital Twin must have a $metadata property of type object"
+                "Digital Twin must have a $dtId property of type string"
             );
         }
 
-        if (
-            !metadataObject.TryGetPropertyValue("$model", out JsonNode? modelNode)
-            || modelNode is not JsonValue modelValue
-            || modelValue.GetValueKind() != JsonValueKind.String
-        )
-        {
-            throw new ValidationFailedException(
-                "Digital Twin's $metadata must contain a $model property of type string"
-            );
-        }
-
-        string modelId =
-            modelValue.ToString()
+        string twinId =
+            dtIdValue.ToString()
             ?? throw new ValidationFailedException(
-                "Digital Twin's $model property cannot be null or empty"
+                "Digital Twin's $dtId property cannot be null or empty"
             );
+
+        // Get the model ID using the cached method
+        string modelId = await GetModelIdByTwinIdCachedAsync(twinId, cancellationToken);
 
         // Get and parse the model
         DigitalTwinsModelData modelData =
