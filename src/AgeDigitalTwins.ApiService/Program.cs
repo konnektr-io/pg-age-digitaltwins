@@ -179,6 +179,7 @@ app.UseAuthorization();
 
 // Map endpoints for Age Digital Twins API
 app.MapDigitalTwinsEndpoints();
+app.MapComponentsEndpoints();
 app.MapRelationshipsEndpoints();
 app.MapQueryEndpoints();
 app.MapModelsEndpoints();
