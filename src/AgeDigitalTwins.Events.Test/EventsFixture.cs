@@ -1,3 +1,4 @@
+using AgeDigitalTwins.Events;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Npgsql;
@@ -14,11 +15,15 @@ public class EventsFixture : IAsyncDisposable
     public AgeDigitalTwinsClient Client { get; }
     public TestingEventSink TestSink { get; }
     public AgeDigitalTwinsReplication Replication { get; }
+    public TelemetryListener TelemetryListener { get; }
+    public SharedEventConsumer SharedEventConsumer { get; }
 
     private readonly CancellationTokenSource _cancellationTokenSource;
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<EventsFixture> _logger;
     private readonly Task _replicationTask;
+    private readonly Task _telemetryTask;
+    private readonly Task _consumerTask;
 
     public EventsFixture()
     {
@@ -74,10 +79,29 @@ public class EventsFixture : IAsyncDisposable
             replicationLogger
         );
 
+        // Setup TelemetryListener
+        var telemetryLogger = _loggerFactory.CreateLogger<TelemetryListener>();
+        TelemetryListener = new TelemetryListener(
+            connectionString,
+            testEventQueue,
+            telemetryLogger
+        );
+
+        // Setup SharedEventConsumer
+        var consumerLogger = _loggerFactory.CreateLogger<SharedEventConsumer>();
+        var sourceUri = new Uri("http://localhost/test");
+        SharedEventConsumer = new SharedEventConsumer(testEventQueue, consumerLogger, sourceUri);
+
         _cancellationTokenSource = new CancellationTokenSource();
 
-        // Start replication - RunAsync should handle its own background tasks
+        // Start all services
         _replicationTask = Replication.RunAsync(_cancellationTokenSource.Token);
+        _telemetryTask = TelemetryListener.RunAsync(_cancellationTokenSource.Token);
+        _consumerTask = SharedEventConsumer.ConsumeEventsAsync(
+            new List<IEventSink> { TestSink },
+            new List<EventRoute>(), // Empty routes for tests - process all events
+            _cancellationTokenSource.Token
+        );
 
         // Give replication a moment to initialize and check for immediate failures
         Task.Delay(2000).Wait();
@@ -147,10 +171,10 @@ public class EventsFixture : IAsyncDisposable
                 );
             }
 
-            if (Replication.IsHealthy)
+            if (Replication.IsHealthy && TelemetryListener.IsHealthy)
             {
                 _logger.LogInformation(
-                    "Replication is healthy after {CheckCount} checks",
+                    "Replication and TelemetryListener are healthy after {CheckCount} checks",
                     checkCount
                 );
                 return;
@@ -183,8 +207,12 @@ public class EventsFixture : IAsyncDisposable
 
         try
         {
-            // Wait for replication task to complete or timeout
-            await _replicationTask.WaitAsync(TimeSpan.FromSeconds(5));
+            // Wait for all tasks to complete or timeout
+            await Task.WhenAll(
+                _replicationTask.WaitAsync(TimeSpan.FromSeconds(5)),
+                _telemetryTask.WaitAsync(TimeSpan.FromSeconds(5)),
+                _consumerTask.WaitAsync(TimeSpan.FromSeconds(5))
+            );
         }
         catch
         {
