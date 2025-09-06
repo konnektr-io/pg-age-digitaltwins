@@ -531,14 +531,9 @@ RETURN COUNT(m) AS deletedCount";
                           RETURN t.`$metadata`.`$model` as modelId";
 
         await using var command = connection.CreateCypherCommand(_graphName, cypher);
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
-        if (!await reader.ReadAsync(cancellationToken))
-        {
-            throw new DigitalTwinNotFoundException($"Digital Twin with ID {twinId} not found");
-        }
+        var modelIdValue = await command.ExecuteScalarAsync(cancellationToken);
 
-        var modelIdValue = reader.GetValue(0);
         if (modelIdValue == null || modelIdValue == DBNull.Value)
         {
             throw new ValidationFailedException(
@@ -550,11 +545,11 @@ RETURN COUNT(m) AS deletedCount";
         string? modelId;
         if (modelIdValue is Agtype agtypeValue)
         {
-            modelId = agtypeValue.GetString();
+            modelId = agtypeValue.GetString().Trim('\u0001');
         }
         else
         {
-            modelId = modelIdValue.ToString();
+            modelId = modelIdValue.ToString()?.Trim('\u0001');
         }
 
         if (string.IsNullOrEmpty(modelId))
