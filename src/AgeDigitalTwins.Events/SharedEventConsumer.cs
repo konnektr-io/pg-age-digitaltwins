@@ -235,9 +235,27 @@ public class SharedEventConsumer
     /// </summary>
     private static bool ShouldRouteEvent(EventRoute route, EventData eventData)
     {
-        // For now, route all events. In the future, we can add filtering logic here
-        // based on event type, twin ID patterns, etc.
-        return true;
+        // Match events based on EventFormat and EventType
+        if (route.EventFormat == null)
+        {
+            // If no format is specified, route all events
+            return true;
+        }
+
+        return route.EventFormat switch
+        {
+            EventFormat.EventNotification => eventData.EventType is 
+                EventType.TwinCreate or EventType.TwinUpdate or EventType.TwinDelete or
+                EventType.RelationshipCreate or EventType.RelationshipUpdate or EventType.RelationshipDelete,
+            
+            EventFormat.DataHistory => eventData.EventType is 
+                EventType.TwinCreate or EventType.TwinUpdate or EventType.TwinDelete or
+                EventType.RelationshipCreate or EventType.RelationshipUpdate or EventType.RelationshipDelete,
+            
+            EventFormat.Telemetry => eventData.EventType is EventType.Telemetry,
+            
+            _ => false
+        };
     }
 
     /// <summary>
