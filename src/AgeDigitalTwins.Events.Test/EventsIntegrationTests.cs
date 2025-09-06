@@ -1100,6 +1100,10 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         Assert.NotNull(receivedEvent.DataSchema);
         Assert.Equal("dtmi:com:adt:dtsample:tempsensor;1", receivedEvent.DataSchema.ToString());
 
+        // Debug output
+        _output.WriteLine($"Event Data Type: {receivedEvent.Data?.GetType()}");
+        _output.WriteLine($"Event Data Value: {receivedEvent.Data}");
+
         // Verify telemetry data
         var eventData = receivedEvent.Data as JsonObject;
         Assert.NotNull(eventData);
