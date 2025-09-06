@@ -1082,7 +1082,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
             timestamp = DateTime.UtcNow,
         };
 
-        await Client.PublishTelemetryAsync(uniqueTwinId, JsonSerializer.Serialize(telemetryData));
+        await Client.PublishTelemetryAsync(uniqueTwinId, telemetryData);
 
         // Assert - Wait for telemetry event
         var receivedEvent = await TestSink.WaitForEventAsync(
@@ -1167,7 +1167,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         await Client.PublishComponentTelemetryAsync(
             uniqueTwinId,
             "deepestCrater",
-            JsonSerializer.Serialize(componentTelemetryData)
+            componentTelemetryData
         );
 
         // Assert - Wait for component telemetry event
@@ -1235,11 +1235,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         var customMessageId = $"msg_{Guid.NewGuid():N}";
         var telemetryData = new { temperature = 30.0, pressure = 1013.25 };
 
-        await Client.PublishTelemetryAsync(
-            uniqueTwinId,
-            JsonSerializer.Serialize(telemetryData),
-            messageId: customMessageId
-        );
+        await Client.PublishTelemetryAsync(uniqueTwinId, telemetryData, messageId: customMessageId);
 
         // Assert - Wait for telemetry event
         var receivedEvent = await TestSink.WaitForEventAsync(
@@ -1280,10 +1276,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         var telemetryData = new { temperature = 18.5, batteryLevel = 85 };
 
         // This should not throw an exception - telemetry publishing is fire-and-forget
-        await Client.PublishTelemetryAsync(
-            nonExistentTwinId,
-            JsonSerializer.Serialize(telemetryData)
-        );
+        await Client.PublishTelemetryAsync(nonExistentTwinId, telemetryData);
 
         // Assert - Wait for telemetry event (should still be generated)
         var receivedEvent = await TestSink.WaitForEventAsync(
@@ -1352,7 +1345,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
             {
                 var telemetryData = new { temperature = 20.0 + index, sensorId = index };
 
-                await Client.PublishTelemetryAsync(twinId, JsonSerializer.Serialize(telemetryData));
+                await Client.PublishTelemetryAsync(twinId, telemetryData);
             }
         );
 
@@ -1426,7 +1419,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         var customTimestamp = DateTime.UtcNow.AddMinutes(-5); // 5 minutes ago
         var telemetryData = new { temperature = 28.0, measurementTime = customTimestamp };
 
-        await Client.PublishTelemetryAsync(uniqueTwinId, JsonSerializer.Serialize(telemetryData));
+        await Client.PublishTelemetryAsync(uniqueTwinId, telemetryData);
 
         // Assert - Wait for telemetry event
         var receivedEvent = await TestSink.WaitForEventAsync(
