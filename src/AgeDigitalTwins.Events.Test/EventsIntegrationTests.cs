@@ -1098,10 +1098,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
 
         // Verify DataSchema contains the model ID
         Assert.NotNull(receivedEvent.DataSchema);
-        Assert.Equal(
-            "dtmi:com:adt:dtsample:TemperatureSensor;1",
-            receivedEvent.DataSchema.ToString()
-        );
+        Assert.Equal("dtmi:com:adt:dtsample:tempsensor;1", receivedEvent.DataSchema.ToString());
 
         // Verify telemetry data
         var eventData = receivedEvent.Data as JsonObject;
@@ -1378,10 +1375,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
 
             // All should have the same model ID in DataSchema (cached)
             Assert.NotNull(twinEvent.DataSchema);
-            Assert.Equal(
-                "dtmi:com:adt:dtsample:TemperatureSensor;1",
-                twinEvent.DataSchema.ToString()
-            );
+            Assert.Equal("dtmi:com:adt:dtsample:tempsensor;1", twinEvent.DataSchema.ToString());
 
             // Verify telemetry data
             var eventData = twinEvent.Data as JsonObject;
@@ -1393,7 +1387,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         }
 
         _output.WriteLine($"Successfully verified model ID caching across {twinIds.Count} twins");
-        _output.WriteLine($"All events have DataSchema: dtmi:com:adt:dtsample:TemperatureSensor;1");
+        _output.WriteLine($"All events have DataSchema: dtmi:com:adt:dtsample:tempsensor;1");
     }
 
     [Fact]
