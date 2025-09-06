@@ -542,15 +542,7 @@ RETURN COUNT(m) AS deletedCount";
         }
 
         // Handle AGE type conversion to string
-        string? modelId;
-        if (modelIdValue is Agtype agtypeValue)
-        {
-            modelId = agtypeValue.GetString().Trim('\u0001');
-        }
-        else
-        {
-            modelId = modelIdValue.ToString()?.Trim('\u0001');
-        }
+        string? modelId = ((Agtype)modelIdValue).GetString().Trim('\u0001').Trim('"');
 
         if (string.IsNullOrEmpty(modelId))
         {
