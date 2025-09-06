@@ -215,6 +215,11 @@ namespace AgeDigitalTwins.Test
                         ""@type"": ""Property"",
                         ""name"": ""diameter"",
                         ""schema"": ""double""
+                    },
+                    {
+                        ""@type"": ""Property"",
+                        ""name"": ""depth"",
+                        ""schema"": ""double""
                     }
                 ]
             }";

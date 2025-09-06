@@ -98,8 +98,13 @@ public class TelemetryListener
             var messageId = telemetryEvent["messageId"]?.ToString();
             var timestamp = telemetryEvent["timestamp"]?.ToString();
             var componentName = telemetryEvent["componentName"]?.ToString();
+            var graphName = telemetryEvent["graphName"]?.ToString();
 
-            if (string.IsNullOrEmpty(digitalTwinId) || string.IsNullOrEmpty(messageId))
+            if (
+                string.IsNullOrEmpty(digitalTwinId)
+                || string.IsNullOrEmpty(messageId)
+                || string.IsNullOrEmpty(graphName)
+            )
             {
                 _logger.LogWarning("Telemetry event missing required fields: {Payload}", e.Payload);
                 return;
@@ -108,7 +113,7 @@ public class TelemetryListener
             // Convert telemetry notification to EventData
             var eventData = new EventData(
                 digitalTwinId,
-                "digitaltwins", // Default graph name
+                graphName, // Default graph name
                 "telemetry"
             )
             {

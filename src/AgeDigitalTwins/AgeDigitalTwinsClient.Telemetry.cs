@@ -119,6 +119,7 @@ public partial class AgeDigitalTwinsClient
             ["messageId"] = messageId,
             ["timestamp"] = timestamp.ToString("o"),
             ["eventType"] = "Telemetry",
+            ["graphName"] = _graphName,
             ["telemetry"] = JsonSerializer.SerializeToNode(telemetry, serializerOptions),
         };
 
@@ -173,6 +174,7 @@ public partial class AgeDigitalTwinsClient
             ["messageId"] = messageId,
             ["timestamp"] = timestamp.ToString("o"),
             ["eventType"] = "ComponentTelemetry",
+            ["graphName"] = _graphName,
             ["telemetry"] = JsonSerializer.SerializeToNode(telemetry, serializerOptions),
         };
 
