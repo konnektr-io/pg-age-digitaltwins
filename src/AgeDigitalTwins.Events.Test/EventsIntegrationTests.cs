@@ -1158,19 +1158,19 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         // Act - Publish component telemetry
         var componentTelemetryData = new
         {
-            targetTemperature = 23.0,
-            actualTemperature = 22.8,
+            diameter = 155.0,
+            depth = 32.0,
             timestamp = DateTime.UtcNow,
         };
 
         await Client.PublishComponentTelemetryAsync(
             uniqueTwinId,
-            "thermostat",
+            "deepestCrater",
             JsonSerializer.Serialize(componentTelemetryData)
         );
 
         // Assert - Wait for component telemetry event
-        var expectedSubject = $"{uniqueTwinId}/components/thermostat";
+        var expectedSubject = $"{uniqueTwinId}/components/deepestCrater";
         var receivedEvent = await TestSink.WaitForEventAsync(
             expectedSubject,
             "Konnektr.IoT.Telemetry",

@@ -101,17 +101,13 @@ public partial class AgeDigitalTwinsClient
         messageId ??= Guid.NewGuid().ToString();
         DateTime timestamp = DateTime.UtcNow;
 
-        // Get the model ID using the cached method
-        string modelId = await GetModelIdByTwinIdCachedAsync(digitalTwinId, cancellationToken);
-
-        // Create the telemetry event payload
+        // Create the telemetry event payload (no model ID validation for fire-and-forget behavior)
         var telemetryEvent = new JsonObject
         {
             ["digitalTwinId"] = digitalTwinId,
             ["messageId"] = messageId,
             ["timestamp"] = timestamp.ToString("o"),
             ["eventType"] = "Telemetry",
-            ["modelId"] = modelId,
             ["telemetry"] = JsonSerializer.SerializeToNode(telemetry, serializerOptions),
         };
 
@@ -141,20 +137,7 @@ public partial class AgeDigitalTwinsClient
         messageId ??= Guid.NewGuid().ToString();
         DateTime timestamp = DateTime.UtcNow;
 
-        // Get the model ID using the cached method
-        string modelId;
-        try
-        {
-            modelId = await GetModelIdByTwinIdCachedAsync(digitalTwinId, cancellationToken);
-        }
-        catch (DigitalTwinNotFoundException)
-        {
-            throw new DigitalTwinNotFoundException(
-                $"Digital Twin with ID {digitalTwinId} not found"
-            );
-        }
-
-        // Create the component telemetry event payload
+        // Create the component telemetry event payload (no model ID validation for fire-and-forget behavior)
         var telemetryEvent = new JsonObject
         {
             ["digitalTwinId"] = digitalTwinId,
@@ -162,7 +145,6 @@ public partial class AgeDigitalTwinsClient
             ["messageId"] = messageId,
             ["timestamp"] = timestamp.ToString("o"),
             ["eventType"] = "ComponentTelemetry",
-            ["modelId"] = modelId,
             ["telemetry"] = JsonSerializer.SerializeToNode(telemetry, serializerOptions),
         };
 

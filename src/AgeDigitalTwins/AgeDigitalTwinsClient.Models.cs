@@ -546,8 +546,25 @@ RETURN COUNT(m) AS deletedCount";
             );
         }
 
-        return modelIdValue.ToString()
-            ?? throw new ValidationFailedException(
+        // Handle AGE type conversion to string
+        string? modelId;
+        if (modelIdValue is Agtype agtypeValue)
+        {
+            modelId = agtypeValue.GetString();
+        }
+        else
+        {
+            modelId = modelIdValue.ToString();
+        }
+
+        if (string.IsNullOrEmpty(modelId))
+        {
+            throw new ValidationFailedException(
+                $"Digital Twin '{twinId}' has an empty or null model ID"
+            );
+        }
+
+        return modelId;
                 $"Digital Twin '{twinId}' has a null or empty model ID"
             );
     }
