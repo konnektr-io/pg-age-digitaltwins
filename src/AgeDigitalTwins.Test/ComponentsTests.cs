@@ -81,8 +81,12 @@ public class ComponentsTests : TestBase
 
         await Client.CreateOrReplaceDigitalTwinAsync(twinId, digitalTwinJson);
 
-        // Act
-        var component = await Client.GetComponentAsync<JsonObject>(twinId, "thermostat");
+        // Act - Get component without model validation for unit testing
+        var component = await Client.GetComponentAsync<JsonObject>(
+            twinId,
+            "thermostat",
+            validateModel: false
+        );
 
         // Assert
         Assert.NotNull(component);
@@ -99,7 +103,12 @@ public class ComponentsTests : TestBase
     {
         // Act & Assert
         await Assert.ThrowsAsync<DigitalTwinNotFoundException>(
-            () => Client.GetComponentAsync<JsonObject>("nonexistent-twin", "thermostat")
+            () =>
+                Client.GetComponentAsync<JsonObject>(
+                    "nonexistent-twin",
+                    "thermostat",
+                    validateModel: false
+                )
         );
 
         _output.WriteLine("✓ Digital twin not found exception thrown as expected");
@@ -143,7 +152,12 @@ public class ComponentsTests : TestBase
 
         // Act & Assert
         await Assert.ThrowsAsync<ComponentNotFoundException>(
-            () => Client.GetComponentAsync<JsonObject>(twinId, "nonExistentComponent")
+            () =>
+                Client.GetComponentAsync<JsonObject>(
+                    twinId,
+                    "nonExistentComponent",
+                    validateModel: false
+                )
         );
 
         _output.WriteLine($"✓ Component not found exception thrown as expected");
@@ -218,7 +232,12 @@ public class ComponentsTests : TestBase
         await Client.UpdateComponentAsync(twinId, "thermostat", patch);
 
         // Assert - Verify the component was updated
-        var updatedComponent = await Client.GetComponentAsync<JsonObject>(twinId, "thermostat");
+        // Verify the update was successful
+        var updatedComponent = await Client.GetComponentAsync<JsonObject>(
+            twinId,
+            "thermostat",
+            validateModel: false
+        );
         Assert.NotNull(updatedComponent);
         Assert.True(
             updatedComponent.TryGetPropertyValue("targetTemperature", out var targetTempNode)

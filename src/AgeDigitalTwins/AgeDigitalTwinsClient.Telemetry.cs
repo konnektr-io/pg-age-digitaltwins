@@ -101,7 +101,18 @@ public partial class AgeDigitalTwinsClient
         messageId ??= Guid.NewGuid().ToString();
         DateTime timestamp = DateTime.UtcNow;
 
-        // Create the telemetry event payload (no model ID validation for fire-and-forget behavior)
+        // Try to get the model ID for DataSchema, but don't fail if it doesn't work (fire-and-forget)
+        string? modelId = null;
+        try
+        {
+            modelId = await GetModelIdByTwinIdCachedAsync(digitalTwinId, cancellationToken);
+        }
+        catch
+        {
+            // Silently ignore model ID lookup failures for fire-and-forget behavior
+        }
+
+        // Create the telemetry event payload
         var telemetryEvent = new JsonObject
         {
             ["digitalTwinId"] = digitalTwinId,
@@ -110,6 +121,12 @@ public partial class AgeDigitalTwinsClient
             ["eventType"] = "Telemetry",
             ["telemetry"] = JsonSerializer.SerializeToNode(telemetry, serializerOptions),
         };
+
+        // Add model ID if available
+        if (!string.IsNullOrEmpty(modelId))
+        {
+            telemetryEvent["modelId"] = modelId;
+        }
 
         // Publish via PostgreSQL NOTIFY
         string channel = "digitaltwins_telemetry";
@@ -137,7 +154,18 @@ public partial class AgeDigitalTwinsClient
         messageId ??= Guid.NewGuid().ToString();
         DateTime timestamp = DateTime.UtcNow;
 
-        // Create the component telemetry event payload (no model ID validation for fire-and-forget behavior)
+        // Try to get the model ID for DataSchema, but don't fail if it doesn't work (fire-and-forget)
+        string? modelId = null;
+        try
+        {
+            modelId = await GetModelIdByTwinIdCachedAsync(digitalTwinId, cancellationToken);
+        }
+        catch
+        {
+            // Silently ignore model ID lookup failures for fire-and-forget behavior
+        }
+
+        // Create the component telemetry event payload
         var telemetryEvent = new JsonObject
         {
             ["digitalTwinId"] = digitalTwinId,
@@ -147,6 +175,12 @@ public partial class AgeDigitalTwinsClient
             ["eventType"] = "ComponentTelemetry",
             ["telemetry"] = JsonSerializer.SerializeToNode(telemetry, serializerOptions),
         };
+
+        // Add model ID if available
+        if (!string.IsNullOrEmpty(modelId))
+        {
+            telemetryEvent["modelId"] = modelId;
+        }
 
         // Publish via PostgreSQL NOTIFY
         string channel = "digitaltwins_telemetry";

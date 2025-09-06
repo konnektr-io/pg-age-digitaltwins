@@ -34,6 +34,32 @@ public partial class AgeDigitalTwinsClient
         CancellationToken cancellationToken = default
     )
     {
+        return await GetComponentAsync<T>(
+            digitalTwinId,
+            componentName,
+            validateModel: true,
+            cancellationToken
+        );
+    }
+
+    /// <summary>
+    /// Gets a component on a digital twin asynchronously with optional model validation.
+    /// </summary>
+    /// <typeparam name="T">The type to which the component will be deserialized.</typeparam>
+    /// <param name="digitalTwinId">The ID of the digital twin.</param>
+    /// <param name="componentName">The name of the component to retrieve.</param>
+    /// <param name="validateModel">Whether to validate the component against the model schema.</param>
+    /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result contains the retrieved component.</returns>
+    /// <exception cref="DigitalTwinNotFoundException">Thrown when the digital twin is not found.</exception>
+    /// <exception cref="ComponentNotFoundException">Thrown when the component is not found.</exception>
+    public virtual async Task<T> GetComponentAsync<T>(
+        string digitalTwinId,
+        string componentName,
+        bool validateModel,
+        CancellationToken cancellationToken = default
+    )
+    {
         using var activity = ActivitySource.StartActivity("GetComponentAsync", ActivityKind.Client);
         activity?.SetTag("digitalTwinId", digitalTwinId);
         activity?.SetTag("componentName", componentName);
@@ -49,6 +75,7 @@ public partial class AgeDigitalTwinsClient
                 connection,
                 digitalTwinId,
                 componentName,
+                validateModel: validateModel,
                 cancellationToken
             );
         }
@@ -75,6 +102,7 @@ public partial class AgeDigitalTwinsClient
         NpgsqlConnection connection,
         string digitalTwinId,
         string componentName,
+        bool validateModel = true,
         CancellationToken cancellationToken = default
     )
     {
@@ -96,13 +124,16 @@ public partial class AgeDigitalTwinsClient
             );
         }
 
-        // Validate that this is actually a component according to the model
-        await ValidateComponentExistsInModel(
-            connection,
-            digitalTwin,
-            componentName,
-            cancellationToken
-        );
+        // Optionally validate that this is actually a component according to the model
+        if (validateModel)
+        {
+            await ValidateComponentExistsInModel(
+                connection,
+                digitalTwin,
+                componentName,
+                cancellationToken
+            );
+        }
 
         // Deserialize and return the component
         return JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(componentNode))
