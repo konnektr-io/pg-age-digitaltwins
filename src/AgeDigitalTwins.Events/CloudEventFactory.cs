@@ -700,7 +700,12 @@ public static class CloudEventFactory
         Dictionary<SinkEventType, string>? typeMapping = null
     )
     {
-        var mapping = typeMapping ?? DefaultEventNotificationTypeMapping;
+        var mapping =
+            typeMapping
+            ?? new Dictionary<SinkEventType, string>
+            {
+                { SinkEventType.Telemetry, "Konnektr.IoT.Telemetry" },
+            };
 
         if (eventData.EventType != EventType.Telemetry)
         {

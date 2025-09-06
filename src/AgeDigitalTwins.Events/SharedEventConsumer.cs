@@ -179,7 +179,7 @@ public class SharedEventConsumer
                         route.TypeMappings
                     ),
                     _ => throw new ArgumentException(
-                        $"Unknown route event format: {route.EventFormat}"
+                        $"Unknown route event format: '{route.EventFormat}'"
                     ),
                 };
 

@@ -34,7 +34,7 @@ public partial class AgeDigitalTwinsClient
         activity?.SetTag("messageId", messageId);
 
         await using var connection = await _dataSource.OpenConnectionAsync(
-            TargetSessionAttributes.PreferStandby,
+            TargetSessionAttributes.ReadWrite,
             cancellationToken
         );
 
@@ -102,17 +102,7 @@ public partial class AgeDigitalTwinsClient
         DateTime timestamp = DateTime.UtcNow;
 
         // Get the model ID using the cached method
-        string modelId;
-        try
-        {
-            modelId = await GetModelIdByTwinIdCachedAsync(digitalTwinId, cancellationToken);
-        }
-        catch (DigitalTwinNotFoundException)
-        {
-            throw new DigitalTwinNotFoundException(
-                $"Digital Twin with ID {digitalTwinId} not found"
-            );
-        }
+        string modelId = await GetModelIdByTwinIdCachedAsync(digitalTwinId, cancellationToken);
 
         // Create the telemetry event payload
         var telemetryEvent = new JsonObject
