@@ -745,14 +745,14 @@ public static class CloudEventFactory
         var subject = componentName != null ? $"{twinId}/components/{componentName}" : twinId;
 
         // Extract the actual telemetry payload
-        JsonNode? telemetryPayload;
+        JsonObject? telemetryPayload = null;
         if (
             telemetryData.TryGetPropertyValue("telemetry", out var telemetryNode)
             && telemetryNode != null
         )
         {
-            // Use the telemetry property if it exists
-            telemetryPayload = telemetryNode;
+            // Use the telemetry property if it exists, ensuring it's a JsonObject
+            telemetryPayload = telemetryNode as JsonObject ?? telemetryNode.AsObject();
         }
         else
         {
