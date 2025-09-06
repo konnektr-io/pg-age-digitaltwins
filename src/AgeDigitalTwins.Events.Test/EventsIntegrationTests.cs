@@ -1215,9 +1215,8 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         // Act - Publish component telemetry
         var componentTelemetryData = new
         {
-            diameter = 155.0,
-            depth = 32.0,
-            timestamp = DateTime.UtcNow,
+            temperature = 32.1,
+            timestamp = DateTime.UtcNow, // Not in DTDL, doesn't matter, no validation
         };
 
         await Client.PublishComponentTelemetryAsync(
@@ -1246,11 +1245,14 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         // Verify component telemetry data
         var eventData = receivedEvent.Data as JsonObject;
         Assert.NotNull(eventData);
-        Assert.Equal("23", eventData["targetTemperature"]?.ToString());
-        Assert.Equal("22.8", eventData["actualTemperature"]?.ToString());
+        Assert.Equal("32.1", eventData["temperature"]?.ToString());
+        Assert.Equal(
+            componentTelemetryData.timestamp.ToString("o"),
+            eventData["timestamp"]?.ToString()
+        );
 
         _output.WriteLine(
-            $"Successfully captured component telemetry event for {uniqueTwinId}/thermostat"
+            $"Successfully captured component telemetry event for {uniqueTwinId}/deepestCrater"
         );
         _output.WriteLine($"Event ID: {receivedEvent.Id}");
         _output.WriteLine($"Event Type: {receivedEvent.Type}");
