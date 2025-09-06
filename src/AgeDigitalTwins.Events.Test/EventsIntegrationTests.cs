@@ -1241,7 +1241,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
 
         // Verify DataSchema contains the model ID
         Assert.NotNull(receivedEvent.DataSchema);
-        Assert.Equal("dtmi:com:adt:dtsample:Room;1", receivedEvent.DataSchema.ToString());
+        Assert.Equal("dtmi:com:contoso:Planet;1", receivedEvent.DataSchema.ToString());
 
         // Verify component telemetry data
         var eventData = receivedEvent.Data as JsonObject;
