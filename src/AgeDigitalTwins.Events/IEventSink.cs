@@ -5,5 +5,8 @@ namespace AgeDigitalTwins.Events;
 public interface IEventSink
 {
     string Name { get; }
-    Task SendEventsAsync(IEnumerable<CloudEvent> cloudEvents);
+    Task SendEventsAsync(
+        IEnumerable<CloudEvent> cloudEvents,
+        CancellationToken cancellationToken = default
+    );
 }

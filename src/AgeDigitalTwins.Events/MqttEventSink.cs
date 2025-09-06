@@ -35,11 +35,14 @@ public class MqttEventSink : IEventSink, IDisposable
 
     public string Name { get; }
 
-    public async Task SendEventsAsync(IEnumerable<CloudEvent> cloudEvents)
+    public async Task SendEventsAsync(
+        IEnumerable<CloudEvent> cloudEvents,
+        CancellationToken cancellationToken = default
+    )
     {
         if (_mqttClient.IsConnected == false)
         {
-            await _mqttClient.ReconnectAsync();
+            await _mqttClient.ReconnectAsync(cancellationToken: cancellationToken);
         }
         foreach (var cloudEvent in cloudEvents)
         {
@@ -51,7 +54,7 @@ public class MqttEventSink : IEventSink, IDisposable
                     _topic
                 );
 
-                await _mqttClient.PublishAsync(message);
+                await _mqttClient.PublishAsync(message, cancellationToken);
                 _logger.LogInformation(
                     "Published message {MessageId} of type {EventType} with source {EventSource} to sink '{SinkName}' on topic '{Topic}'",
                     cloudEvent.Id,
