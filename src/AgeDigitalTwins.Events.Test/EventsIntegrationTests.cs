@@ -173,11 +173,28 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         // Arrange
         await _fixture.WaitForReplicationHealthy();
 
-        string[] models = [SampleData.DtdlRoom, SampleData.DtdlTemperatureSensor];
         try
         {
-            await Client.CreateModelsAsync(models);
-            _output.WriteLine($"Successfully created models: {string.Join(", ", models.Select(m => JsonSerializer.Deserialize<JsonObject>(m)?["@id"]?.ToString() ?? "unknown"))}");
+            await Client.CreateModelsAsync([SampleData.DtdlRoom]);
+            _output.WriteLine(
+                $"Successfully created models: {string.Join(", ", JsonSerializer.Deserialize<JsonObject>(SampleData.DtdlRoom)?["@id"]?.ToString() ?? "unknown")}"
+            );
+        }
+        catch (Exceptions.ModelAlreadyExistsException ex)
+        {
+            _output.WriteLine($"Models already exist: {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            _output.WriteLine($"Failed to create models: {ex.Message}");
+            throw;
+        }
+        try
+        {
+            await Client.CreateModelsAsync([SampleData.DtdlTemperatureSensor]);
+            _output.WriteLine(
+                $"Successfully created models: {string.Join(", ", JsonSerializer.Deserialize<JsonObject>(SampleData.DtdlTemperatureSensor)?["@id"]?.ToString() ?? "unknown")}"
+            );
         }
         catch (Exceptions.ModelAlreadyExistsException ex)
         {
@@ -447,11 +464,28 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         // Arrange
         await _fixture.WaitForReplicationHealthy();
 
-        string[] models = [SampleData.DtdlRoom, SampleData.DtdlTemperatureSensor];
         try
         {
-            await Client.CreateModelsAsync(models);
-            _output.WriteLine($"Successfully created models: {string.Join(", ", models.Select(m => JsonSerializer.Deserialize<JsonObject>(m)?["@id"]?.ToString() ?? "unknown"))}");
+            await Client.CreateModelsAsync([SampleData.DtdlRoom]);
+            _output.WriteLine(
+                $"Successfully created models: {string.Join(", ", JsonSerializer.Deserialize<JsonObject>(SampleData.DtdlRoom)?["@id"]?.ToString() ?? "unknown")}"
+            );
+        }
+        catch (Exceptions.ModelAlreadyExistsException ex)
+        {
+            _output.WriteLine($"Models already exist: {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            _output.WriteLine($"Failed to create models: {ex.Message}");
+            throw;
+        }
+        try
+        {
+            await Client.CreateModelsAsync([SampleData.DtdlTemperatureSensor]);
+            _output.WriteLine(
+                $"Successfully created models: {string.Join(", ", JsonSerializer.Deserialize<JsonObject>(SampleData.DtdlTemperatureSensor)?["@id"]?.ToString() ?? "unknown")}"
+            );
         }
         catch (Exceptions.ModelAlreadyExistsException ex)
         {
@@ -1135,25 +1169,29 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         // Arrange
         await _fixture.WaitForReplicationHealthy();
 
-        string[] models =
-        [
-            SampleData.DtdlCelestialBody,
-            SampleData.DtdlPlanet,
-            SampleData.DtdlCrater,
-        ];
         try
         {
-            await Client.CreateModelsAsync(models);
-            _output.WriteLine($"Successfully created models: {string.Join(", ", models.Select(m => JsonSerializer.Deserialize<JsonObject>(m)?["@id"]?.ToString() ?? "unknown"))}");
+            await Client.CreateModelsAsync([SampleData.DtdlCrater]);
         }
-        catch (Exceptions.ModelAlreadyExistsException ex)
+        catch (Exceptions.ModelAlreadyExistsException)
         {
-            _output.WriteLine($"Models already exist: {ex.Message}");
+            // Models already exist, ignore
         }
-        catch (Exception ex)
+        try
         {
-            _output.WriteLine($"Failed to create models: {ex.Message}");
-            throw;
+            await Client.CreateModelsAsync([SampleData.DtdlCelestialBody]);
+        }
+        catch (Exceptions.ModelAlreadyExistsException)
+        {
+            // Models already exist, ignore
+        }
+        try
+        {
+            await Client.CreateModelsAsync([SampleData.DtdlPlanet]);
+        }
+        catch (Exceptions.ModelAlreadyExistsException)
+        {
+            // Models already exist, ignore
         }
 
         var uniqueTwinId = $"planet_{Guid.NewGuid():N}";
