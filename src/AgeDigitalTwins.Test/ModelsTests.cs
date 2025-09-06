@@ -338,7 +338,7 @@ public class ModelsTests : TestBase
 
         // Act - Use reflection to access the private method
         var method = typeof(AgeDigitalTwinsClient).GetMethod(
-            "GetModelIdByTwinIdAsync", 
+            "GetModelIdByTwinIdAsync",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance
         );
         Assert.NotNull(method);

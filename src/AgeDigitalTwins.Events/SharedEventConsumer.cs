@@ -244,17 +244,25 @@ public class SharedEventConsumer
 
         return route.EventFormat switch
         {
-            EventFormat.EventNotification => eventData.EventType is 
-                EventType.TwinCreate or EventType.TwinUpdate or EventType.TwinDelete or
-                EventType.RelationshipCreate or EventType.RelationshipUpdate or EventType.RelationshipDelete,
-            
-            EventFormat.DataHistory => eventData.EventType is 
-                EventType.TwinCreate or EventType.TwinUpdate or EventType.TwinDelete or
-                EventType.RelationshipCreate or EventType.RelationshipUpdate or EventType.RelationshipDelete,
-            
+            EventFormat.EventNotification => eventData.EventType
+                is EventType.TwinCreate
+                    or EventType.TwinUpdate
+                    or EventType.TwinDelete
+                    or EventType.RelationshipCreate
+                    or EventType.RelationshipUpdate
+                    or EventType.RelationshipDelete,
+
+            EventFormat.DataHistory => eventData.EventType
+                is EventType.TwinCreate
+                    or EventType.TwinUpdate
+                    or EventType.TwinDelete
+                    or EventType.RelationshipCreate
+                    or EventType.RelationshipUpdate
+                    or EventType.RelationshipDelete,
+
             EventFormat.Telemetry => eventData.EventType is EventType.Telemetry,
-            
-            _ => false
+
+            _ => false,
         };
     }
 
