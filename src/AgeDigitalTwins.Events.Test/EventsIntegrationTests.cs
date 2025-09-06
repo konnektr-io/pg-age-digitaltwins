@@ -1125,8 +1125,8 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
 
         string[] models =
         [
-            SampleData.DtdlPlanet,
             SampleData.DtdlCelestialBody,
+            SampleData.DtdlPlanet,
             SampleData.DtdlCrater,
         ];
         try
