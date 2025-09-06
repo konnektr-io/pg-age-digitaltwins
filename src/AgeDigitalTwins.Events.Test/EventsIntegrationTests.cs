@@ -177,10 +177,16 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         try
         {
             await Client.CreateModelsAsync(models);
+            _output.WriteLine($"Successfully created models: {string.Join(", ", models.Select(m => JsonSerializer.Deserialize<JsonObject>(m)?["@id"]?.ToString() ?? "unknown"))}");
         }
-        catch (Exceptions.ModelAlreadyExistsException)
+        catch (Exceptions.ModelAlreadyExistsException ex)
         {
-            // Model already exists, ignore
+            _output.WriteLine($"Models already exist: {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            _output.WriteLine($"Failed to create models: {ex.Message}");
+            throw;
         }
 
         var sourceTwinId = $"room_{Guid.NewGuid():N}";
@@ -445,10 +451,16 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         try
         {
             await Client.CreateModelsAsync(models);
+            _output.WriteLine($"Successfully created models: {string.Join(", ", models.Select(m => JsonSerializer.Deserialize<JsonObject>(m)?["@id"]?.ToString() ?? "unknown"))}");
         }
-        catch (Exceptions.ModelAlreadyExistsException)
+        catch (Exceptions.ModelAlreadyExistsException ex)
         {
-            // Model already exists, ignore
+            _output.WriteLine($"Models already exist: {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            _output.WriteLine($"Failed to create models: {ex.Message}");
+            throw;
         }
 
         var sourceTwinId = $"room_{Guid.NewGuid():N}";
@@ -1132,10 +1144,16 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         try
         {
             await Client.CreateModelsAsync(models);
+            _output.WriteLine($"Successfully created models: {string.Join(", ", models.Select(m => JsonSerializer.Deserialize<JsonObject>(m)?["@id"]?.ToString() ?? "unknown"))}");
         }
-        catch (Exceptions.ModelAlreadyExistsException)
+        catch (Exceptions.ModelAlreadyExistsException ex)
         {
-            // Model already exists, ignore
+            _output.WriteLine($"Models already exist: {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            _output.WriteLine($"Failed to create models: {ex.Message}");
+            throw;
         }
 
         var uniqueTwinId = $"planet_{Guid.NewGuid():N}";
