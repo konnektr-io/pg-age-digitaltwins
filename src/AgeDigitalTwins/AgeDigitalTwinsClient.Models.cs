@@ -565,7 +565,5 @@ RETURN COUNT(m) AS deletedCount";
         }
 
         return modelId;
-                $"Digital Twin '{twinId}' has a null or empty model ID"
-            );
     }
 }
