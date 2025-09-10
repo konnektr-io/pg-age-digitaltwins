@@ -223,6 +223,16 @@ public static class GraphInitialization
                 END;
                 $array_function$"
             ),
+            // Populate the model hierarchy table only if it's empty (for initial setup or existing instances)
+            new(
+                @$"DO $$
+                BEGIN
+                    -- Only refresh if the hierarchy table is empty
+                    IF NOT EXISTS (SELECT 1 FROM {graphName}.model_hierarchy LIMIT 1) THEN
+                        PERFORM {graphName}.refresh_model_hierarchy();
+                    END IF;
+                END $$;"
+            ),
         ];
     }
 }
