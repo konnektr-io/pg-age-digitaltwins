@@ -161,12 +161,14 @@ public static class GraphInitialization
                     -- Populate with direct inheritance relationships
                     INSERT INTO {graphName}.model_hierarchy (child_model_id, parent_model_id)
                     SELECT 
-                        ag_catalog.agtype_access_operator(m.properties,'""id""'::agtype)::text,
+                        trim(both '""' from ag_catalog.agtype_access_operator(m.properties,'""id""'::agtype)::text),
                         trim(both '""' from jsonb_array_elements_text(
                             (ag_catalog.agtype_access_operator(m.properties,'""bases""'::agtype))::text::jsonb
                         ))
                     FROM {graphName}.""Model"" m
-                    WHERE ag_catalog.agtype_access_operator(m.properties,'""bases""'::agtype) IS NOT NULL;
+                    WHERE ag_catalog.agtype_access_operator(m.properties,'""bases""'::agtype) IS NOT NULL
+                      AND ag_catalog.agtype_access_operator(m.properties,'""bases""'::agtype) != 'null'::agtype
+                      AND jsonb_array_length((ag_catalog.agtype_access_operator(m.properties,'""bases""'::agtype))::text::jsonb) > 0;
                     
                     -- Add transitive closure using recursive CTE
                     WITH RECURSIVE hierarchy_closure AS (
