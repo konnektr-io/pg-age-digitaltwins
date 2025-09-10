@@ -162,18 +162,16 @@ public static class GraphInitialization
                     INSERT INTO {graphName}.model_hierarchy (child_model_id, parent_model_id)
                     SELECT
                         trim(both '""' from ag_catalog.agtype_access_operator(m.properties,'""id""'::agtype)::text),
-                        trim(both '""' from jsonb_array_elements_text(
-                            CASE
-                                WHEN jsonb_typeof((ag_catalog.agtype_access_operator(m.properties,'""bases""'::agtype))::text::jsonb) = 'array'
-                                     AND jsonb_array_length((ag_catalog.agtype_access_operator(m.properties,'""bases""'::agtype))::text::jsonb) > 0
-                                THEN (ag_catalog.agtype_access_operator(m.properties,'""bases""'::agtype))::text::jsonb
-                                ELSE '[]'::jsonb
-                            END
-                        ))
+                        trim(both '""' from b.base)
                     FROM {graphName}.""Model"" m
-                    WHERE ag_catalog.agtype_access_operator(m.properties,'""bases""'::agtype) IS NOT NULL
-                      AND jsonb_typeof((ag_catalog.agtype_access_operator(m.properties,'""bases""'::agtype))::text::jsonb) = 'array'
-                      AND jsonb_array_length((ag_catalog.agtype_access_operator(m.properties,'""bases""'::agtype))::text::jsonb) > 0;
+                    CROSS JOIN LATERAL (
+                        SELECT jsonb_array_elements_text(
+                            (ag_catalog.agtype_access_operator(m.properties,'""bases""'::agtype))::text::jsonb
+                        ) AS base
+                        WHERE ag_catalog.agtype_access_operator(m.properties,'""bases""'::agtype) IS NOT NULL
+                          AND jsonb_typeof((ag_catalog.agtype_access_operator(m.properties,'""bases""'::agtype))::text::jsonb) = 'array'
+                          AND jsonb_array_length((ag_catalog.agtype_access_operator(m.properties,'""bases""'::agtype))::text::jsonb) > 0
+                    ) b;
                     
                     -- Add transitive closure using recursive CTE
                     WITH RECURSIVE hierarchy_closure AS (
