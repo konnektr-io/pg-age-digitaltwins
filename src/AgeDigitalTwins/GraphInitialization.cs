@@ -154,44 +154,24 @@ public static class GraphInitialization
                 RETURNS void
                 LANGUAGE plpgsql
                 AS $refresh_function$
+                DECLARE
+                    cypher_sql text;
                 BEGIN
                     -- Clear existing hierarchy data
-                    DELETE FROM {graphName}.model_hierarchy;
-                    
-                    -- Populate with direct inheritance relationships
-                    INSERT INTO {graphName}.model_hierarchy (child_model_id, parent_model_id)
-                    SELECT
-                        trim(both '""' from ag_catalog.agtype_access_operator(m.properties,'""id""'::agtype)::text),
-                        trim(both '""' from b.base)
-                    FROM {graphName}.""Model"" m
-                    CROSS JOIN LATERAL (
-                        SELECT jsonb_array_elements_text(
-                            (ag_catalog.agtype_access_operator(m.properties,'""bases""'::agtype))::text::jsonb
-                        ) AS base
-                        WHERE ag_catalog.agtype_access_operator(m.properties,'""bases""'::agtype) IS NOT NULL
-                          AND jsonb_typeof((ag_catalog.agtype_access_operator(m.properties,'""bases""'::agtype))::text::jsonb) = 'array'
-                          AND jsonb_array_length((ag_catalog.agtype_access_operator(m.properties,'""bases""'::agtype))::text::jsonb) > 0
-                    ) b;
-                    
-                    -- Add transitive closure using recursive CTE
-                    WITH RECURSIVE hierarchy_closure AS (
-                        -- Base case: direct relationships
-                        SELECT child_model_id, parent_model_id, 1 as level
-                        FROM {graphName}.model_hierarchy
-                        
-                        UNION ALL
-                        
-                        -- Recursive case: indirect relationships
-                        SELECT h.child_model_id, mh.parent_model_id, h.level + 1
-                        FROM hierarchy_closure h
-                        JOIN {graphName}.model_hierarchy mh ON h.parent_model_id = mh.child_model_id
-                        WHERE h.level < 10 -- Prevent infinite recursion
-                    )
-                    INSERT INTO {graphName}.model_hierarchy (child_model_id, parent_model_id)
-                    SELECT DISTINCT child_model_id, parent_model_id
-                    FROM hierarchy_closure
-                    WHERE level > 1
-                    ON CONFLICT (child_model_id, parent_model_id) DO NOTHING;
+                    EXECUTE 'DELETE FROM ' || quote_ident('{graphName}') || '.model_hierarchy';
+
+                    -- Use Cypher to get all (child, parent) closure pairs
+                    cypher_sql := $$
+                        SELECT child_id, parent_id FROM ag_catalog.cypher(''{graphName}'', $$
+                            MATCH (child:Model), (parent:Model)
+                            WHERE (child)-[:_extends*0..]->(parent)
+                            RETURN child.id AS child_id, parent.id AS parent_id
+                        $$) AS (child_id text, parent_id text)
+                    $$;
+
+                    -- Insert all pairs into the hierarchy table
+                    EXECUTE 'INSERT INTO ' || quote_ident('{graphName}') || '.model_hierarchy (child_model_id, parent_model_id) '
+                        || 'SELECT child_id, parent_id FROM (' || cypher_sql || ') as closure';
                 END;
                 $refresh_function$"
             ),
