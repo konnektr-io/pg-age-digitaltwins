@@ -163,7 +163,7 @@ public static class GraphInitialization
                     SELECT 
                         ag_catalog.agtype_access_operator(m.properties,'""id""'::agtype)::text,
                         trim(both '""' from jsonb_array_elements_text(
-                            ag_catalog.agtype_access_operator(m.properties,'""bases""'::agtype)::jsonb
+                            (ag_catalog.agtype_access_operator(m.properties,'""bases""'::agtype))::text::jsonb
                         ))
                     FROM {graphName}.""Model"" m
                     WHERE ag_catalog.agtype_access_operator(m.properties,'""bases""'::agtype) IS NOT NULL;
