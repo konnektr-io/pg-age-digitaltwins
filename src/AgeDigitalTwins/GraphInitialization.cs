@@ -154,24 +154,19 @@ public static class GraphInitialization
                 RETURNS void
                 LANGUAGE plpgsql
                 AS $refresh_function$
-                DECLARE
-                    cypher_sql text;
                 BEGIN
                     -- Clear existing hierarchy data
                     EXECUTE 'DELETE FROM ' || quote_ident('{graphName}') || '.model_hierarchy';
 
-                    -- Use Cypher to get all (child, parent) closure pairs
-                    cypher_sql := $$
-                        SELECT child_id, parent_id FROM ag_catalog.cypher(''{graphName}'', $$
+                    -- Insert all closure pairs using Cypher directly
+                    EXECUTE '
+                        INSERT INTO ' || quote_ident('{graphName}') || '.model_hierarchy (child_model_id, parent_model_id)
+                        SELECT child_id, parent_id FROM ag_catalog.cypher(''' || '{graphName}' || ''', $$
                             MATCH (child:Model), (parent:Model)
                             WHERE (child)-[:_extends*0..]->(parent)
                             RETURN child.id AS child_id, parent.id AS parent_id
                         $$) AS (child_id text, parent_id text)
-                    $$;
-
-                    -- Insert all pairs into the hierarchy table
-                    EXECUTE 'INSERT INTO ' || quote_ident('{graphName}') || '.model_hierarchy (child_model_id, parent_model_id) '
-                        || 'SELECT child_id, parent_id FROM (' || cypher_sql || ') as closure';
+                    ';
                 END;
                 $refresh_function$"
             ),
