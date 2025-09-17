@@ -266,21 +266,11 @@ public static partial class AdtQueryHelpers
                         var functionName = m.Groups[1].Value;
                         var functionArgs = m.Groups[2].Value;
 
-                        // Prepend alias to properties within the function arguments
-                        functionArgs = FunctionArgsRegex()
-                            .Replace(
-                                functionArgs,
-                                n =>
-                                {
-                                    return $"{prependAlias}.{n.Value}";
-                                }
-                            );
-
                         return $"{functionName}({functionArgs})";
                     }
                 );
 
-            // Prepend alias to properties outside of function calls
+            // Prepend alias to properties
             whereClause = PropertyAccessWhereClauseRegex()
                 .Replace(
                     whereClause,
@@ -457,13 +447,7 @@ public static partial class AdtQueryHelpers
     private static partial Regex FunctionCallRegex();
 
     [GeneratedRegex(
-        @"(?<=\s|\[|^)(?!\d+|'[^']*'|""[^""]*"")[^\[\]""\s=<>!]+(?=\s*=\s*'|\s|$|\])",
-        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
-    )]
-    private static partial Regex FunctionArgsRegex();
-
-    [GeneratedRegex(
-        @"(?<=\s|\[|^)(?!AND\b|OR\b|IN\b|NOT\b|\d+|'[^']*'|""[^""]*"")[^\[\]""\s=<>!()]+(?=\s*=\s*'|\s|$|\])",
+        @"(?<=\s|\[|\(|^)(?!AND\b|OR\b|IN\b|NOT\b|\d+|'[^']*'|""[^""]*"")[^\[\]""\s=<>!()]+(?=\s*=\s*'|\s|\)|$|\])",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
     )]
     private static partial Regex PropertyAccessWhereClauseRegex();
