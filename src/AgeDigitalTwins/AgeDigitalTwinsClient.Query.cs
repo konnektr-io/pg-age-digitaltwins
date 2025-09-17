@@ -59,6 +59,7 @@ public partial class AgeDigitalTwinsClient
                             "Query cannot be null or empty."
                         );
                     }
+                    activity?.SetTag("cypher", query);
 
                     string nextContinuationQuery = cypher;
                     var limitMatch = LimitRegex().Match(cypher);

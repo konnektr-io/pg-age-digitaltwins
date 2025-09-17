@@ -50,8 +50,67 @@ public static class RateLimitingConfiguration
         // Admin Operations - Administrative operations like model management and jobs
         options.AddPolicy("AdminOperations", CreateAdminOperationsPolicy(configuration));
 
+        // Weighted Query Policy - uses query charge for weighted rate limiting
+        options.AddPolicy("WeightedQueryPolicy", CreateWeightedQueryPolicy(configuration));
+
         // Custom rejection response
         options.OnRejected = CreateRejectionHandler();
+    }
+
+    /// <summary>
+    /// Creates a weighted query rate limiting policy using TokenBucketRateLimiter.
+    /// Each request consumes tokens equal to the query charge (from HttpContext.Items["QueryCharge"]).
+    /// To use this policy:
+    ///   - Set HttpContext.Items["QueryCharge"] in your endpoint (see QueryEndpoints.cs).
+    ///   - Use RequireRateLimiting("WeightedQueryPolicy") on the endpoint.
+    ///   - Register WeightedQueryRateLimitingMiddleware before UseRateLimiter in Program.cs.
+    /// The middleware will set the TokenCount for TokenBucketRateLimiterRequest based on QueryCharge.
+    /// </summary>
+    private static Func<HttpContext, RateLimitPartition<string>> CreateWeightedQueryPolicy(
+        IConfiguration configuration
+    )
+    {
+        return context =>
+        {
+            var userId = GetUserIdentifier(context);
+            return RateLimitPartition.GetTokenBucketLimiter(
+                userId,
+                partition => new TokenBucketRateLimiterOptions
+                {
+                    TokenLimit = configuration.GetValue<int>(
+                        "Parameters:WeightedQueryTokenLimit",
+                        1000
+                    ),
+                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                    QueueLimit = configuration.GetValue<int>(
+                        "Parameters:WeightedQueryQueueLimit",
+                        100
+                    ),
+                    ReplenishmentPeriod = TimeSpan.FromSeconds(
+                        configuration.GetValue<int>("Parameters:WeightedQueryReplenishSeconds", 1)
+                    ),
+                    TokensPerPeriod = configuration.GetValue<int>(
+                        "Parameters:WeightedQueryTokensPerPeriod",
+                        100
+                    ),
+                    AutoReplenishment = true,
+                }
+            /* context =>
+            {
+
+                if (context.Items.TryGetValue("QueryCharge", out var chargeObj))
+                {
+                    if (chargeObj is int chargeInt && chargeInt > 0)
+                        return chargeInt;
+                    if (chargeObj is string chargeStr && int.TryParse(chargeStr, out var chargeParsed) && chargeParsed > 0)
+                        return chargeParsed;
+                }
+                // Default to 1 if not set
+                return 1;
+
+            } */
+            );
+        };
     }
 
     /// <summary>
