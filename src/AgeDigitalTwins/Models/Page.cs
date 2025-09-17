@@ -14,4 +14,8 @@ public class Page<T>
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ContinuationToken { get; set; }
+
+    // Not serialized, used for query charge tracking
+    [JsonIgnore]
+    public int? QueryCharge { get; set; }
 }

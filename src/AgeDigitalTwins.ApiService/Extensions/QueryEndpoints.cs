@@ -7,6 +7,11 @@ namespace AgeDigitalTwins.ApiService.Extensions;
 
 public static class QueryEndpoints
 {
+    /// <summary>
+    /// A constant that is used to as the query-charge header field in the query page response.
+    /// </summary>
+    private const string QueryChargeHeader = "query-charge";
+
     public static WebApplication MapQueryEndpoints(this WebApplication app)
     {
         app.MapPost(
@@ -45,6 +50,14 @@ public static class QueryEndpoints
                         .QueryAsync<JsonDocument>(query, cancellationToken)
                         .AsPages(continuationToken, maxItemsPerPage, cancellationToken)
                         .FirstAsync(cancellationToken);
+
+                    // Set X-Query-Charge header
+                    if (page.QueryCharge.HasValue)
+                    {
+                        httpContext.Response.Headers[QueryChargeHeader] =
+                            page.QueryCharge.Value.ToString();
+                    }
+
                     return Results.Json(page);
                 }
             )
