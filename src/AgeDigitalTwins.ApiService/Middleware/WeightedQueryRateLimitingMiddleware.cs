@@ -1,8 +1,3 @@
-using System;
-using System.Threading.RateLimiting;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http;
-
 namespace AgeDigitalTwins.ApiService.Middleware
 {
     /// <summary>
