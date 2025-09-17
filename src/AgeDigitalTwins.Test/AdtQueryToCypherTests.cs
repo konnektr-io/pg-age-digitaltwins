@@ -139,6 +139,10 @@ public class AdtQueryToCypherTests
         "SELECT T FROM DIGITALTWINS T WHERE IS_NUMBER(T.temperature) AND T.temperature > 20.5",
         "MATCH (T:Twin) WHERE ((toFloat(T.temperature) IS NOT NULL OR toInteger(T.temperature) IS NOT NULL) AND NOT (toString(T.temperature) = T.temperature)) AND T.temperature > 20.5 RETURN T"
     )]
+    [InlineData(
+        "SELECT TOP(1) FROM digitaltwins WHERE ($dtId IN ['00000-0000-0000-00000','test@example.com'] OR email = 'test@example.com') AND $metadata.$model = 'dtmi:com:arcadis:identity:Invite;1'",
+        "MATCH (T:Twin) WHERE (T['$dtId'] IN ['00000-0000-0000-00000','test@example.com'] OR T.email = 'test@example.com') AND T['$metadata']['$model'] = 'dtmi:com:arcadis:identity:Invite;1' RETURN * LIMIT 1"
+    )]
     public void ConvertAdtQueryToCypher_ReturnsExpectedCypher(
         string adtQuery,
         string expectedCypher
