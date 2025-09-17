@@ -72,8 +72,6 @@ public class EventsTestBase : IAsyncDisposable
             connectionString,
             "age_pub", // Shared publication from init.sql
             "age_slot", // Shared slot from init.sql - this means only one test can run at a time
-            null, // Let it determine source URI automatically
-            testSinkFactory,
             testEventQueue,
             replicationLogger
         );
