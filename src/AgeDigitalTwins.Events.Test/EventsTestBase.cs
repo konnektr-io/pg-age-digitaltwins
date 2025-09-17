@@ -67,12 +67,12 @@ public class EventsTestBase : IAsyncDisposable
         var testSinkFactory = new TestingEventSinkFactory(configuration, _loggerFactory, TestSink);
 
         // Use the shared publication and slot from init.sql
+        var testEventQueue = new EventQueue();
         Replication = new AgeDigitalTwinsReplication(
             connectionString,
             "age_pub", // Shared publication from init.sql
             "age_slot", // Shared slot from init.sql - this means only one test can run at a time
-            null, // Let it determine source URI automatically
-            testSinkFactory,
+            testEventQueue,
             replicationLogger
         );
 

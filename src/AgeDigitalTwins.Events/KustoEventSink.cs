@@ -169,7 +169,10 @@ public class KustoEventSink : IEventSink, IDisposable
 
     public string Name => _options.Name;
 
-    public async Task SendEventsAsync(IEnumerable<CloudNative.CloudEvents.CloudEvent> cloudEvents)
+    public async Task SendEventsAsync(
+        IEnumerable<CloudNative.CloudEvents.CloudEvent> cloudEvents,
+        CancellationToken cancellationToken = default
+    )
     {
         var eventsByType = cloudEvents.GroupBy(e => e.Type);
 

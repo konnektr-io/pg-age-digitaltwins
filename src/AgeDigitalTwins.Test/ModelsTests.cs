@@ -305,4 +305,53 @@ public class ModelsTests : TestBase
         Assert.Equal("dtmi:com:adt:dtsample:room;1", m2[0].Id);
         await Client.DeleteModelAsync(m2[0].Id);
     }
+
+    [Fact]
+    public async Task GetModelIdByTwinId_ShouldReturnCorrectModelId()
+    {
+        // Arrange
+        string modelId = "dtmi:com:adt:dtsample:room;1";
+        try
+        {
+            await Client.DeleteModelAsync(modelId);
+        }
+        catch (ModelNotFoundException)
+        {
+            // Ignore exception if model does not exist
+        }
+
+        // Create the model
+        await Client.CreateModelsAsync([SampleData.DtdlRoom]);
+
+        // Create a digital twin with the model
+        string twinId = "test-room-model-id";
+        string twinJson = $$"""
+            {
+              "$dtId": "{{twinId}}",
+              "$metadata": { "$model": "{{modelId}}" },
+              "name": "Test Room",
+              "temperature": 20.0
+            }
+            """;
+
+        await Client.CreateOrReplaceDigitalTwinAsync(twinId, twinJson);
+
+        // Act - Use reflection to access the private method
+        var method = typeof(AgeDigitalTwinsClient).GetMethod(
+            "GetModelIdByTwinIdAsync",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance
+        );
+        Assert.NotNull(method);
+
+        var task = method.Invoke(Client, [twinId, CancellationToken.None]) as Task<string>;
+        Assert.NotNull(task);
+        var result = await task;
+
+        // Assert
+        Assert.Equal(modelId, result);
+
+        // Clean up
+        await Client.DeleteDigitalTwinAsync(twinId);
+        await Client.DeleteModelAsync(modelId);
+    }
 }
