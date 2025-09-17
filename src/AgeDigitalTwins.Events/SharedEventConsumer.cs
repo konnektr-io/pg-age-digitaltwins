@@ -166,17 +166,17 @@ public class SharedEventConsumer
                         CloudEventFactory.CreateEventNotificationEvents(
                             eventData,
                             _sourceUri,
-                            route.TypeMappings
+                            route.TypeMappings ?? []
                         ),
                     EventFormat.DataHistory => CloudEventFactory.CreateDataHistoryEvents(
                         eventData,
                         _sourceUri,
-                        route.TypeMappings
+                        route.TypeMappings ?? []
                     ),
                     EventFormat.Telemetry => CloudEventFactory.CreateTelemetryEvents(
                         eventData,
                         _sourceUri,
-                        route.TypeMappings
+                        route.TypeMappings ?? []
                     ),
                     _ => throw new ArgumentException(
                         $"Unknown route event format: '{route.EventFormat}'"
@@ -187,11 +187,13 @@ public class SharedEventConsumer
                     continue;
 
                 // Add events to the sink's batch
-                if (!sinkEventGroups.ContainsKey(sink))
+                if (!sinkEventGroups.TryGetValue(sink, out List<CloudEvent>? value))
                 {
-                    sinkEventGroups[sink] = new List<CloudEvent>();
+                    value = [];
+                    sinkEventGroups[sink] = value;
                 }
-                sinkEventGroups[sink].AddRange(cloudEvents);
+
+                value.AddRange(cloudEvents);
             }
         }
 
