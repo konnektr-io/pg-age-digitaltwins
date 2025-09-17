@@ -106,8 +106,6 @@ builder.Services.AddSingleton(sp =>
         connectionString,
         publication,
         replicationSlot,
-        source,
-        eventSinkFactory,
         eventQueue,
         subscriptionLogger,
         maxBatchSize

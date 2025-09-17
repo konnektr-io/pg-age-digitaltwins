@@ -3,7 +3,6 @@ using System.Net.Sockets;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
-using CloudNative.CloudEvents;
 using Npgsql;
 using Npgsql.Replication;
 using Npgsql.Replication.PgOutput;
@@ -19,8 +18,6 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
         string connectionString,
         string publication,
         string replicationSlot,
-        string? source,
-        EventSinkFactory eventSinkFactory,
         IEventQueue eventQueue,
         ILogger<AgeDigitalTwinsReplication> logger,
         int maxBatchSize = 50
@@ -29,25 +26,9 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
         _connectionString = connectionString;
         _publication = publication;
         _replicationSlot = replicationSlot;
-        _eventSinkFactory = eventSinkFactory;
         _eventQueue = eventQueue;
         _logger = logger;
         _maxBatchSize = maxBatchSize > 0 ? maxBatchSize : 50; // Ensure positive value with fallback
-
-        if (!string.IsNullOrEmpty(source))
-        {
-            if (!Uri.TryCreate(source, UriKind.RelativeOrAbsolute, out _sourceUri!))
-            {
-                UriBuilder uriBuilder = new(source);
-                _sourceUri = uriBuilder.Uri;
-            }
-        }
-        else
-        {
-            NpgsqlConnectionStringBuilder csb = new(connectionString);
-            UriBuilder uriBuilder = new() { Scheme = "postgresql", Host = csb.Host };
-            _sourceUri = uriBuilder.Uri;
-        }
     }
 
     /// <summary>
@@ -66,16 +47,6 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
     /// Defaults to "age_slot".
     /// </summary>
     private readonly string _replicationSlot;
-
-    /// <summary>
-    /// The source URI for the event sink. This is used to identify the source of the events.
-    /// </summary>
-    private readonly Uri _sourceUri;
-
-    /// <summary>
-    /// Factory for creating event sinks. This is used to create the sinks that will process the events.
-    /// </summary>
-    private readonly EventSinkFactory _eventSinkFactory;
     private readonly ILogger<AgeDigitalTwinsReplication> _logger;
     private LogicalReplicationConnection? _conn;
     private readonly IEventQueue _eventQueue;
