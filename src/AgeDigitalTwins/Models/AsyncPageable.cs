@@ -31,11 +31,11 @@ public class AsyncPageable<T>(
         do
         {
             var page = await _fetchPage(token, pageSizeHint, cancellationToken);
-            yield return page;
             token =
                 page.ContinuationToken != null
                     ? ContinuationToken.Deserialize(page.ContinuationToken)
                     : null;
+            yield return page;
         } while (token != null);
     }
 
@@ -48,11 +48,6 @@ public class AsyncPageable<T>(
             foreach (var item in page.Value)
             {
                 yield return item;
-            }
-            // If there is a continuation token, keep fetching next pages
-            if (page.ContinuationToken == null)
-            {
-                break;
             }
         }
     }
