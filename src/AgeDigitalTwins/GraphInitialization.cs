@@ -55,7 +55,6 @@ public static class GraphInitialization
                 DECLARE
                     twin_model_id text;
                     model_id_text text;
-                    result boolean;
                 BEGIN
                     -- Extract model ID from twin metadata
                     twin_model_id := ag_catalog.agtype_access_operator(twin,'""$metadata""'::agtype,'""$model""'::agtype)::text;
@@ -73,16 +72,27 @@ public static class GraphInitialization
                         RETURN false;
                     END IF;
                     
-                    -- Check inheritance using _extends relationships via Cypher
-                    SELECT EXISTS (
-                        SELECT * FROM ag_catalog.cypher('{graphName}', $$
-                            MATCH (child:Model {{id: $child_id}})-[:_extends*0..]->(parent:Model {{id: $parent_id}})
-                            RETURN true
-                        $$, agtype_build_map('child_id'::text, twin_model_id::agtype, 'parent_id'::text, model_id_text::agtype)
-                        ) AS (exists_path agtype)
-                    ) INTO result;
-                    
-                    RETURN COALESCE(result, false);
+                    -- Check inheritance using _extends table with recursive CTE
+                    -- This approach works on read replicas and avoids variable-length edge queries
+                    RETURN EXISTS (
+                        WITH RECURSIVE model_ancestors AS (
+                            -- Base case: start with the child model's internal ID
+                            SELECT m.id as internal_id
+                            FROM {graphName}.""Model"" m
+                            WHERE ag_catalog.agtype_access_operator(m.properties, '""id""'::agtype)::text = '""' || twin_model_id || '""'
+                            
+                            UNION ALL
+                            
+                            -- Recursive case: find parent models through _extends relationships
+                            SELECT e.end_id as internal_id
+                            FROM model_ancestors ma
+                            JOIN {graphName}.""_extends"" e ON e.start_id = ma.internal_id
+                        )
+                        SELECT 1 
+                        FROM model_ancestors ma
+                        JOIN {graphName}.""Model"" m ON m.id = ma.internal_id
+                        WHERE trim(both '""' from ag_catalog.agtype_access_operator(m.properties, '""id""'::agtype)::text) = model_id_text
+                    );
                 END;
                 $function$"
             ),
