@@ -23,9 +23,20 @@ public static class GraphInitialization
                 @$"CREATE UNIQUE INDEX model_id_idx ON {graphName}.""Model"" (ag_catalog.agtype_access_operator(properties, '""id""'::agtype));"
             ),
             new(@$"CREATE INDEX model_gin_idx ON {graphName}.""Model"" USING gin (properties);"),
+            new(
+                @$"CREATE INDEX IF NOT EXISTS model_bases_gin_idx ON {graphName}.""Model"" 
+                USING gin ((ag_catalog.agtype_access_operator(properties,'""bases""'::agtype)));"
+            ),
             new(@$"ALTER TABLE {graphName}.""Model"" REPLICA IDENTITY FULL;"),
             new(@$"SELECT create_elabel('{graphName}', '_extends');"),
             new(@$"ALTER TABLE {graphName}.""_extends"" REPLICA IDENTITY FULL;"),
+            // Add indexes on _extends table for optimized inheritance queries
+            new(
+                @$"CREATE INDEX IF NOT EXISTS _extends_start_id_idx ON {graphName}.""_extends"" (start_id);"
+            ),
+            new(
+                @$"CREATE INDEX IF NOT EXISTS _extends_end_id_idx ON {graphName}.""_extends"" (end_id);"
+            ),
             new(@$"SELECT create_elabel('{graphName}', '_hasComponent');"),
             new(@$"ALTER TABLE {graphName}.""_hasComponent"" REPLICA IDENTITY FULL;"),
         ];
@@ -39,27 +50,50 @@ public static class GraphInitialization
                 @$"CREATE OR REPLACE FUNCTION {graphName}.is_of_model(twin agtype, model_id agtype, exact boolean default false)
                 RETURNS boolean
                 LANGUAGE plpgsql
+                STABLE
                 AS $function$
                 DECLARE
-                    sql VARCHAR;
-                    twin_model_id agtype;
-                    result boolean;
+                    twin_model_id text;
+                    model_id_text text;
                 BEGIN
-                    SELECT ag_catalog.agtype_access_operator(twin,'""$metadata""'::agtype,'""$model""'::agtype) INTO twin_model_id;
-                    IF exact THEN
-                        sql := format('SELECT ''%s'' = ''%s''', twin_model_id, model_id);
-                    ELSE
-                        sql:= format('SELECT ''%s'' = ''%s'' OR
-                        EXISTS
-                            (SELECT 1 FROM ag_catalog.cypher(''{graphName}'', $$
-                                MATCH (m:Model)
-                                WHERE m.id = %s AND %s IN m.bases
-                                RETURN m.id
-                            $$) AS (m text))
-                        ', twin_model_id, model_id, twin_model_id, model_id);
+                    -- Extract model ID from twin metadata
+                    twin_model_id := ag_catalog.agtype_access_operator(twin,'""$metadata""'::agtype,'""$model""'::agtype)::text;
+                    -- Remove quotes from agtype string values
+                    twin_model_id := trim(both '""' from twin_model_id);
+                    model_id_text := trim(both '""' from model_id::text);
+                    
+                    -- Direct match check first (most common case)
+                    IF twin_model_id = model_id_text THEN
+                        RETURN true;
                     END IF;
-                    EXECUTE sql INTO result;
-                    RETURN result;
+                    
+                    -- If exact match required, return false if direct match failed
+                    IF exact THEN
+                        RETURN false;
+                    END IF;
+                    
+                    -- Check inheritance using _extends table with recursive CTE
+                    -- This approach works on read replicas and avoids variable-length edge queries
+                    RETURN EXISTS (
+                        WITH RECURSIVE model_ancestors AS (
+                            -- Base case: start with the child model's internal ID
+                            SELECT m.id as internal_id, 
+                                   trim(both '""' from ag_catalog.agtype_access_operator(m.properties, '""id""'::agtype)::text) as model_name
+                            FROM {graphName}.""Model"" m
+                            WHERE trim(both '""' from ag_catalog.agtype_access_operator(m.properties, '""id""'::agtype)::text) = twin_model_id
+                            
+                            UNION ALL
+                            
+                            -- Recursive case: find parent models through _extends relationships
+                            SELECT parent.id as internal_id,
+                                   trim(both '""' from ag_catalog.agtype_access_operator(parent.properties, '""id""'::agtype)::text) as model_name
+                            FROM model_ancestors ma
+                            JOIN {graphName}.""_extends"" e ON e.start_id = ma.internal_id
+                            JOIN {graphName}.""Model"" parent ON parent.id = e.end_id
+                        )
+                        SELECT 1 FROM model_ancestors
+                        WHERE model_name = model_id_text
+                    );
                 END;
                 $function$"
             ),
@@ -123,6 +157,34 @@ public static class GraphInitialization
                     RETURN json_target::text::agtype;
                 END;
                 $$ LANGUAGE plpgsql;"
+            ),
+            new(
+                @$"CREATE OR REPLACE FUNCTION {graphName}.is_of_model_old(twin agtype, model_id agtype, exact boolean default false)
+                RETURNS boolean
+                LANGUAGE plpgsql
+                AS $function$
+                DECLARE
+                    sql VARCHAR;
+                    twin_model_id agtype;
+                    result boolean;
+                BEGIN
+                    SELECT ag_catalog.agtype_access_operator(twin,'""$metadata""'::agtype,'""$model""'::agtype) INTO twin_model_id;
+                    IF exact THEN
+                        sql := format('SELECT ''%s'' = ''%s''', twin_model_id, model_id);
+                    ELSE
+                        sql:= format('SELECT ''%s'' = ''%s'' OR
+                        EXISTS
+                            (SELECT 1 FROM ag_catalog.cypher(''{graphName}'', $$
+                                MATCH (m:Model)
+                                WHERE m.id = %s AND %s IN m.bases
+                                RETURN m.id
+                            $$) AS (m text))
+                        ', twin_model_id, model_id, twin_model_id, model_id);
+                    END IF;
+                    EXECUTE sql INTO result;
+                    RETURN result;
+                END;
+                $function$"
             ),
         ];
     }

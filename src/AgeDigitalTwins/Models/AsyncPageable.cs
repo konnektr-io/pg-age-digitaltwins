@@ -31,23 +31,21 @@ public class AsyncPageable<T>(
         do
         {
             var page = await _fetchPage(token, pageSizeHint, cancellationToken);
-
-            yield return page;
-
             token =
                 page.ContinuationToken != null
                     ? ContinuationToken.Deserialize(page.ContinuationToken)
                     : null;
-        } while (continuationToken != null);
+            yield return page;
+        } while (token != null);
     }
 
     public async IAsyncEnumerator<T> GetAsyncEnumerator(
         CancellationToken cancellationToken = default
     )
     {
-        await foreach (Page<T> page in AsPages(cancellationToken: cancellationToken))
+        await foreach (var page in AsPages(cancellationToken: cancellationToken))
         {
-            foreach (T item in page.Value)
+            foreach (var item in page.Value)
             {
                 yield return item;
             }
