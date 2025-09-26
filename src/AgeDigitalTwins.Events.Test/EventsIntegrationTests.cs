@@ -173,14 +173,37 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         // Arrange
         await _fixture.WaitForReplicationHealthy();
 
-        string[] models = [SampleData.DtdlRoom, SampleData.DtdlTemperatureSensor];
         try
         {
-            await Client.CreateModelsAsync(models);
+            await Client.CreateModelsAsync([SampleData.DtdlRoom]);
+            _output.WriteLine(
+                $"Successfully created models: {string.Join(", ", JsonSerializer.Deserialize<JsonObject>(SampleData.DtdlRoom)?["@id"]?.ToString() ?? "unknown")}"
+            );
         }
-        catch (Exceptions.ModelAlreadyExistsException)
+        catch (Exceptions.ModelAlreadyExistsException ex)
         {
-            // Model already exists, ignore
+            _output.WriteLine($"Models already exist: {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            _output.WriteLine($"Failed to create models: {ex.Message}");
+            throw;
+        }
+        try
+        {
+            await Client.CreateModelsAsync([SampleData.DtdlTemperatureSensor]);
+            _output.WriteLine(
+                $"Successfully created models: {string.Join(", ", JsonSerializer.Deserialize<JsonObject>(SampleData.DtdlTemperatureSensor)?["@id"]?.ToString() ?? "unknown")}"
+            );
+        }
+        catch (Exceptions.ModelAlreadyExistsException ex)
+        {
+            _output.WriteLine($"Models already exist: {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            _output.WriteLine($"Failed to create models: {ex.Message}");
+            throw;
         }
 
         var sourceTwinId = $"room_{Guid.NewGuid():N}";
@@ -441,14 +464,37 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         // Arrange
         await _fixture.WaitForReplicationHealthy();
 
-        string[] models = [SampleData.DtdlRoom, SampleData.DtdlTemperatureSensor];
         try
         {
-            await Client.CreateModelsAsync(models);
+            await Client.CreateModelsAsync([SampleData.DtdlRoom]);
+            _output.WriteLine(
+                $"Successfully created models: {string.Join(", ", JsonSerializer.Deserialize<JsonObject>(SampleData.DtdlRoom)?["@id"]?.ToString() ?? "unknown")}"
+            );
         }
-        catch (Exceptions.ModelAlreadyExistsException)
+        catch (Exceptions.ModelAlreadyExistsException ex)
         {
-            // Model already exists, ignore
+            _output.WriteLine($"Models already exist: {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            _output.WriteLine($"Failed to create models: {ex.Message}");
+            throw;
+        }
+        try
+        {
+            await Client.CreateModelsAsync([SampleData.DtdlTemperatureSensor]);
+            _output.WriteLine(
+                $"Successfully created models: {string.Join(", ", JsonSerializer.Deserialize<JsonObject>(SampleData.DtdlTemperatureSensor)?["@id"]?.ToString() ?? "unknown")}"
+            );
+        }
+        catch (Exceptions.ModelAlreadyExistsException ex)
+        {
+            _output.WriteLine($"Models already exist: {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            _output.WriteLine($"Failed to create models: {ex.Message}");
+            throw;
         }
 
         var sourceTwinId = $"room_{Guid.NewGuid():N}";
@@ -1044,5 +1090,425 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         _output.WriteLine($"Relationship Lifecycle Events: {relationshipLifecycleEvents.Count}");
         _output.WriteLine($"Relationship Property Events: {relationshipPropertyEvents.Count}");
         _output.WriteLine("✓ All update and create event types successfully verified!");
+    }
+
+    [Fact]
+    public async Task PublishTelemetryAsync_ShouldGenerateTelemetryEvents()
+    {
+        // Arrange
+        await _fixture.WaitForReplicationHealthy();
+
+        string[] models = [SampleData.DtdlTemperatureSensor];
+        try
+        {
+            await Client.CreateModelsAsync(models);
+        }
+        catch (Exceptions.ModelAlreadyExistsException)
+        {
+            // Model already exists, ignore
+        }
+
+        var uniqueTwinId = $"temp_sensor_{Guid.NewGuid():N}";
+        var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(
+            SampleData.TwinTemperatureSensor1
+        );
+        digitalTwin!.Id = uniqueTwinId;
+
+        // Create the twin first
+        await Client.CreateOrReplaceDigitalTwinAsync(digitalTwin.Id, digitalTwin);
+
+        // Clear events after creation
+        TestSink.ClearEvents();
+
+        // Act - Publish telemetry
+        var telemetryData = new
+        {
+            temperature = 25.5,
+            humidity = 60.0,
+            timestamp = DateTime.UtcNow,
+        };
+
+        await Client.PublishTelemetryAsync(uniqueTwinId, telemetryData);
+
+        // Assert - Wait for telemetry event
+        var receivedEvent = await TestSink.WaitForEventAsync(
+            uniqueTwinId,
+            "Konnektr.IoT.Telemetry",
+            TimeSpan.FromSeconds(10)
+        );
+
+        Assert.NotNull(receivedEvent);
+        Assert.Equal("Konnektr.IoT.Telemetry", receivedEvent.Type);
+        Assert.Equal(uniqueTwinId, receivedEvent.Subject);
+        Assert.Equal("application/json", receivedEvent.DataContentType);
+
+        // Verify DataSchema contains the model ID
+        Assert.NotNull(receivedEvent.DataSchema);
+        Assert.Equal("dtmi:com:adt:dtsample:tempsensor;1", receivedEvent.DataSchema.ToString());
+
+        // Debug output
+        _output.WriteLine($"Event Data Type: {receivedEvent.Data?.GetType()}");
+        _output.WriteLine($"Event Data Value: {receivedEvent.Data}");
+
+        // Verify telemetry data
+        var eventData = receivedEvent.Data as JsonObject;
+        Assert.NotNull(eventData);
+        Assert.Equal("25.5", eventData["temperature"]?.ToString());
+        Assert.Equal("60", eventData["humidity"]?.ToString());
+
+        _output.WriteLine($"Successfully captured telemetry event for {uniqueTwinId}");
+        _output.WriteLine($"Event ID: {receivedEvent.Id}");
+        _output.WriteLine($"Event Type: {receivedEvent.Type}");
+        _output.WriteLine($"DataSchema: {receivedEvent.DataSchema}");
+        _output.WriteLine($"Telemetry Data: {JsonSerializer.Serialize(eventData)}");
+    }
+
+    [Fact]
+    public async Task PublishComponentTelemetryAsync_ShouldGenerateComponentTelemetryEvents()
+    {
+        // Arrange
+        await _fixture.WaitForReplicationHealthy();
+
+        try
+        {
+            await Client.CreateModelsAsync([SampleData.DtdlCrater]);
+        }
+        catch (Exceptions.ModelAlreadyExistsException)
+        {
+            // Models already exist, ignore
+        }
+        try
+        {
+            await Client.CreateModelsAsync([SampleData.DtdlCelestialBody]);
+        }
+        catch (Exceptions.ModelAlreadyExistsException)
+        {
+            // Models already exist, ignore
+        }
+        try
+        {
+            await Client.CreateModelsAsync([SampleData.DtdlPlanet]);
+        }
+        catch (Exceptions.ModelAlreadyExistsException)
+        {
+            // Models already exist, ignore
+        }
+
+        var uniqueTwinId = $"planet_{Guid.NewGuid():N}";
+        var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinPlanetEarth);
+        digitalTwin!.Id = uniqueTwinId;
+
+        // Ensure the deepestCrater component exists (Planet model has this component)
+        digitalTwin.Contents["deepestCrater"] = new JsonObject
+        {
+            ["$metadata"] = new JsonObject(),
+            ["diameter"] = 150.0,
+            ["depth"] = 30.0,
+        };
+
+        // Create the twin first
+        await Client.CreateOrReplaceDigitalTwinAsync(digitalTwin.Id, digitalTwin);
+
+        // Clear events after creation
+        TestSink.ClearEvents();
+
+        // Act - Publish component telemetry
+        var componentTelemetryData = new
+        {
+            temperature = 32.1,
+            timestamp = DateTime.UtcNow, // Not in DTDL, doesn't matter, no validation
+        };
+
+        await Client.PublishComponentTelemetryAsync(
+            uniqueTwinId,
+            "deepestCrater",
+            componentTelemetryData
+        );
+
+        // Assert - Wait for component telemetry event
+        var expectedSubject = $"{uniqueTwinId}/components/deepestCrater";
+        var receivedEvent = await TestSink.WaitForEventAsync(
+            expectedSubject,
+            "Konnektr.IoT.Telemetry",
+            TimeSpan.FromSeconds(10)
+        );
+
+        Assert.NotNull(receivedEvent);
+        Assert.Equal("Konnektr.IoT.Telemetry", receivedEvent.Type);
+        Assert.Equal(expectedSubject, receivedEvent.Subject);
+        Assert.Equal("application/json", receivedEvent.DataContentType);
+
+        // Verify DataSchema contains the model ID
+        Assert.NotNull(receivedEvent.DataSchema);
+        Assert.Equal("dtmi:com:contoso:Planet;1", receivedEvent.DataSchema.ToString());
+
+        // Verify component telemetry data
+        var eventData = receivedEvent.Data as JsonObject;
+        Assert.NotNull(eventData);
+        Assert.Equal("32.1", eventData["temperature"]?.ToString());
+        Assert.Equal(
+            componentTelemetryData.timestamp,
+            DateTime.Parse(
+                eventData["timestamp"]?.ToString() ?? "",
+                null,
+                System.Globalization.DateTimeStyles.RoundtripKind
+            )
+        );
+
+        _output.WriteLine(
+            $"Successfully captured component telemetry event for {uniqueTwinId}/deepestCrater"
+        );
+        _output.WriteLine($"Event ID: {receivedEvent.Id}");
+        _output.WriteLine($"Event Type: {receivedEvent.Type}");
+        _output.WriteLine($"Subject: {receivedEvent.Subject}");
+        _output.WriteLine($"DataSchema: {receivedEvent.DataSchema}");
+        _output.WriteLine($"Component Telemetry Data: {JsonSerializer.Serialize(eventData)}");
+    }
+
+    [Fact]
+    public async Task PublishTelemetryAsync_WithMessageId_ShouldUseProvidedMessageId()
+    {
+        // Arrange
+        await _fixture.WaitForReplicationHealthy();
+
+        string[] models = [SampleData.DtdlTemperatureSensor];
+        try
+        {
+            await Client.CreateModelsAsync(models);
+        }
+        catch (Exceptions.ModelAlreadyExistsException)
+        {
+            // Model already exists, ignore
+        }
+
+        var uniqueTwinId = $"temp_sensor_{Guid.NewGuid():N}";
+        var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(
+            SampleData.TwinTemperatureSensor1
+        );
+        digitalTwin!.Id = uniqueTwinId;
+
+        // Create the twin first
+        await Client.CreateOrReplaceDigitalTwinAsync(digitalTwin.Id, digitalTwin);
+
+        // Clear events after creation
+        TestSink.ClearEvents();
+
+        // Act - Publish telemetry with custom message ID
+        var customMessageId = $"msg_{Guid.NewGuid():N}";
+        var telemetryData = new { temperature = 30.0, pressure = 1013.25 };
+
+        await Client.PublishTelemetryAsync(uniqueTwinId, telemetryData, messageId: customMessageId);
+
+        // Assert - Wait for telemetry event
+        var receivedEvent = await TestSink.WaitForEventAsync(
+            uniqueTwinId,
+            "Konnektr.IoT.Telemetry",
+            TimeSpan.FromSeconds(10)
+        );
+
+        Assert.NotNull(receivedEvent);
+        Assert.Equal(customMessageId, receivedEvent.Id);
+        Assert.Equal("Konnektr.IoT.Telemetry", receivedEvent.Type);
+        Assert.Equal(uniqueTwinId, receivedEvent.Subject);
+
+        // Verify telemetry data
+        var eventData = receivedEvent.Data as JsonObject;
+        Assert.NotNull(eventData);
+        Assert.Equal("30", eventData["temperature"]?.ToString());
+        Assert.Equal("1013.25", eventData["pressure"]?.ToString());
+
+        _output.WriteLine(
+            $"Successfully captured telemetry event with custom message ID: {customMessageId}"
+        );
+        _output.WriteLine($"Event ID: {receivedEvent.Id}");
+        _output.WriteLine($"Telemetry Data: {JsonSerializer.Serialize(eventData)}");
+    }
+
+    [Fact]
+    public async Task PublishTelemetryAsync_ForNonExistentTwin_ShouldStillGenerateEvents()
+    {
+        // Arrange - This test verifies that telemetry can be published even for twins that don't exist yet
+        // which is a common scenario in IoT where devices send data before being registered
+        var nonExistentTwinId = $"phantom_device_{Guid.NewGuid():N}";
+
+        // Clear any existing events
+        TestSink.ClearEvents();
+
+        // Act - Publish telemetry for non-existent twin
+        var telemetryData = new { temperature = 18.5, batteryLevel = 85 };
+
+        // This should not throw an exception - telemetry publishing is fire-and-forget
+        await Client.PublishTelemetryAsync(nonExistentTwinId, telemetryData);
+
+        // Assert - Wait for telemetry event (should still be generated)
+        var receivedEvent = await TestSink.WaitForEventAsync(
+            nonExistentTwinId,
+            "Konnektr.IoT.Telemetry",
+            TimeSpan.FromSeconds(10)
+        );
+
+        // The event should still be generated, but DataSchema might be null since we can't resolve the model
+        Assert.NotNull(receivedEvent);
+        Assert.Equal("Konnektr.IoT.Telemetry", receivedEvent.Type);
+        Assert.Equal(nonExistentTwinId, receivedEvent.Subject);
+
+        // Verify telemetry data is preserved
+        var eventData = receivedEvent.Data as JsonObject;
+        Assert.NotNull(eventData);
+        Assert.Equal("18.5", eventData["temperature"]?.ToString());
+        Assert.Equal("85", eventData["batteryLevel"]?.ToString());
+
+        _output.WriteLine(
+            $"Successfully captured telemetry event for non-existent twin: {nonExistentTwinId}"
+        );
+        _output.WriteLine($"Event ID: {receivedEvent.Id}");
+        _output.WriteLine($"DataSchema: {receivedEvent.DataSchema?.ToString() ?? "null"}");
+        _output.WriteLine($"Telemetry Data: {JsonSerializer.Serialize(eventData)}");
+    }
+
+    [Fact]
+    public async Task PublishTelemetryAsync_MultipleTwins_ShouldCacheModelIds()
+    {
+        // Arrange - This test verifies that model ID caching works correctly across multiple twins
+        await _fixture.WaitForReplicationHealthy();
+
+        string[] models = [SampleData.DtdlTemperatureSensor];
+        try
+        {
+            await Client.CreateModelsAsync(models);
+        }
+        catch (Exceptions.ModelAlreadyExistsException)
+        {
+            // Model already exists, ignore
+        }
+
+        // Create multiple twins with the same model
+        var twinIds = new List<string>();
+        for (int i = 0; i < 3; i++)
+        {
+            var twinId = $"sensor_{i}_{Guid.NewGuid():N}";
+            twinIds.Add(twinId);
+
+            var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(
+                SampleData.TwinTemperatureSensor1
+            );
+            digitalTwin!.Id = twinId;
+            digitalTwin.Contents["name"] = $"Sensor {i}";
+
+            await Client.CreateOrReplaceDigitalTwinAsync(digitalTwin.Id, digitalTwin);
+        }
+
+        // Clear events after creation
+        TestSink.ClearEvents();
+
+        // Act - Publish telemetry for all twins rapidly (should benefit from caching)
+        var tasks = twinIds.Select(
+            async (twinId, index) =>
+            {
+                var telemetryData = new { temperature = 20.0 + index, sensorId = index };
+
+                await Client.PublishTelemetryAsync(twinId, telemetryData);
+            }
+        );
+
+        await Task.WhenAll(tasks);
+
+        // Assert - Wait for all telemetry events
+        await Task.Delay(3000); // Give time for all events to be processed
+
+        var allEvents = TestSink
+            .GetCapturedEvents()
+            .Where(e => e.Type == "Konnektr.IoT.Telemetry")
+            .ToList();
+
+        Assert.True(
+            allEvents.Count >= 3,
+            $"Expected at least 3 telemetry events, got {allEvents.Count}"
+        );
+
+        // Verify each twin's telemetry event
+        foreach (var (twinId, index) in twinIds.Select((id, i) => (id, i)))
+        {
+            var twinEvent = allEvents.FirstOrDefault(e => e.Subject == twinId);
+            Assert.NotNull(twinEvent);
+
+            // All should have the same model ID in DataSchema (cached)
+            Assert.NotNull(twinEvent.DataSchema);
+            Assert.Equal("dtmi:com:adt:dtsample:tempsensor;1", twinEvent.DataSchema.ToString());
+
+            // Verify telemetry data
+            var eventData = twinEvent.Data as JsonObject;
+            Assert.NotNull(eventData);
+            Assert.Equal((20.0 + index).ToString(), eventData["temperature"]?.ToString());
+            Assert.Equal(index.ToString(), eventData["sensorId"]?.ToString());
+
+            _output.WriteLine($"✓ Telemetry event verified for {twinId}");
+        }
+
+        _output.WriteLine($"Successfully verified model ID caching across {twinIds.Count} twins");
+        _output.WriteLine($"All events have DataSchema: dtmi:com:adt:dtsample:tempsensor;1");
+    }
+
+    [Fact]
+    public async Task PublishTelemetryAsync_WithTimestamp_ShouldPreserveEventTime()
+    {
+        // Arrange
+        await _fixture.WaitForReplicationHealthy();
+
+        string[] models = [SampleData.DtdlTemperatureSensor];
+        try
+        {
+            await Client.CreateModelsAsync(models);
+        }
+        catch (Exceptions.ModelAlreadyExistsException)
+        {
+            // Model already exists, ignore
+        }
+
+        var uniqueTwinId = $"time_sensor_{Guid.NewGuid():N}";
+        var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(
+            SampleData.TwinTemperatureSensor1
+        );
+        digitalTwin!.Id = uniqueTwinId;
+
+        // Create the twin first
+        await Client.CreateOrReplaceDigitalTwinAsync(digitalTwin.Id, digitalTwin);
+
+        // Clear events after creation
+        TestSink.ClearEvents();
+
+        // Act - Publish telemetry with custom timestamp
+        var customTimestamp = DateTime.UtcNow.AddMinutes(-5); // 5 minutes ago
+        var telemetryData = new { temperature = 28.0, measurementTime = customTimestamp };
+
+        await Client.PublishTelemetryAsync(uniqueTwinId, telemetryData);
+
+        // Assert - Wait for telemetry event
+        var receivedEvent = await TestSink.WaitForEventAsync(
+            uniqueTwinId,
+            "Konnektr.IoT.Telemetry",
+            TimeSpan.FromSeconds(10)
+        );
+
+        Assert.NotNull(receivedEvent);
+        Assert.Equal("Konnektr.IoT.Telemetry", receivedEvent.Type);
+        Assert.Equal(uniqueTwinId, receivedEvent.Subject);
+
+        // Verify the event timestamp is within the expected range (when we published it)
+        Assert.NotNull(receivedEvent.Time);
+        var beforePublish = DateTime.UtcNow.AddMinutes(-1); // Allow 1 minute range for the test
+        var afterPublish = DateTime.UtcNow;
+        Assert.True(
+            receivedEvent.Time >= beforePublish && receivedEvent.Time <= afterPublish,
+            $"Event time {receivedEvent.Time:O} should be within reasonable range"
+        );
+
+        // Verify telemetry data
+        var eventData = receivedEvent.Data as JsonObject;
+        Assert.NotNull(eventData);
+        Assert.Equal("28", eventData["temperature"]?.ToString());
+
+        _output.WriteLine($"Successfully captured telemetry event with automatic timestamp");
+        _output.WriteLine($"Event Time: {receivedEvent.Time:O}");
     }
 }

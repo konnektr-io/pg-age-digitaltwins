@@ -478,4 +478,86 @@ RETURN COUNT(m) AS deletedCount";
             }
         );
     }
+
+    /// <summary>
+    /// Gets the model ID for a digital twin with caching.
+    /// </summary>
+    /// <param name="twinId">The ID of the digital twin.</param>
+    /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
+    /// <returns>The model ID of the digital twin.</returns>
+    /// <exception cref="DigitalTwinNotFoundException">Thrown when the digital twin is not found.</exception>
+    /// <exception cref="ValidationFailedException">Thrown when the digital twin doesn't have valid metadata.</exception>
+    private async Task<string> GetModelIdByTwinIdCachedAsync(
+        string twinId,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (_modelCacheExpiration == TimeSpan.Zero)
+        {
+            // If cache expiration is set to zero, do not use the cache
+            return await GetModelIdByTwinIdAsync(twinId, cancellationToken);
+        }
+
+        string cacheKey = $"twin_model:{twinId}";
+        return await _modelCache.GetOrCreateAsync(
+                cacheKey,
+                async entry =>
+                {
+                    entry.SetOptions(
+                        new MemoryCacheEntryOptions
+                        {
+                            AbsoluteExpirationRelativeToNow = _modelCacheExpiration,
+                        }
+                    );
+
+                    return await GetModelIdByTwinIdAsync(twinId, cancellationToken);
+                }
+            ) ?? throw new DigitalTwinNotFoundException($"Digital Twin with ID {twinId} not found");
+    }
+
+    /// <summary>
+    /// Gets the model ID for a digital twin without caching.
+    /// </summary>
+    /// <param name="twinId">The ID of the digital twin.</param>
+    /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
+    /// <returns>The model ID of the digital twin.</returns>
+    /// <exception cref="DigitalTwinNotFoundException">Thrown when the digital twin is not found.</exception>
+    /// <exception cref="ValidationFailedException">Thrown when the digital twin doesn't have valid metadata.</exception>
+    private async Task<string> GetModelIdByTwinIdAsync(
+        string twinId,
+        CancellationToken cancellationToken = default
+    )
+    {
+        await using var connection = await _dataSource.OpenConnectionAsync(
+            TargetSessionAttributes.PreferStandby,
+            cancellationToken
+        );
+
+        string cypher =
+            $@"MATCH (t:Twin {{`$dtId`: '{twinId.Replace("'", "\\'")}'}}) 
+                          RETURN t.`$metadata`.`$model` as modelId";
+
+        await using var command = connection.CreateCypherCommand(_graphName, cypher);
+
+        var modelIdValue = await command.ExecuteScalarAsync(cancellationToken);
+
+        if (modelIdValue == null || modelIdValue == DBNull.Value)
+        {
+            throw new ValidationFailedException(
+                $"Digital Twin '{twinId}' does not have a valid model ID in its metadata"
+            );
+        }
+
+        // Handle AGE type conversion to string
+        string? modelId = ((Agtype)modelIdValue).GetString().Trim('\u0001').Trim('"');
+
+        if (string.IsNullOrEmpty(modelId))
+        {
+            throw new ValidationFailedException(
+                $"Digital Twin '{twinId}' has an empty or null model ID"
+            );
+        }
+
+        return modelId;
+    }
 }

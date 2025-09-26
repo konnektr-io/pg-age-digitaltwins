@@ -1,10 +1,8 @@
-using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net.Sockets;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
-using CloudNative.CloudEvents;
 using Npgsql;
 using Npgsql.Replication;
 using Npgsql.Replication.PgOutput;
@@ -20,8 +18,7 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
         string connectionString,
         string publication,
         string replicationSlot,
-        string? source,
-        EventSinkFactory eventSinkFactory,
+        IEventQueue eventQueue,
         ILogger<AgeDigitalTwinsReplication> logger,
         int maxBatchSize = 50
     )
@@ -29,24 +26,9 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
         _connectionString = connectionString;
         _publication = publication;
         _replicationSlot = replicationSlot;
-        _eventSinkFactory = eventSinkFactory;
+        _eventQueue = eventQueue;
         _logger = logger;
         _maxBatchSize = maxBatchSize > 0 ? maxBatchSize : 50; // Ensure positive value with fallback
-
-        if (!string.IsNullOrEmpty(source))
-        {
-            if (!Uri.TryCreate(source, UriKind.RelativeOrAbsolute, out _sourceUri!))
-            {
-                UriBuilder uriBuilder = new(source);
-                _sourceUri = uriBuilder.Uri;
-            }
-        }
-        else
-        {
-            NpgsqlConnectionStringBuilder csb = new(connectionString);
-            UriBuilder uriBuilder = new() { Scheme = "postgresql", Host = csb.Host };
-            _sourceUri = uriBuilder.Uri;
-        }
     }
 
     /// <summary>
@@ -65,19 +47,9 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
     /// Defaults to "age_slot".
     /// </summary>
     private readonly string _replicationSlot;
-
-    /// <summary>
-    /// The source URI for the event sink. This is used to identify the source of the events.
-    /// </summary>
-    private readonly Uri _sourceUri;
-
-    /// <summary>
-    /// Factory for creating event sinks. This is used to create the sinks that will process the events.
-    /// </summary>
-    private readonly EventSinkFactory _eventSinkFactory;
     private readonly ILogger<AgeDigitalTwinsReplication> _logger;
     private LogicalReplicationConnection? _conn;
-    private readonly ConcurrentQueue<EventData> _eventQueue = new();
+    private readonly IEventQueue _eventQueue;
 
     /// <summary>
     /// Maximum number of event data objects to batch together before processing.
@@ -199,30 +171,7 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
             cancellationToken
         );
 
-        var consumerTask = Task.Run(
-            async () =>
-            {
-                while (!cancellationToken.IsCancellationRequested)
-                {
-                    try
-                    {
-                        await ConsumeQueueAsync(cancellationToken);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(
-                            ex,
-                            "Error while consuming the event queue: {Message}\nRetrying in 5 seconds...",
-                            ex.Message
-                        );
-                        await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken); // Wait before retrying
-                    }
-                }
-            },
-            cancellationToken
-        );
-
-        await Task.WhenAll(replicationTask, consumerTask);
+        await replicationTask;
     }
 
     private async Task StartReplicationAsync(CancellationToken cancellationToken = default)
@@ -537,192 +486,6 @@ public class AgeDigitalTwinsReplication : IAsyncDisposable
                 _logger.LogError(ex, "Error processing message: {Message}", ex.Message);
             }
         }
-    }
-
-    private async Task ConsumeQueueAsync(CancellationToken cancellationToken = default)
-    {
-        List<IEventSink> eventSinks = _eventSinkFactory.CreateEventSinks();
-        _logger.LogInformation(
-            "Event sinks created: {Sinks}",
-            string.Join(',', eventSinks.Select(r => r.Name))
-        );
-        if (eventSinks.Count == 0)
-        {
-            _logger.LogWarning("No event sinks configured. Exiting.");
-            return;
-        }
-        List<EventRoute> eventRoutes = _eventSinkFactory.GetEventRoutes();
-        _logger.LogInformation(
-            "Event routes created: {Routes}",
-            JsonSerializer.Serialize(eventRoutes, _jsonSerializerOptions)
-        );
-        if (eventRoutes.Count == 0)
-        {
-            _logger.LogWarning("No event routes configured. Exiting.");
-            return;
-        }
-
-        var eventDataBatch = new List<EventData>();
-
-        while (!cancellationToken.IsCancellationRequested)
-        {
-            // Try to dequeue events and batch them
-            while (
-                eventDataBatch.Count < _maxBatchSize && _eventQueue.TryDequeue(out var eventData)
-            )
-            {
-                if (eventData.EventType != null)
-                {
-                    eventDataBatch.Add(eventData);
-                }
-            }
-
-            // Process the batch if we have events
-            if (eventDataBatch.Count > 0)
-            {
-                await ProcessEventDataBatchAsync(eventDataBatch, eventSinks, eventRoutes);
-                eventDataBatch.Clear();
-            }
-            else
-            {
-                // No events to process, wait before checking again
-                await Task.Delay(100, cancellationToken);
-            }
-        }
-
-        // Process any remaining events when cancellation is requested
-        if (eventDataBatch.Count > 0)
-        {
-            await ProcessEventDataBatchAsync(eventDataBatch, eventSinks, eventRoutes);
-        }
-    }
-
-    private async Task ProcessEventDataBatchAsync(
-        List<EventData> eventDataBatch,
-        List<IEventSink> eventSinks,
-        List<EventRoute> eventRoutes
-    )
-    {
-        // Group cloud events by sink for efficient batch sending
-        var sinkEventGroups = new Dictionary<IEventSink, List<CloudEvent>>();
-
-        foreach (var eventData in eventDataBatch)
-        {
-            foreach (EventRoute route in eventRoutes)
-            {
-                try
-                {
-                    _logger.LogDebug(
-                        "Processing {EventType} with {EventFormat} from {Source} to sink {SinkName} \n{EventData}",
-                        Enum.GetName(typeof(EventType), eventData.EventType!),
-                        route.EventFormat,
-                        _sourceUri,
-                        route.SinkName,
-                        JsonSerializer.Serialize(eventData, _jsonSerializerOptions)
-                    );
-
-                    var sink = eventSinks.FirstOrDefault(s => s.Name == route.SinkName);
-                    if (sink == null)
-                    {
-                        continue;
-                    }
-
-                    List<CloudEvent> cloudEvents;
-                    // Get the typeMapping from the sink's EventTypeMappings property
-                    var sinkOptions = sink as SinkOptions;
-                    var typeMapping = sinkOptions?.EventTypeMappings;
-
-                    if (route.EventFormat == EventFormat.EventNotification)
-                    {
-                        cloudEvents = CloudEventFactory.CreateEventNotificationEvents(
-                            eventData,
-                            _sourceUri,
-                            typeMapping
-                        );
-                    }
-                    else if (route.EventFormat == EventFormat.DataHistory)
-                    {
-                        cloudEvents = CloudEventFactory.CreateDataHistoryEvents(
-                            eventData,
-                            _sourceUri,
-                            typeMapping
-                        );
-                    }
-                    else
-                    {
-                        _logger.LogDebug(
-                            "Skipping event route for {SinkName} with unsupported event format {EventFormat}",
-                            route.SinkName,
-                            route.EventFormat
-                        );
-                        continue;
-                    }
-
-                    if (cloudEvents.Count == 0)
-                    {
-                        _logger.LogDebug(
-                            "Skipping event route for {SinkName} without any events",
-                            route.SinkName
-                        );
-                        continue;
-                    }
-
-                    // Add cloud events to the sink's batch
-                    if (!sinkEventGroups.TryGetValue(sink, out List<CloudEvent>? value))
-                    {
-                        value = new List<CloudEvent>();
-                        sinkEventGroups[sink] = value;
-                    }
-
-                    value.AddRange(cloudEvents);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(
-                        ex,
-                        "Error while processing event route {Route}: {Message}",
-                        JsonSerializer.Serialize(route, _jsonSerializerOptions),
-                        ex.Message
-                    );
-                }
-            }
-        }
-
-        // Send all batched events to each sink
-        var sendTasks = sinkEventGroups.Select(async kvp =>
-        {
-            var sink = kvp.Key;
-            var events = kvp.Value;
-
-            try
-            {
-                _logger.LogDebug(
-                    "Sending batch of {EventCount} events to sink {SinkName}",
-                    events.Count,
-                    sink.Name
-                );
-
-                await sink.SendEventsAsync(events).ConfigureAwait(false);
-
-                _logger.LogDebug(
-                    "Successfully sent batch of {EventCount} events to sink {SinkName}",
-                    events.Count,
-                    sink.Name
-                );
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "Error sending batch of {EventCount} events to sink {SinkName}: {Message}",
-                    events.Count,
-                    sink.Name,
-                    ex.Message
-                );
-            }
-        });
-
-        await Task.WhenAll(sendTasks);
     }
 
     public async ValueTask DisposeAsync()

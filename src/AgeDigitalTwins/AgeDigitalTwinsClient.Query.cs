@@ -1,10 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Runtime.CompilerServices;
-using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using System.Threading;
 using AgeDigitalTwins.Models;
@@ -23,35 +20,34 @@ public partial class AgeDigitalTwinsClient
     /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
     /// <returns>An asynchronous enumerable of query results.</returns>
     public virtual AsyncPageable<T?> QueryAsync<T>(
-        string? query,
+        string query,
         CancellationToken cancellationToken = default
     )
     {
-        using var activity = ActivitySource.StartActivity("QueryAsync", ActivityKind.Client);
-        activity?.SetTag("query", query);
-        activity?.SetTag("graphName", _graphName);
-
-        try
-        {
-            return new AsyncPageable<T?>(
-                async (continuationToken, maxItemsPerPage, ct) =>
+        return new AsyncPageable<T?>(
+            async (continuationToken, maxItemsPerPage, ct) =>
+            {
+                using var activity = ActivitySource.StartActivity(
+                    "QueryAsync",
+                    ActivityKind.Client
+                );
+                activity?.SetTag("query", query);
+                activity?.SetTag("graphName", _graphName);
+                try
                 {
                     string cypher;
-                    // Use query from token if available
                     if (continuationToken != null)
                     {
-                        cypher = continuationToken.Query; // Override query with the one from the token
+                        cypher = continuationToken.Query;
                     }
-                    // ADT query that needs to be converted
                     else if (
                         !string.IsNullOrEmpty(query)
                         && query.Contains("SELECT", StringComparison.InvariantCultureIgnoreCase)
-                        && !query.Contains("RETURN", StringComparison.InvariantCultureIgnoreCase)
+                        && query.IndexOf("RETURN", StringComparison.InvariantCultureIgnoreCase) < 0
                     )
                     {
                         cypher = AdtQueryHelpers.ConvertAdtQueryToCypher(query, _graphName);
                     }
-                    // New Cypher query
                     else if (!string.IsNullOrEmpty(query))
                     {
                         cypher = query;
@@ -63,37 +59,27 @@ public partial class AgeDigitalTwinsClient
                             "Query cannot be null or empty."
                         );
                     }
+                    activity?.SetTag("cypher", query);
 
-                    // Store the query before modifying it for pagination
-                    // This is used to include in the next continuation token
-                    // to allow resuming the query from the same point
                     string nextContinuationQuery = cypher;
-
-                    // Check if the query already contains a LIMIT clause
                     var limitMatch = LimitRegex().Match(cypher);
-                    // Check if the query already contains a SKIP clause
                     var skipMatch = SkipRegex().Match(cypher);
 
-                    // Handle existing SKIP and LIMIT clauses
                     if (skipMatch.Success)
                     {
                         int existingSkip = int.Parse(skipMatch.Groups[1].Value);
                         int newSkip = existingSkip + (continuationToken?.RowNumber ?? 0);
                         cypher = SkipRegex().Replace(cypher, $"SKIP {newSkip}");
                     }
-                    // Handle case where there is no existing SKIP but an existing LIMIT
                     else if (limitMatch.Success && continuationToken != null)
                     {
-                        // Remove the existing LIMIT clause
                         cypher = LimitRegex().Replace(cypher, "");
 
-                        // Add SKIP before the LIMIT
                         cypher +=
                             $" SKIP {continuationToken.RowNumber} LIMIT {limitMatch.Groups[1].Value}";
                     }
                     else if (continuationToken != null)
                     {
-                        // Add SKIP clause if it doesn't exist
                         cypher += $" SKIP {continuationToken.RowNumber}";
                     }
 
@@ -103,19 +89,14 @@ public partial class AgeDigitalTwinsClient
                         existingLimit = int.Parse(limitMatch.Groups[1].Value);
                         if (maxItemsPerPage.HasValue && maxItemsPerPage.Value < existingLimit)
                         {
-                            // Replace the existing LIMIT with the smaller maxItemsPerPage
                             cypher = LimitRegex().Replace(cypher, $"LIMIT {maxItemsPerPage.Value}");
                         }
                     }
                     else if (maxItemsPerPage.HasValue)
                     {
-                        // Add LIMIT clause if it doesn't exist
                         cypher += $" LIMIT {maxItemsPerPage.Value}";
                     }
 
-                    // Detect variable-length edge query using regex (need read-write access)
-                    // This is a workaround for the fact that Age does not support variable-length edge queries
-                    // On read-only connections
                     var isVariableLengthEdgeQuery = VariableLengthEdgeRegex().IsMatch(cypher);
 
                     await using var connection = await _dataSource.OpenConnectionAsync(
@@ -124,7 +105,6 @@ public partial class AgeDigitalTwinsClient
                             : Npgsql.TargetSessionAttributes.PreferStandby,
                         ct
                     );
-
                     await using var command = connection.CreateCypherCommand(_graphName, cypher);
 
                     await using var reader =
@@ -133,6 +113,7 @@ public partial class AgeDigitalTwinsClient
 
                     var schema = await reader.GetColumnSchemaAsync(ct);
                     List<T?> results = new();
+                    int totalProperties = 0;
                     while (await reader.ReadAsync(ct))
                     {
                         Dictionary<string, object> row = new();
@@ -141,16 +122,18 @@ public partial class AgeDigitalTwinsClient
                             var column = schema[i];
                             var value = await reader.GetFieldValueAsync<Agtype?>(i);
                             if (value == null)
-                            {
                                 continue;
-                            }
                             if (((Agtype)value).IsVertex)
                             {
-                                row.Add(column.ColumnName, ((Vertex)value).Properties);
+                                var props = ((Vertex)value).Properties;
+                                row.Add(column.ColumnName, props);
+                                totalProperties += props.Count;
                             }
                             else if (((Agtype)value).IsEdge)
                             {
-                                row.Add(column.ColumnName, ((Edge)value).Properties);
+                                var props = ((Edge)value).Properties;
+                                row.Add(column.ColumnName, props);
+                                totalProperties += props.Count;
                             }
                             else
                             {
@@ -183,6 +166,7 @@ public partial class AgeDigitalTwinsClient
                                     if (dict != null)
                                     {
                                         row.Add(column.ColumnName, dict);
+                                        totalProperties += dict.Count;
                                     }
                                     else
                                     {
@@ -224,40 +208,61 @@ public partial class AgeDigitalTwinsClient
                     var rowNumber = (continuationToken?.RowNumber ?? 0) + results.Count;
                     ContinuationToken? nextContinuationToken =
                         results.Count < maxItemsPerPage || rowNumber >= existingLimit
-                            // No more results to fetch, so no continuation token
                             ? null
-                            // Generate a continuation token (e.g., next row number)
                             : new ContinuationToken
                             {
                                 RowNumber = rowNumber,
                                 Query = nextContinuationQuery,
                             };
 
-                    return (results, nextContinuationToken);
-                }
-            );
-        }
-        catch (Exception ex)
-        {
-            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            activity?.AddEvent(
-                new ActivityEvent(
-                    "Exception",
-                    default,
-                    new ActivityTagsCollection
+                    int charge = results.Count;
+                    if (isVariableLengthEdgeQuery)
+                        charge += 10;
+                    charge += totalProperties;
+                    if (
+                        !string.IsNullOrEmpty(cypher)
+                        && (
+                            cypher.Contains("COUNT", StringComparison.OrdinalIgnoreCase)
+                            || cypher.Contains("SUM", StringComparison.OrdinalIgnoreCase)
+                            || cypher.Contains("AVG", StringComparison.OrdinalIgnoreCase)
+                            || cypher.Contains("MIN", StringComparison.OrdinalIgnoreCase)
+                            || cypher.Contains("MAX", StringComparison.OrdinalIgnoreCase)
+                            || cypher.Contains("is_of_model", StringComparison.OrdinalIgnoreCase)
+                        )
+                    )
                     {
-                        { "exception.type", ex.GetType().FullName },
-                        { "exception.message", ex.Message },
-                        { "exception.stacktrace", ex.StackTrace },
+                        charge += 5;
                     }
-                )
-            );
-            throw;
-        }
-    }
 
-    [GeneratedRegex(@"\[[^\]]*(?::\w*)?\*[\d.]*\]", RegexOptions.Compiled)]
-    internal static partial Regex VariableLengthEdgeRegex();
+                    var page = new Page<T?>
+                    {
+                        Value = results,
+                        ContinuationToken = nextContinuationToken?.ToString(),
+                        QueryCharge = charge,
+                    };
+
+                    return page;
+                }
+                catch (Exception ex)
+                {
+                    activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                    activity?.AddEvent(
+                        new ActivityEvent(
+                            "Exception",
+                            default,
+                            new ActivityTagsCollection
+                            {
+                                { "exception.type", ex.GetType().FullName },
+                                { "exception.message", ex.Message },
+                                { "exception.stacktrace", ex.StackTrace },
+                            }
+                        )
+                    );
+                    throw;
+                }
+            }
+        );
+    }
 
     [GeneratedRegex(
         @"SKIP\s+(\d+)",
@@ -270,4 +275,10 @@ public partial class AgeDigitalTwinsClient
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
     )]
     private static partial Regex LimitRegex();
+
+    [GeneratedRegex(
+        @"\[[^\]]*(?::\w*)?\*[\d.]*\]",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+    )]
+    internal static partial Regex VariableLengthEdgeRegex();
 }

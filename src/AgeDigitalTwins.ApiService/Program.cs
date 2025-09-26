@@ -172,6 +172,9 @@ if (app.Environment.IsDevelopment() || app.Configuration["OpenApi:Enabled"] == "
 app.UseExceptionHandler();
 
 app.UseMiddleware<DatabaseProtectionMiddleware>();
+
+// Register weighted query rate limiting middleware before UseRateLimiter
+app.UseMiddleware<WeightedQueryRateLimitingMiddleware>();
 app.UseRateLimiter();
 
 app.UseAuthentication();
@@ -180,6 +183,7 @@ app.UseAuthorization();
 // Map endpoints for Age Digital Twins API
 app.MapDigitalTwinsEndpoints();
 app.MapComponentsEndpoints();
+app.MapTelemetryEndpoints();
 app.MapRelationshipsEndpoints();
 app.MapQueryEndpoints();
 app.MapModelsEndpoints();

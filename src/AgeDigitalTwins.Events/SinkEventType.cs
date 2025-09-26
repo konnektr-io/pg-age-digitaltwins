@@ -12,6 +12,7 @@ namespace AgeDigitalTwins.Events
         RelationshipCreate,
         RelationshipUpdate,
         RelationshipDelete,
+        Telemetry,
         PropertyEvent,
         TwinLifecycle,
         RelationshipLifecycle,

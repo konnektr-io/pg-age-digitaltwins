@@ -11,20 +11,11 @@ namespace AgeDigitalTwins.Models;
 /// </summary>
 /// <typeparam name="T">The type of the values.</typeparam>
 public class AsyncPageable<T>(
-    Func<
-        ContinuationToken?,
-        int?,
-        CancellationToken,
-        Task<(IEnumerable<T> Items, ContinuationToken? ContinuationToken)>
-    > fetchPage
+    Func<ContinuationToken?, int?, CancellationToken, Task<Page<T>>> fetchPage
 ) : IAsyncEnumerable<T>
 {
-    private readonly Func<
-        ContinuationToken?,
-        int?,
-        CancellationToken,
-        Task<(IEnumerable<T> Items, ContinuationToken? ContinuationToken)>
-    > _fetchPage = fetchPage;
+    private readonly Func<ContinuationToken?, int?, CancellationToken, Task<Page<T>>> _fetchPage =
+        fetchPage;
 
     private const int DefaultPageSize = 2000;
 
@@ -39,19 +30,14 @@ public class AsyncPageable<T>(
 
         do
         {
-            var (items, nextContinuationToken) = await _fetchPage(
-                token,
-                pageSizeHint,
-                cancellationToken
-            );
+            var page = await _fetchPage(token, pageSizeHint, cancellationToken);
 
-            yield return new Page<T>
-            {
-                ContinuationToken = nextContinuationToken?.ToString(),
-                Value = items,
-            };
+            yield return page;
 
-            token = nextContinuationToken;
+            token =
+                page.ContinuationToken != null
+                    ? ContinuationToken.Deserialize(page.ContinuationToken)
+                    : null;
         } while (continuationToken != null);
     }
 

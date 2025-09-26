@@ -128,7 +128,10 @@ public class KafkaEventSink : IEventSink, IDisposable
 
     public string Name { get; }
 
-    public async Task SendEventsAsync(IEnumerable<CloudEvent> cloudEvents)
+    public async Task SendEventsAsync(
+        IEnumerable<CloudEvent> cloudEvents,
+        CancellationToken cancellationToken = default
+    )
     {
         var eventsList = cloudEvents.ToList();
         _logger.LogDebug(
@@ -150,7 +153,7 @@ public class KafkaEventSink : IEventSink, IDisposable
                 );
 
                 // Start the async operation without awaiting - allows batching
-                var task = _producer.ProduceAsync(_topic, message);
+                var task = _producer.ProduceAsync(_topic, message, cancellationToken);
                 tasks.Add(task);
             }
             catch (Exception e)

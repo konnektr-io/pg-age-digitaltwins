@@ -7,6 +7,11 @@ namespace AgeDigitalTwins.ApiService.Extensions;
 
 public static class QueryEndpoints
 {
+    /// <summary>
+    /// A constant that is used to as the query-charge header field in the query page response.
+    /// </summary>
+    private const string QueryChargeHeader = "query-charge";
+
     public static WebApplication MapQueryEndpoints(this WebApplication app)
     {
         app.MapPost(
@@ -42,13 +47,25 @@ public static class QueryEndpoints
                     }
 
                     var page = await client
-                        .QueryAsync<JsonDocument>(query, cancellationToken)
+                        // Query can be empty in case of a continuation token, as the cypher query is also embedded in the continuation token
+                        .QueryAsync<JsonDocument>(query ?? string.Empty, cancellationToken)
                         .AsPages(continuationToken, maxItemsPerPage, cancellationToken)
                         .FirstAsync(cancellationToken);
+
+                    // Set X-Query-Charge header
+                    if (page.QueryCharge.HasValue)
+                    {
+                        httpContext.Response.Headers[QueryChargeHeader] =
+                            page.QueryCharge.Value.ToString();
+                        // Set QueryCharge in HttpContext.Items for rate limiting
+                        httpContext.Items["QueryCharge"] = page.QueryCharge.Value;
+                    }
+
                     return Results.Json(page);
                 }
             )
-            .RequireRateLimiting("MediumOperations")
+            .RequireRateLimiting("WeightedQueryPolicy")
+            .WithMetadata(new AgeDigitalTwins.ApiService.Middleware.WeightedQueryPolicyAttribute())
             .WithName("Query")
             .WithTags("Query")
             .WithSummary("Executes a query against the digital twins graph with pagination.");
