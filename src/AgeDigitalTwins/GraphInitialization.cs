@@ -159,14 +159,12 @@ public static class GraphInitialization
                     EXECUTE 'DELETE FROM ' || quote_ident('{graphName}') || '.model_hierarchy';
 
                     -- Insert all closure pairs using Cypher directly
-                    EXECUTE '
-                        INSERT INTO ' || quote_ident('{graphName}') || '.model_hierarchy (child_model_id, parent_model_id)
-                        SELECT child_id, parent_id FROM ag_catalog.cypher(''' || '{graphName}' || ''', $$
-                            MATCH (child:Model), (parent:Model)
-                            WHERE (child)-[:_extends*0..]->(parent)
-                            RETURN child.id AS child_id, parent.id AS parent_id
-                        $$) AS (child_id text, parent_id text)
-                    ';
+                    EXECUTE 'INSERT INTO ' || quote_ident('{graphName}') || '.model_hierarchy (child_model_id, parent_model_id) '
+                        || 'SELECT child_id, parent_id FROM ag_catalog.cypher(''' || '{graphName}' || ''', $$ '
+                        || 'MATCH (child:Model), (parent:Model) '
+                        || 'WHERE (child)-[:_extends*0..]->(parent) '
+                        || 'RETURN child.id AS child_id, parent.id AS parent_id '
+                        || '$$) AS (child_id text, parent_id text)';
                 END;
                 $refresh_function$"
             ),
