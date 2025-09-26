@@ -32,12 +32,12 @@ public class AsyncPageable<T>(
         {
             var page = await _fetchPage(token, pageSizeHint, cancellationToken);
 
-            yield return page;
-
             token =
                 page.ContinuationToken != null
                     ? ContinuationToken.Deserialize(page.ContinuationToken)
                     : null;
+
+            yield return page;
         } while (continuationToken != null);
     }
 
