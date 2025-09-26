@@ -677,6 +677,19 @@ public class QueryTests : TestBase
         Assert.NotNull(secondPage);
         Assert.Single(secondPage.Value);
         Assert.Null(secondPage.ContinuationToken);
+
+        // All results in one go
+        int count = 0;
+        await foreach (
+            var twin in Client.QueryAsync<JsonDocument>(
+                "SELECT * FROM DIGITALTWINS WHERE $metadata.$model = 'dtmi:com:adt:dtsample:room;1'"
+            )
+        )
+        {
+            Assert.NotNull(twin);
+            count++;
+        }
+        Assert.Equal(3, count);
     }
 
     [Fact]
@@ -881,6 +894,55 @@ public class QueryTests : TestBase
             secondPage.Value.First()!.RootElement.GetProperty("t").GetProperty("$dtId").GetString()
         );
         Assert.Null(secondPage.ContinuationToken);
+    }
+
+    [Fact]
+    public async Task QueryAsync_Pagination_HandlesMoreThanDefaultLimitResults()
+    {
+        await IntializeAsync();
+
+        var numTwins = 2100;
+
+        Dictionary<string, string> twins = new();
+        for (int i = 1; i <= numTwins; i++)
+        {
+            twins[$"twin{i}"] =
+                $"{{\"$dtId\": \"twin{i}\", \"$metadata\": {{\"$model\": \"dtmi:com:adt:dtsample:room;1\"}}, \"name\": \"Twin {i}\"}}";
+        }
+
+        // Bulk create twins in batches to avoid timeouts
+        const int batchSize = 100;
+        var twinJsonObjects = twins
+            .Values.Select(json => JsonNode.Parse(json)?.AsObject())
+            .Where(obj => obj != null)
+            .ToList();
+
+        for (int i = 0; i < twinJsonObjects.Count && i < 25; i += batchSize)
+        {
+            var batch = twinJsonObjects.Skip(i).Take(Math.Min(batchSize, 25 - i)).ToList();
+            try
+            {
+                await Client.CreateOrReplaceDigitalTwinsAsync<JsonObject>(batch!);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Batch insert error at batch {i / batchSize}: {ex.Message}");
+                throw;
+            }
+        }
+
+        // Query all  twins with a page size of 10
+        var query = Client.QueryAsync<JsonDocument>(
+            "SELECT * FROM DIGITALTWINS WHERE $metadata.$model = 'dtmi:com:adt:dtsample:room;1'"
+        );
+
+        int count = 0;
+        await foreach (var page in query)
+        {
+            Assert.NotNull(page);
+            count++;
+        }
+        Assert.Equal(numTwins, count);
     }
 
     [Fact]
