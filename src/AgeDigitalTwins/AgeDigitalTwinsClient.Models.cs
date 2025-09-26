@@ -300,13 +300,6 @@ RETURN m";
                 await setReplicationCommand.ExecuteNonQueryAsync(cancellationToken);
             }
 
-            // Refresh the model hierarchy table for optimized IS_OF_MODEL queries
-            await using var refreshHierarchyCommand = new NpgsqlCommand(
-                $@"SELECT {_graphName}.refresh_model_hierarchy();",
-                connection
-            );
-            await refreshHierarchyCommand.ExecuteNonQueryAsync(cancellationToken);
-
             return result;
         }
         catch (PostgresException ex) when (ex.ConstraintName == "model_id_idx")
