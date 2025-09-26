@@ -919,7 +919,7 @@ public class QueryTests : TestBase
 
         for (int i = 0; i < twinJsonObjects.Count && i < 25; i += batchSize)
         {
-            var batch = twinJsonObjects.Skip(i).Take(Math.Min(batchSize, 25 - i)).ToList();
+            var batch = twinJsonObjects.Skip(i).Take(batchSize).ToList();
             try
             {
                 await Client.CreateOrReplaceDigitalTwinsAsync<JsonObject>(batch!);
