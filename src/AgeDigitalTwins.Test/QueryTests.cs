@@ -881,4 +881,233 @@ public class QueryTests : TestBase
         );
         Assert.Null(secondPage.ContinuationToken);
     }
+
+    [Fact]
+    public async Task Performance_IsOfModel_NewVsOldImplementation()
+    {
+        await IntializeAsync();
+
+        // Clean up any existing twins
+        await foreach (var twin in Client.QueryAsync<JsonDocument>(@"SELECT * FROM DIGITALTWINS"))
+        {
+            await Client.DeleteDigitalTwinAsync(
+                twin!.RootElement.GetProperty("$dtId")!.GetString()!
+            );
+        }
+
+        // Create a variety of twins with inheritance hierarchy
+        Dictionary<string, string> twins =
+            new()
+            {
+                // Direct CelestialBody instances
+                {
+                    "cb1",
+                    @"{""$dtId"": ""cb1"", ""$metadata"": {""$model"": ""dtmi:com:contoso:CelestialBody;1""}, ""name"": ""Celestial Body 1"", ""mass"": 1.0e24}"
+                },
+                {
+                    "cb2",
+                    @"{""$dtId"": ""cb2"", ""$metadata"": {""$model"": ""dtmi:com:contoso:CelestialBody;1""}, ""name"": ""Celestial Body 2"", ""mass"": 2.0e24}"
+                },
+                {
+                    "cb3",
+                    @"{""$dtId"": ""cb3"", ""$metadata"": {""$model"": ""dtmi:com:contoso:CelestialBody;1""}, ""name"": ""Celestial Body 3"", ""mass"": 3.0e24}"
+                },
+                // Planet instances (extends CelestialBody)
+                {
+                    "p1",
+                    @"{""$dtId"": ""p1"", ""$metadata"": {""$model"": ""dtmi:com:contoso:Planet;1""}, ""name"": ""Planet 1""}"
+                },
+                {
+                    "p2",
+                    @"{""$dtId"": ""p2"", ""$metadata"": {""$model"": ""dtmi:com:contoso:Planet;1""}, ""name"": ""Planet 2""}"
+                },
+                {
+                    "p3",
+                    @"{""$dtId"": ""p3"", ""$metadata"": {""$model"": ""dtmi:com:contoso:Planet;1""}, ""name"": ""Planet 3""}"
+                },
+                // HabitablePlanet instances (extends Planet, which extends CelestialBody)
+                {
+                    "hp1",
+                    @"{""$dtId"": ""hp1"", ""$metadata"": {""$model"": ""dtmi:com:contoso:HabitablePlanet;1""}, ""name"": ""Habitable Planet 1"", ""hasLife"": true}"
+                },
+                {
+                    "hp2",
+                    @"{""$dtId"": ""hp2"", ""$metadata"": {""$model"": ""dtmi:com:contoso:HabitablePlanet;1""}, ""name"": ""Habitable Planet 2"", ""hasLife"": false}"
+                },
+                {
+                    "hp3",
+                    @"{""$dtId"": ""hp3"", ""$metadata"": {""$model"": ""dtmi:com:contoso:HabitablePlanet;1""}, ""name"": ""Habitable Planet 3"", ""hasLife"": true}"
+                },
+                // Add some room twins for contrast
+                {
+                    "room1",
+                    @"{""$dtId"": ""room1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""Room 1""}"
+                },
+                {
+                    "room2",
+                    @"{""$dtId"": ""room2"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""Room 2""}"
+                },
+            };
+
+        foreach (var twin in twins)
+        {
+            await Client.CreateOrReplaceDigitalTwinAsync(twin.Key, twin.Value);
+        }
+
+        // Test queries that will exercise inheritance lookup (NEW implementation via ADT syntax)
+        var testQueries = new[]
+        {
+            (
+                "CelestialBody inheritance query",
+                "SELECT * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:contoso:CelestialBody;1')",
+                9
+            ), // Should match all celestial bodies, planets, and habitable planets
+            (
+                "Planet inheritance query",
+                "SELECT * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:contoso:Planet;1')",
+                6
+            ), // Should match planets and habitable planets
+            (
+                "HabitablePlanet direct query",
+                "SELECT * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:contoso:HabitablePlanet;1')",
+                3
+            ), // Should match only habitable planets
+            (
+                "Room direct query",
+                "SELECT * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:adt:dtsample:room;1')",
+                2
+            ), // Should match only rooms
+        };
+
+        // Test with the old implementation (OLD implementation via direct Cypher calls)
+        var oldTestQueries = new[]
+        {
+            (
+                "CelestialBody inheritance query (OLD)",
+                "MATCH (t:Twin) WHERE digitaltwins.is_of_model_old(t, 'dtmi:com:contoso:CelestialBody;1') RETURN t",
+                9
+            ),
+            (
+                "Planet inheritance query (OLD)",
+                "MATCH (t:Twin) WHERE digitaltwins.is_of_model_old(t, 'dtmi:com:contoso:Planet;1') RETURN t",
+                6
+            ),
+            (
+                "HabitablePlanet direct query (OLD)",
+                "MATCH (t:Twin) WHERE digitaltwins.is_of_model_old(t, 'dtmi:com:contoso:HabitablePlanet;1') RETURN t",
+                3
+            ),
+            (
+                "Room direct query (OLD)",
+                "MATCH (t:Twin) WHERE digitaltwins.is_of_model_old(t, 'dtmi:com:adt:dtsample:room;1') RETURN t",
+                2
+            ),
+        };
+
+        const int iterations = 5; // Number of times to run each query for averaging
+
+        // Test new implementation
+        var newResults =
+            new List<(string name, long totalMs, int expectedCount, int actualCount)>();
+        foreach (var (name, query, expectedCount) in testQueries)
+        {
+            var totalTime = 0L;
+            var actualCount = 0;
+
+            for (int i = 0; i < iterations; i++)
+            {
+                var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+                var count = 0;
+
+                await foreach (var result in Client.QueryAsync<JsonDocument>(query))
+                {
+                    count++;
+                }
+
+                stopwatch.Stop();
+                totalTime += stopwatch.ElapsedMilliseconds;
+                if (i == 0)
+                    actualCount = count; // Save count from first iteration
+            }
+
+            newResults.Add((name, totalTime, expectedCount, actualCount));
+            Assert.Equal(expectedCount, actualCount); // Verify correctness
+        }
+
+        // Test old implementation
+        var oldResults =
+            new List<(string name, long totalMs, int expectedCount, int actualCount)>();
+        foreach (var (name, query, expectedCount) in oldTestQueries)
+        {
+            var totalTime = 0L;
+            var actualCount = 0;
+
+            for (int i = 0; i < iterations; i++)
+            {
+                var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+                var count = 0;
+
+                await foreach (var result in Client.QueryAsync<JsonDocument>(query))
+                {
+                    count++;
+                }
+
+                stopwatch.Stop();
+                totalTime += stopwatch.ElapsedMilliseconds;
+                if (i == 0)
+                    actualCount = count; // Save count from first iteration
+            }
+
+            oldResults.Add((name, totalTime, expectedCount, actualCount));
+            Assert.Equal(expectedCount, actualCount); // Verify correctness
+        }
+
+        // Output performance comparison
+        var output = new System.Text.StringBuilder();
+        output.AppendLine("\n=== IS_OF_MODEL Performance Comparison ===");
+        output.AppendLine($"Iterations per query: {iterations}");
+        output.AppendLine($"Total twins in database: {twins.Count}");
+        output.AppendLine();
+
+        output.AppendLine("NEW IMPLEMENTATION:");
+        foreach (var (name, totalMs, expectedCount, actualCount) in newResults)
+        {
+            var avgMs = totalMs / (double)iterations;
+            output.AppendLine(
+                $"  {name}: {avgMs:F2}ms avg ({totalMs}ms total) - {actualCount}/{expectedCount} results"
+            );
+        }
+
+        output.AppendLine();
+        output.AppendLine("OLD IMPLEMENTATION:");
+        foreach (var (name, totalMs, expectedCount, actualCount) in oldResults)
+        {
+            var avgMs = totalMs / (double)iterations;
+            output.AppendLine(
+                $"  {name}: {avgMs:F2}ms avg ({totalMs}ms total) - {actualCount}/{expectedCount} results"
+            );
+        }
+
+        output.AppendLine();
+        output.AppendLine("PERFORMANCE COMPARISON:");
+        for (int i = 0; i < newResults.Count; i++)
+        {
+            var newAvg = newResults[i].totalMs / (double)iterations;
+            var oldAvg = oldResults[i].totalMs / (double)iterations;
+            var improvement = ((oldAvg - newAvg) / oldAvg) * 100;
+            var speedup = oldAvg / newAvg;
+
+            var direction = improvement > 0 ? "faster" : "slower";
+            output.AppendLine(
+                $"  Query {i + 1}: {improvement:+0.0;-0.0}% improvement ({speedup:F1}x {direction})"
+            );
+        }
+
+        // Output to test console - this will show in test output
+        Console.WriteLine(output.ToString());
+
+        // For debugging purposes, also write to a temporary assertion that will always pass
+        // but will show the results in the test output
+        Assert.True(true, output.ToString());
+    }
 }
