@@ -158,6 +158,34 @@ public static class GraphInitialization
                 END;
                 $$ LANGUAGE plpgsql;"
             ),
+            new(
+                @$"CREATE OR REPLACE FUNCTION {graphName}.is_of_model_old(twin agtype, model_id agtype, exact boolean default false)
+                RETURNS boolean
+                LANGUAGE plpgsql
+                AS $function$
+                DECLARE
+                    sql VARCHAR;
+                    twin_model_id agtype;
+                    result boolean;
+                BEGIN
+                    SELECT ag_catalog.agtype_access_operator(twin,'""$metadata""'::agtype,'""$model""'::agtype) INTO twin_model_id;
+                    IF exact THEN
+                        sql := format('SELECT ''%s'' = ''%s''', twin_model_id, model_id);
+                    ELSE
+                        sql:= format('SELECT ''%s'' = ''%s'' OR
+                        EXISTS
+                            (SELECT 1 FROM ag_catalog.cypher(''{graphName}'', $$
+                                MATCH (m:Model)
+                                WHERE m.id = %s AND %s IN m.bases
+                                RETURN m.id
+                            $$) AS (m text))
+                        ', twin_model_id, model_id, twin_model_id, model_id);
+                    END IF;
+                    EXECUTE sql INTO result;
+                    RETURN result;
+                END;
+                $function$"
+            ),
         ];
     }
 }
