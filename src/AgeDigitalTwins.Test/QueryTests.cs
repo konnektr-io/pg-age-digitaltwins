@@ -1081,6 +1081,8 @@ public class QueryTests : TestBase
                     count++;
                 }
 
+                Assert.Equal(expectedCount, count); // Verify correctness
+
                 stopwatch.Stop();
                 totalTime += stopwatch.ElapsedMilliseconds;
                 if (i == 0)
@@ -1088,7 +1090,6 @@ public class QueryTests : TestBase
             }
 
             newResults.Add((name, totalTime, expectedCount, actualCount));
-            Assert.Equal(expectedCount, actualCount); // Verify correctness
         }
 
         // Test old implementation
@@ -1109,6 +1110,8 @@ public class QueryTests : TestBase
                     count++;
                 }
 
+                Assert.Equal(expectedCount, count); // Verify correctness
+
                 stopwatch.Stop();
                 totalTime += stopwatch.ElapsedMilliseconds;
                 if (i == 0)
@@ -1116,7 +1119,6 @@ public class QueryTests : TestBase
             }
 
             oldResults.Add((name, totalTime, expectedCount, actualCount));
-            Assert.Equal(expectedCount, actualCount); // Verify correctness
         }
 
         // Output performance comparison
