@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace AgeDigitalTwins.Test;
 
@@ -895,114 +896,85 @@ public class QueryTests : TestBase
             );
         }
 
-        // Create a variety of twins with inheritance hierarchy
-        Dictionary<string, string> twins =
-            new()
-            {
-                // Direct CelestialBody instances
-                {
-                    "cb1",
-                    @"{""$dtId"": ""cb1"", ""$metadata"": {""$model"": ""dtmi:com:contoso:CelestialBody;1""}, ""name"": ""Celestial Body 1"", ""mass"": 1.0e24}"
-                },
-                {
-                    "cb2",
-                    @"{""$dtId"": ""cb2"", ""$metadata"": {""$model"": ""dtmi:com:contoso:CelestialBody;1""}, ""name"": ""Celestial Body 2"", ""mass"": 2.0e24}"
-                },
-                {
-                    "cb3",
-                    @"{""$dtId"": ""cb3"", ""$metadata"": {""$model"": ""dtmi:com:contoso:CelestialBody;1""}, ""name"": ""Celestial Body 3"", ""mass"": 3.0e24}"
-                },
-                // Planet instances (extends CelestialBody)
-                {
-                    "p1",
-                    @"{""$dtId"": ""p1"", ""$metadata"": {""$model"": ""dtmi:com:contoso:Planet;1""}, ""name"": ""Planet 1""}"
-                },
-                {
-                    "p2",
-                    @"{""$dtId"": ""p2"", ""$metadata"": {""$model"": ""dtmi:com:contoso:Planet;1""}, ""name"": ""Planet 2""}"
-                },
-                {
-                    "p3",
-                    @"{""$dtId"": ""p3"", ""$metadata"": {""$model"": ""dtmi:com:contoso:Planet;1""}, ""name"": ""Planet 3""}"
-                },
-                // HabitablePlanet instances (extends Planet, which extends CelestialBody)
-                {
-                    "hp1",
-                    @"{""$dtId"": ""hp1"", ""$metadata"": {""$model"": ""dtmi:com:contoso:HabitablePlanet;1""}, ""name"": ""Habitable Planet 1"", ""hasLife"": true}"
-                },
-                {
-                    "hp2",
-                    @"{""$dtId"": ""hp2"", ""$metadata"": {""$model"": ""dtmi:com:contoso:HabitablePlanet;1""}, ""name"": ""Habitable Planet 2"", ""hasLife"": false}"
-                },
-                {
-                    "hp3",
-                    @"{""$dtId"": ""hp3"", ""$metadata"": {""$model"": ""dtmi:com:contoso:HabitablePlanet;1""}, ""name"": ""Habitable Planet 3"", ""hasLife"": true}"
-                },
-                // Add some room twins for contrast
-                {
-                    "room1",
-                    @"{""$dtId"": ""room1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""Room 1""}"
-                },
-                {
-                    "room2",
-                    @"{""$dtId"": ""room2"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""Room 2""}"
-                },
-            };
+        // Generate a large number of twins for scalability testing
+        const int twinsPerType = 1000;
+        var twins = new Dictionary<string, string>(twinsPerType * 4);
 
-        foreach (var twin in twins)
+        for (int i = 1; i <= twinsPerType; i++)
         {
-            await Client.CreateOrReplaceDigitalTwinAsync(twin.Key, twin.Value);
+            twins[$"cb{i}"] =
+                $"{{\"$dtId\": \"cb{i}\", \"$metadata\": {{\"$model\": \"dtmi:com:contoso:CelestialBody;1\"}}, \"name\": \"Celestial Body {i}\", \"mass\": {i}.0e24}}";
+            twins[$"p{i}"] =
+                $"{{\"$dtId\": \"p{i}\", \"$metadata\": {{\"$model\": \"dtmi:com:contoso:Planet;1\"}}, \"name\": \"Planet {i}\"}}";
+            twins[$"hp{i}"] =
+                $"{{\"$dtId\": \"hp{i}\", \"$metadata\": {{\"$model\": \"dtmi:com:contoso:HabitablePlanet;1\"}}, \"name\": \"Habitable Planet {i}\", \"hasLife\": {(i % 2 == 0 ? "false" : "true")}}}";
+            twins[$"room{i}"] =
+                $"{{\"$dtId\": \"room{i}\", \"$metadata\": {{\"$model\": \"dtmi:com:adt:dtsample:room;1\"}}, \"name\": \"Room {i}\"}}";
+        }
+
+        // Bulk create twins (in batches to avoid timeouts)
+        const int batchSize = 100; // MaxBatchSize for CreateOrReplaceDigitalTwinsAsync
+        var twinJsonObjects = twins
+            .Values.Select(json => JsonNode.Parse(json)?.AsObject())
+            .Where(obj => obj != null)
+            .ToList();
+
+        for (int i = 0; i < twinJsonObjects.Count; i += batchSize)
+        {
+            var batch = twinJsonObjects.Skip(i).Take(batchSize);
+            await Client.CreateOrReplaceDigitalTwinsAsync<JsonObject>(batch!);
         }
 
         // Test queries that will exercise inheritance lookup (NEW implementation via ADT syntax)
-        var testQueries = new[]
+        // cb + p + hp, p + hp, hp only, rooms only
+        (string name, string query, int expectedCount)[] testQueries = new[]
         {
             (
                 "CelestialBody inheritance query",
                 "SELECT * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:contoso:CelestialBody;1')",
-                9
-            ), // Should match all celestial bodies, planets, and habitable planets
+                twinsPerType * 3
+            ),
             (
                 "Planet inheritance query",
                 "SELECT * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:contoso:Planet;1')",
-                6
-            ), // Should match planets and habitable planets
+                twinsPerType * 2
+            ),
             (
                 "HabitablePlanet direct query",
                 "SELECT * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:contoso:HabitablePlanet;1')",
-                3
-            ), // Should match only habitable planets
+                twinsPerType
+            ),
             (
                 "Room direct query",
                 "SELECT * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:adt:dtsample:room;1')",
-                2
-            ), // Should match only rooms
+                twinsPerType
+            ),
         };
 
         var graphName = Client.GetGraphName();
 
         // Test with the old implementation (OLD implementation via direct Cypher calls)
-        var oldTestQueries = new[]
+        (string name, string query, int expectedCount)[] oldTestQueries = new[]
         {
             (
                 "CelestialBody inheritance query (OLD)",
                 $"MATCH (t:Twin) WHERE {graphName}.is_of_model_old(t, 'dtmi:com:contoso:CelestialBody;1') RETURN t",
-                9
+                twinsPerType * 3
             ),
             (
                 "Planet inheritance query (OLD)",
                 $"MATCH (t:Twin) WHERE {graphName}.is_of_model_old(t, 'dtmi:com:contoso:Planet;1') RETURN t",
-                6
+                twinsPerType * 2
             ),
             (
                 "HabitablePlanet direct query (OLD)",
                 $"MATCH (t:Twin) WHERE {graphName}.is_of_model_old(t, 'dtmi:com:contoso:HabitablePlanet;1') RETURN t",
-                3
+                twinsPerType
             ),
             (
                 "Room direct query (OLD)",
                 $"MATCH (t:Twin) WHERE {graphName}.is_of_model_old(t, 'dtmi:com:adt:dtsample:room;1') RETURN t",
-                2
+                twinsPerType
             ),
         };
 
