@@ -174,7 +174,7 @@ app.UseExceptionHandler();
 app.UseMiddleware<DatabaseProtectionMiddleware>();
 
 // Register weighted query rate limiting middleware before UseRateLimiter
-app.UseMiddleware<AgeDigitalTwins.ApiService.Middleware.WeightedQueryRateLimitingMiddleware>();
+app.UseMiddleware<WeightedQueryRateLimitingMiddleware>();
 app.UseRateLimiter();
 
 app.UseAuthentication();
