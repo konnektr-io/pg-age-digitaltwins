@@ -921,8 +921,91 @@ public class QueryTests : TestBase
 
         for (int i = 0; i < twinJsonObjects.Count; i += batchSize)
         {
-            var batch = twinJsonObjects.Skip(i).Take(batchSize);
-            await Client.CreateOrReplaceDigitalTwinsAsync<JsonObject>(batch!);
+            var batch = twinJsonObjects.Skip(i).Take(batchSize).ToList();
+            try
+            {
+                await Client.CreateOrReplaceDigitalTwinsAsync<JsonObject>(batch!);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Batch insert error at batch {i / batchSize}: {ex.Message}");
+                throw;
+            }
+        }
+
+        // Diagnostic: Count twins by model type before running performance queries
+        var modelTypes = new[]
+        {
+            "dtmi:com:contoso:CelestialBody;1",
+            "dtmi:com:contoso:Planet;1",
+            "dtmi:com:contoso:HabitablePlanet;1",
+            "dtmi:com:adt:dtsample:room;1",
+        };
+        var modelCounts = new Dictionary<string, int>();
+        int totalTwins = 0;
+        foreach (var model in modelTypes)
+        {
+            int count = 0;
+            await foreach (
+                var twin in Client.QueryAsync<JsonDocument>(
+                    $"SELECT * FROM DIGITALTWINS WHERE $metadata.$model = '{model}'"
+                )
+            )
+            {
+                count++;
+            }
+            modelCounts[model] = count;
+            totalTwins += count;
+        }
+        Console.WriteLine("\n=== Twin Counts by Model Type ===");
+        foreach (var kvp in modelCounts)
+        {
+            Console.WriteLine($"  {kvp.Key}: {kvp.Value}");
+        }
+        Console.WriteLine($"  Total twins: {totalTwins} (expected: {twins.Count})\n");
+        Assert.Equal(twins.Count, totalTwins); // Ensure all twins are present
+
+        // Diagnostic: Output model inheritance edges (CelestialBody, Planet, HabitablePlanet)
+        var inheritanceModels = new[]
+        {
+            "dtmi:com:contoso:CelestialBody;1",
+            "dtmi:com:contoso:Planet;1",
+            "dtmi:com:contoso:HabitablePlanet;1",
+        };
+        Console.WriteLine("=== Model Inheritance Edges ===");
+        foreach (var model in inheritanceModels)
+        {
+            int edgeCount = 0;
+            await foreach (
+                var edge in Client.QueryAsync<JsonDocument>(
+                    $"MATCH (m:Model)-[e:EXTENDS]->(parent:Model) WHERE m.id = '{model}' RETURN m, parent"
+                )
+            )
+            {
+                if (edge != null)
+                {
+                    if (
+                        edge.RootElement.TryGetProperty("m", out var mProp)
+                        && edge.RootElement.TryGetProperty("parent", out var parentProp)
+                    )
+                    {
+                        string? mId = "(no id)";
+                        if (mProp.TryGetProperty("id", out var mIdProp))
+                        {
+                            mId = mIdProp.GetString() ?? "(no id)";
+                        }
+                        string? parentId = "(no id)";
+                        if (parentProp.TryGetProperty("id", out var parentIdProp))
+                        {
+                            parentId = parentIdProp.GetString() ?? "(no id)";
+                        }
+                        Console.WriteLine($"  {mId} EXTENDS {parentId}");
+                        edgeCount++;
+                    }
+                }
+            }
+            if (edgeCount == 0)
+                Console.WriteLine($"  {model} has no EXTENDS edges");
         }
 
         // Test queries that will exercise inheritance lookup (NEW implementation via ADT syntax)
