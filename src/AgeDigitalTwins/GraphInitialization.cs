@@ -77,21 +77,22 @@ public static class GraphInitialization
                     RETURN EXISTS (
                         WITH RECURSIVE model_ancestors AS (
                             -- Base case: start with the child model's internal ID
-                            SELECT m.id as internal_id
+                            SELECT m.id as internal_id, 
+                                   trim(both '""' from ag_catalog.agtype_access_operator(m.properties, '""id""'::agtype)::text) as model_name
                             FROM {graphName}.""Model"" m
-                            WHERE ag_catalog.agtype_access_operator(m.properties, '""id""'::agtype)::text = '""' || twin_model_id || '""'
+                            WHERE trim(both '""' from ag_catalog.agtype_access_operator(m.properties, '""id""'::agtype)::text) = twin_model_id
                             
                             UNION ALL
                             
                             -- Recursive case: find parent models through _extends relationships
-                            SELECT e.end_id as internal_id
+                            SELECT parent.id as internal_id,
+                                   trim(both '""' from ag_catalog.agtype_access_operator(parent.properties, '""id""'::agtype)::text) as model_name
                             FROM model_ancestors ma
                             JOIN {graphName}.""_extends"" e ON e.start_id = ma.internal_id
+                            JOIN {graphName}.""Model"" parent ON parent.id = e.end_id
                         )
-                        SELECT 1 
-                        FROM model_ancestors ma
-                        JOIN {graphName}.""Model"" m ON m.id = ma.internal_id
-                        WHERE trim(both '""' from ag_catalog.agtype_access_operator(m.properties, '""id""'::agtype)::text) = model_id_text
+                        SELECT 1 FROM model_ancestors
+                        WHERE model_name = model_id_text
                     );
                 END;
                 $function$"
