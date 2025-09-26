@@ -978,7 +978,7 @@ public class QueryTests : TestBase
             int edgeCount = 0;
             await foreach (
                 var edge in Client.QueryAsync<JsonDocument>(
-                    $"MATCH (m:Model)-[e:EXTENDS]->(parent:Model) WHERE m.id = '{model}' RETURN m, parent"
+                    $"MATCH (m:Model)-[e:_extends]->(parent:Model) WHERE m.id = '{model}' RETURN m, parent"
                 )
             )
             {
