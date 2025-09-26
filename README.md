@@ -53,6 +53,7 @@ AgeDigitalTwins is an SDK and API designed to support Digital Twins applications
   - [x] Authentication
   - [ ] Authorization
   - [x] OpenTelemetry support
+  - [x] Rate Limiting
 - **MCP Server**
   - [x] Models CRUD operations
   - [x] Digital Twins CRUD operations
