@@ -1247,8 +1247,12 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         Assert.NotNull(eventData);
         Assert.Equal("32.1", eventData["temperature"]?.ToString());
         Assert.Equal(
-            componentTelemetryData.timestamp.ToString("o"),
-            eventData["timestamp"]?.ToString()
+            componentTelemetryData.timestamp,
+            DateTime.Parse(
+                eventData["timestamp"]?.ToString() ?? "",
+                null,
+                System.Globalization.DateTimeStyles.RoundtripKind
+            )
         );
 
         _output.WriteLine(

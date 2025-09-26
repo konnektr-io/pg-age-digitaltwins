@@ -39,7 +39,7 @@ AgeDigitalTwins is an SDK and API designed to support Digital Twins applications
   - [ ] Commands
   - [x] Import Jobs
   - [x] Delete Jobs
-  - [x] Diagnostics and Prometheus metrics
+  - [x] Diagnostics, Tracing and Prometheus metrics
 - **API**:
   - [x] Digital Twins CRUD operations
   - [x] Models CRUD operations
@@ -53,6 +53,7 @@ AgeDigitalTwins is an SDK and API designed to support Digital Twins applications
   - [x] Authentication
   - [ ] Authorization
   - [x] OpenTelemetry support
+  - [x] Rate Limiting
 - **MCP Server**
   - [x] Models CRUD operations
   - [x] Digital Twins CRUD operations
@@ -69,7 +70,12 @@ AgeDigitalTwins is an SDK and API designed to support Digital Twins applications
   - [x] Kafka sink
   - [x] Kusto sink (Azure Data Explorer / Fabric Real-Time)
   - [x] MQTT sink
+  - [ ] Postgres sink
   - [ ] Event filtering
+- **Ingestion**:
+  - [ ] MQTT Ingestion
+  - [ ] Kafka Ingestion
+  - [ ] Ingestion Mapping
 
 ## Contributing
 
