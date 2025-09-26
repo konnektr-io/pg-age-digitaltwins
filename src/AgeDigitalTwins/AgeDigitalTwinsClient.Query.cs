@@ -277,8 +277,8 @@ public partial class AgeDigitalTwinsClient
     private static partial Regex LimitRegex();
 
     [GeneratedRegex(
-        @"-\[[^\]]*\]-",
+        @"\[[^\]]*(?::\w*)?\*[\d.]*\]",
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
     )]
-    private static partial Regex VariableLengthEdgeRegex();
+    internal static partial Regex VariableLengthEdgeRegex();
 }
