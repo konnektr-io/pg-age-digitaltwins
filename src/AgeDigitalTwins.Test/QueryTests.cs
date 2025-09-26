@@ -897,7 +897,7 @@ public class QueryTests : TestBase
         }
 
         // Generate a large number of twins for scalability testing
-        const int twinsPerType = 200;
+        const int twinsPerType = 500;
         var twins = new Dictionary<string, string>(twinsPerType * 4);
 
         for (int i = 1; i <= twinsPerType; i++)
