@@ -979,27 +979,29 @@ public class QueryTests : TestBase
             ), // Should match only rooms
         };
 
+        var graphName = Client.GetGraphName();
+
         // Test with the old implementation (OLD implementation via direct Cypher calls)
         var oldTestQueries = new[]
         {
             (
                 "CelestialBody inheritance query (OLD)",
-                "MATCH (t:Twin) WHERE digitaltwins.is_of_model_old(t, 'dtmi:com:contoso:CelestialBody;1') RETURN t",
+                $"MATCH (t:Twin) WHERE {graphName}.is_of_model_old(t, 'dtmi:com:contoso:CelestialBody;1') RETURN t",
                 9
             ),
             (
                 "Planet inheritance query (OLD)",
-                "MATCH (t:Twin) WHERE digitaltwins.is_of_model_old(t, 'dtmi:com:contoso:Planet;1') RETURN t",
+                $"MATCH (t:Twin) WHERE {graphName}.is_of_model_old(t, 'dtmi:com:contoso:Planet;1') RETURN t",
                 6
             ),
             (
                 "HabitablePlanet direct query (OLD)",
-                "MATCH (t:Twin) WHERE digitaltwins.is_of_model_old(t, 'dtmi:com:contoso:HabitablePlanet;1') RETURN t",
+                $"MATCH (t:Twin) WHERE {graphName}.is_of_model_old(t, 'dtmi:com:contoso:HabitablePlanet;1') RETURN t",
                 3
             ),
             (
                 "Room direct query (OLD)",
-                "MATCH (t:Twin) WHERE digitaltwins.is_of_model_old(t, 'dtmi:com:adt:dtsample:room;1') RETURN t",
+                $"MATCH (t:Twin) WHERE {graphName}.is_of_model_old(t, 'dtmi:com:adt:dtsample:room;1') RETURN t",
                 2
             ),
         };
