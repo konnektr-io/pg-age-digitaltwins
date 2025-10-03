@@ -66,7 +66,7 @@ jobs:
         uses: peter-evans/create-pull-request@v5
         with:
           path: docs-repo
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.REPO_PAT }}
           commit-message: "Update Konnektr Graph documentation"
           title: "Update Konnektr Graph documentation"
           body: |

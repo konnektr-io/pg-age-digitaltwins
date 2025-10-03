@@ -3,7 +3,25 @@ title: API Reference
 icon: Code
 ---
 
-The AgeDigitalTwins API is compatible with the [Azure Digital Twins Data Plane REST API](https://learn.microsoft.com/en-us/rest/api/digital-twins/dataplane/twins?view=rest-dataplane-2023-10-31). You can use existing ADT client libraries and tools with this API. Below is a summary of the main endpoints and their usage.
+The Konnektr Graph API is fully compatible with the [Azure Digital Twins Data Plane REST API](https://learn.microsoft.com/en-us/rest/api/digital-twins/dataplane/twins?view=rest-dataplane-2023-10-31). You can use existing Azure Digital Twins client libraries and tools with this API.
+
+## API Endpoints
+
+### Hosted Konnektr Graph
+Your hosted graph endpoint: `https://your-graph-name.api.graph.konnektr.io`
+
+**Authentication**: Auth0 JWT tokens (see [Azure SDK Integration](../how-to-guides/using-azure-digital-twins-sdks))
+
+### Self-Hosted Deployment  
+Your self-hosted endpoint: `https://your-domain.com/api` (or custom URL)
+
+**Authentication**: Configurable (JWT, API keys, or none for development)
+
+## Interactive Documentation
+
+Both deployment types provide Swagger UI for interactive API testing:
+- **Hosted**: `https://your-graph-name.api.graph.konnektr.io/swagger`
+- **Self-Hosted**: `https://your-domain.com/swagger`
 
 ## Digital Twins
 

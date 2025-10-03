@@ -1,40 +1,52 @@
 ---
 title: Konnektr Graph
-description: Digital Twins for Apache AGE allows you to use PostgreSQL with the Apache AGE extension as a backend for Digital Twins solutions using DTDL.
+description: Azure Digital Twins-compatible digital twin platform that runs on PostgreSQL with Apache AGE. Available as a hosted service or self-hosted deployment.
 ---
 
 # Welcome to Konnektr Graph Documentation
 
-Digital Twins for Apache AGE allows you to use PostgreSQL with the Apache AGE extension as a backend for Digital Twins solutions using DTDL. Build real-time digital twin applications with component management, telemetry publishing, and event routing to external systems.
+Konnektr Graph is a high-performance, Azure Digital Twins-compatible digital twin runtime that runs on PostgreSQL with the Apache AGE extension. Build scalable digital twin applications with full DTDL support, real-time eventing, and seamless integration using standard Azure Digital Twins SDKs.
 
-## 🚀 Release v1.0.0
+## 🌟 Hosted Platform (Recommended)
 
-We're excited to announce the release of Konnektr Graph v1.0.0! This release includes:
+Get started in minutes with our fully managed service at [ktrlplane.konnektr.io](https://ktrlplane.konnektr.io):
 
-- Full DTDL support for Digital Twin modeling
-- Component management capabilities
-- Real-time telemetry publishing
-- Event routing to external systems
-- PostgreSQL with Apache AGE backend
+- **Zero Infrastructure Management** - We handle all the complexity
+- **Azure Digital Twins SDK Compatible** - Use your existing code and skills
+- **Real-time Event Streaming** - Built-in Kafka and Kusto integration
+- **Enterprise Security** - Auth0 authentication with role-based access
+- **Automatic Scaling** - Scales with your digital twin workloads
 
 ## Key Features
 
-- **DTDL Support**: Full support for DTDL data models and component validation.
-- **Graph Database**: Utilizes PostgreSQL with the Apache AGE extension for graph database capabilities.
-- **Real-time Telemetry**: Publish and route telemetry data through PostgreSQL NOTIFY/LISTEN for immediate processing.
-- **Event Routing**: Stream digital twin lifecycle events to external systems like Kafka, Azure Data Explorer, and MQTT.
-- **Component Management**: Create, read, update, and delete digital twin components with validation.
-- **Validation**: Comprehensive validation of instances and models loaded in the graph database.
-- **Easy Transition**: Designed to make the transition from Azure Digital Twins seamless (compatible with Azure Digital Twins APIs).
-- **MCP Protocol**: Implements the Model Context Protocol (MCP) to provide context to LLMs.
+- **Full Azure Digital Twins API Compatibility** - Seamless migration and SDK compatibility
+- **DTDL Support** - Complete Digital Twins Definition Language validation and modeling
+- **Real-time Eventing** - Stream twin state changes to Kafka, Azure Data Explorer, and more
+- **Graph Queries** - Powerful Cypher queries over your digital twin graph
+- **Component Management** - Hierarchical component modeling and validation
+- **High Performance** - Built on Apache AGE for enterprise-scale graph operations
+
+## Deployment Options
+
+### 🚀 Hosted (Recommended)
+Perfect for most users - fully managed, enterprise-ready platform:
+- [Quickstart Guide](./getting-started/quickstart) - Get started in 5 minutes
+- [Setup Guide](./getting-started/setup) - Detailed configuration options
+- [Azure SDK Integration](./how-to-guides/using-azure-digital-twins-sdks) - Use standard SDKs
+
+### 🛠️ Self-Hosted (Advanced)
+For users who need direct database access or custom deployment:
+- [Self-Hosted Deployment](./deployment-installation/self-host) - Kubernetes and Docker setup
+- [Direct SDK Usage](./reference/sdk) - Native AgeDigitalTwins SDK
+- [Advanced Configuration](./advanced-topics/) - Performance tuning and diagnostics
 
 ## Getting Started
 
-Ready to start building with Konnektr Graph? Check out our guides:
+Choose your path based on your needs:
 
-- [Introduction](/docs/graph/introduction) - Learn the basics
-- [Getting Started](/docs/graph/getting-started) - Your first digital twin
-- [API Reference](/docs/graph/reference) - Complete API documentation
+**Most Users** → [Hosted Quickstart](./getting-started/quickstart)
+**Advanced Users** → [Self-Hosted Setup](./deployment-installation/self-host)
+**Migrating from Azure** → [Azure SDK Guide](./how-to-guides/using-azure-digital-twins-sdks)
 
 ## Resources
 

@@ -3,19 +3,50 @@ title: Migration Guide
 icon: Replace
 ---
 
-This guide explains how to migrate your data from Azure Digital Twins to AgeDigitalTwins.
+This guide explains how to migrate your data from Azure Digital Twins to Konnektr Graph, or between different Konnektr Graph deployments.
 
-## 1. Deploy AgeDigitalTwins
+## Migration Scenarios
 
-First, deploy your AgeDigitalTwins environment. See the [Deployment & Installation](/deployment-installation/self-host) guide for instructions.
+### From Azure Digital Twins to Konnektr Graph
+Migrate from Azure Digital Twins to either hosted or self-hosted Konnektr Graph.
+
+### Between Konnektr Graph Deployments
+Move data between hosted and self-hosted Konnektr Graph instances.
+
+### From Other Digital Twin Platforms
+Migrate from other DTDL-compatible platforms.
+
+## 1. Choose Your Target Deployment
+
+### Option A: Hosted Konnektr Graph (Recommended)
+1. Create account at [ktrlplane.konnektr.io](https://ktrlplane.konnektr.io)
+2. Deploy a new Konnektr Graph resource
+3. Get your endpoint: `https://your-graph-name.api.graph.konnektr.io`
+4. Set up Auth0 authentication
+
+### Option B: Self-Hosted Konnektr Graph
+1. Deploy using [Self-Hosted Guide](../deployment-installation/self-host)
+2. Configure authentication (JWT, API keys, or development mode)
+3. Get your endpoint URL
 
 ## 2. Migration Approaches
 
 ### A. Using Azure Digital Twins SDKs (Recommended)
 
-You can use the official Azure Digital Twins SDKs (Python, .NET, JavaScript) to copy models, twins, and relationships from your Azure Digital Twins instance to AgeDigitalTwins. This works for both self-hosted and hosted deployments.
+The Azure Digital Twins SDK approach works for all scenarios and provides the easiest migration path:
 
-> **Note:** See [Using Azure Digital Twins SDKs](/how-to-guides/using-azure-digital-twins-sdks) for authentication and setup details.
+**Benefits:**
+- ✅ Works with both hosted and self-hosted Konnektr Graph
+- ✅ Handles all DTDL model complexities  
+- ✅ Built-in retry logic and error handling
+- ✅ Same code works for Azure → Konnektr migration
+
+**Setup:**
+- **Source (Azure Digital Twins)**: Use `DefaultAzureCredential`
+- **Target (Hosted Konnektr Graph)**: Use custom Auth0 `TokenCredential`
+- **Target (Self-Hosted)**: Use custom JWT or API key `TokenCredential`
+
+> **Note:** See [Using Azure Digital Twins SDKs](./using-azure-digital-twins-sdks) for complete authentication setup.
 
 #### Example Migration Scripts
 

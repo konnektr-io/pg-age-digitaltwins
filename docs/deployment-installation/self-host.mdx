@@ -1,8 +1,35 @@
 ---
 title: Self-Hosted Deployment
 icon: Sailboat
-description: You can deploy Digital Twins for Apache AGE using Docker or Helm. The preferred method is Helm for Kubernetes environments.
+description: Deploy Konnektr Graph in your own infrastructure for full control and direct database access. Recommended for advanced users who need custom configurations.
 ---
+
+## When to Self-Host
+
+Self-hosting Konnektr Graph is recommended for:
+
+- **Direct Database Access**: Need to use the native AgeDigitalTwins SDK
+- **Custom Authentication**: Want to integrate with your own identity provider
+- **Compliance Requirements**: Data must remain in your infrastructure
+- **Advanced Customization**: Need custom PostgreSQL extensions or configurations
+- **Air-Gapped Environments**: No internet connectivity requirements
+
+> **Most users should use [Hosted Konnektr Graph](./hosted-konnektr) instead** - it's faster to set up, fully managed, and includes enterprise features out of the box.
+
+## SDK Access Comparison
+
+| SDK Type | Hosted | Self-Hosted |
+|----------|---------|-------------|
+| **Azure Digital Twins SDK** | ✅ Recommended | ✅ With custom auth |
+| **Native AgeDigitalTwins SDK** | ❌ Not available | ✅ Direct database access |
+
+## Prerequisites
+
+- Kubernetes cluster (1.20+)
+- Helm 3.0+
+- PostgreSQL 13+ with Apache AGE extension
+- Storage provisioner for persistent volumes
+- Load balancer or ingress controller (for external access)
 
 ## Helm Chart Deployment
 
@@ -57,3 +84,194 @@ backups:
 ```
 
 For a full list of configuration options, see the `values.yaml` file in the Helm chart.
+
+## Using the Native AgeDigitalTwins SDK
+
+One key advantage of self-hosting is direct access to the native AgeDigitalTwins SDK, which connects directly to your PostgreSQL database:
+
+### Installation
+
+```bash
+dotnet add package AgeDigitalTwins
+```
+
+### Direct Database Connection
+
+```csharp
+using AgeDigitalTwins;
+using Npgsql;
+
+var connectionString = "Host=localhost;Username=postgres;Password=yourpassword;Database=agedb";
+var dataSource = NpgsqlDataSource.Create(connectionString);
+var client = new AgeDigitalTwinsClient(dataSource, "digitaltwins");
+
+// Direct database operations - no HTTP API layer
+var models = await client.GetModelsAsync();
+var twin = await client.GetDigitalTwinAsync("sensor-001");
+```
+
+### Benefits of Direct SDK
+
+- **Performance**: No HTTP API overhead - direct database queries
+- **Advanced Queries**: Full Cypher query support with complex graph traversals
+- **Bulk Operations**: Efficient batch inserts and updates
+- **Custom Extensions**: Access to underlying PostgreSQL and Apache AGE features
+- **Transaction Support**: Multi-operation transactions with rollback support
+
+## Authentication Options
+
+### Option 1: No Authentication (Development)
+```yaml
+api:
+  authentication:
+    enabled: false
+```
+
+### Option 2: JWT Validation
+```yaml
+api:
+  authentication:
+    enabled: true
+    jwt:
+      authority: "https://your-identity-provider.com"
+      audience: "your-api-audience"
+```
+
+### Option 3: API Keys
+```yaml
+api:
+  authentication:
+    enabled: true
+    apiKeys:
+      - "your-api-key-1"
+      - "your-api-key-2"
+```
+
+## Post-Deployment Setup
+
+### 1. Verify Installation
+```bash
+kubectl get pods -l app=agedigitaltwins
+kubectl logs -l app=agedigitaltwins-api
+```
+
+### 2. Test API Access
+```bash
+curl http://your-api-endpoint/health
+```
+
+### 3. Initialize with Sample Data
+Using the native SDK:
+```csharp
+// Upload a DTDL model
+var model = File.ReadAllText("room-model.json");
+await client.CreateModelsAsync(new[] { model });
+
+// Create a digital twin
+var twin = new { Temperature = 20.5, Humidity = 45.0 };
+await client.CreateOrReplaceDigitalTwinAsync("room-001", twin);
+```
+
+## Monitoring & Observability
+
+Self-hosted deployments include:
+
+- **Prometheus Metrics**: Built-in metrics endpoint at `/metrics`
+- **OpenTelemetry**: Distributed tracing support
+- **Health Checks**: Kubernetes-ready health endpoints
+- **Structured Logging**: JSON logs with correlation IDs
+
+### Example Prometheus Configuration
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+data:
+  prometheus.yml: |
+    scrape_configs:
+    - job_name: 'agedigitaltwins'
+      static_configs:
+      - targets: ['agedigitaltwins-api:8080']
+      metrics_path: '/metrics'
+```
+
+## Scaling Considerations
+
+### Horizontal Scaling
+```yaml
+api:
+  replicaCount: 3
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+```
+
+### Database High Availability
+```yaml
+cluster:
+  instances: 3
+  postgresql:
+    synchronous_mode: true
+    max_connections: 200
+```
+
+## Migration to/from Hosted
+
+### From Hosted to Self-Hosted
+1. Export models and twins via Azure Digital Twins SDK
+2. Deploy self-hosted instance
+3. Import data using native SDK for better performance
+4. Update application connection strings
+
+### From Self-Hosted to Hosted
+1. Export models and twins using native SDK
+2. Create hosted Konnektr Graph instance
+3. Import data via Azure Digital Twins SDK
+4. Update authentication to use Auth0
+
+## Troubleshooting
+
+### Common Issues
+
+**Pod Crashes**
+```bash
+kubectl describe pod <pod-name>
+kubectl logs <pod-name> --previous
+```
+
+**Database Connection Issues**
+```bash
+kubectl exec -it <api-pod> -- psql -h <db-host> -U postgres -d agedb -c "SELECT version();"
+```
+
+**Performance Problems**
+```bash
+kubectl top pods
+kubectl exec -it <db-pod> -- psql -c "SELECT * FROM pg_stat_activity;"
+```
+
+## Security Best Practices
+
+- **Network Policies**: Restrict pod-to-pod communication
+- **RBAC**: Use Kubernetes role-based access control
+- **Secrets Management**: Use Kubernetes secrets or external secret managers
+- **TLS**: Enable TLS for all external communications
+- **Database Security**: Use strong passwords and connection encryption
+
+## Support
+
+For self-hosted deployments:
+- **Community Support**: [GitHub Discussions](https://github.com/konnektr-io/pg-age-digitaltwins/discussions)
+- **Issues**: [GitHub Issues](https://github.com/konnektr-io/pg-age-digitaltwins/issues)
+- **Documentation**: [Advanced Topics](../advanced-topics/)
+
+For enterprise support and professional services, contact [support@konnektr.io](mailto:support@konnektr.io).
+
+## Next Steps
+
+- [Native SDK Reference](../reference/sdk) - Complete AgeDigitalTwins SDK documentation
+- [Advanced Configuration](../advanced-topics/performance) - Performance tuning
+- [Event Routing](../concepts/event-routing) - Set up real-time streaming

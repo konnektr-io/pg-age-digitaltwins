@@ -1,17 +1,151 @@
 ---
-title: Konnektr.io
+title: Hosted Konnektr Graph
 icon: Cloud
 ---
 
-> **Note:** This is a placeholder. Detailed instructions for deploying a new instance of Digital Twins for Apache AGE using the Konnektr.io platform will be provided soon.
+Deploy and manage Konnektr Graph as a fully managed service via the Konnektr platform. This is the recommended deployment option for most users.
 
-## Coming Soon
+## Why Choose Hosted?
 
-You will be able to deploy and manage Digital Twins for Apache AGE as a fully managed service via the Konnektr.io platform. This will include:
+- **No Infrastructure Management** - We handle PostgreSQL, Apache AGE, scaling, backups, and monitoring
+- **Enterprise Security** - Built-in Auth0 authentication and role-based access control
+- **Real-time Event Streaming** - Pre-configured Kafka and Kusto sinks
+- **Azure Digital Twins Compatible** - Use standard Azure Digital Twins SDKs
+- **Automatic Updates** - Always running the latest version with security patches
+- **99.9% Uptime SLA** - Enterprise-grade reliability and support
 
-- One-click deployment
-- Managed upgrades and backups
-- Integrated monitoring and event routing
-- Secure, scalable infrastructure
+## Getting Started
 
-Stay tuned for updates!
+### 1. Create Account & Organization
+
+1. Visit [ktrlplane.konnektr.io](https://ktrlplane.konnektr.io)
+2. Sign up for your Konnektr account
+3. Create or join an organization
+4. Set up your first project
+
+### 2. Deploy Konnektr Graph
+
+1. Navigate to your project dashboard
+2. Click "Create Resource" → "Konnektr Graph"
+3. Configure your graph:
+   - **Name**: Unique identifier for your graph instance
+   - **Region**: Choose your preferred deployment region
+   - **Event Sinks**: Optional Kafka or Kusto configuration
+   - **Event Routes**: Define event routing rules
+
+4. Click "Deploy" - your graph will be ready in ~2-3 minutes
+
+### 3. Access Your Graph
+
+Once deployed, you'll receive:
+- **API Endpoint**: `https://your-graph-name.api.graph.konnektr.io`
+- **Auth0 Domain**: `auth.konnektr.io` 
+- **Audience**: `https://api.graph.konnektr.io`
+- **Swagger UI**: Interactive API documentation
+
+## Authentication Setup
+
+Konnektr Graph uses Auth0 for authentication. You'll need to implement a custom `TokenCredential` for Azure Digital Twins SDKs:
+
+```python
+# Python example
+from azure.digitaltwins.core import DigitalTwinsClient
+from your_auth import KonnektrTokenCredential
+
+credential = KonnektrTokenCredential(
+    domain="auth.konnektr.io",
+    client_id="your-client-id",
+    client_secret="your-client-secret",
+    audience="https://api.graph.konnektr.io"
+)
+
+client = DigitalTwinsClient(
+    "https://your-graph-name.api.graph.konnektr.io", 
+    credential
+)
+```
+
+See [Azure SDK Integration](../how-to-guides/using-azure-digital-twins-sdks) for complete examples in Python, C#, and JavaScript.
+
+## Event Streaming Configuration
+
+### Kafka Sinks
+Stream real-time events to Apache Kafka:
+- **Broker List**: Your Kafka cluster endpoints
+- **Topic**: Target topic for digital twin events  
+- **Authentication**: Uses OAUTHBEARER with federated credentials
+
+### Kusto Sinks
+Stream events to Azure Data Explorer or Microsoft Fabric:
+- **Ingestion URI**: Your ADX cluster ingestion endpoint
+- **Database**: Target database name
+- **Authentication**: Automatic with federated credentials
+
+### Event Formats
+Choose between:
+- **EventNotification**: Real-time twin state changes
+- **DataHistory**: Azure Digital Twins-compatible historical format
+
+## Resource Management
+
+From your KtrlPlane dashboard:
+
+- **Monitoring**: View metrics, health status, and performance
+- **Scaling**: Adjust compute and storage resources
+- **Configuration**: Update event sinks and routing rules
+- **Logs**: Access application and system logs
+- **Backup**: Automated daily backups with point-in-time recovery
+- **Access Control**: Manage user permissions and API keys
+
+## Pricing & Billing
+
+Konnektr Graph pricing is based on:
+- **Base Instance**: Monthly subscription per graph instance
+- **API Calls**: Per-request pricing for API operations
+- **Event Streaming**: Based on events per second throughput
+- **Storage**: Data storage and backup retention
+
+Contact [sales@konnektr.io](mailto:sales@konnektr.io) for detailed pricing and enterprise plans.
+
+## Support & SLA
+
+**Support Tiers:**
+- **Community**: GitHub issues and discussions
+- **Professional**: Email support with 24-hour response
+- **Enterprise**: Phone support with 2-hour response and dedicated CSM
+
+**Service Level Agreement:**
+- **Uptime**: 99.9% availability guarantee
+- **Performance**: Less than 100ms API response time (95th percentile)
+- **Recovery**: 4-hour RTO, 1-hour RPO for enterprise plans
+
+## Comparison: Hosted vs Self-Hosted
+
+| Feature | Hosted | Self-Hosted |
+|---------|--------|-------------|
+| **Setup Time** | 5 minutes | Hours to days |
+| **Management** | Fully managed | You manage everything |
+| **SDK Access** | Azure Digital Twins SDK | Azure + Direct SDK |
+| **Scaling** | Automatic | Manual configuration |
+| **Security** | Built-in Auth0 | You configure |
+| **Updates** | Automatic | Manual |
+| **Support** | Included | Community only |
+| **Cost** | Predictable monthly | Infrastructure + time |
+
+## Migration from Azure Digital Twins
+
+Migrating from Azure Digital Twins to hosted Konnektr Graph:
+
+1. **Models**: Export DTDL models and import via API (100% compatible)
+2. **Twins**: Use bulk export/import APIs
+3. **Code**: Replace `DefaultAzureCredential` with `KonnektrTokenCredential`
+4. **Endpoints**: Update endpoint URLs to your Konnektr Graph instance
+5. **Event Routing**: Configure equivalent Kafka/Kusto sinks
+
+See our [Migration Guide](../how-to-guides/migration-guide) for detailed steps.
+
+## Next Steps
+
+- [Quickstart](../getting-started/quickstart) - Get started in 5 minutes
+- [Azure SDK Integration](../how-to-guides/using-azure-digital-twins-sdks) - Complete SDK examples
+- [Event Routing](../concepts/event-routing) - Configure real-time streaming

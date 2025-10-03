@@ -1,11 +1,38 @@
 ---
-title: SDK Reference
+title: Native SDK Reference (Self-Hosted Only)
 icon: Code
 ---
 
+> **Note**: This SDK is only available for **self-hosted deployments**. For hosted Konnektr Graph, use the [Azure Digital Twins SDK](../how-to-guides/using-azure-digital-twins-sdks) instead.
+
 ## Overview
 
-The AgeDigitalTwins SDK provides a .NET client for interacting with the AgeDigitalTwins API. It is designed to be compatible with the Azure Digital Twins SDK, with similar method signatures and return types.
+The AgeDigitalTwins SDK provides a .NET client for direct database access to your self-hosted Konnektr Graph instance. It connects directly to PostgreSQL with Apache AGE, bypassing the HTTP API layer for maximum performance.
+
+### When to Use This SDK
+
+✅ **Use the Native SDK when:**
+- You have a self-hosted Konnektr Graph deployment
+- You need maximum performance with direct database access
+- You want to perform bulk operations efficiently
+- You need advanced Cypher query capabilities
+- You require transaction support
+
+❌ **Don't use this SDK if:**
+- You're using hosted Konnektr Graph (not accessible)
+- You want to migrate to/from Azure Digital Twins easily
+- You prefer standard REST API patterns
+
+### Hosted vs Self-Hosted SDK Comparison
+
+| Feature | Hosted (Azure SDK) | Self-Hosted (Native SDK) |
+|---------|-------------------|---------------------------|
+| **Connection** | HTTPS REST API | Direct PostgreSQL |
+| **Authentication** | Auth0 JWT | Database credentials |
+| **Performance** | Good | Excellent |
+| **Bulk Operations** | Standard | Optimized |
+| **Transactions** | Not supported | Full support |
+| **Migration** | Easy to/from ADT | Custom required |
 
 ## Installation
 
@@ -94,6 +121,98 @@ await foreach (var model in client.GetModelsAsync<object>())
 await client.DeleteModelAsync("dtmi:com:adt:dtsample:room;1");
 ```
 
+### Advanced Query Examples
+
+#### Complex Graph Traversal
+```csharp
+var query = @"
+    MATCH (room:DigitalTwin {$dtId: 'room1'})
+    MATCH (room)-[:contains]->(sensor:DigitalTwin)
+    WHERE sensor.Temperature > 25.0
+    RETURN room.$dtId, sensor.$dtId, sensor.Temperature
+";
+
+await foreach (var result in client.QueryAsync<object>(query))
+{
+    Console.WriteLine(result);
+}
+```
+
+#### Bulk Insert with Transaction
+```csharp
+using (var transaction = dataSource.CreateTransaction())
+{
+    var client = new AgeDigitalTwinsClient(transaction, "digitaltwins");
+    
+    // Insert multiple twins in a transaction
+    for (int i = 0; i < 1000; i++)
+    {
+        var twin = new { $dtId = $"sensor{i}", Temperature = 20.0 + i };
+        await client.CreateOrReplaceDigitalTwinAsync($"sensor{i}", twin);
+    }
+    
+    await transaction.CommitAsync();
+}
+```
+
+## Performance Benefits
+
+The native SDK provides significant performance advantages:
+
+- **Direct Database Access**: No HTTP serialization overhead
+- **Connection Pooling**: Efficient PostgreSQL connection management  
+- **Bulk Operations**: Optimized batch inserts and updates
+- **Transactions**: ACID compliance with rollback support
+- **Streaming**: Memory-efficient query result streaming
+
+## Error Handling
+
+```csharp
+try
+{
+    await client.CreateOrReplaceDigitalTwinAsync("twin1", twinData);
+}
+catch (AgeDigitalTwinsException ex) when (ex.ErrorCode == "ModelNotFound")
+{
+    Console.WriteLine($"Model not found: {ex.Message}");
+}
+catch (NpgsqlException ex)
+{
+    Console.WriteLine($"Database error: {ex.Message}");
+}
+```
+
 ## Compatibility
 
-The SDK is compatible with .NET 6.0 and later. It supports asynchronous programming with `async` and `await` patterns.
+- **.NET 6.0+**: Full support for modern .NET
+- **Async/Await**: All operations are asynchronous
+- **PostgreSQL 13+**: Requires Apache AGE extension
+- **Connection Pooling**: Built-in Npgsql connection pooling
+
+## Migration Considerations
+
+### From Azure Digital Twins SDK to Native SDK
+
+```csharp
+// Before (Azure Digital Twins SDK)
+var client = new DigitalTwinsClient(endpoint, credential);
+var twin = await client.GetDigitalTwinAsync<BasicDigitalTwin>("twin1");
+
+// After (Native SDK)
+var client = new AgeDigitalTwinsClient(dataSource, "digitaltwins");  
+var twin = await client.GetDigitalTwinAsync<object>("twin1");
+```
+
+### From Native SDK to Azure Digital Twins SDK
+
+For migration to hosted Konnektr Graph or Azure Digital Twins, you'll need to:
+1. Replace database connections with HTTP endpoints
+2. Implement Auth0 or Azure AD authentication
+3. Update query syntax to ADT query language
+4. Handle API rate limits and pagination
+
+## Related Documentation
+
+- **For Hosted Users**: [Azure Digital Twins SDK Guide](../how-to-guides/using-azure-digital-twins-sdks)
+- **Self-Hosted Setup**: [Self-Hosted Deployment](../deployment-installation/self-host)
+- **Performance Tuning**: [Advanced Topics](../advanced-topics/performance)
