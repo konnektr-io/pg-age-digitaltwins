@@ -4,7 +4,6 @@
     "description": "Step-by-step guides for common tasks and workflows",
     "pages": [
         "migration-guide",
-        "upgrade-guide",
         "integration-guide",
         "troubleshooting",
         "using-azure-digital-twins-sdks",
