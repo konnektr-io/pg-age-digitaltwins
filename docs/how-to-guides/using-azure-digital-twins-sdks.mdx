@@ -3,41 +3,353 @@ title: Using Azure Digital Twins SDKs
 icon: Plug
 ---
 
-You can use the official Azure Digital Twins SDKs (Python, .NET, JavaScript) to connect to AgeDigitalTwins, as it is API-compatible with Azure Digital Twins.
+You can use the official Azure Digital Twins SDKs (Python, .NET, JavaScript) to connect to Konnektr Graph, as it is fully API-compatible with Azure Digital Twins.
 
-## Authentication
+## Authentication with Konnektr Graph
 
-- For self-hosted deployments, you may need to configure authentication (e.g., Azure AD, custom JWT, or API keys). See your deployment's documentation for details.
-- For hosted (Konnektr) deployments, follow the authentication instructions provided by your service provider.
+Konnektr Graph uses Auth0 for authentication instead of Azure AD, so you **cannot** use `DefaultAzureCredential` or other Azure identity providers. Instead, you must implement a custom `TokenCredential` that obtains tokens from Auth0.
 
-## Example: Python
+### Auth0 Configuration
+- **Domain**: `auth.konnektr.io`  
+- **Audience**: `https://api.graph.konnektr.io`
+- **Grant Type**: `client_credentials` (service-to-service)
+
+## Python SDK
+
+### Custom TokenCredential Implementation
 
 ```python
-from azure.identity import AzureCliCredential
+import requests
+import time
+from azure.core.credentials import AccessToken, TokenCredential
 from azure.digitaltwins.core import DigitalTwinsClient
 
-client = DigitalTwinsClient("https://your-adt-endpoint/", AzureCliCredential())
+class KonnektrTokenCredential(TokenCredential):
+    def __init__(self, domain: str, client_id: str, client_secret: str, audience: str):
+        self.domain = domain
+        self.client_id = client_id
+        self.client_secret = client_secret
+        self.audience = audience
+        self._token = None
+        self._expires_on = 0
+
+    def get_token(self, *scopes, **kwargs) -> AccessToken:
+        if self._token and time.time() < self._expires_on - 300:  # 5 min buffer
+            return self._token
+
+        url = f"https://{self.domain}/oauth/token"
+        payload = {
+            "client_id": self.client_id,
+            "client_secret": self.client_secret,
+            "audience": self.audience,
+            "grant_type": "client_credentials"
+        }
+        
+        response = requests.post(url, json=payload)
+        response.raise_for_status()
+        
+        token_data = response.json()
+        access_token = token_data["access_token"]
+        expires_in = token_data["expires_in"]
+        
+        self._expires_on = time.time() + expires_in
+        self._token = AccessToken(access_token, int(self._expires_on))
+        
+        return self._token
 ```
 
-## Example: .NET
+### Using the Python SDK
+
+```python
+from azure.digitaltwins.core import DigitalTwinsClient
+
+# Create credential
+credential = KonnektrTokenCredential(
+    domain="auth.konnektr.io",
+    client_id="your-client-id",
+    client_secret="your-client-secret", 
+    audience="https://api.graph.konnektr.io"
+)
+
+# Create client
+client = DigitalTwinsClient(
+    endpoint="https://your-graph-name.api.graph.konnektr.io",
+    credential=credential
+)
+
+# Example operations
+try:
+    # List models
+    models = list(client.list_models())
+    print(f"Found {len(models)} models")
+    
+    # Get a specific twin
+    twin = client.get_digital_twin("twin-id")
+    print(f"Twin: {twin}")
+    
+    # Create a twin
+    twin_data = {
+        "$metadata": {"$model": "dtmi:example:Room;1"},
+        "Temperature": 20.0,
+        "Humidity": 45.0
+    }
+    client.upsert_digital_twin("room-001", twin_data)
+    
+except Exception as e:
+    print(f"Error: {e}")
+```
+
+## .NET SDK
+
+### Custom TokenCredential Implementation
+
+```csharp
+using Azure.Core;
+using Azure.DigitalTwins.Core;
+using System.Text.Json;
+
+public class KonnektrTokenCredential : TokenCredential
+{
+    private readonly string _domain;
+    private readonly string _clientId;
+    private readonly string _clientSecret;
+    private readonly string _audience;
+    private readonly HttpClient _httpClient;
+    
+    private AccessToken? _cachedToken;
+    private DateTimeOffset _tokenExpiry;
+
+    public KonnektrTokenCredential(string domain, string clientId, string clientSecret, string audience)
+    {
+        _domain = domain;
+        _clientId = clientId;
+        _clientSecret = clientSecret;
+        _audience = audience;
+        _httpClient = new HttpClient();
+    }
+
+    public override AccessToken GetToken(TokenRequestContext requestContext, CancellationToken cancellationToken)
+        => GetTokenAsync(requestContext, cancellationToken).GetAwaiter().GetResult();
+
+    public override async ValueTask<AccessToken> GetTokenAsync(TokenRequestContext requestContext, CancellationToken cancellationToken)
+    {
+        if (_cachedToken.HasValue && DateTimeOffset.UtcNow < _tokenExpiry.AddMinutes(-5))
+            return _cachedToken.Value;
+
+        var tokenUrl = $"https://{_domain}/oauth/token";
+        var payload = new
+        {
+            client_id = _clientId,
+            client_secret = _clientSecret,
+            audience = _audience,
+            grant_type = "client_credentials"
+        };
+
+        var content = new StringContent(JsonSerializer.Serialize(payload), System.Text.Encoding.UTF8, "application/json");
+        var response = await _httpClient.PostAsync(tokenUrl, content, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+        var tokenResponse = JsonSerializer.Deserialize<TokenResponse>(responseContent);
+
+        _tokenExpiry = DateTimeOffset.UtcNow.AddSeconds(tokenResponse.expires_in);
+        _cachedToken = new AccessToken(tokenResponse.access_token, _tokenExpiry);
+
+        return _cachedToken.Value;
+    }
+
+    private class TokenResponse
+    {
+        public string access_token { get; set; }
+        public int expires_in { get; set; }
+    }
+}
+```
+
+### Using the .NET SDK
 
 ```csharp
 using Azure.DigitalTwins.Core;
-using Azure.Identity;
+using System.Text.Json;
 
-var client = new DigitalTwinsClient(new Uri("https://your-adt-endpoint/"), new DefaultAzureCredential());
-```
-
-## Example: JavaScript
-
-```js
-const { DefaultAzureCredential } = require("@azure/identity");
-const { DigitalTwinsClient } = require("@azure/digital-twins-core");
-
-const client = new DigitalTwinsClient(
-  "https://your-adt-endpoint/",
-  new DefaultAzureCredential()
+// Create credential
+var credential = new KonnektrTokenCredential(
+    domain: "auth.konnektr.io",
+    clientId: "your-client-id",
+    clientSecret: "your-client-secret",
+    audience: "https://api.graph.konnektr.io"
 );
+
+// Create client
+var client = new DigitalTwinsClient(
+    new Uri("https://your-graph-name.api.graph.konnektr.io"),
+    credential
+);
+
+try
+{
+    // List models
+    var models = client.GetModelsAsync();
+    await foreach (var model in models)
+    {
+        Console.WriteLine($"Model: {model.Id}");
+    }
+    
+    // Get a twin
+    var twin = await client.GetDigitalTwinAsync<JsonElement>("twin-id");
+    Console.WriteLine($"Twin: {twin.Value}");
+    
+    // Create a twin  
+    var twinData = new
+    {
+        Metadata = new { Model = "dtmi:example:Room;1" },
+        Temperature = 20.0,
+        Humidity = 45.0
+    };
+    
+    await client.UpsertDigitalTwinAsync("room-001", JsonSerializer.Serialize(twinData));
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"Error: {ex.Message}");
+}
 ```
 
-> **Note:** If you encounter authentication errors, check your API's authentication requirements and ensure your credentials are valid for the target environment.
+## JavaScript/Node.js SDK
+
+### Custom TokenCredential Implementation
+
+```javascript
+const axios = require('axios');
+const { DigitalTwinsClient } = require('@azure/digital-twins-core');
+
+class KonnektrTokenCredential {
+    constructor(domain, clientId, clientSecret, audience) {
+        this.domain = domain;
+        this.clientId = clientId;
+        this.clientSecret = clientSecret;
+        this.audience = audience;
+        this.cachedToken = null;
+        this.tokenExpiry = 0;
+    }
+
+    async getToken() {
+        const now = Math.floor(Date.now() / 1000);
+        if (this.cachedToken && now < this.tokenExpiry - 300) {
+            return { 
+                token: this.cachedToken, 
+                expiresOnTimestamp: this.tokenExpiry * 1000 
+            };
+        }
+
+        const tokenUrl = `https://${this.domain}/oauth/token`;
+        const payload = {
+            client_id: this.clientId,
+            client_secret: this.clientSecret,
+            audience: this.audience,
+            grant_type: 'client_credentials'
+        };
+
+        const response = await axios.post(tokenUrl, payload);
+        const { access_token, expires_in } = response.data;
+
+        this.cachedToken = access_token;
+        this.tokenExpiry = now + expires_in;
+
+        return { 
+            token: access_token, 
+            expiresOnTimestamp: this.tokenExpiry * 1000 
+        };
+    }
+}
+```
+
+### Using the JavaScript SDK
+
+```javascript
+const { DigitalTwinsClient } = require('@azure/digital-twins-core');
+
+// Create credential
+const credential = new KonnektrTokenCredential(
+    'auth.konnektr.io',
+    'your-client-id',
+    'your-client-secret',
+    'https://api.graph.konnektr.io'
+);
+
+// Create client
+const client = new DigitalTwinsClient(
+    'https://your-graph-name.api.graph.konnektr.io',
+    credential
+);
+
+async function example() {
+    try {
+        // List models
+        const models = client.listModels();
+        for await (const model of models) {
+            console.log(`Model: ${model.id}`);
+        }
+        
+        // Get a twin
+        const twin = await client.getDigitalTwin('twin-id');
+        console.log(`Twin:`, twin);
+        
+        // Create a twin
+        const twinData = {
+            $metadata: { $model: 'dtmi:example:Room;1' },
+            Temperature: 20.0,
+            Humidity: 45.0
+        };
+        
+        await client.upsertDigitalTwin('room-001', JSON.stringify(twinData));
+        
+    } catch (error) {
+        console.error(`Error: ${error.message}`);
+    }
+}
+
+example();
+```
+
+## Environment Variables
+
+For security, store your credentials as environment variables:
+
+```bash
+# .env file
+KONNEKTR_CLIENT_ID=your-client-id
+KONNEKTR_CLIENT_SECRET=your-client-secret
+KONNEKTR_DOMAIN=auth.konnektr.io
+KONNEKTR_AUDIENCE=https://api.graph.konnektr.io
+KONNEKTR_ENDPOINT=https://your-graph-name.api.graph.konnektr.io
+```
+
+Then load them in your application:
+
+```python
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+credential = KonnektrTokenCredential(
+    domain=os.getenv('KONNEKTR_DOMAIN'),
+    client_id=os.getenv('KONNEKTR_CLIENT_ID'),
+    client_secret=os.getenv('KONNEKTR_CLIENT_SECRET'),
+    audience=os.getenv('KONNEKTR_AUDIENCE')
+)
+
+client = DigitalTwinsClient(os.getenv('KONNEKTR_ENDPOINT'), credential)
+```
+
+## Error Handling
+
+Common authentication errors and solutions:
+
+- **401 Unauthorized**: Check your client credentials and ensure they're valid
+- **403 Forbidden**: Verify your Auth0 application has the correct permissions
+- **Invalid audience**: Ensure you're using `https://api.graph.konnektr.io`
+- **Token expired**: The custom credential should handle renewal automatically
+
+> **Note:** Unlike Azure Digital Twins which uses Azure AD, Konnektr Graph requires Auth0 authentication. You cannot use Azure identity providers like `DefaultAzureCredential`, `AzureCliCredential`, or `ManagedIdentityCredential`.

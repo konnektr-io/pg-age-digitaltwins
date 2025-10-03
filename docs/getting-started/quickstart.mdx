@@ -3,4 +3,61 @@ title: Quickstart
 icon: Zap
 ---
 
-Welcome! This guide will help you get started quickly with Age Digital Twins.
+Welcome! This guide will help you get started quickly with Konnektr Graph, our hosted digital twins platform built on Age Digital Twins.
+
+## What is Konnektr Graph?
+
+Konnektr Graph is a high-performance, Azure Digital Twins-compatible digital twin runtime that runs in our hosted cloud environment. It provides:
+
+- **Full ADT API compatibility** - Use existing Azure Digital Twins SDKs
+- **Real-time eventing** - Stream twin state changes to various sinks
+- **Query engine** - Powerful Cypher queries over Apache AGE
+- **Managed infrastructure** - No setup required, fully hosted
+
+## Getting Started in 5 Minutes
+
+### 1. Create Your Konnektr Account
+Visit [app.konnektr.io](https://app.konnektr.io) and sign up for your free account.
+
+### 2. Create a Graph Resource
+1. Navigate to your organization dashboard
+2. Click "Create Resource" → "Konnektr Graph"
+3. Configure your graph settings:
+   - **Name**: Choose a descriptive name for your graph
+   - **Event Sinks** (optional): Configure Kafka or Kusto sinks for real-time events
+   - **Event Routes** (optional): Route specific events to your sinks
+
+### 3. Get Your Graph Endpoint
+Once deployed, you'll receive your unique graph endpoint:
+```
+https://your-graph-name.api.graph.konnektr.io
+```
+
+### 4. Connect with Azure Digital Twins SDKs
+Use any Azure Digital Twins SDK with a custom Auth0 token credential:
+
+```python
+# Python example
+from azure.digitaltwins.core import DigitalTwinsClient
+from your_auth import KonnektrTokenCredential  # Custom implementation
+
+credential = KonnektrTokenCredential(
+    domain="auth.konnektr.io",
+    audience="https://api.graph.konnektr.io"
+)
+client = DigitalTwinsClient("https://your-graph-name.api.graph.konnektr.io", credential)
+```
+
+### 5. Start Building
+You're ready to:
+- Upload DTDL models
+- Create digital twins
+- Establish relationships
+- Query your graph
+- Stream real-time events
+
+## Next Steps
+
+- [Setup Guide](./setup) - Detailed deployment and configuration
+- [First Steps](./first-steps) - Authentication and basic operations
+- [Using Azure SDKs](../how-to-guides/using-azure-digital-twins-sdks) - Complete SDK examples

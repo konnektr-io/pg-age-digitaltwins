@@ -4,7 +4,7 @@ AgeDigitalTwins is an SDK and API designed to support Digital Twins applications
 
 ## Documentation
 
-📚 **[View the complete documentation](https://konnektr-io.github.io/pg-age-digitaltwins/)**
+📚 **[View the complete documentation](https://docs.konnektr.io/docs/graph/)**
 
 ## Features
 

@@ -3,4 +3,91 @@ title: Setup
 icon: Settings
 ---
 
-Instructions for setting up your environment and prerequisites.
+This guide walks you through setting up Konnektr Graph in our hosted environment via KtrlPlane.
+
+## Prerequisites
+
+- A Konnektr account at [app.konnektr.io](https://app.konnektr.io)
+- An organization and project set up in KtrlPlane
+
+## Creating a Graph Resource
+
+### 1. Access Resource Creation
+
+1. Log into your Konnektr dashboard
+2. Navigate to your organization
+3. Select or create a project
+4. Click "Create Resource"
+5. Choose "Konnektr Graph"
+
+### 2. Basic Configuration
+
+**Resource Name**: Choose a unique name for your graph instance. This will be part of your API endpoint.
+
+### 3. Event Sinks (Optional)
+
+Configure external systems to receive real-time events from your digital twins:
+
+#### Kafka Sink
+Stream events to Apache Kafka with federated credentials:
+- **Name**: Unique identifier for this sink
+- **Broker List**: Comma-separated list of Kafka brokers
+- **Topic**: Target Kafka topic
+- **SASL Mechanism**: Uses OAUTHBEARER with federated credentials
+
+#### Kusto Sink  
+Stream events to Azure Data Explorer (Kusto) or Microsoft Fabric:
+- **Name**: Unique identifier for this sink
+- **Ingestion URI**: ADX cluster ingestion endpoint
+- **Database**: Target database name
+
+### 4. Event Routes (Optional)
+
+Define which events go to which sinks:
+
+- **Sink Name**: Select from configured sinks
+- **Event Format**: 
+  - `EventNotification`: Real-time twin state changes
+  - `DataHistory`: Historical data format compatible with Azure Digital Twins
+
+### 5. Deploy Your Graph
+
+Click "Create Resource" to deploy your graph. The system will:
+
+1. Provision your graph database
+2. Configure Apache AGE with PostgreSQL
+3. Set up event routing infrastructure
+4. Generate your unique API endpoint
+
+## Resource Endpoints
+
+Once deployed, you'll have access to:
+
+- **API Endpoint**: `https://your-graph-name.api.graph.konnektr.io`
+- **Authentication**: Auth0 with audience `https://api.graph.konnektr.io`
+- **Documentation**: Swagger UI available at your endpoint
+
+## Authentication Setup
+
+Your graph uses Auth0 for authentication. You'll need to:
+
+1. Get your Auth0 domain: `auth.konnektr.io`
+2. Use audience: `https://api.graph.konnektr.io`
+3. Implement a custom TokenCredential for Azure SDKs
+
+See [First Steps](./first-steps) for detailed authentication examples.
+
+## Resource Management
+
+From your KtrlPlane dashboard, you can:
+
+- **Monitor**: View resource health and metrics
+- **Configure**: Update event sinks and routes
+- **Scale**: Adjust resource allocation
+- **Logs**: Access application logs and diagnostics
+- **Delete**: Remove the resource when no longer needed
+
+## Next Steps
+
+- [First Steps](./first-steps) - Connect and authenticate
+- [Using Azure SDKs](../how-to-guides/using-azure-digital-twins-sdks) - SDK integration examples
