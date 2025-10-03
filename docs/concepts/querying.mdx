@@ -1,0 +1,50 @@
+---
+title: Querying the Graph
+icon: Search
+---
+
+## Overview
+
+AgeDigitalTwins supports two query languages:
+
+1. **Azure Digital Twins Query Language**: Refer to the [official documentation](https://learn.microsoft.com/en-us/azure/digital-twins/concepts-query-language).
+2. **Cypher**: Built on Apache AGE, Cypher queries provide powerful graph querying capabilities.
+
+The used query language is automatically detected based on the query syntax.
+
+## Cypher Query Language for Digital Twins
+
+### Basic Queries
+
+- Find all twins:
+
+  ```cypher
+  MATCH (t:Twin) RETURN t;
+  ```
+
+- Find relationships:
+
+  ```cypher
+  MATCH (t:Twin)-[r]->(m:Model) RETURN t, r, m;
+  ```
+
+### Using `digitaltwins.is_of_model`
+
+- Find twins of a specific model:
+
+  ```cypher
+  MATCH (t:Twin) WHERE digitaltwins.is_of_model(t, 'dtmi:com:adt:dtsample:room;1') RETURN t;
+  ```
+
+## ADT Query Functions and Cypher Equivalents
+
+| ADT Query Function | Cypher Equivalent |
+|---------------------|-------------------|
+| `IS_OF_MODEL`      | `digitaltwins.is_of_model` |
+| `STARTSWITH`       | `STARTS WITH`     |
+| `ENDSWITH`         | `ENDS WITH`       |
+| `CONTAINS`         | `CONTAINS`        |
+| `IS_NULL`          | `IS NULL`         |
+| `IS_DEFINED`       | `IS NOT NULL`     |
+
+For more examples, refer to the [AdtQueryToCypherTests.cs](../src/AgeDigitalTwins.Test/AdtQueryToCypherTests.cs).

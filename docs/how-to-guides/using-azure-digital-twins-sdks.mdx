@@ -1,0 +1,43 @@
+---
+title: Using Azure Digital Twins SDKs
+icon: Plug
+---
+
+You can use the official Azure Digital Twins SDKs (Python, .NET, JavaScript) to connect to AgeDigitalTwins, as it is API-compatible with Azure Digital Twins.
+
+## Authentication
+
+- For self-hosted deployments, you may need to configure authentication (e.g., Azure AD, custom JWT, or API keys). See your deployment's documentation for details.
+- For hosted (Konnektr) deployments, follow the authentication instructions provided by your service provider.
+
+## Example: Python
+
+```python
+from azure.identity import AzureCliCredential
+from azure.digitaltwins.core import DigitalTwinsClient
+
+client = DigitalTwinsClient("https://your-adt-endpoint/", AzureCliCredential())
+```
+
+## Example: .NET
+
+```csharp
+using Azure.DigitalTwins.Core;
+using Azure.Identity;
+
+var client = new DigitalTwinsClient(new Uri("https://your-adt-endpoint/"), new DefaultAzureCredential());
+```
+
+## Example: JavaScript
+
+```js
+const { DefaultAzureCredential } = require("@azure/identity");
+const { DigitalTwinsClient } = require("@azure/digital-twins-core");
+
+const client = new DigitalTwinsClient(
+  "https://your-adt-endpoint/",
+  new DefaultAzureCredential()
+);
+```
+
+> **Note:** If you encounter authentication errors, check your API's authentication requirements and ensure your credentials are valid for the target environment.

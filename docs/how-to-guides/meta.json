@@ -1,0 +1,14 @@
+{
+    "title": "How-to Guides",
+    "icon": "BookOpen",
+    "description": "Step-by-step guides for common tasks and workflows",
+    "pages": [
+        "migration-guide",
+        "upgrade-guide",
+        "integration-guide",
+        "troubleshooting",
+        "using-azure-digital-twins-sdks",
+        "working-with-telemetry",
+        "working-with-components"
+    ]
+}

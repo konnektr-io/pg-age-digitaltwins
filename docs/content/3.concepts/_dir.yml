@@ -1,7 +1,0 @@
-title: Concepts
-icon: lucide:lightbulb
-label: Concepts
-navigation.redirect: /concepts/dtdl
-sidebar:
-  style: default
-collapse: false

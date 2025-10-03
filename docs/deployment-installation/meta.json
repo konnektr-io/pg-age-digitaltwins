@@ -1,0 +1,9 @@
+{
+    "title": "Deployment & Installation",
+    "icon": "Download",
+    "description": "Deploy Konnektr Graph in various environments",
+    "pages": [
+        "self-host",
+        "hosted-konnektr"
+    ]
+}
