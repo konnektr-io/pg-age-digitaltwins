@@ -1,0 +1,238 @@
+---
+title: Migration Guide
+icon: Replace
+---
+
+This guide explains how to migrate your data from Azure Digital Twins to AgeDigitalTwins.
+
+## 1. Deploy AgeDigitalTwins
+
+First, deploy your AgeDigitalTwins environment. See the [Deployment & Installation](/deployment-installation/self-host) guide for instructions.
+
+## 2. Migration Approaches
+
+### A. Using Azure Digital Twins SDKs (Recommended)
+
+You can use the official Azure Digital Twins SDKs (Python, .NET, JavaScript) to copy models, twins, and relationships from your Azure Digital Twins instance to AgeDigitalTwins. This works for both self-hosted and hosted deployments.
+
+> **Note:** See [Using Azure Digital Twins SDKs](/how-to-guides/using-azure-digital-twins-sdks) for authentication and setup details.
+
+#### Example Migration Scripts
+
+<Tabs items={['Python', 'C#', 'JavaScript']}>
+<Tab value="Python">
+
+```python title="copy_adt.py"
+# Example migration script for Python
+# This script copies models, twins, and relationships from Azure Digital Twins to AgeDigitalTwins
+
+from azure.identity import DefaultAzureCredential
+from azure.digitaltwins.core import DigitalTwinsClient
+import requests
+import json
+
+# Azure Digital Twins configuration
+adt_url = "https://your-adt-instance.api.eus.digitaltwins.azure.net"
+adt_client = DigitalTwinsClient(adt_url, DefaultAzureCredential())
+
+# AgeDigitalTwins configuration
+age_base_url = "https://your-age-instance.com/api"
+age_headers = {"Authorization": "Bearer your-token"}
+
+# Copy models
+def copy_models():
+    models = adt_client.list_models()
+    for model in models:
+        response = requests.post(f"{age_base_url}/models", 
+                               json=model.serialize(), 
+                               headers=age_headers)
+        print(f"Copied model: {model.id}")
+
+# Copy twins
+def copy_twins():
+    query = "SELECT * FROM digitaltwins"
+    twins = adt_client.query_twins(query)
+    for twin in twins:
+        response = requests.put(f"{age_base_url}/digitaltwins/{twin['$dtId']}", 
+                              json=twin, 
+                              headers=age_headers)
+        print(f"Copied twin: {twin['$dtId']}")
+
+if __name__ == "__main__":
+    copy_models()
+    copy_twins()
+```
+
+**How to Run:**
+- Install `azure-identity` and `azure-digitaltwins-core` via pip
+- Run with `python copy_adt.py`
+
+</Tab>
+<Tab value="C#">
+
+```csharp title="copy_adt.cs"
+// Example migration script for C#
+using Azure.Core;
+using Azure.DigitalTwins.Core;
+using Azure.Identity;
+using System.Text.Json;
+
+public class AdtMigration
+{
+    private readonly DigitalTwinsClient adtClient;
+    private readonly HttpClient ageClient;
+    
+    public AdtMigration()
+    {
+        var credential = new DefaultAzureCredential();
+        adtClient = new DigitalTwinsClient(
+            new Uri("https://your-adt-instance.api.eus.digitaltwins.azure.net"), 
+            credential);
+            
+        ageClient = new HttpClient();
+        ageClient.BaseAddress = new Uri("https://your-age-instance.com/api/");
+        ageClient.DefaultRequestHeaders.Add("Authorization", "Bearer your-token");
+    }
+    
+    public async Task CopyModelsAsync()
+    {
+        await foreach (var model in adtClient.GetModelsAsync())
+        {
+            var json = JsonSerializer.Serialize(model);
+            var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+            await ageClient.PostAsync("models", content);
+            Console.WriteLine($"Copied model: {model.Id}");
+        }
+    }
+    
+    public async Task CopyTwinsAsync()
+    {
+        var query = "SELECT * FROM digitaltwins";
+        await foreach (var twin in adtClient.QueryAsync<object>(query))
+        {
+            var json = JsonSerializer.Serialize(twin);
+            var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+            await ageClient.PutAsync($"digitaltwins/{((dynamic)twin).Id}", content);
+            Console.WriteLine($"Copied twin: {((dynamic)twin).Id}");
+        }
+    }
+}
+```
+
+**How to Run:**
+- Use .NET 6+, add `Azure.DigitalTwins.Core` and `Azure.Identity` NuGet packages
+- Run with `dotnet run`
+
+</Tab>
+<Tab value="JavaScript">
+
+```javascript title="copy_adt.js"
+// Example migration script for JavaScript
+const { DigitalTwinsClient } = require('@azure/digital-twins-core');
+const { DefaultAzureCredential } = require('@azure/identity');
+const axios = require('axios');
+
+// Azure Digital Twins configuration
+const adtUrl = 'https://your-adt-instance.api.eus.digitaltwins.azure.net';
+const credential = new DefaultAzureCredential();
+const adtClient = new DigitalTwinsClient(adtUrl, credential);
+
+// AgeDigitalTwins configuration
+const ageBaseUrl = 'https://your-age-instance.com/api';
+const ageHeaders = { 'Authorization': 'Bearer your-token' };
+
+async function copyModels() {
+    const models = adtClient.listModels();
+    for await (const model of models) {
+        await axios.post(`${ageBaseUrl}/models`, model, { headers: ageHeaders });
+        console.log(`Copied model: ${model.id}`);
+    }
+}
+
+async function copyTwins() {
+    const query = 'SELECT * FROM digitaltwins';
+    const twins = adtClient.queryTwins(query);
+    for await (const twin of twins) {
+        await axios.put(`${ageBaseUrl}/digitaltwins/${twin.$dtId}`, twin, 
+                       { headers: ageHeaders });
+        console.log(`Copied twin: ${twin.$dtId}`);
+    }
+}
+
+async function main() {
+    await copyModels();
+    await copyTwins();
+}
+
+main().catch(console.error);
+```
+
+**How to Run:**
+- Install `@azure/identity` and `@azure/digital-twins-core` via npm
+- Run with `node copy_adt.js`
+
+</Tab>
+</Tabs>
+
+---
+
+### B. Exporting to JSON-LD and Importing using the Import Jobs API
+
+For large migrations or when using the import API, you can export your data to a JSON-LD file and upload it to blob storage for import.
+
+#### Example Export Script (Python)
+
+```python title="export_to_jsonld.py"
+# Example script to export Azure Digital Twins data to JSON-LD format
+from azure.identity import DefaultAzureCredential
+from azure.digitaltwins.core import DigitalTwinsClient
+import json
+
+# Azure Digital Twins configuration
+adt_url = "https://your-adt-instance.api.eus.digitaltwins.azure.net"
+adt_client = DigitalTwinsClient(adt_url, DefaultAzureCredential())
+
+def export_to_jsonld():
+    export_data = {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "@type": "Collection",
+        "models": [],
+        "twins": [],
+        "relationships": []
+    }
+    
+    # Export models
+    models = adt_client.list_models()
+    for model in models:
+        export_data["models"].append(model.serialize())
+    
+    # Export twins
+    query = "SELECT * FROM digitaltwins"
+    twins = adt_client.query_twins(query)
+    for twin in twins:
+        export_data["twins"].append(twin)
+    
+    # Export relationships
+    rel_query = "SELECT * FROM relationships"
+    relationships = adt_client.query_twins(rel_query)
+    for rel in relationships:
+        export_data["relationships"].append(rel)
+    
+    # Save to file
+    with open('export.jsonld', 'w') as f:
+        json.dump(export_data, f, indent=2)
+    
+    print("Export completed: export.jsonld")
+
+if __name__ == "__main__":
+    export_to_jsonld()
+```
+
+#### Steps
+1. Run the export script to generate `export.jsonld`.
+2. Upload the file to your blob storage account.
+3. Use the AgeDigitalTwins import API to import the data (see [API Reference](/reference/api-reference)).
+
+---
+
+For more details on the import API and supported formats, see the [Reference documentation](/reference/api-reference).

@@ -1,4 +1,4 @@
-name: Deploy static docs to Pages
+name: Update Docs Repository
 
 on:
   push:
@@ -7,39 +7,52 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
+  pull-requests: write
 
 concurrency:
-  group: "pages"
+  group: "docs-update"
   cancel-in-progress: false
 
 jobs:
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  update-docs:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout source repository
         uses: actions/checkout@v4
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
         with:
-          run_install: false
-          package_json_file: "docs/package.json"
-      - name: Install dependencies
-        run: pnpm install
-        working-directory: docs
-      - name: Generate static docs
-        run: pnpm run generate
-        working-directory: docs
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+          path: source
+
+      - name: Checkout docs repository
+        uses: actions/checkout@v4
         with:
-          path: "docs/.output/public"
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          repository: konnektr-io/docs
+          token: ${{ secrets.GITHUB_TOKEN }}
+          path: docs-repo
+
+      - name: Remove existing graph docs
+        run: |
+          if [ -d "docs-repo/content/docs/graph" ]; then
+            rm -rf docs-repo/content/docs/graph
+          fi
+
+      - name: Copy docs to target repository
+        run: |
+          mkdir -p docs-repo/content/docs/graph
+          cp -r source/docs/* docs-repo/content/docs/graph/
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v5
+        with:
+          path: docs-repo
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "Update Konnektr Graph documentation"
+          title: "Update Konnektr Graph documentation"
+          body: |
+            This PR updates the Konnektr Graph documentation with the latest changes from the pg-age-digitaltwins repository.
+            
+            **Changes:**
+            - Updated documentation content in `/content/docs/graph/`
+            
+            **Source:** ${{ github.repository }}@${{ github.sha }}
+          branch: update-graph-docs-${{ github.run_number }}
+          delete-branch: true

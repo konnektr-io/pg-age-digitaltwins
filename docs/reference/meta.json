@@ -1,0 +1,10 @@
+{
+    "title": "Reference",
+    "icon": "Book",
+    "description": "API reference, SDK documentation, and configuration options",
+    "pages": [
+        "api",
+        "sdk",
+        "configuration"
+    ]
+}

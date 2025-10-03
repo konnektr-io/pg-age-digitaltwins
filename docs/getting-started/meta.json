@@ -1,0 +1,10 @@
+{
+    "title": "Getting Started",
+    "icon": "Rocket",
+    "description": "Quick start guides and initial setup for Konnektr Graph",
+    "pages": [
+        "quickstart",
+        "setup",
+        "first-steps"
+    ]
+}

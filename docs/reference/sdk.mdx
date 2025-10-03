@@ -1,0 +1,99 @@
+---
+title: SDK Reference
+icon: Code
+---
+
+## Overview
+
+The AgeDigitalTwins SDK provides a .NET client for interacting with the AgeDigitalTwins API. It is designed to be compatible with the Azure Digital Twins SDK, with similar method signatures and return types.
+
+## Installation
+
+To install the SDK, use the following NuGet command:
+
+```bash
+Install-Package AgeDigitalTwins
+```
+
+## Usage
+
+### Initialization
+
+```csharp
+using AgeDigitalTwins;
+using Npgsql;
+
+var connectionString = "Host=localhost;Username=postgres;Password=yourpassword;Database=agedb";
+var dataSource = NpgsqlDataSource.Create(connectionString);
+var client = new AgeDigitalTwinsClient(dataSource, "digitaltwins");
+```
+
+### Managing Digital Twins
+
+#### Create or Replace a Digital Twin
+
+```csharp
+var twin = new
+{
+    $dtId = "room1",
+    name = "Room 1",
+    $metadata = new { $model = "dtmi:com:adt:dtsample:room;1" }
+};
+await client.CreateOrReplaceDigitalTwinAsync("room1", twin);
+```
+
+#### Get a Digital Twin
+
+```csharp
+var twin = await client.GetDigitalTwinAsync<object>("room1");
+Console.WriteLine(twin);
+```
+
+#### Delete a Digital Twin
+
+```csharp
+await client.DeleteDigitalTwinAsync("room1");
+```
+
+### Querying the Graph
+
+#### Execute a Query
+
+```csharp
+var query = "SELECT * FROM DIGITALTWINS";
+await foreach (var result in client.QueryAsync<object>(query))
+{
+    Console.WriteLine(result);
+}
+```
+
+### Managing Models
+
+#### Create Models
+
+```csharp
+var models = new[]
+{
+    "{ \"@id\": \"dtmi:com:adt:dtsample:room;1\", \"@type\": \"Interface\", \"displayName\": \"Room\" }"
+};
+await client.CreateModelsAsync(models);
+```
+
+#### List Models
+
+```csharp
+await foreach (var model in client.GetModelsAsync<object>())
+{
+    Console.WriteLine(model);
+}
+```
+
+#### Delete a Model
+
+```csharp
+await client.DeleteModelAsync("dtmi:com:adt:dtsample:room;1");
+```
+
+## Compatibility
+
+The SDK is compatible with .NET 6.0 and later. It supports asynchronous programming with `async` and `await` patterns.

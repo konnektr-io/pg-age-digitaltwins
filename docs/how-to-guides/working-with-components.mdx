@@ -1,0 +1,778 @@
+---
+title: Working with Components
+description: Learn how to create, manage, and update digital twin components in your applications
+icon: Puzzle
+---
+
+This guide shows you how to work with digital twin components in AgeDigitalTwins, from basic component operations to advanced component-based architectures.
+
+## Prerequisites
+
+- AgeDigitalTwins SDK installed and configured
+- Understanding of [DTDL](/concepts/dtdl) component definitions
+- Digital twins with component-based DTDL models
+
+## Basic Component Operations
+
+### Getting Component Data
+
+Retrieve data for a specific component within a digital twin:
+
+```csharp
+using AgeDigitalTwins;
+
+var client = new AgeDigitalTwinsClient(connectionString);
+
+// Get component data as dynamic object
+dynamic hvacComponent = await client.GetComponentAsync("building-001", "hvac");
+Console.WriteLine($"Set Point: {hvacComponent.SetPoint}°C");
+Console.WriteLine($"Current Mode: {hvacComponent.Mode}");
+
+// Get component data as strongly-typed object
+var hvac = await client.GetComponentAsync<HvacComponent>("building-001", "hvac");
+Console.WriteLine($"Energy Usage: {hvac.EnergyUsage} kWh");
+```
+
+### Updating Component Properties
+
+Update specific properties within a component using JSON Patch:
+
+```csharp
+using Microsoft.AspNetCore.JsonPatch;
+
+// Create a JSON patch document
+var patch = new JsonPatchDocument();
+patch.Replace("/SetPoint", 22.5);
+patch.Replace("/Mode", "Auto");
+patch.Add("/ScheduleEnabled", true);
+
+// Apply the patch to the HVAC component
+await client.UpdateComponentAsync("building-001", "hvac", patch);
+```
+
+You can also update using an object:
+
+```csharp
+// Update with an anonymous object
+await client.UpdateComponentAsync("building-001", "hvac", new {
+    SetPoint = 23.0,
+    Mode = "Heat",
+    FanSpeed = 75
+});
+
+// Update with a strongly-typed object
+var hvacUpdate = new HvacComponentUpdate
+{
+    SetPoint = 21.5,
+    Mode = "Cool",
+    ScheduleEnabled = true
+};
+
+await client.UpdateComponentAsync("building-001", "hvac", hvacUpdate);
+```
+
+## Defining Component Models
+
+### Simple Component DTDL
+
+Define a basic component in your DTDL model:
+
+```json
+{
+  "@id": "dtmi:example:HVAC;1",
+  "@type": "Interface",
+  "displayName": "HVAC System",
+  "contents": [
+    {
+      "@type": "Property",
+      "name": "SetPoint",
+      "schema": "double",
+      "displayName": "Temperature Set Point",
+      "writable": true
+    },
+    {
+      "@type": "Property",
+      "name": "Mode",
+      "schema": {
+        "@type": "Enum",
+        "valueSchema": "string",
+        "enumValues": [
+          { "name": "Off", "enumValue": "Off" },
+          { "name": "Heat", "enumValue": "Heat" },
+          { "name": "Cool", "enumValue": "Cool" },
+          { "name": "Auto", "enumValue": "Auto" }
+        ]
+      },
+      "writable": true
+    },
+    {
+      "@type": "Telemetry",
+      "name": "ActualTemperature",
+      "schema": "double"
+    }
+  ]
+}
+```
+
+### Using the Component in a Twin Model
+
+Reference the component in your main twin model:
+
+```json
+{
+  "@id": "dtmi:example:Building;1",
+  "@type": "Interface",
+  "displayName": "Smart Building",
+  "contents": [
+    {
+      "@type": "Component",
+      "name": "hvac",
+      "schema": "dtmi:example:HVAC;1"
+    },
+    {
+      "@type": "Component",
+      "name": "lighting",
+      "schema": "dtmi:example:LightingSystem;1"
+    },
+    {
+      "@type": "Property",
+      "name": "BuildingName",
+      "schema": "string"
+    }
+  ]
+}
+```
+
+## Working with Strongly-Typed Components
+
+### Define Component Classes
+
+Create strongly-typed classes for your components:
+
+```csharp
+public class HvacComponent
+{
+    public double SetPoint { get; set; }
+    public string Mode { get; set; }
+    public bool ScheduleEnabled { get; set; }
+    public double ActualTemperature { get; set; }
+    public int FanSpeed { get; set; }
+    public double EnergyUsage { get; set; }
+    public DateTime LastMaintenance { get; set; }
+}
+
+public class LightingComponent
+{
+    public Dictionary<string, LightingZone> Zones { get; set; }
+    public bool MotionSensorEnabled { get; set; }
+    public string Schedule { get; set; }
+    public double TotalEnergyUsage { get; set; }
+}
+
+public class LightingZone
+{
+    public int Brightness { get; set; }
+    public int ColorTemperature { get; set; }
+    public bool Enabled { get; set; }
+    public DateTime LastMotion { get; set; }
+}
+```
+
+### Component CRUD Operations
+
+Create a service to manage components:
+
+```csharp
+public class ComponentManager
+{
+    private readonly AgeDigitalTwinsClient _client;
+    private readonly ILogger<ComponentManager> _logger;
+
+    public ComponentManager(AgeDigitalTwinsClient client, ILogger<ComponentManager> logger)
+    {
+        _client = client;
+        _logger = logger;
+    }
+
+    public async Task<T> GetComponentAsync<T>(string twinId, string componentName)
+    {
+        try
+        {
+            return await _client.GetComponentAsync<T>(twinId, componentName);
+        }
+        catch (ComponentNotFoundException)
+        {
+            _logger.LogWarning("Component {ComponentName} not found on twin {TwinId}",
+                componentName, twinId);
+            throw;
+        }
+    }
+
+    public async Task UpdateHvacSettings(string buildingId, double setPoint, string mode)
+    {
+        var hvacUpdate = new {
+            SetPoint = setPoint,
+            Mode = mode,
+            LastUpdated = DateTime.UtcNow
+        };
+
+        await _client.UpdateComponentAsync(buildingId, "hvac", hvacUpdate);
+
+        _logger.LogInformation("Updated HVAC settings for building {BuildingId}: {SetPoint}°C, {Mode}",
+            buildingId, setPoint, mode);
+    }
+
+    public async Task UpdateLightingZone(string buildingId, string zoneName, int brightness, bool enabled)
+    {
+        var patch = new JsonPatchDocument();
+        patch.Replace($"/Zones/{zoneName}/Brightness", brightness);
+        patch.Replace($"/Zones/{zoneName}/Enabled", enabled);
+        patch.Replace($"/Zones/{zoneName}/LastUpdated", DateTime.UtcNow);
+
+        await _client.UpdateComponentAsync(buildingId, "lighting", patch);
+
+        _logger.LogInformation("Updated lighting zone {ZoneName} in building {BuildingId}",
+            zoneName, buildingId);
+    }
+}
+```
+
+## Component Integration Patterns
+
+### Building Management System Integration
+
+Integrate components with external building management systems:
+
+```csharp
+public class BmsComponentSync
+{
+    private readonly AgeDigitalTwinsClient _client;
+    private readonly IBuildingManagementSystem _bms;
+
+    public async Task SyncBuildingComponents(string buildingId)
+    {
+        // Get current BMS data
+        var bmsData = await _bms.GetBuildingSystemsAsync(buildingId);
+
+        // Update HVAC component
+        if (bmsData.HvacSystem != null)
+        {
+            await _client.UpdateComponentAsync(buildingId, "hvac", new {
+                SetPoint = bmsData.HvacSystem.SetPointTemperature,
+                ActualTemperature = bmsData.HvacSystem.CurrentTemperature,
+                Mode = bmsData.HvacSystem.OperatingMode,
+                FanSpeed = bmsData.HvacSystem.FanSpeedPercent,
+                EnergyUsage = bmsData.HvacSystem.CurrentEnergyUsage,
+                LastUpdated = DateTime.UtcNow
+            });
+        }
+
+        // Update lighting component
+        if (bmsData.LightingSystem != null)
+        {
+            var lightingZones = bmsData.LightingSystem.Zones.ToDictionary(
+                zone => zone.Name,
+                zone => new {
+                    Brightness = zone.BrightnessLevel,
+                    Enabled = zone.IsEnabled,
+                    ColorTemperature = zone.ColorTemperature,
+                    LastMotion = zone.LastOccupancyTime
+                }
+            );
+
+            await _client.UpdateComponentAsync(buildingId, "lighting", new {
+                Zones = lightingZones,
+                TotalEnergyUsage = bmsData.LightingSystem.TotalEnergyConsumption,
+                LastUpdated = DateTime.UtcNow
+            });
+        }
+
+        // Update security component
+        if (bmsData.SecuritySystem != null)
+        {
+            await _client.UpdateComponentAsync(buildingId, "security", new {
+                AlarmArmed = bmsData.SecuritySystem.IsArmed,
+                AccessControlActive = bmsData.SecuritySystem.AccessControlEnabled,
+                LastEvent = bmsData.SecuritySystem.LastSecurityEvent,
+                CameraStatus = bmsData.SecuritySystem.CameraStatuses,
+                LastUpdated = DateTime.UtcNow
+            });
+        }
+    }
+}
+```
+
+### IoT Device Integration
+
+Map IoT device data to specific components:
+
+```csharp
+public class IoTComponentIntegration
+{
+    private readonly AgeDigitalTwinsClient _client;
+    private readonly ILogger<IoTComponentIntegration> _logger;
+
+    public async Task ProcessSensorData(string deviceId, SensorData sensorData)
+    {
+        // Map device to twin and component
+        var (twinId, componentName) = MapDeviceToComponent(deviceId);
+
+        switch (sensorData.SensorType)
+        {
+            case SensorType.Temperature:
+                await UpdateTemperatureSensor(twinId, componentName, sensorData);
+                break;
+
+            case SensorType.Occupancy:
+                await UpdateOccupancySensor(twinId, componentName, sensorData);
+                break;
+
+            case SensorType.AirQuality:
+                await UpdateAirQualitySensor(twinId, componentName, sensorData);
+                break;
+        }
+    }
+
+    private async Task UpdateTemperatureSensor(string twinId, string componentName, SensorData data)
+    {
+        await _client.UpdateComponentAsync(twinId, componentName, new {
+            ActualTemperature = data.Temperature,
+            Humidity = data.Humidity,
+            LastReading = data.Timestamp,
+            SensorStatus = data.Status
+        });
+
+        // Also publish telemetry
+        await _client.PublishComponentTelemetryAsync(twinId, componentName, new {
+            temperature = data.Temperature,
+            humidity = data.Humidity,
+            timestamp = data.Timestamp
+        });
+    }
+
+    private async Task UpdateOccupancySensor(string twinId, string componentName, SensorData data)
+    {
+        var zoneName = data.Properties["zone"]?.ToString();
+        if (zoneName != null)
+        {
+            var patch = new JsonPatchDocument();
+            patch.Replace($"/Zones/{zoneName}/LastMotion", data.Timestamp);
+            patch.Replace($"/Zones/{zoneName}/Occupied", data.Properties["occupied"]);
+
+            await _client.UpdateComponentAsync(twinId, componentName, patch);
+        }
+    }
+
+    private (string twinId, string componentName) MapDeviceToComponent(string deviceId)
+    {
+        // Implement your device mapping logic
+        // This could query a database, use naming conventions, etc.
+
+        if (deviceId.StartsWith("hvac-"))
+            return (deviceId.Replace("hvac-", "building-"), "hvac");
+
+        if (deviceId.StartsWith("light-"))
+            return (deviceId.Replace("light-", "building-"), "lighting");
+
+        return (deviceId, "sensors");
+    }
+}
+```
+
+## Component Validation and Error Handling
+
+### Validation Against DTDL Schema
+
+Components are automatically validated against their DTDL schemas:
+
+```csharp
+public class ComponentValidator
+{
+    private readonly AgeDigitalTwinsClient _client;
+
+    public async Task<bool> ValidateAndUpdateComponent<T>(string twinId, string componentName, T componentData)
+    {
+        try
+        {
+            await _client.UpdateComponentAsync(twinId, componentName, componentData);
+            return true;
+        }
+        catch (ValidationException ex)
+        {
+            Console.WriteLine($"Validation failed: {ex.Message}");
+
+            // Log specific validation errors
+            foreach (var error in ex.ValidationErrors)
+            {
+                Console.WriteLine($"- {error.PropertyPath}: {error.ErrorMessage}");
+            }
+
+            return false;
+        }
+        catch (ComponentNotFoundException)
+        {
+            Console.WriteLine($"Component '{componentName}' not found on twin '{twinId}'");
+            return false;
+        }
+    }
+}
+```
+
+### Safe Component Updates
+
+Implement safe update patterns:
+
+```csharp
+public class SafeComponentUpdater
+{
+    private readonly AgeDigitalTwinsClient _client;
+
+    public async Task<ComponentUpdateResult> SafeUpdateComponent(
+        string twinId,
+        string componentName,
+        object updates)
+    {
+        try
+        {
+            // Get current component state
+            var currentComponent = await _client.GetComponentAsync(twinId, componentName);
+
+            // Apply updates
+            await _client.UpdateComponentAsync(twinId, componentName, updates);
+
+            return new ComponentUpdateResult
+            {
+                Success = true,
+                Message = "Component updated successfully"
+            };
+        }
+        catch (DigitalTwinNotFoundException)
+        {
+            return new ComponentUpdateResult
+            {
+                Success = false,
+                Message = $"Twin '{twinId}' not found"
+            };
+        }
+        catch (ComponentNotFoundException)
+        {
+            return new ComponentUpdateResult
+            {
+                Success = false,
+                Message = $"Component '{componentName}' not found on twin '{twinId}'"
+            };
+        }
+        catch (ValidationException ex)
+        {
+            return new ComponentUpdateResult
+            {
+                Success = false,
+                Message = $"Validation failed: {ex.Message}",
+                ValidationErrors = ex.ValidationErrors.ToList()
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ComponentUpdateResult
+            {
+                Success = false,
+                Message = $"Unexpected error: {ex.Message}"
+            };
+        }
+    }
+}
+
+public class ComponentUpdateResult
+{
+    public bool Success { get; set; }
+    public string Message { get; set; }
+    public List<ValidationError> ValidationErrors { get; set; } = new();
+}
+```
+
+## Component Telemetry Patterns
+
+### Scheduled Component Monitoring
+
+Implement scheduled monitoring for component health:
+
+```csharp
+public class ComponentMonitoringService
+{
+    private readonly AgeDigitalTwinsClient _client;
+    private readonly Timer _monitoringTimer;
+
+    public ComponentMonitoringService(AgeDigitalTwinsClient client)
+    {
+        _client = client;
+        _monitoringTimer = new Timer(MonitorComponents, null,
+            TimeSpan.Zero, TimeSpan.FromMinutes(5));
+    }
+
+    private async void MonitorComponents(object state)
+    {
+        var buildings = await GetBuildingTwinIds();
+
+        foreach (var buildingId in buildings)
+        {
+            await MonitorBuildingComponents(buildingId);
+        }
+    }
+
+    private async Task MonitorBuildingComponents(string buildingId)
+    {
+        try
+        {
+            // Monitor HVAC health
+            var hvac = await _client.GetComponentAsync<HvacComponent>(buildingId, "hvac");
+            await _client.PublishComponentTelemetryAsync(buildingId, "hvac", new {
+                healthStatus = CalculateHvacHealth(hvac),
+                efficiency = CalculateHvacEfficiency(hvac),
+                energyUsage = hvac.EnergyUsage,
+                timestamp = DateTime.UtcNow
+            });
+
+            // Monitor lighting health
+            var lighting = await _client.GetComponentAsync<LightingComponent>(buildingId, "lighting");
+            await _client.PublishComponentTelemetryAsync(buildingId, "lighting", new {
+                activeZones = lighting.Zones.Count(z => z.Value.Enabled),
+                totalEnergyUsage = lighting.TotalEnergyUsage,
+                averageBrightness = lighting.Zones.Values.Average(z => z.Brightness),
+                timestamp = DateTime.UtcNow
+            });
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error monitoring building {buildingId}: {ex.Message}");
+        }
+    }
+
+    private string CalculateHvacHealth(HvacComponent hvac)
+    {
+        // Implement your health calculation logic
+        var tempDifference = Math.Abs(hvac.SetPoint - hvac.ActualTemperature);
+
+        if (tempDifference < 1.0) return "Excellent";
+        if (tempDifference < 2.0) return "Good";
+        if (tempDifference < 3.0) return "Fair";
+        return "Poor";
+    }
+
+    private double CalculateHvacEfficiency(HvacComponent hvac)
+    {
+        // Implement efficiency calculation
+        return hvac.EnergyUsage > 0 ? (hvac.SetPoint / hvac.EnergyUsage) * 100 : 0;
+    }
+}
+```
+
+## Advanced Component Patterns
+
+### Component State Machines
+
+Implement state machines for complex component behavior:
+
+```csharp
+public class HvacStateMachine
+{
+    private readonly AgeDigitalTwinsClient _client;
+
+    public enum HvacState
+    {
+        Off,
+        Heating,
+        Cooling,
+        Maintenance,
+        Error
+    }
+
+    public async Task TransitionHvacState(string buildingId, HvacState newState, string reason = null)
+    {
+        var hvac = await _client.GetComponentAsync<HvacComponent>(buildingId, "hvac");
+        var currentState = Enum.Parse<HvacState>(hvac.Mode);
+
+        if (!IsValidTransition(currentState, newState))
+        {
+            throw new InvalidOperationException(
+                $"Invalid state transition from {currentState} to {newState}");
+        }
+
+        await _client.UpdateComponentAsync(buildingId, "hvac", new {
+            Mode = newState.ToString(),
+            LastStateChange = DateTime.UtcNow,
+            StateChangeReason = reason ?? "Manual",
+            PreviousState = currentState.ToString()
+        });
+
+        // Publish state change telemetry
+        await _client.PublishComponentTelemetryAsync(buildingId, "hvac", new {
+            stateChange = new {
+                from = currentState.ToString(),
+                to = newState.ToString(),
+                reason = reason,
+                timestamp = DateTime.UtcNow
+            }
+        });
+    }
+
+    private bool IsValidTransition(HvacState from, HvacState to)
+    {
+        // Define valid state transitions
+        return (from, to) switch
+        {
+            (HvacState.Off, HvacState.Heating) => true,
+            (HvacState.Off, HvacState.Cooling) => true,
+            (HvacState.Heating, HvacState.Off) => true,
+            (HvacState.Heating, HvacState.Cooling) => true,
+            (HvacState.Cooling, HvacState.Off) => true,
+            (HvacState.Cooling, HvacState.Heating) => true,
+            (_, HvacState.Maintenance) => true,  // Can always go to maintenance
+            (_, HvacState.Error) => true,        // Can always go to error
+            (HvacState.Maintenance, HvacState.Off) => true,
+            (HvacState.Error, HvacState.Off) => true,
+            _ => false
+        };
+    }
+}
+```
+
+### Component Dependency Management
+
+Handle dependencies between components:
+
+```csharp
+public class ComponentDependencyManager
+{
+    private readonly AgeDigitalTwinsClient _client;
+
+    public async Task UpdateWithDependencies(string buildingId, ComponentUpdate update)
+    {
+        switch (update.ComponentName)
+        {
+            case "hvac":
+                await UpdateHvacWithDependencies(buildingId, update);
+                break;
+            case "lighting":
+                await UpdateLightingWithDependencies(buildingId, update);
+                break;
+        }
+    }
+
+    private async Task UpdateHvacWithDependencies(string buildingId, ComponentUpdate update)
+    {
+        // Update HVAC component
+        await _client.UpdateComponentAsync(buildingId, "hvac", update.Data);
+
+        // Update dependent systems based on HVAC changes
+        if (update.Data.GetType().GetProperty("Mode")?.GetValue(update.Data)?.ToString() == "Off")
+        {
+            // When HVAC is off, adjust lighting for energy savings
+            await _client.UpdateComponentAsync(buildingId, "lighting", new {
+                PowerSavingMode = true,
+                MaxBrightness = 75  // Reduce max brightness when HVAC is off
+            });
+        }
+
+        // Notify security system of HVAC changes
+        await _client.UpdateComponentAsync(buildingId, "security", new {
+            HvacStatus = update.Data.GetType().GetProperty("Mode")?.GetValue(update.Data),
+            LastHvacUpdate = DateTime.UtcNow
+        });
+    }
+
+    private async Task UpdateLightingWithDependencies(string buildingId, ComponentUpdate update)
+    {
+        await _client.UpdateComponentAsync(buildingId, "lighting", update.Data);
+
+        // When lighting changes, update occupancy estimates
+        var lighting = await _client.GetComponentAsync<LightingComponent>(buildingId, "lighting");
+        var occupancyEstimate = EstimateOccupancy(lighting);
+
+        await _client.UpdateComponentAsync(buildingId, "occupancy", new {
+            EstimatedOccupancy = occupancyEstimate,
+            LastUpdate = DateTime.UtcNow,
+            Source = "Lighting"
+        });
+    }
+
+    private int EstimateOccupancy(LightingComponent lighting)
+    {
+        // Simple occupancy estimation based on active lighting zones
+        return lighting.Zones.Count(z => z.Value.Enabled && z.Value.Brightness > 20);
+    }
+}
+
+public class ComponentUpdate
+{
+    public string ComponentName { get; set; }
+    public object Data { get; set; }
+}
+```
+
+## Performance and Best Practices
+
+### Efficient Component Queries
+
+Use efficient patterns for component operations:
+
+```csharp
+public class EfficientComponentOperations
+{
+    private readonly AgeDigitalTwinsClient _client;
+    private readonly MemoryCache _cache;
+
+    public EfficientComponentOperations(AgeDigitalTwinsClient client)
+    {
+        _client = client;
+        _cache = new MemoryCache(new MemoryCacheOptions
+        {
+            SizeLimit = 1000
+        });
+    }
+
+    // Cache component data for read-heavy scenarios
+    public async Task<T> GetComponentWithCache<T>(string twinId, string componentName,
+        TimeSpan? cacheExpiry = null)
+    {
+        var cacheKey = $"{twinId}:{componentName}";
+
+        if (_cache.TryGetValue(cacheKey, out T cachedValue))
+        {
+            return cachedValue;
+        }
+
+        var component = await _client.GetComponentAsync<T>(twinId, componentName);
+
+        _cache.Set(cacheKey, component, cacheExpiry ?? TimeSpan.FromMinutes(5));
+
+        return component;
+    }
+
+    // Batch multiple component updates
+    public async Task BatchUpdateComponents(string twinId,
+        Dictionary<string, object> componentUpdates)
+    {
+        var updateTasks = componentUpdates.Select(kvp =>
+            _client.UpdateComponentAsync(twinId, kvp.Key, kvp.Value));
+
+        await Task.WhenAll(updateTasks);
+    }
+
+    // Invalidate cache on updates
+    public async Task UpdateComponentAndInvalidateCache(string twinId, string componentName,
+        object update)
+    {
+        await _client.UpdateComponentAsync(twinId, componentName, update);
+
+        var cacheKey = $"{twinId}:{componentName}";
+        _cache.Remove(cacheKey);
+    }
+}
+```
+
+## See Also
+
+- [Components Concepts](/concepts/components) - Understanding digital twin components
+- [DTDL Reference](/concepts/dtdl) - Component definition in DTDL
+- [Telemetry Guide](/how-to-guides/working-with-telemetry) - Publishing component telemetry
+- [Validation](/concepts/validation) - Component validation and error handling

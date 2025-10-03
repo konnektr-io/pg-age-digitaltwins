@@ -1,0 +1,78 @@
+---
+title: API Reference
+icon: Code
+---
+
+The AgeDigitalTwins API is compatible with the [Azure Digital Twins Data Plane REST API](https://learn.microsoft.com/en-us/rest/api/digital-twins/dataplane/twins?view=rest-dataplane-2023-10-31). You can use existing ADT client libraries and tools with this API. Below is a summary of the main endpoints and their usage.
+
+## Digital Twins
+
+### Get Digital Twin
+- **GET /digitaltwins/`{id}`**
+- Retrieves a digital twin by its ID.
+
+### Create or Replace Digital Twin
+- **PUT /digitaltwins/`{id}`**
+- Creates or replaces a digital twin by its ID.
+
+### Update Digital Twin
+- **PATCH /digitaltwins/`{id}`**
+- Updates a digital twin by its ID using a JSON Patch document.
+
+### Delete Digital Twin
+- **DELETE /digitaltwins/`{id}`**
+- Deletes a digital twin by its ID.
+
+## Relationships
+
+### List Relationships
+- **GET /digitaltwins/`{id}`/relationships**
+- Lists all relationships for a digital twin.
+
+### Get Relationship
+- **GET /digitaltwins/`{id}`/relationships/`{relationshipId}`**
+- Retrieves a specific relationship by its ID.
+
+### Create or Replace Relationship
+- **PUT /digitaltwins/`{id}`/relationships/`{relationshipId}`**
+- Creates or replaces a relationship for a digital twin.
+
+### Update Relationship
+- **PATCH /digitaltwins/`{id}`/relationships/`{relationshipId}`**
+- Updates a specific relationship for a digital twin using a JSON Patch document.
+
+### Delete Relationship
+- **DELETE /digitaltwins/`{id}`/relationships/`{relationshipId}`**
+- Deletes a specific relationship for a digital twin.
+
+### List Incoming Relationships
+- **GET /digitaltwins/`{id}`/incomingrelationships**
+- Lists all incoming relationships for a digital twin.
+
+## Query
+
+### Query Digital Twins
+- **POST /query**
+- Executes a query against the digital twins graph with pagination support.
+
+## Models
+
+### List Models
+- **GET /models**
+- Lists all models in the digital twins graph.
+
+### Create Models
+- **POST /models**
+- Creates new models in the digital twins graph.
+
+### Delete All Models
+- **DELETE /models**
+- Deletes all models in the digital twins graph.
+
+### Delete Model
+- **DELETE /models/`{id}`**
+- Deletes a specific model by its ID.
+
+---
+
+For detailed request/response examples and additional parameters, see the [Azure Digital Twins REST API documentation](https://learn.microsoft.com/en-us/rest/api/digital-twins/dataplane/twins?view=rest-dataplane-2023-10-31).
