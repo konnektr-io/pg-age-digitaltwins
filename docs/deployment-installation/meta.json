@@ -3,7 +3,8 @@
     "icon": "Download",
     "description": "Deploy Konnektr Graph in various environments",
     "pages": [
+        "hosted-konnektr",
         "self-host",
-        "hosted-konnektr"
+        "performance"
     ]
 }
