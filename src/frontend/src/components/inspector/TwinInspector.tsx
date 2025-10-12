@@ -1,6 +1,9 @@
-import { FileText, Database, Clock, Zap } from "lucide-react";
+import { FileText, Database } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import type { BasicDigitalTwin } from "@/types";
+import { EditableProperty } from "./EditableProperty";
+import { MetadataTooltip } from "@/components/ui/metadata-tooltip";
+import { useDigitalTwinsStore } from "@/stores/digitalTwinsStore";
+import type { BasicDigitalTwin, DigitalTwinPropertyMetadata } from "@/types";
 import { getModelDisplayName } from "@/mocks/digitalTwinData";
 
 interface TwinInspectorProps {
@@ -8,8 +11,10 @@ interface TwinInspectorProps {
 }
 
 export function TwinInspector({ twinId }: TwinInspectorProps) {
-  // In a real app, this would fetch the twin data from the API
-  // For now, we'll simulate loading the twin data
+  const { getTwin, updateTwinProperty } = useDigitalTwinsStore();
+
+  // In a real app, this would come from the store
+  // For now, simulate loading the twin data
   const mockTwin: BasicDigitalTwin = {
     $dtId: twinId,
     $metadata: {
@@ -31,8 +36,16 @@ export function TwinInspector({ twinId }: TwinInspectorProps) {
     occupancy: 8,
   };
 
-  const { $dtId, $metadata, ...properties } = mockTwin;
+  const twin = getTwin(twinId) || mockTwin;
+  const { $dtId, $metadata, ...properties } = twin;
   const modelDisplayName = getModelDisplayName($metadata.$model);
+
+  const handlePropertySave = async (
+    propertyName: string,
+    newValue: unknown
+  ) => {
+    await updateTwinProperty(twinId, propertyName, newValue);
+  };
 
   return (
     <div className="space-y-4">
@@ -73,92 +86,35 @@ export function TwinInspector({ twinId }: TwinInspectorProps) {
           Properties
         </h3>
         <div className="space-y-2">
-          {Object.entries(properties).map(([key, value]) => (
-            <div key={key} className="flex justify-between items-start text-sm">
-              <span className="text-muted-foreground min-w-0 flex-1">
-                {key}
-              </span>
-              <div className="ml-2 text-right">
-                <div className="font-mono text-xs break-all">
-                  {typeof value === "object" && value !== null
-                    ? JSON.stringify(value)
-                    : String(value)}
-                </div>
-                {/* Show metadata if available */}
-                {(() => {
-                  const meta = $metadata[key];
-                  if (meta && typeof meta === "object" && "lastUpdateTime" in meta) {
-                    const dtMeta = meta as import("@/types/BasicDigitalTwin").DigitalTwinPropertyMetadata;
-                    return dtMeta.lastUpdateTime ? (
-                      <div className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        {new Date(dtMeta.lastUpdateTime).toLocaleString()}
-                      </div>
-                    ) : null;
-                  }
-                  return null;
-                })()}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Metadata */}
-      <div className="space-y-2">
-        <h3 className="font-semibold text-sm flex items-center gap-2">
-          <Zap className="w-4 h-4" />
-          Metadata
-        </h3>
-        <div className="space-y-2">
-          {Object.entries($metadata)
-            .filter(
-              ([key]) =>
-                !key.startsWith("$") && typeof $metadata[key] === "object"
-            )
-            .map(([key, metadata]) => (
-              <div key={key} className="border rounded-md p-2 text-sm">
-                <div className="font-medium mb-1">{key}</div>
-                <div className="space-y-1 text-xs text-muted-foreground">
-                  {(() => {
-                    if (typeof metadata === "object" && metadata && "lastUpdateTime" in metadata) {
-                      const dtMeta = metadata as import("@/types/BasicDigitalTwin").DigitalTwinPropertyMetadata;
-                      return <>
-                        {dtMeta.lastUpdateTime && (
-                          <div className="flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            Updated:{" "}
-                            {new Date(dtMeta.lastUpdateTime).toLocaleString()}
-                          </div>
-                        )}
-                        {dtMeta.sourceTime && (
-                          <div className="flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            Source:{" "}
-                            {new Date(dtMeta.sourceTime).toLocaleString()}
-                          </div>
-                        )}
-                        {dtMeta.desiredValue !== undefined && (
-                          <div>
-                            Desired: {String(dtMeta.desiredValue)}
-                          </div>
-                        )}
-                      </>;
-                    }
-                    return null;
-                  })()}
-                </div>
-              </div>
-            ))}
+          {Object.entries(properties).map(([key, value]) => {
+            const metadata = $metadata[key] as
+              | DigitalTwinPropertyMetadata
+              | undefined;
+            return (
+              <EditableProperty
+                key={key}
+                name={key}
+                value={value}
+                metadata={metadata}
+                onSave={(newValue) => handlePropertySave(key, newValue)}
+              />
+            );
+          })}
         </div>
       </div>
 
       {/* Quick Actions */}
       <div className="pt-4 border-t">
-        <div className="text-xs text-muted-foreground space-y-1">
-          <div>Select twin in query results to inspect</div>
-          <div>Real-time updates: Coming soon</div>
-        </div>
+        <MetadataTooltip
+          metadata={{
+            lastUpdateTime: "2024-01-15T10:32:00Z",
+          }}
+        >
+          <div className="text-xs text-muted-foreground space-y-1">
+            <div>Click properties to edit • Hover for metadata</div>
+            <div>Changes save automatically</div>
+          </div>
+        </MetadataTooltip>
       </div>
     </div>
   );
