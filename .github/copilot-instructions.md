@@ -125,5 +125,7 @@ _Maintainers and contributors: Please read and follow these instructions to ensu
   - Do not use `as any` or assign values to variables typed as `any`.
   - Avoid all patterns that result in implicit `any` (e.g., missing type annotations, untyped function parameters, or untyped object destructuring).
   - Use precise, safe types and always prefer explicit, correct typing.
-  - If a type is unknown, use `unknown` or a more specific type, and always perform type narrowing before use.
+  - Define proper interfaces and types instead of relying on `Record<string, unknown>` or excessive type guards.
+  - If a type is genuinely unknown, use `unknown` sparingly and perform minimal type narrowing.
+  - Prefer strong typing at the source (interfaces, API responses) rather than defensive type guards everywhere.
   - All code must pass with `noImplicitAny` enabled.

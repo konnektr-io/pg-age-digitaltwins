@@ -1,24 +1,16 @@
-import { FileCode2, Layers, Tag, Clock, Info } from "lucide-react";
+import { FileCode2, Layers, Tag, Info } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { mockModels } from "@/mocks/digitalTwinData";
 
 interface ModelInspectorProps {
   modelId: string;
-
+}
 
 export function ModelInspector({ modelId }: ModelInspectorProps) {
   // Find the model in our mock data
   const modelData = mockModels.find((model) => {
-    if (
-      typeof model.model === "object" &&
-      model.model !== null &&
-      "@id" in model.model
-    ) {
-      const idVal = (model.model as Record<string, unknown>)["@id"];
-      return typeof idVal === "string" && idVal === modelId;
-    }
-    return false;
+    return model.model?.["@id"] === modelId;
   });
 
   if (!modelData) {
@@ -47,41 +39,52 @@ export function ModelInspector({ modelId }: ModelInspectorProps) {
           <div className="flex justify-between items-start text-sm">
             <span className="text-muted-foreground">Model ID</span>
             <code className="font-mono text-xs bg-muted px-2 py-1 rounded break-all max-w-[200px] text-right">
-              {typeof model === "object" &&
-              model !== null &&
-              typeof (model as Record<string, unknown>)["@id"] === "string"
-                ? String((model as Record<string, unknown>)["@id"])
-                : ""}
+              {model?.["@id"] || ""}
             </code>
           </div>
           <div className="flex justify-between items-center text-sm">
-			<span className="text-muted-foreground">Upload Time</span>
+            <span className="text-muted-foreground">Upload Time</span>
           </div>
           <div className="flex justify-between items-start text-sm">
             <span className="text-muted-foreground">Display Name</span>
             <span className="text-right break-all max-w-[200px]">
-              {typeof model === "object" &&
-              model !== null &&
-              (model as Record<string, unknown>)["displayName"] !== undefined
-                ? String((model as Record<string, unknown>)["displayName"])
-                : "No display name"}
+              {(() => {
+                if (!model?.displayName) return "No display name";
+                if (typeof model.displayName === "string")
+                  return model.displayName;
+                if (
+                  typeof model.displayName === "object" &&
+                  "en" in model.displayName
+                ) {
+                  return String(model.displayName.en);
+                }
+                return JSON.stringify(model.displayName);
+              })()}
             </span>
           </div>
-          {typeof model === "object" &&
-            model !== null &&
-            (model as Record<string, unknown>)["description"] !== undefined && (
-              <div className="flex justify-between items-start text-sm">
-                <span className="text-muted-foreground">Description</span>
-                <span className="text-right text-xs max-w-[200px] break-words">
-                  {(() => {
-                    const desc = (model as Record<string, unknown>)["description"];
-                    if (typeof desc === "string") return desc;
-                    if (desc && typeof desc === "object" && "en" in desc) return String((desc as Record<string, unknown>)["en"]);
-                    return JSON.stringify(desc);
-                  })()}
-                </span>
-              </div>
-            )}
+          {model?.description && (
+            <div className="flex justify-between items-start text-sm">
+              <span className="text-muted-foreground">Description</span>
+              <span className="text-right text-xs max-w-[200px] break-words">
+                {(() => {
+                  if (typeof model?.description === "string")
+                    return model.description;
+                  if (
+                    model?.description &&
+                    typeof model.description === "object" &&
+                    "en" in model.description
+                  ) {
+                    return String(
+                      (model.description as Record<string, unknown>)["en"]
+                    );
+                  }
+                  return model?.description
+                    ? JSON.stringify(model.description)
+                    : "";
+                })()}
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -93,95 +96,84 @@ export function ModelInspector({ modelId }: ModelInspectorProps) {
         </h3>
         <div className="flex justify-between items-start text-sm">
           <span className="text-muted-foreground">Model ID</span>
-          <code className="font-mono text-xs bg-muted px-2 py-1 rounded">{id}</code>
+          <code className="font-mono text-xs bg-muted px-2 py-1 rounded">
+            {id}
+          </code>
         </div>
       </div>
 
       {/* Contents/Properties */}
-      {typeof model === "object" &&
-        model !== null &&
-        Array.isArray((model as Record<string, unknown>)["contents"]) &&
-        model.contents && model.contents.length > 0 && (
-          <div className="space-y-2">
-            <h3 className="font-semibold text-sm flex items-center gap-2">
-              <Layers className="w-4 h-4" />
-              Contents (
-              {((model as Record<string, unknown>)["contents"] as unknown[]).length}
-              )
-            </h3>
-            <div className="space-y-2 max-h-48 overflow-y-auto">
-              {model.contents?.map((content, index) => {
-                if (typeof content !== "object" || content === null) return null;
-                const c = content;
-                return (
-                  <div key={index} className="border rounded-md p-2 text-sm">
-                    <div className="flex justify-between items-start mb-1">
-                      <span className="font-medium">
-                        {typeof c.name === "string" ? c.name : String(c.name ?? "")}
-                      </span>
-                      <Badge variant="secondary" className="text-xs">
-                        {typeof c["@type"] === "string" ? c["@type"] : String(c["@type"] ?? "")}
-                      </Badge>
-                    </div>
-                    {c.displayName !== undefined && (
-                      <div className="text-xs text-muted-foreground mb-1">
-                        {(() => {
-                          const dn = c.displayName;
-                          if (typeof dn === "string") return dn;
-                          if (dn && typeof dn === "object" && "en" in dn) return String((dn as Record<string, unknown>)["en"]);
-                          return JSON.stringify(dn);
-                        })()}
-                      </div>
-                    )}
-                    {c.description !== undefined && (
-                      <div className="text-xs text-muted-foreground break-words">
-                        {(() => {
-                          const desc = c.description;
-                          if (typeof desc === "string") return desc;
-                          if (desc && typeof desc === "object" && "en" in desc) return String((desc as Record<string, unknown>)["en"]);
-                          return JSON.stringify(desc);
-                        })()}
-                      </div>
-                    )}
-                    {c['@type'] === 'Property' && c.schema !== undefined && (
-                      <div className="text-xs mt-1">
-                        <span className="text-muted-foreground">Schema: </span>
-                        <code className="font-mono">
-                          {typeof c.schema === "string" ? c.schema : JSON.stringify(c.schema)}
-                        </code>
-                      </div>
-                    )}
+      {model?.contents && model.contents.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="font-semibold text-sm flex items-center gap-2">
+            <Layers className="w-4 h-4" />
+            Contents ({model.contents.length})
+          </h3>
+          <div className="space-y-2 max-h-48 overflow-y-auto">
+            {model.contents.map((content, index) => (
+              <div key={index} className="border rounded-md p-2 text-sm">
+                <div className="flex justify-between items-start mb-1">
+                  <span className="font-medium">{content.name || ""}</span>
+                  <Badge variant="secondary" className="text-xs">
+                    {Array.isArray(content["@type"])
+                      ? content["@type"][0]
+                      : content["@type"]}
+                  </Badge>
+                </div>
+                {content.displayName && (
+                  <div className="text-xs text-muted-foreground mb-1">
+                    {typeof content.displayName === "string"
+                      ? content.displayName
+                      : content.displayName.en ||
+                        JSON.stringify(content.displayName)}
                   </div>
-                );
-              })}
-            </div>
+                )}
+                {content.description && (
+                  <div className="text-xs text-muted-foreground break-words">
+                    {typeof content.description === "string"
+                      ? content.description
+                      : content.description.en ||
+                        JSON.stringify(content.description)}
+                  </div>
+                )}
+                {"schema" in content && content.schema && (
+                  <div className="text-xs mt-1">
+                    <span className="text-muted-foreground">Schema: </span>
+                    <code className="font-mono">
+                      {typeof content.schema === "string"
+                        ? content.schema
+                        : JSON.stringify(content.schema)}
+                    </code>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
-        )}
+        </div>
+      )}
 
       {/* Extends */}
-      {typeof model === "object" &&
-        model !== null &&
-        (model as Record<string, unknown>)["extends"] && (
-          <div className="space-y-2">
-            <h3 className="font-semibold text-sm flex items-center gap-2">
-              <Tag className="w-4 h-4" />
-              Extends
-            </h3>
-            <div className="space-y-1">
-              {(Array.isArray((model as Record<string, unknown>)["extends"])
-                ? ((model as Record<string, unknown>)["extends"] as unknown[])
-                : [(model as Record<string, unknown>)["extends"]]
-              ).map((extend, index) => (
-                <code
-                  key={index}
-                  className="block font-mono text-xs bg-muted px-2 py-1 rounded break-all"
-                >
-                  {typeof extend === "string" ? extend : String(extend)}
-                </code>
-              ))}
-            </div>
+      {model?.extends && (
+        <div className="space-y-2">
+          <h3 className="font-semibold text-sm flex items-center gap-2">
+            <Tag className="w-4 h-4" />
+            Extends
+          </h3>
+          <div className="space-y-1">
+            {(Array.isArray(model.extends)
+              ? model.extends
+              : [model.extends]
+            ).map((extend, index) => (
+              <code
+                key={index}
+                className="block font-mono text-xs bg-muted px-2 py-1 rounded break-all"
+              >
+                {extend}
+              </code>
+            ))}
           </div>
-        )}
+        </div>
+      )}
 
       {/* Actions */}
       <div className="pt-4 border-t space-y-2">
@@ -190,14 +182,7 @@ export function ModelInspector({ modelId }: ModelInspectorProps) {
         </Button>
         <div className="text-xs text-muted-foreground space-y-1">
           <div>Select model in sidebar or query results</div>
-          <div>
-            Model validation:{" "}
-            {typeof model === "object" &&
-            model !== null &&
-            (model as Record<string, unknown>)["contents"]
-              ? "Valid"
-              : "Unknown"}
-          </div>
+          <div>Model validation: {model?.contents ? "Valid" : "Unknown"}</div>
         </div>
       </div>
     </div>
