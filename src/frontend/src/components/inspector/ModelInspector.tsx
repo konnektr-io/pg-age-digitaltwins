@@ -5,13 +5,21 @@ import { mockModels } from "@/mocks/digitalTwinData";
 
 interface ModelInspectorProps {
   modelId: string;
-}
+
 
 export function ModelInspector({ modelId }: ModelInspectorProps) {
   // Find the model in our mock data
-  const modelData = mockModels.find(
-    (model) => (model.model as any)["@id"] === modelId
-  );
+  const modelData = mockModels.find((model) => {
+    if (
+      typeof model.model === "object" &&
+      model.model !== null &&
+      "@id" in model.model
+    ) {
+      const idVal = (model.model as Record<string, unknown>)["@id"];
+      return typeof idVal === "string" && idVal === modelId;
+    }
+    return false;
+  });
 
   if (!modelData) {
     return (
@@ -25,8 +33,7 @@ export function ModelInspector({ modelId }: ModelInspectorProps) {
     );
   }
 
-  const { model: dtdlModel, uploadTime } = modelData;
-  const model = dtdlModel as any;
+  const { model, id } = modelData;
 
   return (
     <div className="space-y-4">
@@ -40,29 +47,41 @@ export function ModelInspector({ modelId }: ModelInspectorProps) {
           <div className="flex justify-between items-start text-sm">
             <span className="text-muted-foreground">Model ID</span>
             <code className="font-mono text-xs bg-muted px-2 py-1 rounded break-all max-w-[200px] text-right">
-              {model["@id"]}
+              {typeof model === "object" &&
+              model !== null &&
+              typeof (model as Record<string, unknown>)["@id"] === "string"
+                ? String((model as Record<string, unknown>)["@id"])
+                : ""}
             </code>
           </div>
           <div className="flex justify-between items-center text-sm">
-            <span className="text-muted-foreground">Type</span>
-            <Badge variant="outline" className="text-xs">
-              {model["@type"] || "Interface"}
-            </Badge>
+			<span className="text-muted-foreground">Upload Time</span>
           </div>
           <div className="flex justify-between items-start text-sm">
             <span className="text-muted-foreground">Display Name</span>
             <span className="text-right break-all max-w-[200px]">
-              {model.displayName || "No display name"}
+              {typeof model === "object" &&
+              model !== null &&
+              (model as Record<string, unknown>)["displayName"] !== undefined
+                ? String((model as Record<string, unknown>)["displayName"])
+                : "No display name"}
             </span>
           </div>
-          {model.description && (
-            <div className="flex justify-between items-start text-sm">
-              <span className="text-muted-foreground">Description</span>
-              <span className="text-right text-xs max-w-[200px] break-words">
-                {model.description}
-              </span>
-            </div>
-          )}
+          {typeof model === "object" &&
+            model !== null &&
+            (model as Record<string, unknown>)["description"] !== undefined && (
+              <div className="flex justify-between items-start text-sm">
+                <span className="text-muted-foreground">Description</span>
+                <span className="text-right text-xs max-w-[200px] break-words">
+                  {(() => {
+                    const desc = (model as Record<string, unknown>)["description"];
+                    if (typeof desc === "string") return desc;
+                    if (desc && typeof desc === "object" && "en" in desc) return String((desc as Record<string, unknown>)["en"]);
+                    return JSON.stringify(desc);
+                  })()}
+                </span>
+              </div>
+            )}
         </div>
       </div>
 
@@ -72,97 +91,97 @@ export function ModelInspector({ modelId }: ModelInspectorProps) {
           <Info className="w-4 h-4" />
           Context & Version
         </h3>
-        <div className="space-y-2">
-          {model["@context"] && (
-            <div className="flex justify-between items-start text-sm">
-              <span className="text-muted-foreground">Context</span>
-              <code className="text-xs text-right break-all max-w-[200px]">
-                {Array.isArray(model["@context"])
-                  ? model["@context"].join(", ")
-                  : model["@context"]}
-              </code>
-            </div>
-          )}
-          <div className="flex justify-between items-start text-sm">
-            <span className="text-muted-foreground">Model ID</span>
-            <code className="font-mono text-xs bg-muted px-2 py-1 rounded">
-              {String(modelData.id)}
-            </code>
-          </div>
-          <div className="flex justify-between items-center text-sm">
-            <span className="text-muted-foreground">Upload Time</span>
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Clock className="w-3 h-3" />
-              {(uploadTime as Date).toLocaleString()}
-            </div>
-          </div>
+        <div className="flex justify-between items-start text-sm">
+          <span className="text-muted-foreground">Model ID</span>
+          <code className="font-mono text-xs bg-muted px-2 py-1 rounded">{id}</code>
         </div>
       </div>
 
       {/* Contents/Properties */}
-      {model.contents && model.contents.length > 0 && (
-        <div className="space-y-2">
-          <h3 className="font-semibold text-sm flex items-center gap-2">
-            <Layers className="w-4 h-4" />
-            Contents ({model.contents.length})
-          </h3>
-          <div className="space-y-2 max-h-48 overflow-y-auto">
-            {model.contents.map((content: any, index: number) => (
-              <div key={index} className="border rounded-md p-2 text-sm">
-                <div className="flex justify-between items-start mb-1">
-                  <span className="font-medium">{content.name}</span>
-                  <Badge variant="secondary" className="text-xs">
-                    {content["@type"]}
-                  </Badge>
-                </div>
-                {content.displayName && (
-                  <div className="text-xs text-muted-foreground mb-1">
-                    {content.displayName}
+      {typeof model === "object" &&
+        model !== null &&
+        Array.isArray((model as Record<string, unknown>)["contents"]) &&
+        model.contents && model.contents.length > 0 && (
+          <div className="space-y-2">
+            <h3 className="font-semibold text-sm flex items-center gap-2">
+              <Layers className="w-4 h-4" />
+              Contents (
+              {((model as Record<string, unknown>)["contents"] as unknown[]).length}
+              )
+            </h3>
+            <div className="space-y-2 max-h-48 overflow-y-auto">
+              {model.contents?.map((content, index) => {
+                if (typeof content !== "object" || content === null) return null;
+                const c = content;
+                return (
+                  <div key={index} className="border rounded-md p-2 text-sm">
+                    <div className="flex justify-between items-start mb-1">
+                      <span className="font-medium">
+                        {typeof c.name === "string" ? c.name : String(c.name ?? "")}
+                      </span>
+                      <Badge variant="secondary" className="text-xs">
+                        {typeof c["@type"] === "string" ? c["@type"] : String(c["@type"] ?? "")}
+                      </Badge>
+                    </div>
+                    {c.displayName !== undefined && (
+                      <div className="text-xs text-muted-foreground mb-1">
+                        {(() => {
+                          const dn = c.displayName;
+                          if (typeof dn === "string") return dn;
+                          if (dn && typeof dn === "object" && "en" in dn) return String((dn as Record<string, unknown>)["en"]);
+                          return JSON.stringify(dn);
+                        })()}
+                      </div>
+                    )}
+                    {c.description !== undefined && (
+                      <div className="text-xs text-muted-foreground break-words">
+                        {(() => {
+                          const desc = c.description;
+                          if (typeof desc === "string") return desc;
+                          if (desc && typeof desc === "object" && "en" in desc) return String((desc as Record<string, unknown>)["en"]);
+                          return JSON.stringify(desc);
+                        })()}
+                      </div>
+                    )}
+                    {c['@type'] === 'Property' && c.schema !== undefined && (
+                      <div className="text-xs mt-1">
+                        <span className="text-muted-foreground">Schema: </span>
+                        <code className="font-mono">
+                          {typeof c.schema === "string" ? c.schema : JSON.stringify(c.schema)}
+                        </code>
+                      </div>
+                    )}
                   </div>
-                )}
-                {content.description && (
-                  <div className="text-xs text-muted-foreground break-words">
-                    {content.description}
-                  </div>
-                )}
-                {content.schema && (
-                  <div className="text-xs mt-1">
-                    <span className="text-muted-foreground">Schema: </span>
-                    <code className="font-mono">
-                      {typeof content.schema === "string"
-                        ? content.schema
-                        : JSON.stringify(content.schema)}
-                    </code>
-                  </div>
-                )}
-              </div>
-            ))}
+                );
+              })}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
       {/* Extends */}
-      {model.extends && (
-        <div className="space-y-2">
-          <h3 className="font-semibold text-sm flex items-center gap-2">
-            <Tag className="w-4 h-4" />
-            Extends
-          </h3>
-          <div className="space-y-1">
-            {(Array.isArray(model.extends)
-              ? model.extends
-              : [model.extends]
-            ).map((extend: any, index: number) => (
-              <code
-                key={index}
-                className="block font-mono text-xs bg-muted px-2 py-1 rounded break-all"
-              >
-                {extend}
-              </code>
-            ))}
+      {typeof model === "object" &&
+        model !== null &&
+        (model as Record<string, unknown>)["extends"] && (
+          <div className="space-y-2">
+            <h3 className="font-semibold text-sm flex items-center gap-2">
+              <Tag className="w-4 h-4" />
+              Extends
+            </h3>
+            <div className="space-y-1">
+              {(Array.isArray((model as Record<string, unknown>)["extends"])
+                ? ((model as Record<string, unknown>)["extends"] as unknown[])
+                : [(model as Record<string, unknown>)["extends"]]
+              ).map((extend, index) => (
+                <code
+                  key={index}
+                  className="block font-mono text-xs bg-muted px-2 py-1 rounded break-all"
+                >
+                  {typeof extend === "string" ? extend : String(extend)}
+                </code>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
       {/* Actions */}
       <div className="pt-4 border-t space-y-2">
@@ -171,7 +190,14 @@ export function ModelInspector({ modelId }: ModelInspectorProps) {
         </Button>
         <div className="text-xs text-muted-foreground space-y-1">
           <div>Select model in sidebar or query results</div>
-          <div>Model validation: {model.contents ? "Valid" : "Unknown"}</div>
+          <div>
+            Model validation:{" "}
+            {typeof model === "object" &&
+            model !== null &&
+            (model as Record<string, unknown>)["contents"]
+              ? "Valid"
+              : "Unknown"}
+          </div>
         </div>
       </div>
     </div>

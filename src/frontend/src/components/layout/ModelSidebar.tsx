@@ -33,7 +33,17 @@ import {
 } from "@/mocks/digitalTwinData";
 
 const mockModels: MockModel[] = realModels.map((model) => {
-  const modelId = (model.model as any)["@id"] as string;
+  let modelId = "";
+  if (
+    typeof model.model === "object" &&
+    model.model !== null &&
+    "@id" in model.model
+  ) {
+    const idVal = (model.model as Record<string, unknown>)["@id"];
+    if (typeof idVal === "string") {
+      modelId = idVal;
+    }
+  }
   return {
     id: modelId,
     name: modelId.split(":").pop()?.split(";")[0] || "Unknown",

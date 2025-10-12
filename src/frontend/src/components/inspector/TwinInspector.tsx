@@ -85,14 +85,19 @@ export function TwinInspector({ twinId }: TwinInspectorProps) {
                     : String(value)}
                 </div>
                 {/* Show metadata if available */}
-                {$metadata[key] && typeof $metadata[key] === "object" && (
-                  <div className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                    <Clock className="w-3 h-3" />
-                    {new Date(
-                      ($metadata[key] as any).lastUpdateTime
-                    ).toLocaleString()}
-                  </div>
-                )}
+                {(() => {
+                  const meta = $metadata[key];
+                  if (meta && typeof meta === "object" && "lastUpdateTime" in meta) {
+                    const dtMeta = meta as import("@/types/BasicDigitalTwin").DigitalTwinPropertyMetadata;
+                    return dtMeta.lastUpdateTime ? (
+                      <div className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        {new Date(dtMeta.lastUpdateTime).toLocaleString()}
+                      </div>
+                    ) : null;
+                  }
+                  return null;
+                })()}
               </div>
             </div>
           ))}
@@ -115,33 +120,33 @@ export function TwinInspector({ twinId }: TwinInspectorProps) {
               <div key={key} className="border rounded-md p-2 text-sm">
                 <div className="font-medium mb-1">{key}</div>
                 <div className="space-y-1 text-xs text-muted-foreground">
-                  {typeof metadata === "object" && metadata && (
-                    <>
-                      {(metadata as any).lastUpdateTime && (
-                        <div className="flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          Updated:{" "}
-                          {new Date(
-                            (metadata as any).lastUpdateTime
-                          ).toLocaleString()}
-                        </div>
-                      )}
-                      {(metadata as any).sourceTime && (
-                        <div className="flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          Source:{" "}
-                          {new Date(
-                            (metadata as any).sourceTime
-                          ).toLocaleString()}
-                        </div>
-                      )}
-                      {(metadata as any).desiredValue !== undefined && (
-                        <div>
-                          Desired: {String((metadata as any).desiredValue)}
-                        </div>
-                      )}
-                    </>
-                  )}
+                  {(() => {
+                    if (typeof metadata === "object" && metadata && "lastUpdateTime" in metadata) {
+                      const dtMeta = metadata as import("@/types/BasicDigitalTwin").DigitalTwinPropertyMetadata;
+                      return <>
+                        {dtMeta.lastUpdateTime && (
+                          <div className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            Updated:{" "}
+                            {new Date(dtMeta.lastUpdateTime).toLocaleString()}
+                          </div>
+                        )}
+                        {dtMeta.sourceTime && (
+                          <div className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            Source:{" "}
+                            {new Date(dtMeta.sourceTime).toLocaleString()}
+                          </div>
+                        )}
+                        {dtMeta.desiredValue !== undefined && (
+                          <div>
+                            Desired: {String(dtMeta.desiredValue)}
+                          </div>
+                        )}
+                      </>;
+                    }
+                    return null;
+                  })()}
                 </div>
               </div>
             ))}

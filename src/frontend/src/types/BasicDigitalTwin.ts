@@ -1,9 +1,12 @@
 export interface DigitalTwinPropertyMetadata {
-  lastUpdateTime?: string
-  sourceTime?: string
+  lastUpdateTime?: string;
+  sourceTime?: string;
   /** Desired value for IoT PnP devcies */
-  desiredValue?: string | number | boolean
-  desiredVersion?: number
+  desiredValue?: string | number | boolean;
+  desiredVersion?: number;
+  ackVersion?: number;
+  ackCode?: number;
+  ackDescription?: string;
 }
 
 /** Basic Digital Twin data model with id and model */

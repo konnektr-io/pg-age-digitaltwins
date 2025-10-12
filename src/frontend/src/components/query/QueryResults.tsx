@@ -27,7 +27,7 @@ import { GraphViewer } from "@/components/graph/GraphViewer";
 import { mockDigitalTwins, mockRelationships } from "@/mocks/digitalTwinData";
 
 interface QueryResultsProps {
-  results: any[] | null;
+  results: unknown[] | null;
   error: string | null;
   isLoading: boolean;
 }
@@ -39,26 +39,29 @@ export function QueryResults({ results, error, isLoading }: QueryResultsProps) {
   // Get column headers based on mode
   const getColumnHeaders = () => {
     if (!results || results.length === 0) return [];
-
-    const keys = Object.keys(results[0]);
-
+    const firstRow = results[0];
+    if (typeof firstRow !== "object" || firstRow === null) return [];
+    const keys = Object.keys(firstRow);
     if (columnMode === "display") {
       // Try to get display names from DTDL for each key
       return keys.map((key) => {
-        // For now, just capitalize the key - we'll enhance this later
-        if (key.startsWith("$")) return key; // Keep system properties as-is
+        if (key.startsWith("$")) return key;
         return (
           key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, " $1")
         );
       });
     }
-
-    return keys; // Raw mode
+    return keys;
   };
 
   const columnHeaders = getColumnHeaders();
   const columnKeys =
-    results && results.length > 0 ? Object.keys(results[0]) : [];
+    results &&
+    results.length > 0 &&
+    typeof results[0] === "object" &&
+    results[0] !== null
+      ? Object.keys(results[0])
+      : [];
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 50;
   const { selectItem } = useInspectorStore();
@@ -69,28 +72,38 @@ export function QueryResults({ results, error, isLoading }: QueryResultsProps) {
     : [];
 
   // Function to determine item type and handle clicks
-  const handleRowClick = (item: any) => {
-    // Check if it's a Digital Twin
-    if (item.$dtId && item.$metadata) {
-      selectItem({
-        type: "twin",
-        id: item.$dtId,
-        data: item,
-      });
-      return;
+  const handleRowClick = (item: unknown) => {
+    if (typeof item === "object" && item !== null) {
+      const obj = item as Record<string, unknown>;
+      if (typeof obj.$dtId === "string" && obj.$metadata) {
+        selectItem({
+          type: "twin",
+          id: obj.$dtId,
+          data: obj,
+        });
+        return;
+      }
+      if (
+        typeof obj.$relationshipId === "string" &&
+        typeof obj.$sourceId === "string" &&
+        typeof obj.$targetId === "string"
+      ) {
+        selectItem({
+          type: "relationship",
+          id: obj.$relationshipId,
+          data: obj,
+        });
+        return;
+      }
+      if (typeof obj["@id"] === "string" && obj["@id"].startsWith("dtmi:")) {
+        selectItem({
+          type: "model",
+          id: obj["@id"],
+          data: obj,
+        });
+        return;
+      }
     }
-
-    // Check if it's a Relationship
-    if (item.$relationshipId && item.$sourceId && item.$targetId) {
-      selectItem({
-        type: "relationship",
-        id: item.$relationshipId,
-        data: item,
-      });
-      return;
-    }
-
-    // Check if it looks like a model ID (DTMI format)
     if (typeof item === "string" && item.startsWith("dtmi:")) {
       selectItem({
         type: "model",
@@ -99,34 +112,28 @@ export function QueryResults({ results, error, isLoading }: QueryResultsProps) {
       });
       return;
     }
-
-    // If item has a model ID field, treat as model
-    if (item["@id"] && item["@id"].startsWith("dtmi:")) {
-      selectItem({
-        type: "model",
-        id: item["@id"],
-        data: item,
-      });
-      return;
-    }
   };
 
   const handleExport = () => {
     if (!results) return;
-
+    const firstRow = results[0];
+    if (typeof firstRow !== "object" || firstRow === null) return;
+    const headers = Object.keys(firstRow);
     const csv = results
-      .map((row) =>
-        Object.values(row)
-          .map((val) =>
-            typeof val === "string" ? `"${val.replace(/"/g, '""')}"` : val
-          )
-          .join(",")
-      )
+      .map((row) => {
+        if (typeof row !== "object" || row === null) return "";
+        return headers
+          .map((key) => {
+            const val = (row as Record<string, unknown>)[key];
+            if (typeof val === "string") {
+              return `"${val.replace(/"/g, '""')}"`;
+            }
+            return String(val ?? "");
+          })
+          .join(",");
+      })
       .join("\n");
-
-    const headers = results.length > 0 ? Object.keys(results[0]).join(",") : "";
-    const csvContent = headers + "\n" + csv;
-
+    const csvContent = headers.join(",") + "\n" + csv;
     const blob = new Blob([csvContent], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -277,8 +284,10 @@ export function QueryResults({ results, error, isLoading }: QueryResultsProps) {
                           onClick={() => handleRowClick(row)}
                         >
                           {columnKeys.map((key) => {
-                            const value = row[key];
-
+                            let value: unknown = undefined;
+                            if (typeof row === "object" && row !== null) {
+                              value = (row as Record<string, unknown>)[key];
+                            }
                             return (
                               <TableCell
                                 key={key}

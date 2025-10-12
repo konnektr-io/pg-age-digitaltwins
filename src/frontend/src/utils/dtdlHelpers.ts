@@ -33,14 +33,28 @@ export const getModelPropertyDefinitions = (
   const model = mockModels.find((m) => m.id === modelId);
   if (!model || !model.model) return {};
 
-  const dtdlModel = model.model as any;
-  const contents = dtdlModel.contents || [];
+  const dtdlModel = model.model as unknown;
+  let contents: unknown = undefined;
+  if (
+    typeof dtdlModel === "object" &&
+    dtdlModel !== null &&
+    "contents" in dtdlModel
+  ) {
+    contents = (dtdlModel as { contents?: unknown }).contents;
+  }
+  const contentsArr = Array.isArray(contents) ? contents : [];
 
   const properties: Record<string, PropertyDefinition> = {};
 
-  contents
-    .filter((content: DTDLContent) => content["@type"] === "Property")
-    .forEach((prop: DTDLContent) => {
+  contentsArr
+    .filter(
+      (content): content is DTDLContent =>
+        typeof content === "object" &&
+        content !== null &&
+        "@type" in content &&
+        (content as DTDLContent)["@type"] === "Property"
+    )
+    .forEach((prop) => {
       properties[prop.name] = {
         name: prop.name,
         displayName: prop.displayName,

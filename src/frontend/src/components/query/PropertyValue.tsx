@@ -11,7 +11,7 @@ import { getPropertyMetadata } from "@/utils/dtdlHelpers";
 interface PropertyValueProps {
   twin: BasicDigitalTwin;
   propertyName: string;
-  value: any;
+  value: unknown;
   showTooltip?: boolean;
   className?: string;
 }
@@ -24,10 +24,22 @@ export function PropertyValue({
   className = "",
 }: PropertyValueProps) {
   const metadata = getPropertyMetadata(twin, propertyName);
-  const displayValue =
-    typeof value === "object" && value !== null
-      ? JSON.stringify(value)
-      : String(value ?? "");
+
+  let displayValue: string;
+  if (typeof value === "object" && value !== null) {
+    displayValue = JSON.stringify(value);
+  } else if (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
+    displayValue = String(value);
+  } else if (value === null || value === undefined) {
+    displayValue = "";
+  } else {
+    // fallback for other types (e.g., symbol, bigint, function)
+    displayValue = String(value);
+  }
 
   if (!showTooltip || !metadata) {
     return <span className={className}>{displayValue}</span>;
