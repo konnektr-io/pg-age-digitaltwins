@@ -15,7 +15,7 @@ export function ConnectionStatus(): React.ReactElement {
 
   return (
     <div className="flex items-center gap-4">
-      {/* Environment Indicator */}
+      {/* Connection Indicator */}
       {currentConnection && (
         <div className="text-sm">
           <span className="text-gray-500">Connection:</span>{" "}

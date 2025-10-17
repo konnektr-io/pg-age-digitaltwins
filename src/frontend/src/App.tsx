@@ -6,6 +6,7 @@ import { MainContent } from "@/components/layout/MainContent";
 import { Inspector } from "@/components/inspector/Inspector";
 import { StatusBar } from "@/components/layout/StatusBar";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
+import { CookieConsent } from "@/components/cookie-consent";
 
 function App() {
   const {
@@ -15,6 +16,42 @@ function App() {
     rightPanelSize,
     setPanelSize,
   } = useWorkspaceStore();
+
+  // Set GTM consent using gtag API
+  const setGtmConsent = (consent: "accepted" | "declined") => {
+    if (typeof window !== "undefined") {
+      // Declare window.gtag for TypeScript
+      type GtagFn = (
+        command: string,
+        action: string,
+        params: Record<string, string>
+      ) => void;
+      const gtag = (window as typeof window & { gtag?: GtagFn }).gtag;
+      if (gtag) {
+        if (consent === "accepted") {
+          gtag("consent", "update", {
+            ad_storage: "granted",
+            analytics_storage: "granted",
+          });
+        } else {
+          gtag("consent", "update", {
+            ad_storage: "denied",
+            analytics_storage: "denied",
+          });
+        }
+      }
+    }
+  };
+
+  // Callback for accepting cookies
+  const handleAccept = () => {
+    setGtmConsent("accepted");
+  };
+
+  // Callback for declining cookies
+  const handleDecline = () => {
+    setGtmConsent("declined");
+  };
 
   return (
     <ThemeProvider defaultTheme="system" storageKey="konnektr-graph-theme">
@@ -72,6 +109,13 @@ function App() {
 
         {/* Status Bar */}
         <StatusBar />
+
+        {/* Cookie Consent Popup */}
+        <CookieConsent
+          variant="minimal"
+          onAcceptCallback={handleAccept}
+          onDeclineCallback={handleDecline}
+        />
       </div>
     </ThemeProvider>
   );

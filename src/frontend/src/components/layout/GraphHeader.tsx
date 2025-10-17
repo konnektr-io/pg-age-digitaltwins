@@ -1,10 +1,10 @@
 import {
   Settings,
-  ChevronDown,
   LogOut,
   Menu,
   PanelRightOpen,
   PanelLeftOpen,
+  Database,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,9 +14,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useWorkspaceStore } from "@/stores/workspaceStore";
-import { useConnectionStore } from "@/stores/connectionStore";
-import { ModeToggle } from "@/components/mode-toggle";
+import { useWorkspaceStore } from "../../stores/workspaceStore";
+// import { useConnectionStore } from "../../stores/connectionStore";
+import { ModeToggle } from "../mode-toggle";
+import { ConnectionSelector } from "@/components/ConnectionSelector";
+import { ConnectionStatus } from "@/components/ConnectionStatus";
 
 export function GraphHeader() {
   const {
@@ -27,7 +29,7 @@ export function GraphHeader() {
     showLeftPanel,
     setShowLeftPanel,
   } = useWorkspaceStore();
-  const { isConnected, endpoint } = useConnectionStore();
+  // No longer need isConnected or currentConnection here
 
   // Mock user data - in real app this would come from auth context
   const mockUser = {
@@ -58,29 +60,16 @@ export function GraphHeader() {
             </Button>
           )}
 
-          {/* Environment Selector - moved to left for better alignment */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                className="px-3 py-1.5 text-sm bg-muted hover:bg-muted/80 rounded-md flex items-center gap-2"
-              >
-                {endpoint
-                  ? (() => {
-                      try {
-                        return new URL(endpoint).hostname;
-                      } catch {
-                        return "Invalid URL";
-                      }
-                    })()
-                  : "No Environment"}
-                <ChevronDown className="w-4 h-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              <DropdownMenuItem>Configure Connection...</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {/* Logo and Title - Main Brand */}
+          <div className="flex items-center gap-2">
+            <Database className="w-5 h-5 text-secondary" />
+            <span className="font-semibold text-foreground text-lg">
+              Konnektr Graph
+            </span>
+          </div>
+
+          {/* Connection Selector */}
+          <ConnectionSelector />
         </div>
 
         <div className="flex items-center gap-4">
@@ -118,14 +107,7 @@ export function GraphHeader() {
           )}
 
           {/* Connection Status */}
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <div
-              className={`w-2 h-2 rounded-full ${
-                isConnected ? "bg-green-500" : "bg-red-500"
-              }`}
-            />
-            <span>{isConnected ? "Connected" : "Disconnected"}</span>
-          </div>
+          <ConnectionStatus />
 
           {/* Settings Menu */}
           <DropdownMenu>
@@ -162,7 +144,7 @@ export function GraphHeader() {
                 <span className="hidden md:inline text-sm">
                   {mockUser.email}
                 </span>
-                <ChevronDown className="h-4 w-4" />
+                {/* <ChevronDown className="h-4 w-4" /> */}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">

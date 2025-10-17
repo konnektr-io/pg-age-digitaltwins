@@ -12,6 +12,7 @@ import {
   QUERY_ALL_TWINS,
 } from "@/utils/constants";
 import { getDataFromQueryResponse, type QueryResponseData } from "@/utils/queryAdt";
+import { Auth0TokenCredential } from "@/services/Auth0TokenCredential";
 
 /**
  * Helper to get initialized Digital Twins client
@@ -19,7 +20,6 @@ import { getDataFromQueryResponse, type QueryResponseData } from "@/utils/queryA
  */
 
 
-import { Auth0TokenCredential } from "@/services/Auth0TokenCredential";
 
 const getClient = (): DigitalTwinsClient => {
   const { getCurrentConnection, isConnected } = useConnectionStore.getState();

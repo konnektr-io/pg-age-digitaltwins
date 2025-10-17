@@ -15,7 +15,7 @@ export function Auth0ProviderWithConfig({
 
   if (!domain || !clientId || !audience) {
     console.error(
-      "Auth0 configuration missing. Please check your environment variables."
+      "Auth0 configuration missing. Please check your connection settings."
     );
     return <div>Auth0 configuration error. Please contact support.</div>;
   }
