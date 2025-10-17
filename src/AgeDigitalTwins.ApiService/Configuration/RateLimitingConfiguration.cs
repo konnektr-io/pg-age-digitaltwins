@@ -8,6 +8,8 @@ namespace AgeDigitalTwins.ApiService.Configuration;
 /// Policies are designed based on operation intensity and resource usage.
 /// </summary>
 public static class RateLimitingConfiguration
+// Note: This configuration is only applied if Parameters:RateLimitingEnabled is true in Program.cs.
+// It is safe to call ConfigureRateLimiting even if rate limiting is not enabled; no side effects will occur unless registered in the DI pipeline.
 {
     /// <summary>
     /// Configures all rate limiting policies for the application.
@@ -28,12 +30,12 @@ public static class RateLimitingConfiguration
                 userId,
                 partition => new FixedWindowRateLimiterOptions
                 {
-                    PermitLimit = configuration.GetValue<int>("Parameters:GlobalPermitLimit", 1000),
+                    PermitLimit = configuration.GetValue("Parameters:GlobalPermitLimit", 1000),
                     Window = TimeSpan.FromSeconds(
-                        configuration.GetValue<int>("Parameters:GlobalWindowSeconds", 1)
+                        configuration.GetValue("Parameters:GlobalWindowSeconds", 1)
                     ),
                     QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                    QueueLimit = configuration.GetValue<int>("Parameters:GlobalQueueLimit", 200),
+                    QueueLimit = configuration.GetValue("Parameters:GlobalQueueLimit", 200),
                 }
             );
         });
@@ -77,19 +79,13 @@ public static class RateLimitingConfiguration
                 userId,
                 partition => new TokenBucketRateLimiterOptions
                 {
-                    TokenLimit = configuration.GetValue<int>(
-                        "Parameters:WeightedQueryTokenLimit",
-                        1000
-                    ),
+                    TokenLimit = configuration.GetValue("Parameters:WeightedQueryTokenLimit", 1000),
                     QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                    QueueLimit = configuration.GetValue<int>(
-                        "Parameters:WeightedQueryQueueLimit",
-                        100
-                    ),
+                    QueueLimit = configuration.GetValue("Parameters:WeightedQueryQueueLimit", 100),
                     ReplenishmentPeriod = TimeSpan.FromSeconds(
-                        configuration.GetValue<int>("Parameters:WeightedQueryReplenishSeconds", 1)
+                        configuration.GetValue("Parameters:WeightedQueryReplenishSeconds", 1)
                     ),
-                    TokensPerPeriod = configuration.GetValue<int>(
+                    TokensPerPeriod = configuration.GetValue(
                         "Parameters:WeightedQueryTokensPerPeriod",
                         100
                     ),
@@ -140,18 +136,15 @@ public static class RateLimitingConfiguration
                 userId,
                 partition => new FixedWindowRateLimiterOptions
                 {
-                    PermitLimit = configuration.GetValue<int>(
+                    PermitLimit = configuration.GetValue(
                         "Parameters:LightOperationsPermitLimit",
                         100
                     ),
                     Window = TimeSpan.FromSeconds(
-                        configuration.GetValue<int>("Parameters:LightOperationsWindowSeconds", 1)
+                        configuration.GetValue("Parameters:LightOperationsWindowSeconds", 1)
                     ),
                     QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                    QueueLimit = configuration.GetValue<int>(
-                        "Parameters:LightOperationsQueueLimit",
-                        50
-                    ),
+                    QueueLimit = configuration.GetValue("Parameters:LightOperationsQueueLimit", 50),
                 }
             );
         };
@@ -173,15 +166,15 @@ public static class RateLimitingConfiguration
                 userId,
                 partition => new FixedWindowRateLimiterOptions
                 {
-                    PermitLimit = configuration.GetValue<int>(
+                    PermitLimit = configuration.GetValue(
                         "Parameters:MediumOperationsPermitLimit",
                         50
                     ),
                     Window = TimeSpan.FromSeconds(
-                        configuration.GetValue<int>("Parameters:MediumOperationsWindowSeconds", 1)
+                        configuration.GetValue("Parameters:MediumOperationsWindowSeconds", 1)
                     ),
                     QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                    QueueLimit = configuration.GetValue<int>(
+                    QueueLimit = configuration.GetValue(
                         "Parameters:MediumOperationsQueueLimit",
                         25
                     ),
@@ -206,18 +199,15 @@ public static class RateLimitingConfiguration
                 userId,
                 partition => new FixedWindowRateLimiterOptions
                 {
-                    PermitLimit = configuration.GetValue<int>(
+                    PermitLimit = configuration.GetValue(
                         "Parameters:HeavyOperationsPermitLimit",
                         20
                     ),
                     Window = TimeSpan.FromSeconds(
-                        configuration.GetValue<int>("Parameters:HeavyOperationsWindowSeconds", 1)
+                        configuration.GetValue("Parameters:HeavyOperationsWindowSeconds", 1)
                     ),
                     QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                    QueueLimit = configuration.GetValue<int>(
-                        "Parameters:HeavyOperationsQueueLimit",
-                        10
-                    ),
+                    QueueLimit = configuration.GetValue("Parameters:HeavyOperationsQueueLimit", 10),
                 }
             );
         };
@@ -239,18 +229,15 @@ public static class RateLimitingConfiguration
                 userId,
                 partition => new FixedWindowRateLimiterOptions
                 {
-                    PermitLimit = configuration.GetValue<int>(
+                    PermitLimit = configuration.GetValue(
                         "Parameters:AdminOperationsPermitLimit",
                         50
                     ),
                     Window = TimeSpan.FromMinutes(
-                        configuration.GetValue<int>("Parameters:AdminOperationsWindowMinutes", 1)
+                        configuration.GetValue("Parameters:AdminOperationsWindowMinutes", 1)
                     ),
                     QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                    QueueLimit = configuration.GetValue<int>(
-                        "Parameters:AdminOperationsQueueLimit",
-                        25
-                    ),
+                    QueueLimit = configuration.GetValue("Parameters:AdminOperationsQueueLimit", 25),
                 }
             );
         };
@@ -262,7 +249,7 @@ public static class RateLimitingConfiguration
     /// </summary>
     private static Func<OnRejectedContext, CancellationToken, ValueTask> CreateRejectionHandler()
     {
-        return async (context, _) =>
+        return async (context, cancellationToken) =>
         {
             context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
 
@@ -278,7 +265,8 @@ public static class RateLimitingConfiguration
                     error = "Rate limit exceeded",
                     message = "Too many requests. Please try again later.",
                     retryAfterSeconds = retryAfter?.TotalSeconds,
-                }
+                },
+                cancellationToken: cancellationToken
             );
         };
     }

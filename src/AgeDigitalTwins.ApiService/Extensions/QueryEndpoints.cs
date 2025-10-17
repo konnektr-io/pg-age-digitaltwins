@@ -65,7 +65,7 @@ public static class QueryEndpoints
                 }
             )
             .RequireRateLimiting("WeightedQueryPolicy")
-            .WithMetadata(new AgeDigitalTwins.ApiService.Middleware.WeightedQueryPolicyAttribute())
+            .WithMetadata(new Middleware.WeightedQueryPolicyAttribute())
             .WithName("Query")
             .WithTags("Query")
             .WithSummary("Executes a query against the digital twins graph with pagination.");
