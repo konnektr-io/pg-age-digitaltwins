@@ -8,6 +8,8 @@ namespace AgeDigitalTwins.ApiService.Configuration;
 /// Policies are designed based on operation intensity and resource usage.
 /// </summary>
 public static class RateLimitingConfiguration
+// Note: This configuration is only applied if Parameters:RateLimitingEnabled is true in Program.cs.
+// It is safe to call ConfigureRateLimiting even if rate limiting is not enabled; no side effects will occur unless registered in the DI pipeline.
 {
     /// <summary>
     /// Configures all rate limiting policies for the application.

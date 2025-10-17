@@ -142,11 +142,21 @@ else
 // Add job resumption service
 builder.Services.AddHostedService<JobResumptionService>();
 
-// Add rate limiting to protect the API and database from overload
-builder.Services.AddRateLimiter(options => options.ConfigureRateLimiting(builder.Configuration));
-
 builder.Services.AddRequestTimeouts();
 builder.Services.AddOutputCache();
+
+// Add rate limiting only if enabled in configuration
+var enableRateLimiting = builder.Configuration.GetValue<bool>(
+    "Parameters:RateLimitingEnabled",
+    true
+);
+
+if (enableRateLimiting)
+{
+    builder.Services.AddRateLimiter(options =>
+        options.ConfigureRateLimiting(builder.Configuration)
+    );
+}
 
 // Configure JSON serialization options to omit null values and use camelCase naming
 builder.Services.ConfigureHttpJsonOptions(options =>
@@ -170,9 +180,12 @@ app.UseExceptionHandler();
 
 app.UseMiddleware<DatabaseProtectionMiddleware>();
 
-// Register weighted query rate limiting middleware before UseRateLimiter
-app.UseMiddleware<WeightedQueryRateLimitingMiddleware>();
-app.UseRateLimiter();
+// Register weighted query rate limiting middleware and UseRateLimiter only if enabled
+if (enableRateLimiting)
+{
+    app.UseMiddleware<WeightedQueryRateLimitingMiddleware>();
+    app.UseRateLimiter();
+}
 
 app.UseAuthentication();
 app.UseAuthorization();
