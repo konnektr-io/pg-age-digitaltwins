@@ -1,26 +1,23 @@
+using AgeDigitalTwins.Models;
+
 namespace AgeDigitalTwins.ApiService.Services;
 
 /// <summary>
 /// Background service that continuously monitors and resumes incomplete jobs.
 /// Checks for jobs to resume every 2 minutes.
 /// </summary>
-public class JobResumptionService : BackgroundService
+public class JobResumptionService(
+    AgeDigitalTwinsClient client,
+    IBlobStorageService blobStorageService,
+    ILogger<JobResumptionService> logger
+) : BackgroundService
 {
-    private readonly AgeDigitalTwinsClient _client;
-    private readonly IBlobStorageService _blobStorageService;
-    private readonly ILogger<JobResumptionService> _logger;
-
-    public JobResumptionService(
-        AgeDigitalTwinsClient client,
-        IBlobStorageService blobStorageService,
-        ILogger<JobResumptionService> logger
-    )
-    {
-        _client = client ?? throw new ArgumentNullException(nameof(client));
-        _blobStorageService =
-            blobStorageService ?? throw new ArgumentNullException(nameof(blobStorageService));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    }
+    private readonly AgeDigitalTwinsClient _client =
+        client ?? throw new ArgumentNullException(nameof(client));
+    private readonly IBlobStorageService _blobStorageService =
+        blobStorageService ?? throw new ArgumentNullException(nameof(blobStorageService));
+    private readonly ILogger<JobResumptionService> _logger =
+        logger ?? throw new ArgumentNullException(nameof(logger));
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -142,6 +139,35 @@ public class JobResumptionService : BackgroundService
                                     job.Id,
                                     ex.Message
                                 );
+                                try
+                                {
+                                    await _client.JobService.UpdateJobStatusAsync(
+                                        job.Id,
+                                        JobStatus.Failed,
+                                        errorData: new JobError
+                                        {
+                                            Code = ex.GetType().Name,
+                                            Message = "Job could not be resumed",
+                                            Details = new Dictionary<string, object>
+                                            {
+                                                { "message", ex.Message },
+                                                { "stackTrace", ex.StackTrace ?? string.Empty },
+                                                { "timestamp", DateTime.UtcNow.ToString("o") },
+                                                { "fatal", true },
+                                            },
+                                        },
+                                        cancellationToken: stoppingToken
+                                    );
+                                }
+                                catch (Exception updateEx)
+                                {
+                                    _logger.LogWarning(
+                                        updateEx,
+                                        "Failed to update status to Failed for job {JobId}: {Error}",
+                                        job.Id,
+                                        updateEx.Message
+                                    );
+                                }
 
                                 // Release the lock since we failed to process the job
                                 try
