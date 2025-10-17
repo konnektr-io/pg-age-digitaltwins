@@ -66,7 +66,7 @@ public class DatabaseProtectionMiddleware
                 {
                     error = "Query Units limit exceeded",
                     message = "Please reduce the complexity of your queries or wait before making new requests",
-                    hint = "Default limit is 20,000 Query Units per second",
+                    hint = $"Limit is ${_options.MaxQueryComplexityPerWindow} Query Units per {_options.QueryComplexityWindowMinutes} minutes",
                 }
             );
             return;
@@ -113,8 +113,7 @@ public class DatabaseProtectionMiddleware
 
     private static bool IsQueryEndpoint(HttpContext context)
     {
-        return context.Request.Path.StartsWithSegments("/query")
-            || context.Request.Path.StartsWithSegments("/jobs/imports");
+        return context.Request.Path.StartsWithSegments("/query");
     }
 
     private void CleanupOldMetrics(object? state)
@@ -145,12 +144,12 @@ public class DatabaseProtectionMiddleware
 /// </summary>
 public class DatabaseProtectionOptions
 {
-    public int MaxConcurrentRequestsPerUser { get; set; } = 5;
-    public int MaxQueryComplexityPerWindow { get; set; } = 100;
+    public int MaxConcurrentRequestsPerUser { get; set; } = 20;
+    public int MaxQueryComplexityPerWindow { get; set; } = 500;
     public int BaseQueryComplexity { get; set; } = 10;
     public int SlowRequestThresholdMs { get; set; } = 5000;
     public int MetricsRetentionMinutes { get; set; } = 10;
-    public int QueryComplexityWindowMinutes { get; set; } = 5;
+    public int QueryComplexityWindowMinutes { get; set; } = 1;
 }
 
 /// <summary>
@@ -158,8 +157,8 @@ public class DatabaseProtectionOptions
 /// </summary>
 public class RequestMetrics
 {
-    private readonly object _lock = new();
-    private readonly List<DateTime> _queryTimes = new();
+    private readonly Lock _lock = new();
+    private readonly List<DateTime> _queryTimes = [];
 
     public int ConcurrentRequests;
     public DateTime LastRequestTime = DateTime.UtcNow;

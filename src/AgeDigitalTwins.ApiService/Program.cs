@@ -33,21 +33,18 @@ builder.AddNpgsqlMultihostDataSource(
             new(settings.ConnectionString)
             {
                 SearchPath = "ag_catalog, \"$user\", public",
-                ConnectionIdleLifetime = builder.Configuration.GetValue<int>(
+                ConnectionIdleLifetime = builder.Configuration.GetValue(
                     "Parameters:ConnectionIdleLifetime",
                     60
                 ), // seconds
-                ConnectionLifetime = builder.Configuration.GetValue<int>(
+                ConnectionLifetime = builder.Configuration.GetValue(
                     "Parameters:ConnectionLifetime",
                     300
                 ), // seconds
-                MaxPoolSize = builder.Configuration.GetValue<int>("Parameters:MaxPoolSize", 100),
-                MinPoolSize = builder.Configuration.GetValue<int>("Parameters:MinPoolSize", 0),
-                Timeout = builder.Configuration.GetValue<int>("Parameters:ConnectionTimeout", 15), // seconds
-                CommandTimeout = builder.Configuration.GetValue<int>(
-                    "Parameters:CommandTimeout",
-                    30
-                ), // seconds
+                MaxPoolSize = builder.Configuration.GetValue("Parameters:MaxPoolSize", 100),
+                MinPoolSize = builder.Configuration.GetValue("Parameters:MinPoolSize", 0),
+                Timeout = builder.Configuration.GetValue("Parameters:ConnectionTimeout", 15), // seconds
+                CommandTimeout = builder.Configuration.GetValue("Parameters:CommandTimeout", 30), // seconds
             };
         settings.ConnectionString = connectionStringBuilder.ConnectionString;
     },
@@ -64,12 +61,12 @@ builder.Services.AddSingleton(sp =>
     NpgsqlMultiHostDataSource dataSource = sp.GetRequiredService<NpgsqlMultiHostDataSource>();
     string graphName = builder.Configuration["Parameters:AgeGraphName"] ?? "digitaltwins";
     logger.LogInformation("Using graph: {GraphName}", graphName);
-    int modelCacheExpiration = builder.Configuration.GetValue<int>(
+    int modelCacheExpiration = builder.Configuration.GetValue(
         "Parameters:ModelCacheExpirationSeconds",
         10
     );
-    int defaultBatchSize = builder.Configuration.GetValue<int>("Parameters:DefaultBatchSize", 50);
-    int defaultCheckpointInterval = builder.Configuration.GetValue<int>(
+    int defaultBatchSize = builder.Configuration.GetValue("Parameters:DefaultBatchSize", 50);
+    int defaultCheckpointInterval = builder.Configuration.GetValue(
         "Parameters:DefaultCheckpointInterval",
         50
     );
