@@ -1,7 +1,33 @@
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
+import type { DigitalTwinsClient } from "@azure/digital-twins-core";
+import type { Operation } from "fast-json-patch";
 import type { BasicDigitalTwin, BasicRelationship } from "@/types";
-import { mockDigitalTwins } from "@/mocks/digitalTwinData";
+import { digitalTwinsClientFactory } from "@/services/digitalTwinsClientFactory";
+import { useConnectionStore } from "./connectionStore";
+import {
+  REL_TYPE_ALL,
+  REL_TYPE_INCOMING,
+  REL_TYPE_OUTGOING,
+  QUERY_ALL_TWINS,
+} from "@/utils/constants";
+import { getDataFromQueryResponse, type QueryResponseData } from "@/utils/queryAdt";
+
+/**
+ * Helper to get initialized Digital Twins client
+ * Throws error if connection is not configured
+ */
+const getClient = (): DigitalTwinsClient => {
+  const { endpoint, isConnected } = useConnectionStore.getState();
+  
+  if (!endpoint || !isConnected) {
+    throw new Error("Not connected to Digital Twins instance. Please configure connection.");
+  }
+
+  // Use endpoint as both environmentId and host for now
+  // TODO: Separate environmentId when implementing multi-tenant support
+  return digitalTwinsClientFactory(endpoint, endpoint);
+};
 
 export interface DigitalTwinsState {
   // State
@@ -25,20 +51,25 @@ export interface DigitalTwinsState {
   ) => Promise<void>;
   deleteTwin: (twinId: string) => Promise<void>;
   getTwin: (twinId: string) => BasicDigitalTwin | undefined;
+  getTwinById: (twinId: string) => Promise<BasicDigitalTwin>;
   getTwinsByModel: (modelId: string) => BasicDigitalTwin[];
+  queryTwins: (query: string) => Promise<QueryResponseData>;
 
   // Actions - Relationships
   loadRelationships: (twinId?: string) => Promise<void>;
   createRelationship: (relationship: BasicRelationship) => Promise<string>;
   updateRelationship: (
+    sourceTwinId: string,
     relationshipId: string,
-    updates: Partial<BasicRelationship>
+    updates: Operation[]
   ) => Promise<void>;
-  deleteRelationship: (relationshipId: string) => Promise<void>;
+  deleteRelationship: (sourceTwinId: string, relationshipId: string) => Promise<void>;
+  getRelationship: (sourceTwinId: string, relationshipId: string) => Promise<BasicRelationship>;
   getRelationshipsForTwin: (twinId: string) => {
     outgoing: BasicRelationship[];
     incoming: BasicRelationship[];
   };
+  queryRelationships: (twinId: string, type?: string) => Promise<BasicRelationship[]>;
 
   // Actions - Selection & Filtering
   selectTwin: (twinId: string | null) => void;
@@ -77,9 +108,13 @@ export const useDigitalTwinsStore = create<DigitalTwinsState>()(
     loadTwins: async () => {
       set({ isLoading: true, error: null });
       try {
-        // TODO: Replace with actual API call
-        await new Promise((resolve) => setTimeout(resolve, 100)); // Simulate network delay
-        set({ twins: [...mockDigitalTwins], isLoading: false });
+        const queryResult = await get().queryTwins(QUERY_ALL_TWINS);
+        
+        set({ 
+          twins: queryResult.twins, 
+          relationships: queryResult.relationships,
+          isLoading: false 
+        });
       } catch (error) {
         set({
           error:
@@ -92,18 +127,20 @@ export const useDigitalTwinsStore = create<DigitalTwinsState>()(
     createTwin: async (twinData) => {
       set({ isLoading: true, error: null });
       try {
-        // Generate a unique ID
-        const twinId = `twin-${Date.now()}-${Math.random()
+        const client = getClient();
+        
+        // Generate a unique ID if not provided
+        const twinId = twinData.$dtId || `twin-${Date.now()}-${Math.random()
           .toString(36)
           .substr(2, 9)}`;
-        const newTwin: BasicDigitalTwin = {
-          ...twinData,
-          $dtId: twinId,
-        };
+        
+        const response = await client.upsertDigitalTwin(
+          twinId,
+          JSON.stringify(twinData)
+        );
 
-        // TODO: Replace with actual API call
-        await new Promise((resolve) => setTimeout(resolve, 100));
-
+        const newTwin = response as BasicDigitalTwin;
+        
         set((state) => ({
           twins: [...state.twins, newTwin],
           isLoading: false,
@@ -123,12 +160,26 @@ export const useDigitalTwinsStore = create<DigitalTwinsState>()(
     updateTwin: async (twinId, updates) => {
       set({ isLoading: true, error: null });
       try {
-        // TODO: Replace with actual API call
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        const client = getClient();
+        
+        // Convert updates to JSON Patch operations
+        const patch: Operation[] = Object.entries(updates).map(([key, value]) => ({
+          op: "replace" as const,
+          path: `/${key}`,
+          value,
+        }));
 
+        await client.updateDigitalTwin(
+          twinId,
+          patch as unknown as Array<Record<string, unknown>>
+        );
+
+        // Refresh the twin from the server
+        const updatedTwin = await get().getTwinById(twinId);
+        
         set((state) => ({
           twins: state.twins.map((twin) =>
-            twin.$dtId === twinId ? { ...twin, ...updates } : twin
+            twin.$dtId === twinId ? updatedTwin : twin
           ),
           isLoading: false,
         }));
@@ -145,8 +196,16 @@ export const useDigitalTwinsStore = create<DigitalTwinsState>()(
     deleteTwin: async (twinId) => {
       set({ isLoading: true, error: null });
       try {
-        // TODO: Replace with actual API call
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        const client = getClient();
+        
+        // Delete all relationships first
+        const rels = await get().queryRelationships(twinId, REL_TYPE_ALL);
+        for (const rel of rels) {
+          await client.deleteRelationship(rel.$sourceId, rel.$relationshipId);
+        }
+
+        // Delete the twin
+        await client.deleteDigitalTwin(twinId);
 
         set((state) => ({
           twins: state.twins.filter((twin) => twin.$dtId !== twinId),
@@ -171,41 +230,51 @@ export const useDigitalTwinsStore = create<DigitalTwinsState>()(
       return get().twins.find((twin) => twin.$dtId === twinId);
     },
 
+    getTwinById: async (twinId) => {
+      const client = getClient();
+      const response = await client.getDigitalTwin(twinId);
+      return response as BasicDigitalTwin;
+    },
+
     getTwinsByModel: (modelId) => {
       return get().twins.filter((twin) => twin.$metadata.$model === modelId);
+    },
+
+    queryTwins: async (query) => {
+      const client = getClient();
+      const result: QueryResponseData = {
+        twins: [],
+        relationships: [],
+        count: 0,
+        other: [],
+        data: [],
+      };
+
+      const queryResult = client.queryTwins(query);
+      for await (const page of queryResult.byPage()) {
+        const data = getDataFromQueryResponse(page.value);
+        result.twins.push(...data.twins);
+        result.relationships.push(...data.relationships);
+        result.other.push(...data.other);
+        result.data.push(...data.data);
+        result.count = data.count || result.twins.length;
+      }
+
+      return result;
     },
 
     // Relationships actions
     loadRelationships: async (twinId) => {
       set({ isLoading: true, error: null });
       try {
-        // TODO: Replace with actual API call
-        await new Promise((resolve) => setTimeout(resolve, 100));
-
-        // Mock relationships data - in real implementation, would filter by twinId if provided
-        const mockRelationships: BasicRelationship[] = [
-          {
-            $relationshipId: "rel-001",
-            $relationshipName: "contains",
-            $sourceId: "building-001",
-            $targetId: "floor-001-01",
-          },
-          {
-            $relationshipId: "rel-002",
-            $relationshipName: "contains",
-            $sourceId: "floor-001-01",
-            $targetId: "room-001-01-001",
-          },
-        ];
-
-        set({
-          relationships: twinId
-            ? mockRelationships.filter(
-                (rel) => rel.$sourceId === twinId || rel.$targetId === twinId
-              )
-            : mockRelationships,
-          isLoading: false,
-        });
+        if (twinId) {
+          const rels = await get().queryRelationships(twinId, REL_TYPE_ALL);
+          set({ relationships: rels, isLoading: false });
+        } else {
+          // Load all relationships via query
+          const queryResult = await get().queryTwins("SELECT * FROM RELATIONSHIPS");
+          set({ relationships: queryResult.relationships, isLoading: false });
+        }
       } catch (error) {
         set({
           error:
@@ -220,16 +289,25 @@ export const useDigitalTwinsStore = create<DigitalTwinsState>()(
     createRelationship: async (relationshipData) => {
       set({ isLoading: true, error: null });
       try {
-        const relationshipId = `rel-${Date.now()}-${Math.random()
+        const client = getClient();
+        
+        const { $sourceId, $targetId, $relationshipName, $relationshipId, ...properties } = relationshipData;
+        
+        const relationshipId = $relationshipId || `rel-${Date.now()}-${Math.random()
           .toString(36)
           .substr(2, 9)}`;
-        const newRelationship: BasicRelationship = {
-          ...relationshipData,
-          $relationshipId: relationshipId,
-        };
 
-        // TODO: Replace with actual API call
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        const response = await client.upsertRelationship(
+          $sourceId,
+          relationshipId,
+          {
+            $relationshipName,
+            $targetId,
+            ...properties,
+          }
+        );
+
+        const newRelationship = response as BasicRelationship;
 
         set((state) => ({
           relationships: [...state.relationships, newRelationship],
@@ -249,16 +327,24 @@ export const useDigitalTwinsStore = create<DigitalTwinsState>()(
       }
     },
 
-    updateRelationship: async (relationshipId, updates) => {
+    updateRelationship: async (sourceTwinId, relationshipId, patch) => {
       set({ isLoading: true, error: null });
       try {
-        // TODO: Replace with actual API call
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        const client = getClient();
+
+        await client.updateRelationship(
+          sourceTwinId,
+          relationshipId,
+          patch as unknown as Array<Record<string, unknown>>
+        );
+
+        // Refresh the relationship from the server
+        const updatedRel = await get().getRelationship(sourceTwinId, relationshipId);
 
         set((state) => ({
           relationships: state.relationships.map((rel) =>
-            rel.$relationshipId === relationshipId
-              ? { ...rel, ...updates }
+            rel.$relationshipId === relationshipId && rel.$sourceId === sourceTwinId
+              ? updatedRel
               : rel
           ),
           isLoading: false,
@@ -275,15 +361,15 @@ export const useDigitalTwinsStore = create<DigitalTwinsState>()(
       }
     },
 
-    deleteRelationship: async (relationshipId) => {
+    deleteRelationship: async (sourceTwinId, relationshipId) => {
       set({ isLoading: true, error: null });
       try {
-        // TODO: Replace with actual API call
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        const client = getClient();
+        await client.deleteRelationship(sourceTwinId, relationshipId);
 
         set((state) => ({
           relationships: state.relationships.filter(
-            (rel) => rel.$relationshipId !== relationshipId
+            (rel) => !(rel.$relationshipId === relationshipId && rel.$sourceId === sourceTwinId)
           ),
           isLoading: false,
         }));
@@ -297,6 +383,33 @@ export const useDigitalTwinsStore = create<DigitalTwinsState>()(
         });
         throw error;
       }
+    },
+
+    getRelationship: async (sourceTwinId, relationshipId) => {
+      const client = getClient();
+      const response = await client.getRelationship(sourceTwinId, relationshipId);
+      return response as BasicRelationship;
+    },
+
+    queryRelationships: async (twinId, type = REL_TYPE_OUTGOING) => {
+      const client = getClient();
+      const list: BasicRelationship[] = [];
+      
+      const query =
+        type === REL_TYPE_ALL
+          ? `SELECT * FROM RELATIONSHIPS WHERE $targetId = '${twinId}' OR $sourceId = '${twinId}'`
+          : type === REL_TYPE_INCOMING
+          ? `SELECT * FROM RELATIONSHIPS WHERE $targetId = '${twinId}'`
+          : `SELECT * FROM RELATIONSHIPS WHERE $sourceId = '${twinId}'`;
+      
+      const queryResult = client.queryTwins(query).byPage();
+      for await (const page of queryResult) {
+        if (page.value) {
+          list.push(...(page.value as BasicRelationship[]));
+        }
+      }
+
+      return list;
     },
 
     getRelationshipsForTwin: (twinId) => {
@@ -349,7 +462,7 @@ export const useDigitalTwinsStore = create<DigitalTwinsState>()(
         filtered = filtered.filter((twin) => {
           return Object.entries(filter.propertyFilters!).every(
             ([key, value]) => {
-              const twinValue = twin[key];
+              const twinValue = twin[key as keyof BasicDigitalTwin];
               if (value === null || value === undefined) {
                 return twinValue === null || twinValue === undefined;
               }
@@ -366,27 +479,8 @@ export const useDigitalTwinsStore = create<DigitalTwinsState>()(
     updateTwinProperty: async (twinId, propertyName, value) => {
       set({ isLoading: true, error: null });
       try {
-        // TODO: Replace with actual API call
-        await new Promise((resolve) => setTimeout(resolve, 100));
-
-        set((state) => ({
-          twins: state.twins.map((twin) =>
-            twin.$dtId === twinId
-              ? {
-                  ...twin,
-                  [propertyName]: value,
-                  $metadata: {
-                    ...twin.$metadata,
-                    [propertyName]: {
-                      ...((twin.$metadata[propertyName] as any) || {}),
-                      lastUpdateTime: new Date().toISOString(),
-                    },
-                  },
-                }
-              : twin
-          ),
-          isLoading: false,
-        }));
+        await get().updateTwin(twinId, { [propertyName]: value });
+        set({ isLoading: false });
       } catch (error) {
         set({
           error:
@@ -402,27 +496,8 @@ export const useDigitalTwinsStore = create<DigitalTwinsState>()(
     updateTwinComponent: async (twinId, componentName, componentData) => {
       set({ isLoading: true, error: null });
       try {
-        // TODO: Replace with actual API call
-        await new Promise((resolve) => setTimeout(resolve, 100));
-
-        set((state) => ({
-          twins: state.twins.map((twin) =>
-            twin.$dtId === twinId
-              ? {
-                  ...twin,
-                  [componentName]: componentData,
-                  $metadata: {
-                    ...twin.$metadata,
-                    [componentName]: {
-                      ...((twin.$metadata[componentName] as any) || {}),
-                      lastUpdateTime: new Date().toISOString(),
-                    },
-                  },
-                }
-              : twin
-          ),
-          isLoading: false,
-        }));
+        await get().updateTwin(twinId, { [componentName]: componentData });
+        set({ isLoading: false });
       } catch (error) {
         set({
           error:

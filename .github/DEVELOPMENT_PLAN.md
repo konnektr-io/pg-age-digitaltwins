@@ -2,25 +2,38 @@
 
 ## Current Status Overview
 
-### ✅ Completed Features (Phase 1 & 2)
+### ✅ Completed Features (Phase 1, 2 & 3)
 
 - **Core Layout & Navigation**: Resizable panels, header, sidebar, inspector
 - **Monaco Editor**: Cypher syntax highlighting, IntelliSense, autocompletion
 - **Query Results**: Basic table display with pagination and export
 - **Query History**: Searchable history with metadata tracking
 - **State Management**: Zustand stores for workspace, connection, and query state
+- **🆕 API Integration**: Real Azure Digital Twins API calls in stores
+- **🆕 Service Refactoring**: Removed TwinsApiService, migrated to stores
+- **🆕 Digital Twins Client**: Mock token credential for development
 
-### 🐛 Critical Issues Identified
+### 🚀 Recent Completion: API Integration (Phase 3.4)
+
+**See [API_INTEGRATION_COMPLETE.md](./API_INTEGRATION_COMPLETE.md) for full details**
+
+- ✅ Migrated all API logic from `TwinsApiService` to stores
+- ✅ `digitalTwinsStore.ts` now makes real API calls
+- ✅ `modelsStore.ts` now makes real API calls
+- ✅ Mock `TokenCredential` implemented for development
+- ✅ Removed unnecessary `TwinsApiService` abstraction layer
+- ✅ Moved constants to `utils/constants.ts`
+
+### 🐛 Critical Issues Remaining
 
 1. **Resizable Panel Conflicts**: Panels interfere with each other during resize
-2. **Data Model Mismatch**: Mock query results don't match Digital Twin structure
-3. **Inspector Integration**: Clicking query results doesn't populate inspector
-4. **Missing Graph Visualization**: Need Sigma.js graph viewer for visual results
-5. **Nested Results**: Complex query results need proper table representation
+2. **Inspector Integration**: Clicking query results doesn't populate inspector
+3. **Missing Graph Visualization**: Need Sigma.js graph viewer for visual results
+4. **Nested Results**: Complex query results need proper table representation
+5. **UI Integration**: Update components to use new store methods
 6. **Authentication**: Need to integrate Auth0 authentication system
-7. **Backend Integration**: Need to connect to actual Konnektr Graph API
 
-## Phase 3: Critical Fixes & Core Integration
+## Phase 3: Critical Fixes & Core Integration (In Progress)
 
 ### 3.1 Fix Resizable Panel Issues
 
