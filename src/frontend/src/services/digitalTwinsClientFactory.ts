@@ -11,7 +11,7 @@ import type {
  * Pipeline policy that rewrites URLs and adds custom headers
  */
 const createCustomProxyPolicy = (
-  environmentId: string,
+  adtHost: string,
   pathRewrite: (path: string) => string
 ): PipelinePolicy => {
   return {
@@ -21,7 +21,7 @@ const createCustomProxyPolicy = (
       next: SendRequest
     ): Promise<PipelineResponse> => {
       // Add custom header
-      request.headers.set("x-adt-id", environmentId);
+      request.headers.set("x-adt-host", adtHost);
 
       // Rewrite URL
       const url = new URL(request.url);
@@ -38,32 +38,31 @@ const createCustomProxyPolicy = (
 };
 
 /** Digital Twins Clients cache object */
-const digitalTwinsClients: { [environmentId: string]: DigitalTwinsClient } = {};
+const digitalTwinsClients: { [adtHost: string]: DigitalTwinsClient } = {};
 
 /**
  * Get the twins proxy path from environment or use default
  * TODO: Configure this properly in environment variables
  */
 const getTwinsProxyPath = (): string => {
-  return import.meta.env.VITE_TWINS_PROXY || "/api/digitaltwins";
+  return import.meta.env.VITE_TWINS_PROXY || "/api/proxy";
 };
 
 /** Digital Twins client factory that returns cached Digital Twins Client */
 export const digitalTwinsClientFactory = (
-  environmentId: string,
   adtHost: string,
   tokenCredential: TokenCredential
 ): DigitalTwinsClient => {
   // `/api/digitaltwins${url.pathname}`
-  if (!digitalTwinsClients[environmentId]) {
+  if (!digitalTwinsClients[adtHost]) {
     // find all consecutive forward slashes (two or more)
     const _pathRegex = /(\/){2,}/g;
     const _pathRewrite = (path: string) =>
       `${getTwinsProxyPath()}${path}`.replace(_pathRegex, "/");
 
-    const customPolicy = createCustomProxyPolicy(environmentId, _pathRewrite);
+    const customPolicy = createCustomProxyPolicy(adtHost, _pathRewrite);
 
-    digitalTwinsClients[environmentId] = new DigitalTwinsClient(
+    digitalTwinsClients[adtHost] = new DigitalTwinsClient(
       `https://${adtHost}/`,
       tokenCredential,
       {
@@ -72,5 +71,5 @@ export const digitalTwinsClientFactory = (
       }
     );
   }
-  return digitalTwinsClients[environmentId];
+  return digitalTwinsClients[adtHost];
 };

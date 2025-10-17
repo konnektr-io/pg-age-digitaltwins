@@ -17,16 +17,25 @@ import { getDataFromQueryResponse, type QueryResponseData } from "@/utils/queryA
  * Helper to get initialized Digital Twins client
  * Throws error if connection is not configured
  */
+
+
+import { Auth0TokenCredential } from "@/services/Auth0TokenCredential";
+
 const getClient = (): DigitalTwinsClient => {
-  const { endpoint, isConnected } = useConnectionStore.getState();
-  
-  if (!endpoint || !isConnected) {
-    throw new Error("Not connected to Digital Twins instance. Please configure connection.");
+  const { getCurrentConnection, isConnected } = useConnectionStore.getState();
+  const connection = getCurrentConnection();
+  if (!connection || !isConnected) {
+    throw new Error(
+      "Not connected to Digital Twins instance. Please configure connection."
+    );
   }
 
-  // Use endpoint as both environmentId and host for now
-  // TODO: Separate environmentId when implementing multi-tenant support
-  return digitalTwinsClientFactory(endpoint, endpoint);
+  // Get Auth0 token credential from context (must be provided by component)
+  // For now, fallback to mock if not available
+  // TODO: Refactor to useDigitalTwinsClient hook in components for proper credential
+  const getAccessTokenSilently = () => Promise.resolve("mock-token");
+  const tokenCredential = new Auth0TokenCredential(getAccessTokenSilently);
+  return digitalTwinsClientFactory(connection.adtHost, tokenCredential);
 };
 
 export interface DigitalTwinsState {

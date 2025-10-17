@@ -1,13 +1,12 @@
 import { useAuth0 } from "@auth0/auth0-react";
 import { useConnectionStore } from "../stores/connectionStore";
-import { useEnvironmentStore } from "../stores/environmentStore";
 
 export function ConnectionStatus(): React.ReactElement {
   const { isAuthenticated, isLoading, loginWithRedirect, logout, user } =
     useAuth0();
   const isConnected = useConnectionStore((state) => state.isConnected);
-  const currentEnvironment = useEnvironmentStore((state) =>
-    state.getCurrentEnvironment()
+  const currentConnection = useConnectionStore((state) =>
+    state.getCurrentConnection()
   );
 
   if (isLoading) {
@@ -17,10 +16,10 @@ export function ConnectionStatus(): React.ReactElement {
   return (
     <div className="flex items-center gap-4">
       {/* Environment Indicator */}
-      {currentEnvironment && (
+      {currentConnection && (
         <div className="text-sm">
-          <span className="text-gray-500">Environment:</span>{" "}
-          <span className="font-medium">{currentEnvironment.name}</span>
+          <span className="text-gray-500">Connection:</span>{" "}
+          <span className="font-medium">{currentConnection.name}</span>
         </div>
       )}
 

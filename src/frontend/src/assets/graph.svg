@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="120" height="120" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="graphGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1E9E95;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2D4263;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="graphGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2D4263;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1E9E95;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Main nodes -->
+  <circle cx="30" cy="30" r="12" fill="url(#graphGrad1)" stroke="rgba(255,255,255,0.2)" stroke-width="2"/>
+  <circle cx="90" cy="30" r="10" fill="url(#graphGrad2)" stroke="rgba(255,255,255,0.2)" stroke-width="2"/>
+  <circle cx="60" cy="60" r="14" fill="url(#graphGrad1)" stroke="rgba(255,255,255,0.2)" stroke-width="2"/>
+  <circle cx="25" cy="90" r="10" fill="url(#graphGrad2)" stroke="rgba(255,255,255,0.2)" stroke-width="2"/>
+  <circle cx="85" cy="85" r="11" fill="url(#graphGrad1)" stroke="rgba(255,255,255,0.2)" stroke-width="2"/>
+  <circle cx="90" cy="60" r="8" fill="url(#graphGrad2)" stroke="rgba(255,255,255,0.2)" stroke-width="2"/>
+  
+  <!-- Connection lines -->
+  <path d="M30 30 L60 60" stroke="url(#graphGrad1)" stroke-width="3" opacity="0.8"/>
+  <path d="M90 30 L60 60" stroke="url(#graphGrad2)" stroke-width="3" opacity="0.8"/>
+  <path d="M60 60 L25 90" stroke="url(#graphGrad1)" stroke-width="3" opacity="0.8"/>
+  <path d="M60 60 L85 85" stroke="url(#graphGrad2)" stroke-width="3" opacity="0.8"/>
+  <path d="M90 30 L90 60" stroke="url(#graphGrad1)" stroke-width="2" opacity="0.6"/>
+  <path d="M85 85 L90 60" stroke="url(#graphGrad2)" stroke-width="2" opacity="0.6"/>
+  <path d="M30 30 L90 30" stroke="url(#graphGrad1)" stroke-width="2" opacity="0.4"/>
+  
+  <!-- Highlight dots -->
+  <circle cx="30" cy="30" r="4" fill="rgba(255,255,255,0.9)"/>
+  <circle cx="60" cy="60" r="5" fill="rgba(255,255,255,0.9)"/>
+  <circle cx="90" cy="30" r="3" fill="rgba(255,255,255,0.9)"/>
+</svg>

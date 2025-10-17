@@ -22,7 +22,6 @@ export function useDigitalTwinsClient(): DigitalTwinsClient | null {
 
     const tokenCredential = new Auth0TokenCredential(getAccessTokenSilently);
     return digitalTwinsClientFactory(
-      currentEnvironment.id,
       currentEnvironment.adtHost,
       tokenCredential
     );

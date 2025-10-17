@@ -6,8 +6,6 @@ import {
   ChevronRight,
   ChevronDown,
   Layers,
-  Database,
-  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -138,8 +136,7 @@ function ModelTreeItem({
 
 export function ModelSidebar() {
   const [searchQuery, setSearchQuery] = useState("");
-  const { selectedItem, setSelectedItem, setShowLeftPanel } =
-    useWorkspaceStore();
+  const { selectedItem, setSelectedItem } = useWorkspaceStore();
   const { selectItem } = useInspectorStore();
 
   const handleModelSelect = (modelId: string) => {
@@ -155,25 +152,6 @@ export function ModelSidebar() {
 
   return (
     <div className="flex flex-col h-full w-full bg-card border-r border-border">
-      {/* Sidebar Header with Title */}
-      <div className="border-b bg-background px-6 py-4">
-        <div className="flex items-center justify-between h-10">
-          <div className="flex items-center gap-2">
-            <Database className="h-5 w-5 text-secondary" />
-            <span className="font-semibold">Konnektr Graph</span>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="p-1.5"
-            onClick={() => setShowLeftPanel(false)}
-            title="Close Models Panel"
-          >
-            <X className="w-4 h-4" />
-          </Button>
-        </div>
-      </div>
-
       {/* Models Section Header */}
       <div className="p-3 border-b border-border">
         <div className="flex items-center justify-between mb-2">
