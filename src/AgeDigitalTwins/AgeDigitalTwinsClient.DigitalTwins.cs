@@ -437,7 +437,7 @@ public partial class AgeDigitalTwinsClient
             .Replace("'", "\\'");
 
         string cypher =
-            $@"WITH '{updatedDigitalTwinJson}'::agtype as twin
+            $@"WITH '{updatedDigitalTwinJson}'::jsonb::agtype as twin
 MERGE (t: Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})
 SET t = twin
 RETURN t";
@@ -702,7 +702,7 @@ RETURN t";
             .Serialize(patchedTwin, serializerOptions)
             .Replace("'", "\\'");
         string cypher =
-            $@"WITH '{updatedDigitalTwinJson}'::agtype as twin
+            $@"WITH '{updatedDigitalTwinJson}'::jsonb::agtype as twin
 MERGE (t: Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})
 SET t = twin";
         await using var command = connection.CreateCypherCommand(_graphName, cypher);
