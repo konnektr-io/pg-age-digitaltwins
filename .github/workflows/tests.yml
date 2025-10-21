@@ -34,7 +34,7 @@ jobs:
             -e POSTGRES_PASSWORD=app \
             -p 5432:5432 \
             --shm-size=512mb \
-            ghcr.io/konnektr-io/age:16-1.5.0-standard-trixie \
+            ghcr.io/konnektr-io/age:16-1.6.0-standard-trixie \
             bash -c "initdb -D /var/lib/postgresql/data --username=app --pwfile=<(echo app) && \
                      echo 'host all all 0.0.0.0/0 trust' >> /var/lib/postgresql/data/pg_hba.conf && \
                      echo 'local all all trust' >> /var/lib/postgresql/data/pg_hba.conf && \
