@@ -78,6 +78,8 @@ jobs:
       
       - name: Initialize database with AGE extension
         run: |
+          echo "Creating app database..."
+          docker exec postgres-test createdb -U app app
           echo "Running initialization script..."
           docker exec -i postgres-test psql -U app -d app < "${{ github.workspace }}/src/data/init.sql"
           echo "Database initialized successfully"
