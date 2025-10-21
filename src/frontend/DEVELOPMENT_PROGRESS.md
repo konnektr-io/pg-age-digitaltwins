@@ -42,7 +42,16 @@
 - **Toolbar Actions**: Run, Save, Format, and History buttons
 - **Resizable Panels**: Editor and results can be resized independently
 
-## � **Known Issues & Limitations**
+### 🧪 **Testing Infrastructure**
+
+- **Vitest Setup**: Configured Vitest with React Testing Library for unit and component testing
+- **Test Scripts**: Added `pnpm test`, `pnpm test:ui`, and `pnpm test:coverage` commands
+- **First Test Suite**: Comprehensive tests for `dataStructureDetector.ts` (23 tests, all passing)
+- **Test Coverage**: 100% coverage of utility functions including edge cases
+- **Documentation**: Created TESTING.md guide with best practices and examples
+- **CI-Ready**: Tests configured to run in CI/CD pipelines
+
+## 📊 **Known Issues & Limitations**
 
 ### ⚠️ **Critical Issues Identified**
 
