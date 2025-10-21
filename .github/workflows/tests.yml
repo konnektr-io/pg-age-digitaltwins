@@ -30,7 +30,7 @@ jobs:
 
       - name: Start custom PostgreSQL container
         run: |
-            docker run --name postgres-test \
+          docker run --name postgres-test \
             -e POSTGRES_USER=app \
             -e POSTGRES_PASSWORD=app \
             -e POSTGRES_DB=app \
@@ -41,10 +41,27 @@ jobs:
             -c max_connections=1000 \
             -c max_replication_slots=10 \
             -c max_wal_senders=10 &
+          
+          echo "Waiting for container to start..."
+          sleep 10
+          echo "Container status:"
+          docker ps -a | grep postgres-test
+          echo "Container logs:"
+          docker logs postgres-test
 
       - name: Wait for PostgreSQL to be ready
         run: |
           for i in {1..45}; do
+            # Check if container is still running
+            if ! docker ps | grep -q postgres-test; then
+              echo "Container has stopped running!";
+              echo "Container status:";
+              docker ps -a | grep postgres-test;
+              echo "Container logs:";
+              docker logs postgres-test;
+              exit 1;
+            fi
+            
             if docker exec postgres-test pg_isready -U app -d app; then
               echo "PostgreSQL is ready";
               sleep 5;
@@ -54,7 +71,9 @@ jobs:
             sleep 5;
           done
           echo "PostgreSQL did not become ready in time";
-          echo "Showing container logs:";
+          echo "Final container status:";
+          docker ps -a | grep postgres-test;
+          echo "Final container logs:";
           docker logs postgres-test;
           exit 1;
 
