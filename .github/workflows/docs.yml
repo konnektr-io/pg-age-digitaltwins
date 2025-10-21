@@ -76,5 +76,5 @@ jobs:
             - Updated documentation content in `/content/docs/graph/`
             
             **Source:** ${{ github.repository }}@${{ github.sha }}
-          branch: update-ktrlplane-docs
+          branch: update-graph-docs
           delete-branch: true
