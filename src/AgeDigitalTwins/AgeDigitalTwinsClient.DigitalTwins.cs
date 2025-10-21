@@ -1085,9 +1085,9 @@ RETURN COUNT(t) AS deletedCount";
 
                 string cypher =
                     $@"UNWIND {twinsString} as twinJson
-                    WITH twinJson::jsonb::agtype as twin
-                    MERGE (t:Twin {{`$dtId`: twin['$dtId']}})
-                    SET t = twin";
+WITH twinJson::jsonb::agtype as twin
+MERGE (t:Twin {{`$dtId`: twin['$dtId']}})
+SET t = twin";
 
                 await using var command = connection.CreateCypherCommand(_graphName, cypher);
                 await command.ExecuteNonQueryAsync(cancellationToken);

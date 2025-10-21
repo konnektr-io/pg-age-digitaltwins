@@ -521,7 +521,7 @@ public class QueryTests : TestBase
                 },
                 {
                     "celestialBody1",
-                    @"{""$dtId"": ""celestialBody1"", ""$metadata"": {""$model"": ""dtmi:com:contoso:CelestialBody;1""}, ""name"": ""Celestial Body 1"", ""mass"": 5.972e24}"
+                    @"{""$dtId"": ""celestialBody1"", ""$metadata"": {""$model"": ""dtmi:com:contoso:CelestialBody;1""}, ""name"": ""Celestial Body 1"", ""mass"": 5.972e10}"
                 },
                 {
                     "habitablePlanet1",
@@ -561,7 +561,7 @@ public class QueryTests : TestBase
                 },
                 {
                     "celestialBody1",
-                    @"{""$dtId"": ""celestialBody1"", ""$metadata"": {""$model"": ""dtmi:com:contoso:CelestialBody;1""}, ""name"": ""Celestial Body 1"", ""mass"": 5.972e24}"
+                    @"{""$dtId"": ""celestialBody1"", ""$metadata"": {""$model"": ""dtmi:com:contoso:CelestialBody;1""}, ""name"": ""Celestial Body 1"", ""mass"": 5.972e10}"
                 },
                 {
                     "habitablePlanet1",
@@ -601,7 +601,7 @@ public class QueryTests : TestBase
                 },
                 {
                     "celestialBody1",
-                    @"{""$dtId"": ""celestialBody1"", ""$metadata"": {""$model"": ""dtmi:com:contoso:CelestialBody;1""}, ""name"": ""Celestial Body 1"", ""mass"": 5.972e24}"
+                    @"{""$dtId"": ""celestialBody1"", ""$metadata"": {""$model"": ""dtmi:com:contoso:CelestialBody;1""}, ""name"": ""Celestial Body 1"", ""mass"": 5.972e10}"
                 },
                 {
                     "habitablePlanet1",
@@ -965,7 +965,7 @@ public class QueryTests : TestBase
         for (int i = 1; i <= twinsPerType; i++)
         {
             twins[$"cb{i}"] =
-                $"{{\"$dtId\": \"cb{i}\", \"$metadata\": {{\"$model\": \"dtmi:com:contoso:CelestialBody;1\"}}, \"name\": \"Celestial Body {i}\", \"mass\": {i}.0e24}}";
+                $"{{\"$dtId\": \"cb{i}\", \"$metadata\": {{\"$model\": \"dtmi:com:contoso:CelestialBody;1\"}}, \"name\": \"Celestial Body {i}\", \"mass\": {i}.0e10}}";
             twins[$"p{i}"] =
                 $"{{\"$dtId\": \"p{i}\", \"$metadata\": {{\"$model\": \"dtmi:com:contoso:Planet;1\"}}, \"name\": \"Planet {i}\"}}";
             twins[$"hp{i}"] =
@@ -986,7 +986,8 @@ public class QueryTests : TestBase
             var batch = twinJsonObjects.Skip(i).Take(batchSize).ToList();
             try
             {
-                await Client.CreateOrReplaceDigitalTwinsAsync<JsonObject>(batch!);
+                var result = await Client.CreateOrReplaceDigitalTwinsAsync<JsonObject>(batch!);
+                Assert.False(result.HasFailures, $"Batch insert error at batch {i / batchSize}");
             }
             catch (Exception ex)
             {
