@@ -2,7 +2,7 @@ import { useAuth0 } from "@auth0/auth0-react";
 import { DigitalTwinsClient } from "@azure/digital-twins-core";
 import { Auth0TokenCredential } from "@/services/Auth0TokenCredential";
 import { digitalTwinsClientFactory } from "@/services/digitalTwinsClientFactory";
-import { useEnvironmentStore } from "@/stores/environmentStore";
+import { useConnectionStore } from "@/stores/connectionStore";
 import { useMemo } from "react";
 
 /**
@@ -11,8 +11,8 @@ import { useMemo } from "react";
  */
 export function useDigitalTwinsClient(): DigitalTwinsClient | null {
   const { getAccessTokenSilently, isAuthenticated } = useAuth0();
-  const currentEnvironment = useEnvironmentStore((state) =>
-    state.getCurrentEnvironment()
+  const currentEnvironment = useConnectionStore((state) =>
+    state.getCurrentConnection()
   );
 
   const client = useMemo(() => {
