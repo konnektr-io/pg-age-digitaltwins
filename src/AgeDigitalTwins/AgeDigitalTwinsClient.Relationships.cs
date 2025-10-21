@@ -382,7 +382,7 @@ public partial class AgeDigitalTwinsClient
         );
 
         string cypher =
-            $@"WITH '{updatedRelationshipJson}'::agtype as relationship
+            $@"WITH '{updatedRelationshipJson}'::jsonb::agtype as relationship
 MATCH (source:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}}),(target:Twin {{`$dtId`: '{targetId.Replace("'", "\\'")}'}})
 MERGE (source)-[rel:{relationshipName} {{`$relationshipId`: '{relationshipId.Replace("'", "\\'")}'}}]->(target)
 SET rel = relationship
@@ -499,7 +499,7 @@ RETURN rel";
                 .Serialize(patchedRel, serializerOptions)
                 .Replace("'", "\\'");
             string cypher =
-                $@"WITH '{updatedRelJson}'::agtype AS relationship
+                $@"WITH '{updatedRelJson}'::jsonb::agtype AS relationship
 MATCH (:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})-[rel {{`$relationshipId`: '{relationshipId.Replace("'", "\\'")}'}}]->(:Twin)
 SET rel = relationship";
             await using var connection = await _dataSource.OpenConnectionAsync(
