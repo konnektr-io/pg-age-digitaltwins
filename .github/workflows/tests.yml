@@ -33,15 +33,15 @@ jobs:
           docker run --name postgres-test -d \
             -e POSTGRES_PASSWORD=app \
             -p 5432:5432 \
-            --shm-size=256mb \
+            --shm-size=512mb \
             ghcr.io/konnektr-io/age:16-1.6.0-standard-trixie \
             bash -c "initdb -D /var/lib/postgresql/data --username=app --pwfile=<(echo app) && \
                      echo 'host all all 0.0.0.0/0 trust' >> /var/lib/postgresql/data/pg_hba.conf && \
                      echo 'local all all trust' >> /var/lib/postgresql/data/pg_hba.conf && \
                      postgres -D /var/lib/postgresql/data \
                      -c wal_level=logical \
-                     -c max_connections=200 \
-                     -c shared_buffers=128MB \
+                     -c max_connections=500 \
+                     -c shared_buffers=256MB \
                      -c max_replication_slots=10 \
                      -c max_wal_senders=10 \
                      -c listen_addresses='*'"
@@ -100,15 +100,15 @@ jobs:
         run: |
           if [ "${{ github.event.inputs.test_project }}" == "All" ]; then
             if [ -n "${{ github.event.inputs.filter }}" ]; then
-              dotnet test './src' --logger 'GitHubActions' --logger 'console;verbosity=normal' --blame-hang --blame-hang-timeout 5m --filter "${{ github.event.inputs.filter }}"
+              dotnet test './src' --logger 'GitHubActions' --logger 'console;verbosity=normal' --blame-hang --blame-hang-timeout 5m --filter "${{ github.event.inputs.filter }}" -- RunConfiguration.MaxCpuCount=2
             else
-              dotnet test './src' --logger 'GitHubActions' --logger 'console;verbosity=normal' --blame-hang --blame-hang-timeout 5m
+              dotnet test './src' --logger 'GitHubActions' --logger 'console;verbosity=normal' --blame-hang --blame-hang-timeout 5m -- RunConfiguration.MaxCpuCount=2
             fi
           else
             if [ -n "${{ github.event.inputs.filter }}" ]; then
-              dotnet test './src/${{ github.event.inputs.test_project }}' --logger 'GitHubActions' --logger 'console;verbosity=normal' --blame-hang --blame-hang-timeout 5m --filter "${{ github.event.inputs.filter }}"
+              dotnet test './src/${{ github.event.inputs.test_project }}' --logger 'GitHubActions' --logger 'console;verbosity=normal' --blame-hang --blame-hang-timeout 5m --filter "${{ github.event.inputs.filter }}" -- RunConfiguration.MaxCpuCount=2
             else
-              dotnet test './src/${{ github.event.inputs.test_project }}' --logger 'GitHubActions' --logger 'console;verbosity=normal' --blame-hang --blame-hang-timeout 5m
+              dotnet test './src/${{ github.event.inputs.test_project }}' --logger 'GitHubActions' --logger 'console;verbosity=normal' --blame-hang --blame-hang-timeout 5m -- RunConfiguration.MaxCpuCount=2
             fi
           fi
 
