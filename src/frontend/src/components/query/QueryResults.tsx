@@ -10,21 +10,26 @@ import {
   Network,
   Type,
   Code,
+  Columns,
+  List,
+  Rows,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Table as UITable,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { useInspectorStore } from "@/stores/inspectorStore";
 import { GraphViewer } from "@/components/graph/GraphViewer";
-import { mockDigitalTwins, mockRelationships } from "@/mocks/digitalTwinData";
+import { transformResultsToGraph } from "@/utils/queryResultsTransformer";
+import {
+  analyzeDataStructure,
+  type TableViewMode,
+} from "@/utils/dataStructureDetector";
+import {
+  SimpleTableView,
+  GroupedColumnsView,
+  FlatColumnsView,
+  ExpandableRowsView,
+} from "./table-views";
 
 interface QueryResultsProps {
   results: unknown[] | null;
@@ -35,6 +40,22 @@ interface QueryResultsProps {
 export function QueryResults({ results, error, isLoading }: QueryResultsProps) {
   const [viewMode, setViewMode] = useState<"table" | "raw" | "graph">("table");
   const [columnMode, setColumnMode] = useState<"display" | "raw">("display");
+
+  // Analyze data structure and set smart default for table view mode
+  const dataStructure = results ? analyzeDataStructure(results) : null;
+  const [tableViewMode, setTableViewMode] = useState<TableViewMode>(
+    dataStructure?.recommendedView ?? "simple"
+  );
+
+  // Update table view mode when results change
+  useState(() => {
+    if (dataStructure) {
+      setTableViewMode(dataStructure.recommendedView);
+    }
+  });
+
+  // Transform results for graph view
+  const graphData = transformResultsToGraph(results);
 
   // Get column headers based on mode
   const getColumnHeaders = () => {
@@ -63,8 +84,39 @@ export function QueryResults({ results, error, isLoading }: QueryResultsProps) {
       ? Object.keys(results[0])
       : [];
   const [currentPage, setCurrentPage] = useState(1);
+  const [expandedColumns, setExpandedColumns] = useState<
+    Record<string, boolean>
+  >({});
+  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
   const pageSize = 50;
   const { selectItem } = useInspectorStore();
+
+  const toggleColumn = (columnName: string) => {
+    setExpandedColumns((prev) => ({
+      ...prev,
+      [columnName]: !prev[columnName],
+    }));
+  };
+
+  const toggleRow = (idx: number) => {
+    const newExpanded = new Set(expandedRows);
+    if (newExpanded.has(idx)) {
+      newExpanded.delete(idx);
+    } else {
+      newExpanded.add(idx);
+    }
+    setExpandedRows(newExpanded);
+  };
+
+  const handleEntityClick = (entity: unknown, entityKey: string) => {
+    if (typeof entity === "object" && entity !== null && "$dtId" in entity) {
+      selectItem({
+        type: entityKey.toLowerCase() as "twin" | "relationship" | "model",
+        id: String(entity.$dtId),
+        data: entity,
+      });
+    }
+  };
 
   const totalPages = results ? Math.ceil(results.length / pageSize) : 0;
   const paginatedResults = results
@@ -187,26 +239,72 @@ export function QueryResults({ results, error, isLoading }: QueryResultsProps) {
 
           {/* Column Mode Toggle - only show for table view */}
           {viewMode === "table" && (
-            <div className="flex gap-1 p-1 bg-muted rounded-md">
-              <Button
-                variant={columnMode === "display" ? "default" : "ghost"}
-                size="sm"
-                className="px-2 py-1 text-xs"
-                onClick={() => setColumnMode("display")}
-                title="Show display names from DTDL models"
-              >
-                <Type className="w-3 h-3" />
-              </Button>
-              <Button
-                variant={columnMode === "raw" ? "default" : "ghost"}
-                size="sm"
-                className="px-2 py-1 text-xs"
-                onClick={() => setColumnMode("raw")}
-                title="Show raw field names"
-              >
-                <Code className="w-3 h-3" />
-              </Button>
-            </div>
+            <>
+              <div className="flex gap-1 p-1 bg-muted rounded-md">
+                <Button
+                  variant={columnMode === "display" ? "default" : "ghost"}
+                  size="sm"
+                  className="px-2 py-1 text-xs"
+                  onClick={() => setColumnMode("display")}
+                  title="Show display names from DTDL models"
+                >
+                  <Type className="w-3 h-3" />
+                </Button>
+                <Button
+                  variant={columnMode === "raw" ? "default" : "ghost"}
+                  size="sm"
+                  className="px-2 py-1 text-xs"
+                  onClick={() => setColumnMode("raw")}
+                  title="Show raw field names"
+                >
+                  <Code className="w-3 h-3" />
+                </Button>
+              </div>
+
+              {/* Table View Mode Toggle - only show if we have nested entities */}
+              {dataStructure && dataStructure.hasNestedEntities && (
+                <div className="flex gap-1 p-1 bg-muted rounded-md">
+                  <Button
+                    variant={tableViewMode === "simple" ? "default" : "ghost"}
+                    size="sm"
+                    className="px-2 py-1 text-xs"
+                    onClick={() => setTableViewMode("simple")}
+                    title="Simple table (nested data as JSON)"
+                  >
+                    <Table className="w-3 h-3" />
+                  </Button>
+                  <Button
+                    variant={tableViewMode === "grouped" ? "default" : "ghost"}
+                    size="sm"
+                    className="px-2 py-1 text-xs"
+                    onClick={() => setTableViewMode("grouped")}
+                    title="Grouped columns (expandable column groups)"
+                  >
+                    <Columns className="w-3 h-3" />
+                  </Button>
+                  <Button
+                    variant={tableViewMode === "flat" ? "default" : "ghost"}
+                    size="sm"
+                    className="px-2 py-1 text-xs"
+                    onClick={() => setTableViewMode("flat")}
+                    title="Flat columns (entity.property naming)"
+                  >
+                    <List className="w-3 h-3" />
+                  </Button>
+                  <Button
+                    variant={
+                      tableViewMode === "expandable" ? "default" : "ghost"
+                    }
+                    size="sm"
+                    className="px-2 py-1 text-xs"
+                    onClick={() => setTableViewMode("expandable")}
+                    title="Expandable rows (master-detail view)"
+                  >
+                    <Rows className="w-3 h-3" />
+                  </Button>
+                </div>
+              )}
+            </>
           )}
 
           {/* Export Button */}
@@ -266,53 +364,71 @@ export function QueryResults({ results, error, isLoading }: QueryResultsProps) {
             <ScrollArea className="flex-1">
               {viewMode === "table" ? (
                 <div className="p-4">
-                  <UITable>
-                    <TableHeader>
-                      <TableRow>
-                        {columnKeys.map((key, index) => (
-                          <TableHead key={key} className="font-semibold">
-                            {columnHeaders[index]}
-                          </TableHead>
-                        ))}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {paginatedResults.map((row, index) => (
-                        <TableRow
-                          key={index}
-                          className="cursor-pointer hover:bg-muted/50 transition-colors"
-                          onClick={() => handleRowClick(row)}
-                        >
-                          {columnKeys.map((key) => {
-                            let value: unknown = undefined;
-                            if (typeof row === "object" && row !== null) {
-                              value = (row as Record<string, unknown>)[key];
-                            }
-                            return (
-                              <TableCell
-                                key={key}
-                                className="font-mono text-xs"
-                              >
-                                {typeof value === "object" && value !== null
-                                  ? JSON.stringify(value)
-                                  : String(value)}
-                              </TableCell>
-                            );
-                          })}
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </UITable>
+                  {tableViewMode === "simple" && (
+                    <SimpleTableView
+                      results={paginatedResults}
+                      columnKeys={columnKeys}
+                      columnHeaders={columnHeaders}
+                      onRowClick={handleRowClick}
+                    />
+                  )}
+                  {tableViewMode === "grouped" && (
+                    <GroupedColumnsView
+                      results={paginatedResults}
+                      expandedColumns={expandedColumns}
+                      onToggleColumn={toggleColumn}
+                      onEntityClick={handleEntityClick}
+                    />
+                  )}
+                  {tableViewMode === "flat" && (
+                    <FlatColumnsView
+                      results={paginatedResults}
+                      onEntityClick={handleEntityClick}
+                    />
+                  )}
+                  {tableViewMode === "expandable" && (
+                    <ExpandableRowsView
+                      results={paginatedResults}
+                      expandedRows={expandedRows}
+                      onToggleRow={toggleRow}
+                    />
+                  )}
                 </div>
               ) : viewMode === "graph" ? (
                 <div className="p-4 h-full">
-                  <GraphViewer
-                    twins={mockDigitalTwins}
-                    relationships={mockRelationships}
-                    onNodeClick={(twinId: string) =>
-                      selectItem({ type: "twin", id: twinId })
-                    }
-                  />
+                  {graphData.hasGraphData ? (
+                    <GraphViewer
+                      twins={graphData.twins}
+                      relationships={graphData.relationships}
+                      onNodeClick={(twinId: string) =>
+                        selectItem({ type: "twin", id: twinId })
+                      }
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="text-center max-w-md">
+                        <Network className="w-12 h-12 mx-auto mb-4 opacity-50 text-muted-foreground" />
+                        <h3 className="text-lg font-semibold mb-2">
+                          No Graph Data Available
+                        </h3>
+                        <p className="text-sm text-muted-foreground mb-4">
+                          The current query results don't contain digital twins
+                          or relationships that can be visualized as a graph.
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Graph view requires results with{" "}
+                          <code className="bg-muted px-1 py-0.5 rounded">
+                            $dtId
+                          </code>{" "}
+                          (twins) or{" "}
+                          <code className="bg-muted px-1 py-0.5 rounded">
+                            $relationshipId
+                          </code>{" "}
+                          (relationships) properties.
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="p-4">
