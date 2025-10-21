@@ -54,6 +54,8 @@ jobs:
             sleep 5;
           done
           echo "PostgreSQL did not become ready in time";
+          echo "Showing container logs:";
+          docker logs postgres-test;
           exit 1;
 
       - name: Setup .NET SDK
