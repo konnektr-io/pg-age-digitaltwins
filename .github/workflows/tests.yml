@@ -36,6 +36,8 @@ jobs:
             --shm-size=256mb \
             ghcr.io/konnektr-io/age:16-1.6.0-standard-trixie \
             bash -c "initdb -D /var/lib/postgresql/data --username=app --pwfile=<(echo app) && \
+                     echo 'host all all 0.0.0.0/0 trust' >> /var/lib/postgresql/data/pg_hba.conf && \
+                     echo 'local all all trust' >> /var/lib/postgresql/data/pg_hba.conf && \
                      postgres -D /var/lib/postgresql/data \
                      -c wal_level=logical \
                      -c max_connections=200 \
