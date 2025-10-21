@@ -33,13 +33,16 @@ jobs:
           docker run --name postgres-test -d \
             -e POSTGRES_PASSWORD=app \
             -p 5432:5432 \
+            --shm-size=256mb \
             ghcr.io/konnektr-io/age:16-1.6.0-standard-trixie \
             bash -c "initdb -D /var/lib/postgresql/data --username=app --pwfile=<(echo app) && \
                      postgres -D /var/lib/postgresql/data \
                      -c wal_level=logical \
-                     -c max_connections=1000 \
+                     -c max_connections=200 \
+                     -c shared_buffers=128MB \
                      -c max_replication_slots=10 \
-                     -c max_wal_senders=10"
+                     -c max_wal_senders=10 \
+                     -c listen_addresses='*'"
           
           echo "Waiting for container to start..."
           sleep 10
