@@ -31,13 +31,13 @@ jobs:
       - name: Start custom PostgreSQL container
         run: |
           docker run --name postgres-test -d \
+            -e PGDATA=/var/lib/postgresql/data/pgdata \
             -e POSTGRES_USER=app \
             -e POSTGRES_PASSWORD=app \
             -e POSTGRES_DB=app \
             -v "${{ github.workspace }}/src/data/init.sql:/docker-entrypoint-initdb.d/init.sql" \
             -p 5432:5432 \
             ghcr.io/konnektr-io/age:16-1.6.0-standard-trixie \
-            postgres \
             -c wal_level=logical \
             -c max_connections=1000 \
             -c max_replication_slots=10 \
