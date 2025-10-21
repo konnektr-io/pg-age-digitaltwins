@@ -30,17 +30,15 @@ jobs:
 
       - name: Start custom PostgreSQL container
         run: |
-          docker run --name postgres-test \
+          docker run --name postgres-test -d \
+            -e PGDATA=/var/lib/postgresql/data/pgdata \
             -e POSTGRES_USER=app \
             -e POSTGRES_PASSWORD=app \
             -e POSTGRES_DB=app \
-            -v "${{ github.workspace }}/src/data/init.sql:/docker-entrypoint-initdb.d/init.sql" \
+            -v "${{ github.workspace }}/src/data/init.sql:/init.sql" \
             -p 5432:5432 \
             ghcr.io/konnektr-io/age:16-1.6.0-standard-trixie \
-            -c wal_level=logical \
-            -c max_connections=1000 \
-            -c max_replication_slots=10 \
-            -c max_wal_senders=10 &
+            /controller/manager instance run --log-level=info
           
           echo "Waiting for container to start..."
           sleep 10
@@ -62,12 +60,12 @@ jobs:
               exit 1;
             fi
             
-            if docker exec postgres-test pg_isready -U app -d app; then
+            if docker exec postgres-test pg_isready -U app -d app 2>/dev/null; then
               echo "PostgreSQL is ready";
               sleep 5;
               exit 0;
             fi;
-            echo "Waiting for PostgreSQL...";
+            echo "Waiting for PostgreSQL... (attempt $i)";
             sleep 5;
           done
           echo "PostgreSQL did not become ready in time";
@@ -76,6 +74,12 @@ jobs:
           echo "Final container logs:";
           docker logs postgres-test;
           exit 1;
+      
+      - name: Initialize database with AGE extension
+        run: |
+          echo "Running initialization script..."
+          docker exec -i postgres-test psql -U app -d app < "${{ github.workspace }}/src/data/init.sql"
+          echo "Database initialized successfully"
 
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
