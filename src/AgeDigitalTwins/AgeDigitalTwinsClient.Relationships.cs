@@ -884,7 +884,7 @@ RETURN t.`$dtId` AS twinId";
 
                 string cypher =
                     $@"UNWIND {relationshipsString} as relationshipJson
-                    WITH relationshipJson::agtype as relationship
+                    WITH relationshipJson::jsonb::agtype as relationship
                     MATCH (source:Twin {{`$dtId`: relationship['$sourceId']}})
                     MATCH (target:Twin {{`$dtId`: relationship['$targetId']}})
                     MERGE (source)-[r:{relationshipName} {{`$relationshipId`: relationship['$relationshipId']}}]->(target)
