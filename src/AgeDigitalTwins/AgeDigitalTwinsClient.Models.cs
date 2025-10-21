@@ -179,14 +179,19 @@ MATCH (m:Model {{id: dependency}})
                 modelData.Bases = bases.ToArray();
                 return modelData;
             });
-            // This is needed as after unwinding, it gets converted to agtype again
-            string modelsString =
-                $"['{string.Join("','", modelDatas.Select(m => JsonSerializer.Serialize(m, serializerOptions).Replace("'", "\\'")))}']";
+
+            // Serialize each model to JSON, then create a proper JSON array string
+            // Important: We need to avoid double-escaping by building the array directly
+            var serializedModels = modelDatas
+                .Select(m => JsonSerializer.Serialize(m, serializerOptions))
+                .ToList();
+
+            string modelsString = "[" + string.Join(",", serializedModels) + "]";
 
             // It is not possible to update or overwrite an existing model
             // Trying so will raise a unique constraint violation
             string cypher =
-                $@"UNWIND {modelsString} as model
+                $@"UNWIND {modelsString}::jsonb as model
 WITH model::agtype as modelAgtype
 CREATE (m:Model {{id: modelAgtype['id']}})
 SET m = modelAgtype
