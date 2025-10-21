@@ -31,12 +31,15 @@ jobs:
       - name: Start custom PostgreSQL container
         run: |
           docker run --name postgres-test -d \
-            -e POSTGRES_USER=app \
             -e POSTGRES_PASSWORD=app \
-            -e POSTGRES_DB=app \
             -p 5432:5432 \
             ghcr.io/konnektr-io/age:16-1.6.0-standard-trixie \
-            postgres -c wal_level=logical -c max_connections=1000 -c max_replication_slots=10 -c max_wal_senders=10
+            bash -c "initdb -D /var/lib/postgresql/data --username=app --pwfile=<(echo app) && \
+                     postgres -D /var/lib/postgresql/data \
+                     -c wal_level=logical \
+                     -c max_connections=1000 \
+                     -c max_replication_slots=10 \
+                     -c max_wal_senders=10"
           
           echo "Waiting for container to start..."
           sleep 10
