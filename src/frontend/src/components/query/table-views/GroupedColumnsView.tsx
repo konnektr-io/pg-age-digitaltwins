@@ -12,7 +12,7 @@ import {
   getEntityColumns,
   getEntityProperties,
   getEntityType,
-} from "./tableViewHelpers";
+} from "@/utils/dataStructureDetector";
 
 interface GroupedColumnsViewProps {
   results: unknown[];

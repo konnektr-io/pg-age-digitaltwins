@@ -153,7 +153,7 @@ export const useQueryStore = create<QueryState>()(
         set({ isExecuting: true, queryError: null });
 
         try {
-          // Mock API call - replace with actual GraphQL/REST call
+          // Mock API call - replace with actual call
           const executionTime = 800 + Math.random() * 400;
           await new Promise((resolve) => setTimeout(resolve, executionTime));
 

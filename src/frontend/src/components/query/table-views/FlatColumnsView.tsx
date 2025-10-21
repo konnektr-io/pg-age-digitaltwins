@@ -7,7 +7,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { getEntityColumns, getEntityProperties } from "./tableViewHelpers";
+import {
+  getEntityColumns,
+  getEntityProperties,
+} from "@/utils/dataStructureDetector";
 
 interface FlatColumnsViewProps {
   results: unknown[];

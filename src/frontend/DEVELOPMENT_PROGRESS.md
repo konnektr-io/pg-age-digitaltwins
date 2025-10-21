@@ -122,17 +122,19 @@ See **QUERY_COMPONENTS_ANALYSIS.md** for complete analysis and implementation pl
 - ✅ Inspector integration works in all table view modes
 - ✅ Removed QueryResultsImproved.tsx after feature extraction
 - ✅ **Refactored QueryResults.tsx for maintainability (817 → 444 lines)**
+- ✅ **Consolidated duplicate helper functions** - removed tableViewHelpers.ts, all components now import from dataStructureDetector.ts
 - **Files Created**: 
   - `src/utils/dataStructureDetector.ts`
-  - `src/components/query/table-views/tableViewHelpers.ts`
   - `src/components/query/table-views/SimpleTableView.tsx`
   - `src/components/query/table-views/GroupedColumnsView.tsx`
   - `src/components/query/table-views/FlatColumnsView.tsx`
   - `src/components/query/table-views/ExpandableRowsView.tsx`
   - `src/components/query/table-views/index.ts`
 - **Files Modified**: `src/components/query/QueryResults.tsx`
-- **Files Deleted**: `src/components/query/QueryResultsImproved.tsx`
-- **Documentation**: `PHASE_5_2_COMPLETE.md`, `PHASE_5_2_SUMMARY.md`, `TABLE_VIEW_MODES_GUIDE.md`, `QUERYRESULTS_REFACTORING.md`
+- **Files Deleted**: 
+  - `src/components/query/QueryResultsImproved.tsx`
+  - `src/components/query/table-views/tableViewHelpers.ts` (duplicate functions consolidated)
+- **Documentation**: `PHASE_5_2_COMPLETE.md`, `PHASE_5_2_SUMMARY.md`, `TABLE_VIEW_MODES_GUIDE.md`
 - **Features**:
   - **Simple Table**: Default view, shows nested data as JSON strings
   - **Grouped Columns**: Expandable column groups for entities with nested properties
