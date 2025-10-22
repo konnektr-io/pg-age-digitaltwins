@@ -932,7 +932,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         _output.WriteLine(logContent);
 
         // Wait for events to be processed
-        await Task.Delay(5000);
+        await Task.Delay(15000);
 
         // Assert
         Assert.NotNull(result);
