@@ -138,7 +138,7 @@ namespace AgeDigitalTwins.ApiService.Test
                     ""$model"": ""dtmi:com:contoso:Moon;1""
                 },
                 ""name"": ""Luna"",
-                ""mass"": 7.34767309E9
+                ""mass"": 7.34767309E22
             }";
 
         public const string DtdlCrater =
