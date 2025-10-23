@@ -778,10 +778,14 @@ RETURN t";
     )
     {
         string cypher =
-            $@"MATCH (t:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}}) 
+            $@"MATCH (t:Twin {{`$dtId`: $twinId}}) 
 DELETE t
 RETURN COUNT(t) AS deletedCount";
-        await using var command = connection.CreateCypherCommand(_graphName, cypher);
+        await using var command = connection.CreateCypherCommand(
+            _graphName,
+            cypher,
+            new Dictionary<string, object?>() { { "twinId", digitalTwinId } }
+        );
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         int rowsAffected = 0;
         if (await reader.ReadAsync(cancellationToken))
@@ -1097,16 +1101,26 @@ RETURN COUNT(t) AS deletedCount";
             try
             {
                 // Prepare twins for batch insert - construct full query like models
-                string twinsString =
-                    $"['{string.Join("','", finalValidTwins.Select(t => JsonSerializer.Serialize(t.digitalTwinObject, serializerOptions).Replace("'", "\\'")))}']";
+                JsonObject parametersJson =
+                    new()
+                    {
+                        {
+                            "twins",
+                            new JsonArray([.. finalValidTwins.Select(t => t.digitalTwinObject)])
+                        },
+                    };
 
                 string cypher =
-                    $@"UNWIND {twinsString} as twinJson
+                    $@"UNWIND $twins as twinJson
 WITH twinJson::cstring::agtype as twin
-MERGE (t:Twin {{`$dtId`: twin['$dtId']}})
+MERGE (t:Twin {{`$dtId`: twin.`$dtId`}})
 SET t = twin";
 
-                await using var command = connection.CreateCypherCommand(_graphName, cypher);
+                await using var command = connection.CreateCypherCommand(
+                    _graphName,
+                    cypher,
+                    JsonSerializer.Serialize(parametersJson)
+                );
                 await command.ExecuteNonQueryAsync(cancellationToken);
 
                 // Mark all successfully processed twins
