@@ -343,7 +343,7 @@ public partial class AgeDigitalTwinsClient
             .Replace("'", "\\'");
 
         string cypher =
-            $@"WITH '{updatedDigitalTwinJson}'::jsonb::agtype as twin
+            $@"WITH '{updatedDigitalTwinJson}'::cstring::agtype as twin
 MERGE (t: Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})
 SET t = twin
 RETURN t";
