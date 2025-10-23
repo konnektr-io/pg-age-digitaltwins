@@ -432,16 +432,25 @@ public partial class AgeDigitalTwinsClient
         digitalTwinObject["$etag"] = newEtag;
 
         // Serialize the updated digital twin
-        string updatedDigitalTwinJson = JsonSerializer
-            .Serialize(digitalTwinObject, serializerOptions)
-            .Replace("'", "\\'");
+        string updatedDigitalTwinJson = JsonSerializer.Serialize(
+            digitalTwinObject,
+            serializerOptions
+        );
 
         string cypher =
-            $@"WITH '{updatedDigitalTwinJson}'::cstring::agtype as twin
-MERGE (t: Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})
+            $@"WITH $twin::cstring::agtype as twin
+MERGE (t: Twin {{`$dtId`: $twinId}})
 SET t = twin
 RETURN t";
-        await using var command = connection.CreateCypherCommand(_graphName, cypher);
+        await using var command = connection.CreateCypherCommand(
+            _graphName,
+            cypher,
+            new Dictionary<string, object?>()
+            {
+                { "twinId", digitalTwinId },
+                { "twin", updatedDigitalTwinJson },
+            }
+        );
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
         if (await reader.ReadAsync(cancellationToken))
@@ -698,14 +707,22 @@ RETURN t";
         string newEtag = ETagGenerator.GenerateEtag(digitalTwinId, now);
         patchedTwin["$etag"] = newEtag;
         // Replace the entire twin in the database
-        string updatedDigitalTwinJson = JsonSerializer
-            .Serialize(patchedTwin, serializerOptions)
-            .Replace("'", "\\'");
+        string updatedDigitalTwinJson = JsonSerializer.Serialize(patchedTwin, serializerOptions);
+
         string cypher =
-            $@"WITH '{updatedDigitalTwinJson}'::cstring::agtype as twin
-MERGE (t: Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})
-SET t = twin";
-        await using var command = connection.CreateCypherCommand(_graphName, cypher);
+            $@"WITH $twin::cstring::agtype as twin
+MERGE (t: Twin {{`$dtId`: $twinId}})
+SET t = twin
+RETURN t";
+        await using var command = connection.CreateCypherCommand(
+            _graphName,
+            cypher,
+            new Dictionary<string, object?>()
+            {
+                { "twinId", digitalTwinId },
+                { "twin", updatedDigitalTwinJson },
+            }
+        );
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 

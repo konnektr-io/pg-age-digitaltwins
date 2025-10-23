@@ -51,6 +51,39 @@ public class DigitalTwinsTests : TestBase
     }
 
     [Fact]
+    public async Task CreateOrReplaceDigitalTwinAsync_BasicDigitalTwinWithWeirdId_CreatedAndReadable()
+    {
+        // Load required models
+        string[] models = [SampleData.DtdlCrater];
+        await Client.CreateModelsAsync(models);
+
+        // ADT supported characters: A-Z a-z 0-9 - . +% _ # * ? ! ( ) , = @ $ '
+
+        // Create digital twin
+        var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinCrater);
+        digitalTwin!.Id = "crater'12.3+%_#*?!(123),=@$";
+
+        var createdTwin = await Client.CreateOrReplaceDigitalTwinAsync(digitalTwin.Id, digitalTwin);
+
+        Assert.NotNull(createdTwin);
+        Assert.Equal(digitalTwin.Id, createdTwin.Id);
+
+        // Read digital twin
+        var readTwin = await Client.GetDigitalTwinAsync<BasicDigitalTwin>(digitalTwin.Id);
+        Assert.NotNull(readTwin);
+        Assert.Equal(digitalTwin.Id, readTwin.Id);
+
+        // Read it again with a different method, should have the same etag
+        var readTwin2 = await Client.GetDigitalTwinAsync<JsonDocument>(readTwin.Id);
+        Assert.NotNull(readTwin2);
+        Assert.Equal(digitalTwin.Id, readTwin2.RootElement.GetProperty("$dtId").GetString());
+        Assert.Equal(
+            readTwin2.RootElement.GetProperty("$etag").GetString(),
+            readTwin.ETag.ToString()
+        );
+    }
+
+    [Fact]
     public async Task CreateOrReplaceDigitalTwinAsync_BasicDigitalTwinWithWeirdcharacters_CreatedAndReadable()
     {
         // Load required models
