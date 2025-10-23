@@ -187,7 +187,7 @@ MATCH (m:Model {{id: dependency}})
             // Trying so will raise a unique constraint violation
             string cypher =
                 $@"UNWIND {modelsString} as model
-WITH model::jsonb::agtype as modelAgtype
+WITH model::cstring::agtype as modelAgtype
 CREATE (m:Model {{id: modelAgtype.id}})
 SET m = modelAgtype
 RETURN m";

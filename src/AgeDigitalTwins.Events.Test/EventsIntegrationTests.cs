@@ -895,10 +895,10 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
             @"{""Section"": ""Header""}
 {""fileVersion"": ""1.0.0"", ""author"": ""update-test"", ""organization"": ""contoso""}
 {""Section"": ""Twins""}
-{""$dtId"":""earth"",""$metadata"":{""$model"":""dtmi:com:contoso:Planet;1""},""name"":""Earth (Updated)"",""mass"":5.972e8,""hasLife"":true,""temperature"":15.0}
-{""$dtId"":""mars"",""$metadata"":{""$model"":""dtmi:com:contoso:Planet;1""},""name"":""Mars (Updated)"",""mass"":6.39e9,""hasLife"":false,""temperature"":-63.0}
-{""$dtId"":""jupiter"",""$metadata"":{""$model"":""dtmi:com:contoso:Planet;1""},""name"":""Jupiter"",""mass"":1.898e9,""hasLife"":false,""temperature"":-110.0}
-{""$dtId"":""europa"",""$metadata"":{""$model"":""dtmi:com:contoso:Moon;1""},""name"":""Europa"",""mass"":4.8e9,""temperature"":-160.0}
+{""$dtId"":""earth"",""$metadata"":{""$model"":""dtmi:com:contoso:Planet;1""},""name"":""Earth (Updated)"",""mass"":5.972e24,""hasLife"":true,""temperature"":15.0}
+{""$dtId"":""mars"",""$metadata"":{""$model"":""dtmi:com:contoso:Planet;1""},""name"":""Mars (Updated)"",""mass"":6.39e23,""hasLife"":false,""temperature"":-63.0}
+{""$dtId"":""jupiter"",""$metadata"":{""$model"":""dtmi:com:contoso:Planet;1""},""name"":""Jupiter"",""mass"":1.898e27,""hasLife"":false,""temperature"":-110.0}
+{""$dtId"":""europa"",""$metadata"":{""$model"":""dtmi:com:contoso:Moon;1""},""name"":""Europa"",""mass"":4.8e22,""temperature"":-160.0}
 {""Section"": ""Relationships""}
 {""$sourceId"":""earth"",""$relationshipId"":""earth_moon_satellite"",""$targetId"":""moon"",""$relationshipName"":""satellites"",""Distance"":384400.5}
 {""$sourceId"":""jupiter"",""$relationshipId"":""jupiter_europa_satellite"",""$targetId"":""europa"",""$relationshipName"":""satellites"",""Distance"":671034.0}";
