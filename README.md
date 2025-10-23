@@ -71,11 +71,8 @@ AgeDigitalTwins is an SDK and API designed to support Digital Twins applications
   - [x] Kusto sink (Azure Data Explorer / Fabric Real-Time)
   - [x] MQTT sink
   - [ ] Postgres sink
+  - [ ] AgeDigitalTwins API sink
   - [ ] Event filtering
-- **Ingestion**:
-  - [ ] MQTT Ingestion
-  - [ ] Kafka Ingestion
-  - [ ] Ingestion Mapping
 
 ## Contributing
 
