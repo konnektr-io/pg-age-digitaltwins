@@ -323,6 +323,16 @@ public static partial class AdtQueryHelpers
                 );
         }
 
+        // Process ARRAY_CONTAINS function
+        whereClause = ArrayContainsFunctionRegex()
+            .Replace(
+                whereClause,
+                m =>
+                {
+                    return $"{m.Groups[2].Value} IN {m.Groups[1].Value}";
+                }
+            );
+
         // Process string function STARTSWITH
         whereClause = StartsWithFunctionRegex()
             .Replace(
@@ -364,7 +374,7 @@ public static partial class AdtQueryHelpers
             );
 
         // Process IS_DEFINED function
-        whereClause = IsDefinedRegex()
+        whereClause = IsDefinedFunctionRegex()
             .Replace(
                 whereClause,
                 m =>
@@ -374,7 +384,7 @@ public static partial class AdtQueryHelpers
             );
 
         // Process IS_NUMBER function
-        whereClause = IsNumberRegex()
+        whereClause = IsNumberFunctionRegex()
             .Replace(
                 whereClause,
                 m =>
@@ -476,6 +486,12 @@ public static partial class AdtQueryHelpers
     )]
     private static partial Regex ContainsFunctionRegex();
 
+    [GeneratedRegex(
+        @"ARRAY_CONTAINS\(([^,]+),\s*([^\)]+)\)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+    )]
+    private static partial Regex ArrayContainsFunctionRegex();
+
     [GeneratedRegex(@"IS_NULL\(([^)]+)\)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex IsNullFunctionRegex();
 
@@ -483,13 +499,13 @@ public static partial class AdtQueryHelpers
         @"IS_DEFINED\(([^)]+)\)",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
     )]
-    private static partial Regex IsDefinedRegex();
+    private static partial Regex IsDefinedFunctionRegex();
 
     [GeneratedRegex(
         @"IS_NUMBER\(([^)]+)\)",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
     )]
-    private static partial Regex IsNumberRegex();
+    private static partial Regex IsNumberFunctionRegex();
 
     [GeneratedRegex(@"(\.\$[\w]+)")]
     private static partial Regex DollarSignPropertyRegex();
