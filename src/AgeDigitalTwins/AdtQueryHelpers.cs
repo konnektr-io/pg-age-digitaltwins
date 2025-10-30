@@ -394,7 +394,25 @@ public static partial class AdtQueryHelpers
                 }
             );
 
-        // TODO: Other type checks
+        // Process IS_BOOL function
+        whereClause = IsBoolFunctionRegex()
+            .Replace(
+                whereClause,
+                m =>
+                {
+                    var property = m.Groups[1].Value;
+                    return $"({property} = true OR {property} = false)";
+                }
+            );
+
+        // TODO: Process IS_OBJECT function
+        // Not really possible to do safely
+
+        // TODO: Process IS_PRIMITIVE function
+        // Not really possible to do safely
+
+        // TODO: Process IS_STRING function
+        // Not really possible to do safely
 
         // Replace property access with $ character
         whereClause = DollarSignPropertyRegex().Replace(whereClause, m => $"['{m.Value[1..]}']");
@@ -506,6 +524,9 @@ public static partial class AdtQueryHelpers
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
     )]
     private static partial Regex IsNumberFunctionRegex();
+
+    [GeneratedRegex(@"IS_BOOL\(([^)]+)\)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex IsBoolFunctionRegex();
 
     [GeneratedRegex(@"(\.\$[\w]+)")]
     private static partial Regex DollarSignPropertyRegex();

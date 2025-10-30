@@ -59,6 +59,10 @@ public class AdtQueryToCypherTests
         "MATCH (T:Twin) WHERE true IN T.bools RETURN T"
     )]
     [InlineData(
+        "SELECT T FROM DIGITALTWINS T WHERE IS_BOOL(T.bool)",
+        "MATCH (T:Twin) WHERE (T.bool = true OR T.bool = false) RETURN T"
+    )]
+    [InlineData(
         "SELECT * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:adt:dtsample:room;1') AND name = 'foo'",
         "MATCH (T:Twin) WHERE testgraph.is_of_model(T,'dtmi:com:adt:dtsample:room;1') AND T.name = 'foo' RETURN *"
     )]
