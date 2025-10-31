@@ -323,15 +323,27 @@ public class QueryTests : TestBase
         await IntializeAsync();
         // Insert a twin with a map, a string, and a number property
         var twinJson =
-            @"{""$dtId"": ""typecheck1"", ""mapProp"": {""foo"": 1}, ""strProp"": ""hello"", ""numProp"": 42}";
-        await Client.CreateOrReplaceDigitalTwinAsync("typecheck1", twinJson);
+            @"{
+            ""$dtId"": ""typecheckroom1"", 
+            ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, 
+            ""name"": ""Room 1"",
+            ""description"": ""This is a room."",
+            ""temperature"": 22.5,
+            ""humidity"": 0.5,
+            ""dimensions"": {
+                ""length"": 5.0,
+                ""width"": 4.0,
+                ""height"": 3.0
+            }
+            }";
+        await Client.CreateOrReplaceDigitalTwinAsync("room1", twinJson);
 
         // IS_OBJECT should be true for mapProp, false for strProp, numProp
         var objectResult = await Client
             .QueryAsync<JsonDocument>(
                 @"
-            MATCH (t:Twin { `$dtId`: 'typecheck1' })
-            RETURN t.$dtId AS id, testgraph.is_object(t.mapProp) AS isObj, testgraph.is_object(t.strProp) AS isObjStr, testgraph.is_object(t.numProp) AS isObjNum
+            MATCH (t:Twin { `$dtId`: 'typecheckroom1' })
+            RETURN t.$dtId AS id, testgraph.is_object(t.dimensions) AS isObj, testgraph.is_object(t.name) AS isObjStr, testgraph.is_object(t.temperature) AS isObjNum
         "
             )
             .FirstOrDefaultAsync();
@@ -344,8 +356,8 @@ public class QueryTests : TestBase
         var primResult = await Client
             .QueryAsync<JsonDocument>(
                 $@"
-            MATCH (t:Twin {{ `$dtId`: 'typecheck1' }})
-            RETURN t.$dtId AS id, {Client.GetGraphName()}.is_primitive(t.mapProp) AS isPrimMap, {Client.GetGraphName()}.is_primitive(t.strProp) AS isPrimStr, {Client.GetGraphName()}.is_primitive(t.numProp) AS isPrimNum
+            MATCH (t:Twin {{ `$dtId`: 'typecheckroom1' }})
+            RETURN t.$dtId AS id, {Client.GetGraphName()}.is_primitive(t.dimensions) AS isPrimMap, {Client.GetGraphName()}.is_primitive(t.name) AS isPrimStr, {Client.GetGraphName()}.is_primitive(t.temperature) AS isPrimNum
         "
             )
             .FirstOrDefaultAsync();
@@ -358,8 +370,8 @@ public class QueryTests : TestBase
         var strResult = await Client
             .QueryAsync<JsonDocument>(
                 @$"
-            MATCH (t:Twin {{ `$dtId`: 'typecheck1' }})
-            RETURN t.$dtId AS id, {Client.GetGraphName()}.is_string(t.mapProp) AS isStrMap, {Client.GetGraphName()}.is_string(t.strProp) AS isStrStr, {Client.GetGraphName()}.is_string(t.numProp) AS isStrNum
+            MATCH (t:Twin {{ `$dtId`: 'typecheckroom1' }})
+            RETURN t.$dtId AS id, {Client.GetGraphName()}.is_string(t.dimensions) AS isStrMap, {Client.GetGraphName()}.is_string(t.name) AS isStrStr, {Client.GetGraphName()}.is_string(t.temperature) AS isStrNum
         "
             )
             .FirstOrDefaultAsync();
