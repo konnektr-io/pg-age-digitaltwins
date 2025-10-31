@@ -217,7 +217,7 @@ public static class GraphInitialization
                     IF exact THEN
                         sql := format('SELECT ''%s'' = ''%s''', twin_model_id, model_id);
                     ELSE
-                        sql:= format('SELECT ''%s'' = ''%s'' OR
+                        sql := format('SELECT ''%s'' = ''%s'' OR
                         EXISTS
                             (SELECT 1 FROM ag_catalog.cypher(''{graphName}'', $$
                                 MATCH (m:Model)

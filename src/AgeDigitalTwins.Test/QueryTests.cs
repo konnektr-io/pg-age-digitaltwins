@@ -341,9 +341,9 @@ public class QueryTests : TestBase
         // IS_OBJECT should be true for mapProp, false for strProp, numProp
         var objectResult = await Client
             .QueryAsync<JsonDocument>(
-                @"
-            MATCH (t:Twin { `$dtId`: 'typecheckroom1' })
-            RETURN t.$dtId AS id, testgraph.is_object(t.dimensions) AS isObj, testgraph.is_object(t.name) AS isObjStr, testgraph.is_object(t.temperature) AS isObjNum
+                @$"
+            MATCH (t:Twin {{ `$dtId`: 'typecheckroom1' }})
+            RETURN t.$dtId AS id, {Client.GetGraphName()}.is_object(t.dimensions) AS isObj, {Client.GetGraphName()}.is_object(t.name) AS isObjStr, {Client.GetGraphName()}.is_object(t.temperature) AS isObjNum
         "
             )
             .FirstOrDefaultAsync();
