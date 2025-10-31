@@ -336,7 +336,7 @@ public class QueryTests : TestBase
                 ""height"": 3.0
             }
             }";
-        await Client.CreateOrReplaceDigitalTwinAsync("room1", twinJson);
+        await Client.CreateOrReplaceDigitalTwinAsync("typecheckroom1", twinJson);
 
         // IS_OBJECT should be true for mapProp, false for strProp, numProp
         var objectResult = await Client
