@@ -175,7 +175,7 @@ public static class GraphInitialization
                 @$"CREATE OR REPLACE FUNCTION {graphName}.is_primitive(val agtype)
                         RETURNS boolean AS $$
                         BEGIN
-                            RETURN age_tostring(val) IS NOT NULL OR age_tonumber(val) IS NOT NULL OR val = true OR val = false;
+                            RETURN ag_catalog.age_tostring(val) IS NOT NULL OR ag_catalog.age_tonumber(val) IS NOT NULL OR val = true OR val = false;
                         EXCEPTION
                             WHEN others THEN
                                 RETURN false;
@@ -187,7 +187,7 @@ public static class GraphInitialization
                 @$"CREATE OR REPLACE FUNCTION {graphName}.is_string(val agtype)
                         RETURNS boolean AS $$
                         BEGIN
-                            RETURN age_tostring(val) = val;
+                            RETURN ag_catalog.age_tostring(val) = val;
                         EXCEPTION
                             WHEN others THEN
                                 RETURN false;
