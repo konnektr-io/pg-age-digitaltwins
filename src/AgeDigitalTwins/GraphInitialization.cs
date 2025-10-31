@@ -162,11 +162,8 @@ public static class GraphInitialization
             new(
                 @$"CREATE OR REPLACE FUNCTION {graphName}.is_object(val agtype)
                         RETURNS boolean AS $$
-                        DECLARE
-                            t text;
                         BEGIN
-                            t := jsonb_typeof(val::jsonb);
-                            RETURN t = 'object';
+                            RETURN ag_catalog.age_keys(val) IS NOT NULL;
                         EXCEPTION
                             WHEN others THEN
                                 RETURN false;
@@ -177,11 +174,8 @@ public static class GraphInitialization
             new(
                 @$"CREATE OR REPLACE FUNCTION {graphName}.is_primitive(val agtype)
                         RETURNS boolean AS $$
-                        DECLARE
-                            t text;
                         BEGIN
-                            t := jsonb_typeof(val::jsonb);
-                            RETURN t IN ('string', 'number', 'boolean', 'null');
+                            RETURN age_tostring(val) IS NOT NULL OR age_tonumber(val) IS NOT NULL OR val = true OR val = false;
                         EXCEPTION
                             WHEN others THEN
                                 RETURN false;
@@ -192,11 +186,8 @@ public static class GraphInitialization
             new(
                 @$"CREATE OR REPLACE FUNCTION {graphName}.is_string(val agtype)
                         RETURNS boolean AS $$
-                        DECLARE
-                            t text;
                         BEGIN
-                            t := jsonb_typeof(val::jsonb);
-                            RETURN t = 'string';
+                            RETURN age_tostring(val) = val;
                         EXCEPTION
                             WHEN others THEN
                                 RETURN false;
