@@ -158,6 +158,51 @@ public static class GraphInitialization
                 END;
                 $$ LANGUAGE plpgsql;"
             ),
+            // IS_OBJECT: returns true if agtype is a map/object
+            new(
+                @$"CREATE OR REPLACE FUNCTION {graphName}.is_object(val agtype)
+                        RETURNS boolean AS $$
+                        DECLARE
+                            t text;
+                        BEGIN
+                            t := jsonb_typeof(val::jsonb);
+                            RETURN t = 'object';
+                        EXCEPTION
+                            WHEN others THEN
+                                RETURN false;
+                        END;
+                        $$ LANGUAGE plpgsql IMMUTABLE;"
+            ),
+            // IS_PRIMITIVE: returns true if agtype is string, number, boolean, or null
+            new(
+                @$"CREATE OR REPLACE FUNCTION {graphName}.is_primitive(val agtype)
+                        RETURNS boolean AS $$
+                        DECLARE
+                            t text;
+                        BEGIN
+                            t := jsonb_typeof(val::jsonb);
+                            RETURN t IN ('string', 'number', 'boolean', 'null');
+                        EXCEPTION
+                            WHEN others THEN
+                                RETURN false;
+                        END;
+                        $$ LANGUAGE plpgsql IMMUTABLE;"
+            ),
+            // IS_STRING: returns true if agtype is a string
+            new(
+                @$"CREATE OR REPLACE FUNCTION {graphName}.is_string(val agtype)
+                        RETURNS boolean AS $$
+                        DECLARE
+                            t text;
+                        BEGIN
+                            t := jsonb_typeof(val::jsonb);
+                            RETURN t = 'string';
+                        EXCEPTION
+                            WHEN others THEN
+                                RETURN false;
+                        END;
+                        $$ LANGUAGE plpgsql IMMUTABLE;"
+            ),
             new(
                 @$"CREATE OR REPLACE FUNCTION {graphName}.is_of_model_old(twin agtype, model_id agtype, exact boolean default false)
                 RETURNS boolean

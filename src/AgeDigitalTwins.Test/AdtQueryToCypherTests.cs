@@ -47,6 +47,18 @@ public class AdtQueryToCypherTests
         "MATCH (T:Twin) WHERE T.name IS NULL RETURN T"
     )]
     [InlineData(
+        "SELECT T FROM DIGITALTWINS T WHERE IS_OBJECT(T.someMap)",
+        "MATCH (T:Twin) WHERE testgraph.is_object(T.someMap) RETURN T"
+    )]
+    [InlineData(
+        "SELECT T FROM DIGITALTWINS T WHERE IS_PRIMITIVE(T.someScalar)",
+        "MATCH (T:Twin) WHERE testgraph.is_primitive(T.someScalar) RETURN T"
+    )]
+    [InlineData(
+        "SELECT T FROM DIGITALTWINS T WHERE IS_STRING(T.someString)",
+        "MATCH (T:Twin) WHERE testgraph.is_string(T.someString) RETURN T"
+    )]
+    [InlineData(
         "SELECT T FROM DIGITALTWINS T WHERE ARRAY_CONTAINS(T.tags, 'tag1')",
         "MATCH (T:Twin) WHERE 'tag1' IN T.tags RETURN T"
     )]

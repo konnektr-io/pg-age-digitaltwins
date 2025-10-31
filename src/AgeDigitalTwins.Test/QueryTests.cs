@@ -318,6 +318,58 @@ public class QueryTests : TestBase
     }
 
     [Fact]
+    public async Task QueryAsync_TypeCheckFunctions_WorkAsExpected()
+    {
+        await IntializeAsync();
+        // Insert a twin with a map, a string, and a number property
+        var twinJson =
+            @"{""$dtId"": ""typecheck1"", ""mapProp"": {""foo"": 1}, ""strProp"": ""hello"", ""numProp"": 42}";
+        await Client.CreateOrReplaceDigitalTwinAsync("typecheck1", twinJson);
+
+        // IS_OBJECT should be true for mapProp, false for strProp, numProp
+        var objectResult = await Client
+            .QueryAsync<JsonDocument>(
+                @"
+            MATCH (t:Twin { `$dtId`: 'typecheck1' })
+            RETURN t.$dtId AS id, testgraph.is_object(t.mapProp) AS isObj, testgraph.is_object(t.strProp) AS isObjStr, testgraph.is_object(t.numProp) AS isObjNum
+        "
+            )
+            .FirstOrDefaultAsync();
+        Assert.NotNull(objectResult);
+        Assert.True(objectResult.RootElement.GetProperty("isObj").GetBoolean());
+        Assert.False(objectResult.RootElement.GetProperty("isObjStr").GetBoolean());
+        Assert.False(objectResult.RootElement.GetProperty("isObjNum").GetBoolean());
+
+        // IS_PRIMITIVE should be true for strProp, numProp, false for mapProp
+        var primResult = await Client
+            .QueryAsync<JsonDocument>(
+                $@"
+            MATCH (t:Twin {{ `$dtId`: 'typecheck1' }})
+            RETURN t.$dtId AS id, {Client.GetGraphName()}.is_primitive(t.mapProp) AS isPrimMap, {Client.GetGraphName()}.is_primitive(t.strProp) AS isPrimStr, {Client.GetGraphName()}.is_primitive(t.numProp) AS isPrimNum
+        "
+            )
+            .FirstOrDefaultAsync();
+        Assert.NotNull(primResult);
+        Assert.False(primResult.RootElement.GetProperty("isPrimMap").GetBoolean());
+        Assert.True(primResult.RootElement.GetProperty("isPrimStr").GetBoolean());
+        Assert.True(primResult.RootElement.GetProperty("isPrimNum").GetBoolean());
+
+        // IS_STRING should be true for strProp, false for mapProp, numProp
+        var strResult = await Client
+            .QueryAsync<JsonDocument>(
+                @$"
+            MATCH (t:Twin {{ `$dtId`: 'typecheck1' }})
+            RETURN t.$dtId AS id, {Client.GetGraphName()}.is_string(t.mapProp) AS isStrMap, {Client.GetGraphName()}.is_string(t.strProp) AS isStrStr, {Client.GetGraphName()}.is_string(t.numProp) AS isStrNum
+        "
+            )
+            .FirstOrDefaultAsync();
+        Assert.NotNull(strResult);
+        Assert.False(strResult.RootElement.GetProperty("isStrMap").GetBoolean());
+        Assert.True(strResult.RootElement.GetProperty("isStrStr").GetBoolean());
+        Assert.False(strResult.RootElement.GetProperty("isStrNum").GetBoolean());
+    }
+
+    [Fact]
     public async Task QueryAsync_AdtQueryWithTop_ReturnsTwins()
     {
         await IntializeAsync();

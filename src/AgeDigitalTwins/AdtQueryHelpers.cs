@@ -405,14 +405,17 @@ public static partial class AdtQueryHelpers
                 }
             );
 
-        // TODO: Process IS_OBJECT function
-        // Not really possible to do safely
+        // Process IS_OBJECT function
+        whereClause = IsObjectFunctionRegex()
+            .Replace(whereClause, m => $"{graphName}.is_object({m.Groups[1].Value})");
 
-        // TODO: Process IS_PRIMITIVE function
-        // Not really possible to do safely
+        // Process IS_PRIMITIVE function
+        whereClause = IsPrimitiveFunctionRegex()
+            .Replace(whereClause, m => $"{graphName}.is_primitive({m.Groups[1].Value})");
 
-        // TODO: Process IS_STRING function
-        // Not really possible to do safely
+        // Process IS_STRING function
+        whereClause = IsStringFunctionRegex()
+            .Replace(whereClause, m => $"{graphName}.is_string({m.Groups[1].Value})");
 
         // Replace property access with $ character
         whereClause = DollarSignPropertyRegex().Replace(whereClause, m => $"['{m.Value[1..]}']");
@@ -536,4 +539,22 @@ public static partial class AdtQueryHelpers
 
     [GeneratedRegex("(?<operand1>[^\\s]+)\\s*!=\\s*(?<operand2>[^\\s]+)")]
     private static partial Regex InequalityOperatorRegex();
+
+    [GeneratedRegex(
+        @"IS_PRIMITIVE\(([^)]+)\)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+    )]
+    private static partial Regex IsPrimitiveFunctionRegex();
+
+    [GeneratedRegex(
+        @"IS_STRING\(([^)]+)\)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+    )]
+    private static partial Regex IsStringFunctionRegex();
+
+    [GeneratedRegex(
+        @"IS_OBJECT\(([^)]+)\)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+    )]
+    private static partial Regex IsObjectFunctionRegex();
 }
