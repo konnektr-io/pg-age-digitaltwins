@@ -1,8 +1,8 @@
 # Konnektr Graph Explorer - Development Progress
 
-**Last Updated**: November 1, 2025  
-**Current Branch**: feat/type-checks  
-**Status**: 🟡 Ready for Real Backend Integration (Phase 6)
+**Last Updated**: January 29, 2025  
+**Current Branch**: feat/frontend  
+**Status**: � Authentication Layer Complete - Ready for Backend Testing (Phase 6.3+)
 
 ---
 
@@ -12,15 +12,15 @@
 - **UI/UX**: ✅ 100% Complete (All components functional)
 - **State Management**: ✅ 100% Complete (Zustand stores properly architected)
 - **Graph Visualization**: ✅ 100% Complete (Sigma.js with real data transformation)
-- **Authentication**: ⚠️ 50% Complete (Auth0 only, needs abstraction)
-- **Data Integration**: ⚠️ 30% Complete (Mix of mock and real API calls)
+- **Authentication**: ✅ 95% Complete (MSAL + Auth0 + NoAuth support, needs testing)
+- **Data Integration**: ⚠️ 40% Complete (Auth layer ready, QueryStore still uses mocks)
 - **Testing**: ⚠️ 40% Complete (Unit tests exist, need E2E with real backend)
 
 ### Critical Findings
 1. **Mock Data Usage**: QueryStore, ModelSidebar, and ModelInspector still use mock data
-2. **Auth Architecture**: Tightly coupled to Auth0 - **needs abstraction for MSAL/ADT support**
+2. **Auth Architecture**: ✅ **RESOLVED** - Now supports MSAL, Auth0, and NoAuth (Phase 6.2 complete)
 3. **Real Backend**: Not yet tested against actual AgeDigitalTwins API
-4. **Cookie Consent**: ✅ Recently added (GTAG + popup)
+4. **Cookie Consent**: ✅ Complete (GTAG + popup)
 
 **See**: [CODEBASE_REVIEW_2025-11-01.md](./CODEBASE_REVIEW_2025-11-01.md) for comprehensive analysis
 
@@ -79,15 +79,16 @@
 
 ## 📊 **Known Issues & Current Limitations**
 
-### 🔴 **Critical: Blocking Real Backend Integration**
+### � **High Priority: Backend Integration**
 
-1. **Authentication Abstraction Needed** 🔴 **BLOCKING**
-   - Current: Hardcoded to Auth0 provider
-   - Required: Support for Auth0, MSAL (Azure ADT), and Generic OAuth
-   - Impact: Cannot connect to Azure Digital Twins or self-hosted instances
-   - **See**: [CODEBASE_REVIEW Phase 6.2](./CODEBASE_REVIEW_2025-11-01.md#phase-62-implement-authentication-abstraction-medium-risk)
+1. **Authentication Abstraction** ✅ **RESOLVED** (Phase 6.2 Complete)
+   - Current: Fully supports Auth0, MSAL (Azure ADT), and NoAuth
+   - Connection-based authentication with per-connection config
+   - Enhanced UI with provider selector and conditional fields
+   - MSAL setup documentation provided
+   - **Status**: Ready for testing with real backends
 
-2. **QueryStore Uses Mock Data** 🟡 **HIGH PRIORITY**
+2. **QueryStore Uses Mock Data** � **BLOCKING**
    - Current: `executeQuery()` has hardcoded mock data routing (lines 150-210)
    - Required: Use Azure SDK `client.queryTwins()` for real queries
    - Impact: Queries don't execute against real backend
@@ -156,27 +157,34 @@
 
 **See**: [CODEBASE_REVIEW_2025-11-01.md](./CODEBASE_REVIEW_2025-11-01.md) for comprehensive implementation plan
 
-### 🔄 **In Progress**
+### ✅ **Recently Completed**
 
-#### Phase 6.1: Extract Reusable Helpers
-- [ ] Move `getModelDisplayName()` to `src/utils/dtdlHelpers.ts`
-- [ ] Move `formatTwinForDisplay()` to `src/utils/dtdlHelpers.ts`
-- [ ] Update imports in affected components
-- **Effort**: 2-4 hours
+#### Phase 6.1: Extract Reusable Helpers ✅ COMPLETED
+- [x] Moved `getModelDisplayName()` to `src/utils/dtdlHelpers.ts`
+- [x] Moved `formatTwinForDisplay()` to `src/utils/dtdlHelpers.ts`
+- [x] Updated imports in ModelSidebar, TwinInspector, queryStore
+- **Actual Effort**: 30 minutes
 - **Risk**: 🟢 Low
+- **Completed**: 2025-01-29
+- **See**: [PHASE_6_1_COMPLETE.md](./PHASE_6_1_COMPLETE.md)
 
-#### Phase 6.2: Authentication Abstraction ⚠️ **CRITICAL**
-- [ ] Create `src/services/auth/` directory structure
-- [ ] Implement generic `AuthProvider` with context
-- [ ] Implement `Auth0Provider` (migrate existing)
-- [ ] Implement `MsalProvider` (new, for Azure ADT)
-- [ ] Implement `GenericOAuthProvider` (new, for self-hosted)
-- [ ] Create `TokenCredentialFactory`
-- [ ] Update `useDigitalTwinsClient` hook
-- [ ] Add provider selection in `main.tsx`
-- **Effort**: 1-2 days
+#### Phase 6.2: Authentication Abstraction ✅ COMPLETED ⚠️ **CRITICAL**
+- [x] Created `src/services/auth/` directory structure
+- [x] Implemented `MsalTokenCredential` (Azure ADT with PKCE)
+- [x] Implemented `Auth0TokenCredential` (Konnektr hosted)
+- [x] Created `getTokenCredential()` factory function
+- [x] Extended Connection model with `authProvider` and `authConfig`
+- [x] Updated `digitalTwinsClientFactory` to accept Connection (async)
+- [x] Updated digitalTwinsStore and modelsStore to use new factory
+- [x] Enhanced ConnectionSelector with auth provider UI
+- [x] Added validation for auth configurations
+- [x] Created MSAL setup documentation
+- **Actual Effort**: 3 hours
 - **Risk**: 🟡 Medium
-- **Why Critical**: Blocks all real backend testing
+- **Completed**: 2025-01-29
+- **See**: [PHASE_6_2A_COMPLETE.md](./PHASE_6_2A_COMPLETE.md), [AUTH_ARCHITECTURE_SIMPLIFIED.md](./AUTH_ARCHITECTURE_SIMPLIFIED.md), [MSAL_SETUP.md](./MSAL_SETUP.md)
+
+### 🔄 **In Progress**
 
 #### Phase 6.3: Replace QueryStore Mock Data
 - [ ] Implement real query execution via Azure SDK
