@@ -1,5 +1,8 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { digitalTwinsClientFactory } from "@/services/digitalTwinsClientFactory";
+import { useConnectionStore } from "./connectionStore";
+import { formatTwinForDisplay } from "@/utils/dtdlHelpers";
 
 export interface QueryTab {
   id: string;
@@ -151,54 +154,38 @@ export const useQueryStore = create<QueryState>()(
 
       executeQuery: async (query) => {
         set({ isExecuting: true, queryError: null });
+        const startTime = Date.now();
 
         try {
-          // Mock API call - replace with actual call
-          const executionTime = 800 + Math.random() * 400;
-          await new Promise((resolve) => setTimeout(resolve, executionTime));
+          // Get current connection
+          const { getCurrentConnection, isConnected } =
+            useConnectionStore.getState();
+          const connection = getCurrentConnection();
 
-          // Import mock data dynamically to avoid circular dependencies
-          const { mockQueryResults, mockDigitalTwins } = await import(
-            "@/mocks/digitalTwinData"
-          );
-          const { formatTwinForDisplay } = await import("@/utils/dtdlHelpers");
-
-          // Simple query routing based on query content
-          let results: any[] = [];
-          const queryLower = query.toLowerCase();
-
-          if (queryLower.includes("building") && queryLower.includes("floor")) {
-            // Relationship query
-            results = mockQueryResults.twinRelationshipResults.map(
-              (result) => ({
-                ...result,
-                b: result.b ? formatTwinForDisplay(result.b) : null,
-                f: result.f ? formatTwinForDisplay(result.f) : null,
-              })
+          if (!connection || !isConnected) {
+            throw new Error(
+              "Not connected to Digital Twins instance. Please configure connection."
             );
-          } else if (queryLower.includes("building")) {
-            // Building query
-            results = mockQueryResults.singleTwins.map(formatTwinForDisplay);
-          } else if (
-            queryLower.includes("avg") ||
-            queryLower.includes("count")
-          ) {
-            // Aggregation query
-            results = mockQueryResults.aggregationResults;
-          } else if (
-            queryLower.includes("collect") ||
-            queryLower.includes("*")
-          ) {
-            // Nested results query
-            results = mockQueryResults.nestedResults.map((result) => ({
-              ...result,
-              b: result.b ? formatTwinForDisplay(result.b) : null,
-              rooms: result.rooms?.map(formatTwinForDisplay) || [],
-            }));
-          } else {
-            // Default: return all twins
-            results = mockDigitalTwins.map(formatTwinForDisplay);
           }
+
+          // Get authenticated client
+          const client = await digitalTwinsClientFactory(connection);
+
+          // Execute query using Azure SDK
+          const queryResult = client.queryTwins(query);
+          const results: any[] = [];
+
+          // Iterate through paginated results
+          for await (const item of queryResult) {
+            // Format twin data for display if it has the structure of a digital twin
+            const formattedItem =
+              typeof item === "object" && item !== null && "$dtId" in item
+                ? formatTwinForDisplay(item as any)
+                : item;
+            results.push(formattedItem);
+          }
+
+          const executionTime = Date.now() - startTime;
 
           set({
             queryResults: results,
@@ -209,14 +196,31 @@ export const useQueryStore = create<QueryState>()(
           get().addToHistory({
             query,
             timestamp: Date.now(),
-            executionTime: Math.round(executionTime),
+            executionTime,
             resultCount: results.length,
           });
         } catch (error) {
+          const executionTime = Date.now() - startTime;
+
+          let errorMessage = "Unknown error occurred";
+          if (error instanceof Error) {
+            errorMessage = error.message;
+          } else if (typeof error === "string") {
+            errorMessage = error;
+          }
+
           set({
-            queryError:
-              error instanceof Error ? error.message : "Unknown error occurred",
+            queryError: errorMessage,
             isExecuting: false,
+            queryResults: null,
+          });
+
+          // Still add to history even on error
+          get().addToHistory({
+            query,
+            timestamp: Date.now(),
+            executionTime,
+            resultCount: 0,
           });
         }
       },
