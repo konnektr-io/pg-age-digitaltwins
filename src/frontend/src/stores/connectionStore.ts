@@ -48,9 +48,10 @@ interface ConnectionState {
   addConnection: (conn: Connection) => void;
   removeConnection: (id: string) => void;
   updateConnection: (id: string, updates: Partial<Connection>) => void;
-  setCurrentConnection: (id: string) => void;
+  setCurrentConnection: (id: string) => Promise<void>;
   getCurrentConnection: () => Connection | null;
   setIsConnected: (connected: boolean) => void;
+  testConnection: (id: string) => Promise<boolean>;
 }
 
 const defaultConnections: Connection[] = [
@@ -94,10 +95,32 @@ export const useConnectionStore = create<ConnectionState>()(
         }));
       },
 
-      setCurrentConnection: (id) => {
+      setCurrentConnection: async (id) => {
         const conn = get().connections.find((c) => c.id === id);
         if (conn) {
-          set({ currentConnectionId: id });
+          set({ currentConnectionId: id, isConnected: true });
+
+          // For MSAL connections, trigger authentication proactively
+          if (conn.authProvider === "msal") {
+            try {
+              // Import here to avoid circular dependencies
+              const { getTokenCredential } = await import("@/services/auth");
+              const credential = await getTokenCredential(conn);
+
+              // Try to get a token to trigger MSAL initialization and login if needed
+              if (credential) {
+                await credential.getToken(
+                  conn.authConfig?.scopes || [
+                    "https://digitaltwins.azure.net/.default",
+                  ]
+                );
+              }
+            } catch (error) {
+              console.warn("Auth initialization:", error);
+              // Don't fail the connection selection, just log the warning
+              // The actual API calls will trigger login if needed
+            }
+          }
         }
       },
 
@@ -111,6 +134,34 @@ export const useConnectionStore = create<ConnectionState>()(
 
       setIsConnected: (connected) => {
         set({ isConnected: connected });
+      },
+
+      testConnection: async (id) => {
+        const conn = get().connections.find((c) => c.id === id);
+        if (!conn) {
+          console.error(`Connection ${id} not found`);
+          return false;
+        }
+
+        try {
+          // Import here to avoid circular dependencies
+          const { digitalTwinsClientFactory } = await import(
+            "@/services/digitalTwinsClientFactory"
+          );
+
+          // Try to create a client - this will trigger auth if needed
+          const client = await digitalTwinsClientFactory(conn);
+
+          // Try a simple API call to verify connection works
+          // Just list models with limit 1 to test connectivity
+          const models = client.listModels({ includeModelDefinition: false });
+          await models.next(); // Get first result
+
+          return true;
+        } catch (error) {
+          console.error("Connection test failed:", error);
+          return false;
+        }
       },
     }),
     {

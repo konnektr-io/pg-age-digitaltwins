@@ -53,7 +53,7 @@ export function ConnectionSelector(): React.ReactElement {
   });
   const [error, setError] = useState<string | null>(null);
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!form.name.trim() || !form.adtHost.trim()) {
       setError("Name and Host are required.");
       return;
@@ -94,7 +94,7 @@ export function ConnectionSelector(): React.ReactElement {
     }
 
     addConnection(newConnection);
-    setCurrentConnection(newConnection.id);
+    await setCurrentConnection(newConnection.id);
     setForm({
       name: "",
       adtHost: "",
