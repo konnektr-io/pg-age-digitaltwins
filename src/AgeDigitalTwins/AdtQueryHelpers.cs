@@ -383,17 +383,6 @@ public static partial class AdtQueryHelpers
                 }
             );
 
-        // Process IS_NUMBER function
-        whereClause = IsNumberFunctionRegex()
-            .Replace(
-                whereClause,
-                m =>
-                {
-                    var property = m.Groups[1].Value;
-                    return $"((toFloat({property}) IS NOT NULL OR toInteger({property}) IS NOT NULL) AND NOT (toString({property}) = {property}))";
-                }
-            );
-
         // Process IS_BOOL function
         whereClause = IsBoolFunctionRegex()
             .Replace(
@@ -404,6 +393,10 @@ public static partial class AdtQueryHelpers
                     return $"({property} = true OR {property} = false)";
                 }
             );
+
+        // Process IS_NUMBER function
+        whereClause = IsNumberFunctionRegex()
+            .Replace(whereClause, m => $"{graphName}.is_number({m.Groups[1].Value})");
 
         // Process IS_OBJECT function
         whereClause = IsObjectFunctionRegex()

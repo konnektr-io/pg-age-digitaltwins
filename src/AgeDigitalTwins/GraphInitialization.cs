@@ -170,12 +170,24 @@ public static class GraphInitialization
                         END;
                         $$ LANGUAGE plpgsql IMMUTABLE;"
             ),
-            // IS_PRIMITIVE: returns true if agtype is string, number, boolean, or null
+            // IS_NUMBER: returns true if agtype is number
+            new(
+                @$"CREATE OR REPLACE FUNCTION {graphName}.is_number(val agtype)
+                        RETURNS boolean AS $$
+                        BEGIN
+                            RETURN ag_catalog.age_tofloat(val) IS NOT NULL OR ag_catalog.age_tointeger(val) IS NOT NULL AND NOT (ag_catalog.age_tostring(val) = val);
+                        EXCEPTION
+                            WHEN others THEN
+                                RETURN false;
+                        END;
+                        $$ LANGUAGE plpgsql IMMUTABLE;"
+            ),
+            // IS_PRIMITIVE: returns true if agtype is string, number, boolean
             new(
                 @$"CREATE OR REPLACE FUNCTION {graphName}.is_primitive(val agtype)
                         RETURNS boolean AS $$
                         BEGIN
-                            RETURN ag_catalog.age_tostring(val) IS NOT NULL OR ag_catalog.age_tonumber(val) IS NOT NULL OR val = true OR val = false;
+                            RETURN ag_catalog.age_tostring(val) IS NOT NULL OR ag_catalog.age_tofloat(val) IS NOT NULL OR val = true OR val = false;
                         EXCEPTION
                             WHEN others THEN
                                 RETURN false;
