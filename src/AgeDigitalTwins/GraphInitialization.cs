@@ -175,7 +175,7 @@ public static class GraphInitialization
                 @$"CREATE OR REPLACE FUNCTION {graphName}.is_number(val agtype)
                         RETURNS boolean AS $$
                         BEGIN
-                            RETURN ag_catalog.age_tofloat(val) IS NOT NULL OR ag_catalog.age_tointeger(val) IS NOT NULL AND NOT (ag_catalog.age_tostring(val) = val);
+                            RETURN (ag_catalog.age_tofloat(val) IS NOT NULL OR ag_catalog.age_tointeger(val) IS NOT NULL) AND NOT (ag_catalog.age_tostring(val) = val);
                         EXCEPTION
                             WHEN others THEN
                                 RETURN false;
