@@ -62,10 +62,10 @@ const TreeView = React.forwardRef<HTMLDivElement, TreeProps>(
 
     // Determine if component is controlled
     const isControlled = controlledSelectedItemId !== undefined;
-    
+
     // Use controlled value if controlled, otherwise use internal state
-    const selectedItemId = isControlled 
-      ? controlledSelectedItemId 
+    const selectedItemId = isControlled
+      ? controlledSelectedItemId
       : uncontrolledSelectedItemId;
 
     const handleSelectChange = React.useCallback(
