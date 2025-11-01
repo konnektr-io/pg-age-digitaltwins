@@ -58,7 +58,7 @@ const generateTabId = () => Date.now().toString();
 const createDefaultTab = (overrides?: Partial<QueryTab>): QueryTab => ({
   id: generateTabId(),
   name: "Untitled",
-  query: "-- Cypher Query (Ctrl+Enter to run)\nMATCH (n) RETURN n LIMIT 10",
+  query: "-- Cypher Query (Ctrl+Enter to run)\nSELECT TOP(5) FROM DIGITALTWINS",
   saved: true,
   language: "cypher",
   ...overrides,
@@ -72,7 +72,7 @@ export const useQueryStore = create<QueryState>()(
       activeTabId: null,
 
       // Current query state
-      currentQuery: "MATCH (n) RETURN n LIMIT 10",
+      currentQuery: "SELECT TOP(5) FROM DIGITALTWINS",
       isExecuting: false,
       queryResults: null,
       queryError: null,
@@ -201,6 +201,7 @@ export const useQueryStore = create<QueryState>()(
             resultCount: results.length,
           });
         } catch (error) {
+          console.error("Error executing query:", error);
           const executionTime = Date.now() - startTime;
 
           let errorMessage = "Unknown error occurred";
@@ -208,6 +209,16 @@ export const useQueryStore = create<QueryState>()(
             errorMessage = error.message;
           } else if (typeof error === "string") {
             errorMessage = error;
+          } else if (typeof error === "object" && error !== null) {
+            // Handle API error responses
+            const apiError = error as any;
+            if (apiError.statusCode) {
+              errorMessage = `API Error ${apiError.statusCode}: ${
+                apiError.message || "Unknown error"
+              }`;
+            } else if (apiError.message) {
+              errorMessage = apiError.message;
+            }
           }
 
           set({

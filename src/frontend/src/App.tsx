@@ -5,6 +5,7 @@ import { ModelSidebar } from "@/components/layout/ModelSidebar";
 import { MainContent } from "@/components/layout/MainContent";
 import { Inspector } from "@/components/inspector/Inspector";
 import { StatusBar } from "@/components/layout/StatusBar";
+import { ConnectionStatusBanner } from "@/components/ConnectionStatusBanner";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { CookieConsent } from "@/components/cookie-consent";
 
@@ -59,6 +60,9 @@ function App() {
         {/* Header */}
         <GraphHeader />
 
+        {/* Connection Status Banner */}
+        <ConnectionStatusBanner />
+
         {/* Main Content Area with Resizable Panels */}
         <div className="flex-1 overflow-hidden">
           <PanelGroup
@@ -74,7 +78,7 @@ function App() {
                   defaultSize={leftPanelSize}
                   minSize={15}
                   maxSize={40}
-                  onResize={(size) => setPanelSize("left", size)}
+                  onResize={(size: number) => setPanelSize("left", size)}
                   className="flex"
                 >
                   <ModelSidebar />
@@ -97,7 +101,7 @@ function App() {
                   defaultSize={rightPanelSize}
                   minSize={15}
                   maxSize={40}
-                  onResize={(size) => setPanelSize("right", size)}
+                  onResize={(size: number) => setPanelSize("right", size)}
                   className="flex flex-col"
                 >
                   <Inspector />

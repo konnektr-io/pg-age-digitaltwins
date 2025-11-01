@@ -333,10 +333,28 @@ export function QueryResults({ results, error, isLoading }: QueryResultsProps) {
         )}
 
         {error && (
-          <div className="flex items-center justify-center h-full">
-            <div className="flex items-center gap-2 text-destructive">
-              <AlertCircle className="w-4 h-4" />
-              <span>Error: {error}</span>
+          <div className="flex items-center justify-center h-full p-4">
+            <div className="max-w-2xl w-full">
+              <div className="flex flex-col items-center gap-4 text-center">
+                <div className="text-destructive">
+                  <AlertCircle className="w-12 h-12 mx-auto mb-2" />
+                  <div className="font-semibold text-lg">Query Failed</div>
+                </div>
+                <div className="w-full bg-muted p-4 rounded-lg text-left">
+                  <div className="text-sm font-mono text-destructive break-words">
+                    {error}
+                  </div>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  <p>Common issues:</p>
+                  <ul className="list-disc list-inside mt-1 text-left">
+                    <li>Check your connection settings</li>
+                    <li>Verify authentication is working</li>
+                    <li>Ensure the query syntax is correct</li>
+                    <li>Check network connectivity</li>
+                  </ul>
+                </div>
+              </div>
             </div>
           </div>
         )}

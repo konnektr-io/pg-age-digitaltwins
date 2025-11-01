@@ -127,9 +127,25 @@ export const useModelsStore = create<ModelsState>()(
         // Auto-validate models after loading
         get().validateAllModels();
       } catch (error) {
+        console.error("Error loading models:", error);
+        let errorMessage = "Failed to load models";
+
+        if (error instanceof Error) {
+          errorMessage = error.message;
+        } else if (typeof error === "object" && error !== null) {
+          // Handle API error responses
+          const apiError = error as any;
+          if (apiError.statusCode) {
+            errorMessage = `API Error ${apiError.statusCode}: ${
+              apiError.message || "Unknown error"
+            }`;
+          } else if (apiError.message) {
+            errorMessage = apiError.message;
+          }
+        }
+
         set({
-          error:
-            error instanceof Error ? error.message : "Failed to load models",
+          error: errorMessage,
           isLoading: false,
         });
       }
@@ -603,4 +619,17 @@ export const useModelsStore = create<ModelsState>()(
       });
     },
   }))
+);
+
+// Subscribe to connection changes to auto-reload models
+useConnectionStore.subscribe(
+  (state) => state.currentConnectionId,
+  (currentConnectionId, previousConnectionId) => {
+    // Only reload if connection actually changed and we have a connection
+    if (currentConnectionId && currentConnectionId !== previousConnectionId) {
+      console.log("Connection changed, reloading models...");
+      const { loadModels } = useModelsStore.getState();
+      loadModels();
+    }
+  }
 );

@@ -13,6 +13,8 @@ import type { Connection, AuthConfig } from "@/stores/connectionStore";
 export class MsalTokenCredential implements TokenCredential {
   private msalInstance: PublicClientApplication;
   private scopes: string[];
+  private isInitialized = false;
+  private isRedirecting = false;
 
   constructor(config: AuthConfig) {
     if (!config.clientId || !config.tenantId) {
@@ -40,10 +42,17 @@ export class MsalTokenCredential implements TokenCredential {
    * Initialize MSAL instance (must be called before getToken)
    */
   async initialize(): Promise<void> {
+    if (this.isInitialized) {
+      return; // Already initialized
+    }
+
     await this.msalInstance.initialize();
 
     // Handle redirect promise on page load
-    await this.msalInstance.handleRedirectPromise();
+    const resp = await this.msalInstance.handleRedirectPromise();
+    console.log("MSAL redirect response:", resp);
+
+    this.isInitialized = true;
   }
 
   /**
@@ -53,18 +62,38 @@ export class MsalTokenCredential implements TokenCredential {
   async getToken(
     _scopes: string | string[]
   ): Promise<{ token: string; expiresOnTimestamp: number }> {
+    // Ensure MSAL is initialized
+    if (!this.isInitialized) {
+      await this.initialize();
+    }
+
     const accounts = this.msalInstance.getAllAccounts();
 
     if (accounts.length === 0) {
       // No user signed in, trigger interactive login
-      await this.msalInstance.loginRedirect({
-        scopes: this.scopes,
-      });
+      if (this.isRedirecting) {
+        // Already redirecting, don't trigger another redirect
+        throw new Error("Authentication in progress - redirecting to sign in");
+      }
+
+      this.isRedirecting = true;
+      console.log("No MSAL accounts found, triggering login redirect...");
+
+      try {
+        await this.msalInstance.loginRedirect({
+          scopes: this.scopes,
+        });
+      } catch (error) {
+        this.isRedirecting = false;
+        throw error;
+      }
+
       // Redirect happens, token will be acquired after redirect
       throw new Error("Redirecting to sign in...");
     }
 
     const account = accounts[0];
+    console.log("Using MSAL account:", account.username);
 
     try {
       // Try silent token acquisition first
@@ -73,22 +102,45 @@ export class MsalTokenCredential implements TokenCredential {
         account,
       });
 
+      console.log(
+        "Token acquired successfully, expires:",
+        new Date(result.expiresOn || 0)
+      );
+
       return {
         token: result.accessToken,
         expiresOnTimestamp: result.expiresOn?.getTime() || Date.now() + 3600000,
       };
     } catch (error) {
       if (error instanceof InteractionRequiredAuthError) {
-        // Silent acquisition failed, trigger interactive
-        await this.msalInstance.acquireTokenRedirect({
-          scopes: this.scopes,
-          account,
-        });
+        console.warn("Interaction required for token refresh:", error);
+
+        // Check if we're already redirecting to avoid loops
+        if (this.isRedirecting) {
+          throw new Error(
+            "Authentication in progress - token refresh required"
+          );
+        }
+
+        this.isRedirecting = true;
+
+        try {
+          // Silent acquisition failed, trigger interactive
+          await this.msalInstance.acquireTokenRedirect({
+            scopes: this.scopes,
+            account,
+          });
+        } catch (redirectError) {
+          this.isRedirecting = false;
+          throw redirectError;
+        }
 
         // Note: acquireTokenRedirect doesn't return a result, it redirects
         // Token will be acquired after redirect
         throw new Error("Redirecting for token refresh...");
       }
+
+      console.error("Token acquisition failed:", error);
       throw error;
     }
   }

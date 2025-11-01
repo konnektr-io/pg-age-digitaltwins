@@ -131,9 +131,25 @@ export const useDigitalTwinsStore = create<DigitalTwinsState>()(
           isLoading: false,
         });
       } catch (error) {
+        console.error("Error loading twins:", error);
+        let errorMessage = "Failed to load twins";
+
+        if (error instanceof Error) {
+          errorMessage = error.message;
+        } else if (typeof error === "object" && error !== null) {
+          // Handle API error responses
+          const apiError = error as any;
+          if (apiError.statusCode) {
+            errorMessage = `API Error ${apiError.statusCode}: ${
+              apiError.message || "Unknown error"
+            }`;
+          } else if (apiError.message) {
+            errorMessage = apiError.message;
+          }
+        }
+
         set({
-          error:
-            error instanceof Error ? error.message : "Failed to load twins",
+          error: errorMessage,
           isLoading: false,
         });
       }
@@ -562,4 +578,17 @@ export const useDigitalTwinsStore = create<DigitalTwinsState>()(
       });
     },
   }))
+);
+
+// Subscribe to connection changes to auto-reload twins
+useConnectionStore.subscribe(
+  (state) => state.currentConnectionId,
+  (currentConnectionId, previousConnectionId) => {
+    // Only reload if connection actually changed and we have a connection
+    if (currentConnectionId && currentConnectionId !== previousConnectionId) {
+      console.log("Connection changed, reloading twins...");
+      const { loadTwins } = useDigitalTwinsStore.getState();
+      loadTwins();
+    }
+  }
 );

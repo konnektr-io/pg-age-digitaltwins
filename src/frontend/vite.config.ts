@@ -3,6 +3,7 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react-swc";
 import { defineConfig } from "vite";
 import { VitePluginRadar } from "vite-plugin-radar";
+import { setupProxy } from "./src/setupProxy";
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -16,29 +17,18 @@ export default defineConfig({
         },
       ],
     }),
+    // Custom plugin to register proxy middleware
+    {
+      name: "configure-adt-proxy",
+      configureServer(server) {
+        // Register custom proxy middleware for Azure Digital Twins
+        setupProxy(server.middlewares);
+      },
+    },
   ],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
-    },
-  },
-  server: {
-    proxy: {
-      // Proxy all API requests to the backend
-      "/api": {
-        target: process.env.VITE_API_BASE_URL || "http://localhost:5000",
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ""),
-        configure: (proxy) => {
-          proxy.on("proxyReq", (proxyReq, req) => {
-            // Forward x-adt-host header from frontend request
-            const adtHost = req.headers["x-adt-host"];
-            if (adtHost) {
-              proxyReq.setHeader("x-adt-host", adtHost as string);
-            }
-          });
-        },
-      },
     },
   },
 });

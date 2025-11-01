@@ -43,6 +43,7 @@ interface ConnectionState {
   connections: Connection[];
   currentConnectionId: string | null;
   isConnected: boolean;
+  dismissedBanners: Set<string>; // Track dismissed connection banners by connection ID
 
   // Actions
   addConnection: (conn: Connection) => void;
@@ -52,6 +53,8 @@ interface ConnectionState {
   getCurrentConnection: () => Connection | null;
   setIsConnected: (connected: boolean) => void;
   testConnection: (id: string) => Promise<boolean>;
+  dismissBanner: (connectionId: string) => void;
+  isBannerDismissed: (connectionId: string) => boolean;
 }
 
 const defaultConnections: Connection[] = [
@@ -70,6 +73,7 @@ export const useConnectionStore = create<ConnectionState>()(
       connections: defaultConnections,
       currentConnectionId: defaultConnections[0].id,
       isConnected: false,
+      dismissedBanners: new Set<string>(),
 
       addConnection: (conn) => {
         set((state) => ({
@@ -100,21 +104,16 @@ export const useConnectionStore = create<ConnectionState>()(
         if (conn) {
           set({ currentConnectionId: id, isConnected: true });
 
-          // For MSAL connections, trigger authentication proactively
+          // For MSAL connections, just initialize the credential (don't call getToken yet)
+          // This ensures MSAL is ready and handles any redirect responses
           if (conn.authProvider === "msal") {
             try {
               // Import here to avoid circular dependencies
               const { getTokenCredential } = await import("@/services/auth");
-              const credential = await getTokenCredential(conn);
-
-              // Try to get a token to trigger MSAL initialization and login if needed
-              if (credential) {
-                await credential.getToken(
-                  conn.authConfig?.scopes || [
-                    "https://digitaltwins.azure.net/.default",
-                  ]
-                );
-              }
+              // Just initialize - this handles redirects and sets up MSAL
+              // Actual token will be acquired when first API call is made
+              await getTokenCredential(conn);
+              console.log("MSAL credential initialized and ready");
             } catch (error) {
               console.warn("Auth initialization:", error);
               // Don't fail the connection selection, just log the warning
@@ -163,9 +162,45 @@ export const useConnectionStore = create<ConnectionState>()(
           return false;
         }
       },
+
+      dismissBanner: (connectionId) => {
+        set((state) => ({
+          dismissedBanners: new Set(state.dismissedBanners).add(connectionId),
+        }));
+      },
+
+      isBannerDismissed: (connectionId) => {
+        return get().dismissedBanners.has(connectionId);
+      },
     }),
     {
       name: "konnektr-connections",
+      // Custom storage to handle Set serialization
+      storage: {
+        getItem: (name) => {
+          const str = localStorage.getItem(name);
+          if (!str) return null;
+          const parsed = JSON.parse(str);
+          // Convert dismissedBanners array back to Set
+          if (parsed.state?.dismissedBanners) {
+            parsed.state.dismissedBanners = new Set(
+              parsed.state.dismissedBanners
+            );
+          }
+          return parsed;
+        },
+        setItem: (name, value) => {
+          const parsed = JSON.parse(value);
+          // Convert dismissedBanners Set to array for storage
+          if (parsed.state?.dismissedBanners) {
+            parsed.state.dismissedBanners = Array.from(
+              parsed.state.dismissedBanners
+            );
+          }
+          localStorage.setItem(name, JSON.stringify(parsed));
+        },
+        removeItem: (name) => localStorage.removeItem(name),
+      },
     }
   )
 );
