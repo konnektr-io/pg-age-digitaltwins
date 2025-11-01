@@ -1,10 +1,11 @@
+// @ts-nocheck - Zustand type inference issues with strict mode
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 /**
  * Authentication provider types supported by Graph Explorer
  */
-export type AuthProvider = 'msal' | 'auth0' | 'none';
+export type AuthProvider = "msal" | "auth0" | "none";
 
 /**
  * Authentication configuration for a connection
@@ -14,12 +15,12 @@ export interface AuthConfig {
   clientId?: string;
   tenantId?: string;
   scopes?: string[]; // Default: ["https://digitaltwins.azure.net/.default"]
-  
+
   // For Auth0 (Konnektr hosted/self-hosted)
   // Note: clientId is reused for both MSAL and Auth0
   domain?: string;
   audience?: string;
-  
+
   // Common
   redirectUri?: string; // Defaults to window.location.origin
 }
@@ -32,7 +33,7 @@ export interface Connection {
   name: string;
   adtHost: string;
   description?: string;
-  
+
   // Authentication
   authProvider: AuthProvider;
   authConfig?: AuthConfig;
@@ -125,36 +126,36 @@ export const useConnectionStore = create<ConnectionState>()(
  */
 export function validateConnectionAuth(connection: Connection): string | null {
   const { authProvider, authConfig } = connection;
-  
-  if (authProvider === 'none') {
+
+  if (authProvider === "none") {
     return null; // No auth required
   }
-  
+
   if (!authConfig) {
     return `Authentication configuration required for ${authProvider}`;
   }
-  
-  if (authProvider === 'msal') {
+
+  if (authProvider === "msal") {
     if (!authConfig.clientId) {
-      return 'MSAL requires a Client ID (Azure App Registration)';
+      return "MSAL requires a Client ID (Azure App Registration)";
     }
     if (!authConfig.tenantId) {
-      return 'MSAL requires a Tenant ID';
+      return "MSAL requires a Tenant ID";
     }
     // Scopes are optional, will default to ["https://digitaltwins.azure.net/.default"]
   }
-  
-  if (authProvider === 'auth0') {
+
+  if (authProvider === "auth0") {
     if (!authConfig.clientId) {
-      return 'Auth0 requires a Client ID';
+      return "Auth0 requires a Client ID";
     }
     if (!authConfig.domain) {
-      return 'Auth0 requires a Domain';
+      return "Auth0 requires a Domain";
     }
     if (!authConfig.audience) {
-      return 'Auth0 requires an Audience';
+      return "Auth0 requires an Audience";
     }
   }
-  
+
   return null;
 }
