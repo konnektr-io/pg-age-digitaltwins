@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Search, Plus, Upload, Layers, Trash2, UserPlus } from "lucide-react";
+import { Search, Plus, Upload, Layers, Trash2, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -15,7 +15,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { useInspectorStore } from "@/stores/inspectorStore";
 import { useModelsStore } from "@/stores/modelsStore";
 import { useDigitalTwinsStore } from "@/stores/digitalTwinsStore";
@@ -113,30 +112,44 @@ function buildModelTree(
           <Badge variant="secondary" className="text-xs">
             {count}
           </Badge>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 w-6 p-0"
+          <div
+            role="button"
+            tabIndex={0}
+            className="h-6 w-6 p-0 inline-flex items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground cursor-pointer"
             onClick={(e) => {
               e.stopPropagation();
               onCreateTwin(modelId);
             }}
-            title="Create twin"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                e.stopPropagation();
+                onCreateTwin(modelId);
+              }
+            }}
+            title="Create twin from this model"
           >
-            <UserPlus className="w-3 h-3" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+            <Copy className="w-3 h-3" />
+          </div>
+          <div
+            role="button"
+            tabIndex={0}
+            className="h-6 w-6 p-0 inline-flex items-center justify-center rounded-md hover:bg-destructive/10 hover:text-destructive cursor-pointer text-destructive/70"
             onClick={(e) => {
               e.stopPropagation();
               onDelete(modelId);
             }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                e.stopPropagation();
+                onDelete(modelId);
+              }
+            }}
             title="Delete model"
           >
             <Trash2 className="w-3 h-3" />
-          </Button>
+          </div>
         </div>
       ),
     };
@@ -151,8 +164,8 @@ export function ModelSidebar() {
   const [modelToDelete, setModelToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const { selectedItem, setSelectedItem } = useWorkspaceStore();
-  const { selectItem } = useInspectorStore();
+  const selectedItem = useInspectorStore((state) => state.selectedItem);
+  const selectItem = useInspectorStore((state) => state.selectItem);
   const {
     models,
     loadModels,
@@ -178,7 +191,6 @@ export function ModelSidebar() {
 
   const handleModelSelect = (item: TreeDataItem | undefined) => {
     if (item) {
-      setSelectedItem({ type: "model", id: item.id });
       selectItem({ type: "model", id: item.id });
     }
   };
@@ -246,6 +258,10 @@ export function ModelSidebar() {
   };
 
   const filteredTree = filterTree(modelTree, searchQuery);
+
+  // Compute the selected model ID for the tree
+  const treeSelectedId =
+    selectedItem?.type === "model" ? selectedItem.id : null;
 
   return (
     <>
@@ -324,11 +340,7 @@ export function ModelSidebar() {
                     <TreeView
                       data={filteredTree}
                       className="w-full"
-                      initialSelectedItemId={
-                        selectedItem?.type === "model"
-                          ? selectedItem.id
-                          : undefined
-                      }
+                      selectedItemId={treeSelectedId}
                       onSelectChange={handleModelSelect}
                     />
                   )}

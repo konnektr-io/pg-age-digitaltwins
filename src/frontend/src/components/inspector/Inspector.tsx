@@ -17,7 +17,8 @@ import { ModelInspector } from "./ModelInspector";
 import { useInspectorStore } from "@/stores/inspectorStore";
 
 export function Inspector() {
-  const { selectedItem, clearSelection } = useInspectorStore();
+  const selectedItem = useInspectorStore((state) => state.selectedItem);
+  const clearSelection = useInspectorStore((state) => state.clearSelection);
   const [searchQuery, setSearchQuery] = useState("");
 
   if (!selectedItem) {

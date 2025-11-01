@@ -2,21 +2,12 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 export type MainView = "query" | "models";
-export type SelectedItemType = "twin" | "model";
-
-export interface SelectedItem {
-  type: SelectedItemType;
-  id: string;
-}
 
 interface WorkspaceState {
   // View state
   mainView: MainView;
   showLeftPanel: boolean;
   showRightPanel: boolean;
-
-  // Selection state
-  selectedItem: SelectedItem | null;
 
   // Panel sizes (for react-resizable-panels)
   leftPanelSize: number;
@@ -26,7 +17,6 @@ interface WorkspaceState {
   setMainView: (view: MainView) => void;
   setShowLeftPanel: (show: boolean) => void;
   setShowRightPanel: (show: boolean) => void;
-  setSelectedItem: (item: SelectedItem | null) => void;
   setPanelSize: (panel: "left" | "right", size: number) => void;
   toggleLeftPanel: () => void;
   toggleRightPanel: () => void;
@@ -39,29 +29,31 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       mainView: "query",
       showLeftPanel: true,
       showRightPanel: true,
-      selectedItem: null,
       leftPanelSize: 20, // percentage
       rightPanelSize: 25, // percentage
 
       // Actions
-      setMainView: (view) => set({ mainView: view }),
-      setShowLeftPanel: (show) => set({ showLeftPanel: show }),
-      setShowRightPanel: (show) => set({ showRightPanel: show }),
-      setSelectedItem: (item) => set({ selectedItem: item }),
-      setPanelSize: (panel, size) =>
-        set((state) => ({
+      setMainView: (view: MainView) => set({ mainView: view }),
+      setShowLeftPanel: (show: boolean) => set({ showLeftPanel: show }),
+      setShowRightPanel: (show: boolean) => set({ showRightPanel: show }),
+      setPanelSize: (panel: "left" | "right", size: number) =>
+        set((state: WorkspaceState) => ({
           ...state,
           [panel === "left" ? "leftPanelSize" : "rightPanelSize"]: size,
         })),
       toggleLeftPanel: () =>
-        set((state) => ({ showLeftPanel: !state.showLeftPanel })),
+        set((state: WorkspaceState) => ({
+          showLeftPanel: !state.showLeftPanel,
+        })),
       toggleRightPanel: () =>
-        set((state) => ({ showRightPanel: !state.showRightPanel })),
+        set((state: WorkspaceState) => ({
+          showRightPanel: !state.showRightPanel,
+        })),
     }),
     {
       name: "konnektr-workspace",
       // Only persist layout preferences, not selections
-      partialize: (state) => ({
+      partialize: (state: WorkspaceState) => ({
         mainView: state.mainView,
         showLeftPanel: state.showLeftPanel,
         showRightPanel: state.showRightPanel,
