@@ -6,6 +6,8 @@ import type {
   PipelineResponse,
   SendRequest,
 } from "@azure/core-rest-pipeline";
+import type { Connection } from "@/stores/connectionStore";
+import { getTokenCredential } from "@/services/auth";
 
 /**
  * Pipeline policy that rewrites URLs and adds custom headers
@@ -48,14 +50,58 @@ const getTwinsProxyPath = (): string => {
   return import.meta.env.VITE_TWINS_PROXY || "/api/proxy";
 };
 
-/** Digital Twins client factory that returns cached Digital Twins Client */
-export const digitalTwinsClientFactory = (
+/**
+ * Digital Twins client factory that returns cached Digital Twins Client
+ *
+ * @param connection - Connection with auth provider and config
+ * @returns Promise that resolves to DigitalTwinsClient
+ *
+ * Note: This function is async because it needs to initialize MSAL if using MSAL auth
+ */
+export const digitalTwinsClientFactory = async (
+  connection: Connection
+): Promise<DigitalTwinsClient> => {
+  const { adtHost } = connection;
+
+  // Cache key includes connection ID to support different auth configs for same host
+  const cacheKey = `${adtHost}:${connection.id}`;
+
+  if (!digitalTwinsClients[cacheKey]) {
+    // Get token credential based on auth provider
+    const tokenCredential = await getTokenCredential(connection);
+
+    if (!tokenCredential) {
+      throw new Error("No authentication configured for this connection");
+    }
+
+    // find all consecutive forward slashes (two or more)
+    const _pathRegex = /(\/){2,}/g;
+    const _pathRewrite = (path: string) =>
+      `${getTwinsProxyPath()}${path}`.replace(_pathRegex, "/");
+
+    const customPolicy = createCustomProxyPolicy(adtHost, _pathRewrite);
+
+    digitalTwinsClients[cacheKey] = new DigitalTwinsClient(
+      `https://${adtHost}/`,
+      tokenCredential,
+      {
+        allowInsecureConnection: window.location.hostname === "localhost",
+        additionalPolicies: [{ policy: customPolicy, position: "perCall" }],
+      }
+    );
+  }
+  return digitalTwinsClients[cacheKey];
+};
+
+/**
+ * Legacy factory function for backward compatibility
+ * @deprecated Use digitalTwinsClientFactory(connection) instead
+ */
+export const digitalTwinsClientFactoryLegacy = (
   adtHost: string,
   tokenCredential: TokenCredential
 ): DigitalTwinsClient => {
-  // `/api/digitaltwins${url.pathname}`
   if (!digitalTwinsClients[adtHost]) {
-    // find all consecutive forward slashes (two or more)
     const _pathRegex = /(\/){2,}/g;
     const _pathRewrite = (path: string) =>
       `${getTwinsProxyPath()}${path}`.replace(_pathRegex, "/");

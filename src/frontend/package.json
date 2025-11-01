@@ -18,6 +18,8 @@
     "@azure/core-auth": "^1.10.1",
     "@azure/core-rest-pipeline": "^1.22.1",
     "@azure/digital-twins-core": "^2.0.0",
+    "@azure/msal-browser": "^4.26.0",
+    "@azure/msal-react": "^3.0.21",
     "@monaco-editor/react": "^4.7.0",
     "@radix-ui/react-avatar": "^1.1.10",
     "@radix-ui/react-dialog": "^1.1.15",

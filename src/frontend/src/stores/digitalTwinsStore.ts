@@ -11,17 +11,17 @@ import {
   REL_TYPE_OUTGOING,
   QUERY_ALL_TWINS,
 } from "@/utils/constants";
-import { getDataFromQueryResponse, type QueryResponseData } from "@/utils/queryAdt";
-import { Auth0TokenCredential } from "@/services/Auth0TokenCredential";
-
+import {
+  getDataFromQueryResponse,
+  type QueryResponseData,
+} from "@/utils/queryAdt";
 /**
  * Helper to get initialized Digital Twins client
  * Throws error if connection is not configured
+ *
+ * Note: This function is now async to support MSAL initialization
  */
-
-
-
-const getClient = (): DigitalTwinsClient => {
+const getClient = async (): Promise<DigitalTwinsClient> => {
   const { getCurrentConnection, isConnected } = useConnectionStore.getState();
   const connection = getCurrentConnection();
   if (!connection || !isConnected) {
@@ -30,12 +30,8 @@ const getClient = (): DigitalTwinsClient => {
     );
   }
 
-  // Get Auth0 token credential from context (must be provided by component)
-  // For now, fallback to mock if not available
-  // TODO: Refactor to useDigitalTwinsClient hook in components for proper credential
-  const getAccessTokenSilently = () => Promise.resolve("mock-token");
-  const tokenCredential = new Auth0TokenCredential(getAccessTokenSilently);
-  return digitalTwinsClientFactory(connection.adtHost, tokenCredential);
+  // Use the new connection-based factory with auth support
+  return await digitalTwinsClientFactory(connection);
 };
 
 export interface DigitalTwinsState {
@@ -136,7 +132,7 @@ export const useDigitalTwinsStore = create<DigitalTwinsState>()(
     createTwin: async (twinData) => {
       set({ isLoading: true, error: null });
       try {
-        const client = getClient();
+        const client = await getClient();
         
         // Generate a unique ID if not provided
         const twinId = twinData.$dtId || `twin-${Date.now()}-${Math.random()
@@ -169,7 +165,7 @@ export const useDigitalTwinsStore = create<DigitalTwinsState>()(
     updateTwin: async (twinId, updates) => {
       set({ isLoading: true, error: null });
       try {
-        const client = getClient();
+        const client = await getClient();
         
         // Convert updates to JSON Patch operations
         const patch: Operation[] = Object.entries(updates).map(([key, value]) => ({
@@ -205,7 +201,7 @@ export const useDigitalTwinsStore = create<DigitalTwinsState>()(
     deleteTwin: async (twinId) => {
       set({ isLoading: true, error: null });
       try {
-        const client = getClient();
+        const client = await getClient();
         
         // Delete all relationships first
         const rels = await get().queryRelationships(twinId, REL_TYPE_ALL);
@@ -240,7 +236,7 @@ export const useDigitalTwinsStore = create<DigitalTwinsState>()(
     },
 
     getTwinById: async (twinId) => {
-      const client = getClient();
+      const client = await getClient();
       const response = await client.getDigitalTwin(twinId);
       return response as BasicDigitalTwin;
     },
@@ -250,7 +246,7 @@ export const useDigitalTwinsStore = create<DigitalTwinsState>()(
     },
 
     queryTwins: async (query) => {
-      const client = getClient();
+      const client = await getClient();
       const result: QueryResponseData = {
         twins: [],
         relationships: [],
@@ -298,7 +294,7 @@ export const useDigitalTwinsStore = create<DigitalTwinsState>()(
     createRelationship: async (relationshipData) => {
       set({ isLoading: true, error: null });
       try {
-        const client = getClient();
+        const client = await getClient();
         
         const { $sourceId, $targetId, $relationshipName, $relationshipId, ...properties } = relationshipData;
         
@@ -339,7 +335,7 @@ export const useDigitalTwinsStore = create<DigitalTwinsState>()(
     updateRelationship: async (sourceTwinId, relationshipId, patch) => {
       set({ isLoading: true, error: null });
       try {
-        const client = getClient();
+        const client = await getClient();
 
         await client.updateRelationship(
           sourceTwinId,
@@ -373,7 +369,7 @@ export const useDigitalTwinsStore = create<DigitalTwinsState>()(
     deleteRelationship: async (sourceTwinId, relationshipId) => {
       set({ isLoading: true, error: null });
       try {
-        const client = getClient();
+        const client = await getClient();
         await client.deleteRelationship(sourceTwinId, relationshipId);
 
         set((state) => ({
@@ -395,13 +391,13 @@ export const useDigitalTwinsStore = create<DigitalTwinsState>()(
     },
 
     getRelationship: async (sourceTwinId, relationshipId) => {
-      const client = getClient();
+      const client = await getClient();
       const response = await client.getRelationship(sourceTwinId, relationshipId);
       return response as BasicRelationship;
     },
 
     queryRelationships: async (twinId, type = REL_TYPE_OUTGOING) => {
-      const client = getClient();
+      const client = await getClient();
       const list: BasicRelationship[] = [];
       
       const query =

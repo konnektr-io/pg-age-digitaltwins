@@ -4,14 +4,14 @@ import type { DigitalTwinsClient } from "@azure/digital-twins-core";
 import type { DigitalTwinsModelDataExtended, DtdlInterface, DigitalTwinsModelData } from "@/types";
 import { digitalTwinsClientFactory } from "@/services/digitalTwinsClientFactory";
 import { useConnectionStore } from "./connectionStore";
-import { Auth0TokenCredential } from "@/services/Auth0TokenCredential";
 
 /**
  * Helper to get initialized Digital Twins client
  * Throws error if connection is not configured
+ *
+ * Note: This function is now async to support MSAL initialization
  */
-
-const getClient = (): DigitalTwinsClient => {
+const getClient = async (): Promise<DigitalTwinsClient> => {
   const { getCurrentConnection, isConnected } = useConnectionStore.getState();
   const connection = getCurrentConnection();
   if (!connection || !isConnected) {
@@ -20,12 +20,8 @@ const getClient = (): DigitalTwinsClient => {
     );
   }
 
-  // Get Auth0 token credential from context (must be provided by component)
-  // For now, fallback to mock if not available
-  // TODO: Refactor to useDigitalTwinsClient hook in components for proper credential
-  const getAccessTokenSilently = () => Promise.resolve("mock-token");
-  const tokenCredential = new Auth0TokenCredential(getAccessTokenSilently);
-  return digitalTwinsClientFactory(connection.adtHost, tokenCredential);
+  // Use the new connection-based factory with auth support
+  return await digitalTwinsClientFactory(connection);
 };
 
 export interface ModelsState {
@@ -86,7 +82,9 @@ export interface ModelsState {
 /**
  * Convert DigitalTwinsModelData to Extended format
  */
-const toExtendedModel = (modelData: DigitalTwinsModelData): DigitalTwinsModelDataExtended => {
+const toExtendedModel = (
+  modelData: DigitalTwinsModelData
+): DigitalTwinsModelDataExtended => {
   return {
     ...modelData,
     model: modelData.model as DtdlInterface,
@@ -107,14 +105,14 @@ export const useModelsStore = create<ModelsState>()(
     loadModels: async () => {
       set({ isLoading: true, error: null });
       try {
-        const client = getClient();
+        const client = await getClient();
         const list: DigitalTwinsModelDataExtended[] = [];
-        
+
         const models = client.listModels({
           dependenciesFor: [],
           includeModelDefinition: true,
         });
-        
+
         for await (const model of models) {
           list.push(toExtendedModel(model as DigitalTwinsModelData));
         }
@@ -133,7 +131,7 @@ export const useModelsStore = create<ModelsState>()(
     },
 
     getModelById: async (modelId) => {
-      const client = getClient();
+      const client = await getClient();
       const model = await client.getModel(modelId, {
         includeModelDefinition: true,
       });
@@ -154,9 +152,11 @@ export const useModelsStore = create<ModelsState>()(
           throw new Error(`Model with ID ${modelId} already exists`);
         }
 
-        const client = getClient();
+        const client = await getClient();
         const result = await client.createModels([model]);
-        const newModelData = toExtendedModel(result[0] as DigitalTwinsModelData);
+        const newModelData = toExtendedModel(
+          result[0] as DigitalTwinsModelData
+        );
 
         set((state) => ({
           models: [...state.models, newModelData],
@@ -180,9 +180,11 @@ export const useModelsStore = create<ModelsState>()(
     uploadModels: async (models) => {
       set({ isLoading: true, error: null });
       try {
-        const client = getClient();
+        const client = await getClient();
         const result = await client.createModels(models);
-        const modelDataList = result.map((m) => toExtendedModel(m as DigitalTwinsModelData));
+        const modelDataList = result.map((m) =>
+          toExtendedModel(m as DigitalTwinsModelData)
+        );
 
         set((state) => ({
           models: [...state.models, ...modelDataList],
@@ -211,15 +213,17 @@ export const useModelsStore = create<ModelsState>()(
         // In Azure Digital Twins, models are immutable once created
         // To update a model, you need to delete the old one and create a new one
         // This should only be done if no twins are using the model
-        
-        const client = getClient();
-        
+
+        const client = await getClient();
+
         // Delete the old model
         await client.deleteModel(modelId);
-        
+
         // Create the new model
         const result = await client.createModels([model]);
-        const updatedModelData = toExtendedModel(result[0] as DigitalTwinsModelData);
+        const updatedModelData = toExtendedModel(
+          result[0] as DigitalTwinsModelData
+        );
 
         set((state) => ({
           models: state.models.map((m) =>
@@ -243,7 +247,7 @@ export const useModelsStore = create<ModelsState>()(
     deleteModel: async (modelId) => {
       set({ isLoading: true, error: null });
       try {
-        const client = getClient();
+        const client = await getClient();
         await client.deleteModel(modelId);
 
         set((state) => ({
@@ -268,7 +272,7 @@ export const useModelsStore = create<ModelsState>()(
     decommissionModel: async (modelId) => {
       set({ isLoading: true, error: null });
       try {
-        const client = getClient();
+        const client = await getClient();
         await client.decomissionModel(modelId);
 
         set((state) => ({
@@ -319,10 +323,21 @@ export const useModelsStore = create<ModelsState>()(
         }
 
         // Check @type is valid
-        const validTypes = ["Interface", "Relationship", "Property", "Component", "Telemetry", "Command"];
-        const types = Array.isArray(model.model["@type"]) ? model.model["@type"] : [model.model["@type"]];
+        const validTypes = [
+          "Interface",
+          "Relationship",
+          "Property",
+          "Component",
+          "Telemetry",
+          "Command",
+        ];
+        const types = Array.isArray(model.model["@type"])
+          ? model.model["@type"]
+          : [model.model["@type"]];
         if (!types.some((t) => validTypes.includes(t))) {
-          errors.push(`Invalid @type. Must be one of: ${validTypes.join(", ")}`);
+          errors.push(
+            `Invalid @type. Must be one of: ${validTypes.join(", ")}`
+          );
         }
 
         // Check extends references exist
@@ -330,11 +345,16 @@ export const useModelsStore = create<ModelsState>()(
           const extendsList = Array.isArray(model.model.extends)
             ? model.model.extends
             : [model.model.extends];
-          
+
           for (const extendedModel of extendsList) {
-            const extendedId = typeof extendedModel === "string" ? extendedModel : extendedModel["@id"];
+            const extendedId =
+              typeof extendedModel === "string"
+                ? extendedModel
+                : extendedModel["@id"];
             if (!get().getModel(extendedId)) {
-              warnings.push(`Extended model ${extendedId} not found in current model list`);
+              warnings.push(
+                `Extended model ${extendedId} not found in current model list`
+              );
             }
           }
         }
@@ -343,9 +363,14 @@ export const useModelsStore = create<ModelsState>()(
         if (model.model.contents) {
           for (const content of model.model.contents) {
             if (content["@type"] === "Component" && content.schema) {
-              const schemaId = typeof content.schema === "string" ? content.schema : content.schema["@id"];
+              const schemaId =
+                typeof content.schema === "string"
+                  ? content.schema
+                  : content.schema["@id"];
               if (schemaId && !get().getModel(schemaId)) {
-                warnings.push(`Component schema ${schemaId} not found in current model list`);
+                warnings.push(
+                  `Component schema ${schemaId} not found in current model list`
+                );
               }
             }
           }
@@ -401,7 +426,7 @@ export const useModelsStore = create<ModelsState>()(
         const extendsList = Array.isArray(model.model.extends)
           ? model.model.extends
           : [model.model.extends];
-        
+
         extendsList.forEach((ext) => {
           const id = typeof ext === "string" ? ext : ext["@id"];
           if (id) dependencies.push(id);
@@ -412,7 +437,10 @@ export const useModelsStore = create<ModelsState>()(
       if (model.model.contents) {
         model.model.contents.forEach((content) => {
           if (content["@type"] === "Component" && content.schema) {
-            const schemaId = typeof content.schema === "string" ? content.schema : content.schema["@id"];
+            const schemaId =
+              typeof content.schema === "string"
+                ? content.schema
+                : content.schema["@id"];
             if (schemaId) dependencies.push(schemaId);
           }
         });
@@ -486,7 +514,7 @@ export const useModelsStore = create<ModelsState>()(
           const id = model.id.toLowerCase();
           const displayName = model.displayName?.en?.toLowerCase() || "";
           const description = model.description?.en?.toLowerCase() || "";
-          
+
           return (
             id.includes(searchTerm) ||
             displayName.includes(searchTerm) ||
@@ -496,7 +524,9 @@ export const useModelsStore = create<ModelsState>()(
       }
 
       if (filter.modelType) {
-        filtered = filtered.filter((m) => m.model["@type"] === filter.modelType);
+        filtered = filtered.filter(
+          (m) => m.model["@type"] === filter.modelType
+        );
       }
 
       if (filter.isValid !== undefined) {
@@ -523,7 +553,7 @@ export const useModelsStore = create<ModelsState>()(
         const extendsList = Array.isArray(model.model.extends)
           ? model.model.extends
           : [model.model.extends];
-        
+
         extendsList.forEach((ext) => {
           const id = typeof ext === "string" ? ext : ext["@id"];
           if (id) extends_.push(id);
@@ -534,7 +564,10 @@ export const useModelsStore = create<ModelsState>()(
       if (model.model.contents) {
         model.model.contents.forEach((content) => {
           if (content["@type"] === "Component" && content.schema) {
-            const schemaId = typeof content.schema === "string" ? content.schema : content.schema["@id"];
+            const schemaId =
+              typeof content.schema === "string"
+                ? content.schema
+                : content.schema["@id"];
             if (schemaId) components.push(schemaId);
           } else if (content["@type"] === "Relationship" && content.target) {
             relationships.push(content.target);

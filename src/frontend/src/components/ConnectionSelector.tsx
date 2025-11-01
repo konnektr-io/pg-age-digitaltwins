@@ -1,5 +1,8 @@
 import { useState } from "react";
-import { useConnectionStore } from "@/stores/connectionStore";
+import {
+  useConnectionStore,
+  validateConnectionAuth,
+} from "@/stores/connectionStore";
 import {
   Select,
   SelectTrigger,
@@ -33,7 +36,12 @@ export function ConnectionSelector(): React.ReactElement {
   const addConnection = useConnectionStore((state) => state.addConnection);
 
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", adtHost: "", description: "" });
+  const [form, setForm] = useState({
+    name: "",
+    adtHost: "",
+    description: "",
+    authProvider: "none" as const,
+  });
   const [error, setError] = useState<string | null>(null);
 
   const handleAdd = () => {
@@ -41,14 +49,25 @@ export function ConnectionSelector(): React.ReactElement {
       setError("Name and Host are required.");
       return;
     }
-    addConnection({
+
+    const newConnection = {
       id: form.name.toLowerCase().replace(/\s+/g, "-"),
       name: form.name,
       adtHost: form.adtHost,
       description: form.description,
-    });
-    setCurrentConnection(form.name.toLowerCase().replace(/\s+/g, "-"));
-    setForm({ name: "", adtHost: "", description: "" });
+      authProvider: form.authProvider,
+    };
+
+    // Validate auth configuration
+    const validationError = validateConnectionAuth(newConnection);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    addConnection(newConnection);
+    setCurrentConnection(newConnection.id);
+    setForm({ name: "", adtHost: "", description: "", authProvider: "none" });
     setError(null);
     setOpen(false);
   };
@@ -67,7 +86,14 @@ export function ConnectionSelector(): React.ReactElement {
             <SelectLabel>Connections</SelectLabel>
             {connections.map((conn) => (
               <SelectItem key={conn.id} value={conn.id}>
-                {conn.name}
+                <div className="flex items-center gap-2">
+                  <span>{conn.name}</span>
+                  {conn.authProvider !== "none" && (
+                    <span className="text-xs text-muted-foreground px-1.5 py-0.5 rounded bg-secondary">
+                      {conn.authProvider}
+                    </span>
+                  )}
+                </div>
               </SelectItem>
             ))}
           </SelectGroup>
