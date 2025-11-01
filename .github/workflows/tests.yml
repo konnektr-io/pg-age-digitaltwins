@@ -30,31 +30,64 @@ jobs:
 
       - name: Start custom PostgreSQL container
         run: |
-            docker run --name postgres-test \
-            -e POSTGRES_USER=app \
+          docker run --name postgres-test -d \
             -e POSTGRES_PASSWORD=app \
-            -e POSTGRES_DB=app \
-            -v "${{ github.workspace }}/src/data/init.sql:/docker-entrypoint-initdb.d/init.sql" \
             -p 5432:5432 \
-            ghcr.io/konnektr-io/age:16-bookworm-4 \
-            -c wal_level=logical \
-            -c max_connections=1000 \
-            -c max_replication_slots=10 \
-            -c max_wal_senders=10 &
+            --shm-size=512mb \
+            ghcr.io/konnektr-io/age:16-1.6.0-standard-trixie \
+            bash -c "initdb -D /var/lib/postgresql/data --username=app --pwfile=<(echo app) && \
+                     echo 'host all all 0.0.0.0/0 trust' >> /var/lib/postgresql/data/pg_hba.conf && \
+                     echo 'local all all trust' >> /var/lib/postgresql/data/pg_hba.conf && \
+                     postgres -D /var/lib/postgresql/data \
+                     -c wal_level=logical \
+                     -c max_connections=1000 \
+                     -c shared_buffers=256MB \
+                     -c max_replication_slots=10 \
+                     -c max_wal_senders=10 \
+                     -c listen_addresses='*'"
+          
+          echo "Waiting for container to start..."
+          sleep 10
+          echo "Container status:"
+          docker ps -a | grep postgres-test
+          echo "Container logs:"
+          docker logs postgres-test
 
       - name: Wait for PostgreSQL to be ready
         run: |
-          for i in {1..30}; do
-            if docker exec postgres-test pg_isready -U app -d app; then
+          for i in {1..45}; do
+            # Check if container is still running
+            if ! docker ps | grep -q postgres-test; then
+              echo "Container has stopped running!";
+              echo "Container status:";
+              docker ps -a | grep postgres-test;
+              echo "Container logs:";
+              docker logs postgres-test;
+              exit 1;
+            fi
+            
+            if docker exec postgres-test pg_isready -U app -d app 2>/dev/null; then
               echo "PostgreSQL is ready";
               sleep 5;
               exit 0;
             fi;
-            echo "Waiting for PostgreSQL...";
+            echo "Waiting for PostgreSQL... (attempt $i)";
             sleep 5;
           done
           echo "PostgreSQL did not become ready in time";
+          echo "Final container status:";
+          docker ps -a | grep postgres-test;
+          echo "Final container logs:";
+          docker logs postgres-test;
           exit 1;
+      
+      - name: Initialize database with AGE extension
+        run: |
+          echo "Creating app database..."
+          docker exec postgres-test createdb -U app app
+          echo "Running initialization script..."
+          docker exec -i postgres-test psql -U app -d app < "${{ github.workspace }}/src/data/init.sql"
+          echo "Database initialized successfully"
 
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
@@ -67,15 +100,15 @@ jobs:
         run: |
           if [ "${{ github.event.inputs.test_project }}" == "All" ]; then
             if [ -n "${{ github.event.inputs.filter }}" ]; then
-              dotnet test './src' --logger 'GitHubActions' --logger 'console;verbosity=normal' --blame-hang --blame-hang-timeout 5m --filter "${{ github.event.inputs.filter }}"
+              dotnet test './src' --logger 'GitHubActions' --logger 'console;verbosity=normal' --blame-hang --blame-hang-timeout 5m --filter "${{ github.event.inputs.filter }}" -- RunConfiguration.MaxCpuCount=2
             else
-              dotnet test './src' --logger 'GitHubActions' --logger 'console;verbosity=normal' --blame-hang --blame-hang-timeout 5m
+              dotnet test './src' --logger 'GitHubActions' --logger 'console;verbosity=normal' --blame-hang --blame-hang-timeout 5m -- RunConfiguration.MaxCpuCount=2
             fi
           else
             if [ -n "${{ github.event.inputs.filter }}" ]; then
-              dotnet test './src/${{ github.event.inputs.test_project }}' --logger 'GitHubActions' --logger 'console;verbosity=normal' --blame-hang --blame-hang-timeout 5m --filter "${{ github.event.inputs.filter }}"
+              dotnet test './src/${{ github.event.inputs.test_project }}' --logger 'GitHubActions' --logger 'console;verbosity=normal' --blame-hang --blame-hang-timeout 5m --filter "${{ github.event.inputs.filter }}" -- RunConfiguration.MaxCpuCount=2
             else
-              dotnet test './src/${{ github.event.inputs.test_project }}' --logger 'GitHubActions' --logger 'console;verbosity=normal' --blame-hang --blame-hang-timeout 5m
+              dotnet test './src/${{ github.event.inputs.test_project }}' --logger 'GitHubActions' --logger 'console;verbosity=normal' --blame-hang --blame-hang-timeout 5m -- RunConfiguration.MaxCpuCount=2
             fi
           fi
 

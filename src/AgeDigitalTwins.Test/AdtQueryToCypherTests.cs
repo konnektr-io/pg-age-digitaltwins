@@ -27,12 +27,52 @@ public class AdtQueryToCypherTests
         "MATCH (T:Twin) WHERE testgraph.is_of_model(T,'dtmi:com:adt:dtsample:room;1') RETURN *"
     )]
     [InlineData(
-        "SELECT * FROM DIGITALTWINS WHERE STARTS_WITH(name, 'foo')",
-        "MATCH (T:Twin) WHERE STARTS_WITH(T.name, 'foo') RETURN *"
+        "SELECT * FROM DIGITALTWINS WHERE STARTSWITH(name, 'foo')",
+        "MATCH (T:Twin) WHERE T.name STARTS WITH 'foo' RETURN *"
     )]
     [InlineData(
-        "SELECT $dtId, name FROM DIGITALTWINS WHERE STARTS_WITH(name, 'foo')",
-        "MATCH (T:Twin) WHERE STARTS_WITH(T.name, 'foo') RETURN T['$dtId'], T.name"
+        "SELECT $dtId, name FROM DIGITALTWINS WHERE STARTSWITH(name, 'foo')",
+        "MATCH (T:Twin) WHERE T.name STARTS WITH 'foo' RETURN T['$dtId'], T.name"
+    )]
+    [InlineData(
+        "SELECT $dtId, name FROM DIGITALTWINS WHERE ENDSWITH(name, 'foo')",
+        "MATCH (T:Twin) WHERE T.name ENDS WITH 'foo' RETURN T['$dtId'], T.name"
+    )]
+    [InlineData(
+        "SELECT $dtId, name FROM DIGITALTWINS WHERE IS_DEFINED(name)",
+        "MATCH (T:Twin) WHERE T.name IS NOT NULL RETURN T['$dtId'], T.name"
+    )]
+    [InlineData(
+        "SELECT T FROM DIGITALTWINS T WHERE IS_NULL(T.name)",
+        "MATCH (T:Twin) WHERE T.name IS NULL RETURN T"
+    )]
+    [InlineData(
+        "SELECT T FROM DIGITALTWINS T WHERE IS_OBJECT(T.someMap)",
+        "MATCH (T:Twin) WHERE testgraph.is_object(T.someMap) RETURN T"
+    )]
+    [InlineData(
+        "SELECT T FROM DIGITALTWINS T WHERE IS_PRIMITIVE(T.someScalar)",
+        "MATCH (T:Twin) WHERE testgraph.is_primitive(T.someScalar) RETURN T"
+    )]
+    [InlineData(
+        "SELECT T FROM DIGITALTWINS T WHERE IS_STRING(T.someString)",
+        "MATCH (T:Twin) WHERE testgraph.is_string(T.someString) RETURN T"
+    )]
+    [InlineData(
+        "SELECT T FROM DIGITALTWINS T WHERE ARRAY_CONTAINS(T.tags, 'tag1')",
+        "MATCH (T:Twin) WHERE 'tag1' IN T.tags RETURN T"
+    )]
+    [InlineData(
+        "SELECT T FROM DIGITALTWINS T WHERE ARRAY_CONTAINS(T.numbers, 1)",
+        "MATCH (T:Twin) WHERE 1 IN T.numbers RETURN T"
+    )]
+    [InlineData(
+        "SELECT T FROM DIGITALTWINS T WHERE ARRAY_CONTAINS(T.bools, true)",
+        "MATCH (T:Twin) WHERE true IN T.bools RETURN T"
+    )]
+    [InlineData(
+        "SELECT T FROM DIGITALTWINS T WHERE IS_BOOL(T.bool)",
+        "MATCH (T:Twin) WHERE (T.bool = true OR T.bool = false) RETURN T"
     )]
     [InlineData(
         "SELECT * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:adt:dtsample:room;1') AND name = 'foo'",
@@ -129,15 +169,15 @@ public class AdtQueryToCypherTests
     )]
     [InlineData(
         "SELECT * FROM DIGITALTWINS WHERE IS_NUMBER(Capacity)",
-        "MATCH (T:Twin) WHERE ((toFloat(T.Capacity) IS NOT NULL OR toInteger(T.Capacity) IS NOT NULL) AND NOT (toString(T.Capacity) = T.Capacity)) RETURN *"
+        "MATCH (T:Twin) WHERE testgraph.is_number(T.Capacity) RETURN *"
     )]
     [InlineData(
         "SELECT * FROM DIGITALTWINS WHERE IS_NUMBER(Capacity) AND Capacity != 0",
-        "MATCH (T:Twin) WHERE ((toFloat(T.Capacity) IS NOT NULL OR toInteger(T.Capacity) IS NOT NULL) AND NOT (toString(T.Capacity) = T.Capacity)) AND NOT (T.Capacity = 0) RETURN *"
+        "MATCH (T:Twin) WHERE testgraph.is_number(T.Capacity) AND NOT (T.Capacity = 0) RETURN *"
     )]
     [InlineData(
         "SELECT T FROM DIGITALTWINS T WHERE IS_NUMBER(T.temperature) AND T.temperature > 20.5",
-        "MATCH (T:Twin) WHERE ((toFloat(T.temperature) IS NOT NULL OR toInteger(T.temperature) IS NOT NULL) AND NOT (toString(T.temperature) = T.temperature)) AND T.temperature > 20.5 RETURN T"
+        "MATCH (T:Twin) WHERE testgraph.is_number(T.temperature) AND T.temperature > 20.5 RETURN T"
     )]
     [InlineData(
         "SELECT TOP(1) FROM digitaltwins WHERE ($dtId IN ['00000-0000-0000-00000','test@example.com'] OR email = 'test@example.com') AND $metadata.$model = 'dtmi:com:arcadis:identity:Invite;1'",

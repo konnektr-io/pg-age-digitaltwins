@@ -158,6 +158,54 @@ public static class GraphInitialization
                 END;
                 $$ LANGUAGE plpgsql;"
             ),
+            // IS_OBJECT: returns true if agtype is a map/object
+            new(
+                @$"CREATE OR REPLACE FUNCTION {graphName}.is_object(val agtype)
+                RETURNS boolean AS $$
+                BEGIN
+                    RETURN ag_catalog.age_keys(val) IS NOT NULL;
+                EXCEPTION
+                    WHEN others THEN
+                        RETURN false;
+                END;
+                $$ LANGUAGE plpgsql;"
+            ),
+            // IS_NUMBER: returns true if agtype is number
+            new(
+                @$"CREATE OR REPLACE FUNCTION {graphName}.is_number(val agtype)
+                RETURNS boolean AS $$
+                BEGIN
+                    RETURN (ag_catalog.age_tofloat(val) IS NOT NULL OR ag_catalog.age_tointeger(val) IS NOT NULL) AND NOT (ag_catalog.age_tostring(val) = val);
+                EXCEPTION
+                    WHEN others THEN
+                        RETURN false;
+                END;
+                $$ LANGUAGE plpgsql;"
+            ),
+            // IS_PRIMITIVE: returns true if agtype is string, number, boolean
+            new(
+                @$"CREATE OR REPLACE FUNCTION {graphName}.is_primitive(val agtype)
+                RETURNS boolean AS $$
+                BEGIN
+                    RETURN ag_catalog.age_tostring(val) IS NOT NULL OR ag_catalog.age_tofloat(val) IS NOT NULL OR val = true OR val = false;
+                EXCEPTION
+                    WHEN others THEN
+                        RETURN false;
+                END;
+                $$ LANGUAGE plpgsql;"
+            ),
+            // IS_STRING: returns true if agtype is a string
+            new(
+                @$"CREATE OR REPLACE FUNCTION {graphName}.is_string(val agtype)
+                RETURNS boolean AS $$
+                BEGIN
+                    RETURN ag_catalog.age_tostring(val) = val;
+                EXCEPTION
+                    WHEN others THEN
+                        RETURN false;
+                END;
+                $$ LANGUAGE plpgsql;"
+            ),
             new(
                 @$"CREATE OR REPLACE FUNCTION {graphName}.is_of_model_old(twin agtype, model_id agtype, exact boolean default false)
                 RETURNS boolean
@@ -172,7 +220,7 @@ public static class GraphInitialization
                     IF exact THEN
                         sql := format('SELECT ''%s'' = ''%s''', twin_model_id, model_id);
                     ELSE
-                        sql:= format('SELECT ''%s'' = ''%s'' OR
+                        sql := format('SELECT ''%s'' = ''%s'' OR
                         EXISTS
                             (SELECT 1 FROM ag_catalog.cypher(''{graphName}'', $$
                                 MATCH (m:Model)

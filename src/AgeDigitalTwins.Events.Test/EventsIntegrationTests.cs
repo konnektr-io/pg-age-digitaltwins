@@ -842,7 +842,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
             Contents =
             {
                 ["name"] = "Earth",
-                ["mass"] = 5.972e24,
+                ["mass"] = 5.972e10,
                 ["hasLife"] = true,
             },
         };
@@ -851,7 +851,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         {
             Id = "moon",
             Metadata = { ModelId = "dtmi:com:contoso:Moon;1" },
-            Contents = { ["name"] = "Moon", ["mass"] = 7.342e22 },
+            Contents = { ["name"] = "Moon", ["mass"] = 7.342e10 },
         };
 
         var marsTwin = new BasicDigitalTwin
@@ -861,7 +861,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
             Contents =
             {
                 ["name"] = "Mars",
-                ["mass"] = 6.39e23,
+                ["mass"] = 6.39e10,
                 ["hasLife"] = false,
             },
         };
