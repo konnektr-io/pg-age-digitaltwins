@@ -30,7 +30,7 @@ AgeDigitalTwins is an SDK and API designed to support Digital Twins applications
     - [x] JOIN
     - [x] IS_OF_MODEL
     - [x] String functions
-    - [ ] Type check functions
+    - [x] Type check functions
   - [x] Error handling
   - [x] ETags
   - [x] Pagination

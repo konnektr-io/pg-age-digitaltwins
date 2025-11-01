@@ -318,6 +318,136 @@ public class QueryTests : TestBase
     }
 
     [Fact]
+    public async Task QueryAsync_IsObjectFunction_WorksAsExpected()
+    {
+        await IntializeAsync();
+        var twinJson =
+            @"{""$dtId"": ""typecheckroom1"", ""$metadata"": { ""$model"": ""dtmi:com:adt:dtsample:room;1"" }, ""name"": ""Room 1"", ""description"": ""This is a room."", ""temperature"": 22.5, ""humidity"": 0.5, ""dimensions"": { ""length"": 5.0, ""width"": 4.0, ""height"": 3.0 } }";
+        await Client.CreateOrReplaceDigitalTwinAsync("typecheckroom1", twinJson);
+
+        var objectResult = await Client
+            .QueryAsync<JsonDocument>(
+                @$"
+            MATCH (t:Twin {{ `$dtId`: 'typecheckroom1' }})
+            RETURN t.`$dtId` AS id, {Client.GetGraphName()}.is_object(t.dimensions) AS isObj, {Client.GetGraphName()}.is_object(t.name) AS isObjStr, {Client.GetGraphName()}.is_object(t.temperature) AS isObjNum
+        "
+            )
+            .FirstOrDefaultAsync();
+        Assert.NotNull(objectResult);
+        Assert.True(objectResult.RootElement.GetProperty("isObj").GetBoolean());
+        Assert.False(objectResult.RootElement.GetProperty("isObjStr").GetBoolean());
+        Assert.False(objectResult.RootElement.GetProperty("isObjNum").GetBoolean());
+    }
+
+    [Fact]
+    public async Task QueryAsync_IsPrimitiveFunction_WorksAsExpected()
+    {
+        await IntializeAsync();
+        var twinJson =
+            @"{""$dtId"": ""typecheckroom1"", ""$metadata"": { ""$model"": ""dtmi:com:adt:dtsample:room;1"" }, ""name"": ""Room 1"", ""description"": ""This is a room."", ""temperature"": 22.5, ""humidity"": 0.5, ""dimensions"": { ""length"": 5.0, ""width"": 4.0, ""height"": 3.0 } }";
+        await Client.CreateOrReplaceDigitalTwinAsync("typecheckroom1", twinJson);
+
+        var primResult = await Client
+            .QueryAsync<JsonDocument>(
+                $@"
+            MATCH (t:Twin {{ `$dtId`: 'typecheckroom1' }})
+            RETURN t.`$dtId` AS id, {Client.GetGraphName()}.is_primitive(t.dimensions) AS isPrimMap, {Client.GetGraphName()}.is_primitive(t.name) AS isPrimStr, {Client.GetGraphName()}.is_primitive(t.temperature) AS isPrimNum
+        "
+            )
+            .FirstOrDefaultAsync();
+        Assert.NotNull(primResult);
+        Assert.False(primResult.RootElement.GetProperty("isPrimMap").GetBoolean());
+        Assert.True(primResult.RootElement.GetProperty("isPrimStr").GetBoolean());
+        Assert.True(primResult.RootElement.GetProperty("isPrimNum").GetBoolean());
+    }
+
+    [Fact]
+    public async Task QueryAsync_IsStringFunction_WorksAsExpected()
+    {
+        await IntializeAsync();
+        var twinJson =
+            @"{""$dtId"": ""typecheckroom1"", ""$metadata"": { ""$model"": ""dtmi:com:adt:dtsample:room;1"" }, ""name"": ""Room 1"", ""description"": ""This is a room."", ""temperature"": 22.5, ""humidity"": 0.5, ""dimensions"": { ""length"": 5.0, ""width"": 4.0, ""height"": 3.0 } }";
+        await Client.CreateOrReplaceDigitalTwinAsync("typecheckroom1", twinJson);
+
+        var strResult = await Client
+            .QueryAsync<JsonDocument>(
+                @$"
+            MATCH (t:Twin {{ `$dtId`: 'typecheckroom1' }})
+            RETURN t.`$dtId` AS id, {Client.GetGraphName()}.is_string(t.dimensions) AS isStrMap, {Client.GetGraphName()}.is_string(t.name) AS isStrStr, {Client.GetGraphName()}.is_string(t.temperature) AS isStrNum
+        "
+            )
+            .FirstOrDefaultAsync();
+        Assert.NotNull(strResult);
+        Assert.False(strResult.RootElement.GetProperty("isStrMap").GetBoolean());
+        Assert.True(strResult.RootElement.GetProperty("isStrStr").GetBoolean());
+        Assert.False(strResult.RootElement.GetProperty("isStrNum").GetBoolean());
+    }
+
+    [Fact]
+    public async Task QueryAsync_TypeCheckFunctions_WorkAsExpected()
+    {
+        await IntializeAsync();
+        // Insert a twin with a map, a string, and a number property
+        var twinJson =
+            @"{
+            ""$dtId"": ""typecheckroom1"", 
+            ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, 
+            ""name"": ""Room 1"",
+            ""description"": ""This is a room."",
+            ""temperature"": 22.5,
+            ""humidity"": 0.5,
+            ""dimensions"": {
+                ""length"": 5.0,
+                ""width"": 4.0,
+                ""height"": 3.0
+            }
+            }";
+        await Client.CreateOrReplaceDigitalTwinAsync("typecheckroom1", twinJson);
+
+        // IS_OBJECT should be true for mapProp, false for strProp, numProp
+        var objectResult = await Client
+            .QueryAsync<JsonDocument>(
+                @$"
+            MATCH (t:Twin {{ `$dtId`: 'typecheckroom1' }})
+            RETURN t.`$dtId` AS id, {Client.GetGraphName()}.is_object(t.dimensions) AS isObj, {Client.GetGraphName()}.is_object(t.name) AS isObjStr, {Client.GetGraphName()}.is_object(t.temperature) AS isObjNum
+        "
+            )
+            .FirstOrDefaultAsync();
+        Assert.NotNull(objectResult);
+        Assert.True(objectResult.RootElement.GetProperty("isObj").GetBoolean());
+        Assert.False(objectResult.RootElement.GetProperty("isObjStr").GetBoolean());
+        Assert.False(objectResult.RootElement.GetProperty("isObjNum").GetBoolean());
+
+        // IS_PRIMITIVE should be true for strProp, numProp, false for mapProp
+        var primResult = await Client
+            .QueryAsync<JsonDocument>(
+                $@"
+            MATCH (t:Twin {{ `$dtId`: 'typecheckroom1' }})
+            RETURN t.`$dtId` AS id, {Client.GetGraphName()}.is_primitive(t.dimensions) AS isPrimMap, {Client.GetGraphName()}.is_primitive(t.name) AS isPrimStr, {Client.GetGraphName()}.is_primitive(t.temperature) AS isPrimNum
+        "
+            )
+            .FirstOrDefaultAsync();
+        Assert.NotNull(primResult);
+        Assert.False(primResult.RootElement.GetProperty("isPrimMap").GetBoolean());
+        Assert.True(primResult.RootElement.GetProperty("isPrimStr").GetBoolean());
+        Assert.True(primResult.RootElement.GetProperty("isPrimNum").GetBoolean());
+
+        // IS_STRING should be true for strProp, false for mapProp, numProp
+        var strResult = await Client
+            .QueryAsync<JsonDocument>(
+                @$"
+            MATCH (t:Twin {{ `$dtId`: 'typecheckroom1' }})
+            RETURN t.`$dtId` AS id, {Client.GetGraphName()}.is_string(t.dimensions) AS isStrMap, {Client.GetGraphName()}.is_string(t.name) AS isStrStr, {Client.GetGraphName()}.is_string(t.temperature) AS isStrNum
+        "
+            )
+            .FirstOrDefaultAsync();
+        Assert.NotNull(strResult);
+        Assert.False(strResult.RootElement.GetProperty("isStrMap").GetBoolean());
+        Assert.True(strResult.RootElement.GetProperty("isStrStr").GetBoolean());
+        Assert.False(strResult.RootElement.GetProperty("isStrNum").GetBoolean());
+    }
+
+    [Fact]
     public async Task QueryAsync_AdtQueryWithTop_ReturnsTwins()
     {
         await IntializeAsync();

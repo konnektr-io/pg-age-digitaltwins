@@ -47,6 +47,18 @@ public class AdtQueryToCypherTests
         "MATCH (T:Twin) WHERE T.name IS NULL RETURN T"
     )]
     [InlineData(
+        "SELECT T FROM DIGITALTWINS T WHERE IS_OBJECT(T.someMap)",
+        "MATCH (T:Twin) WHERE testgraph.is_object(T.someMap) RETURN T"
+    )]
+    [InlineData(
+        "SELECT T FROM DIGITALTWINS T WHERE IS_PRIMITIVE(T.someScalar)",
+        "MATCH (T:Twin) WHERE testgraph.is_primitive(T.someScalar) RETURN T"
+    )]
+    [InlineData(
+        "SELECT T FROM DIGITALTWINS T WHERE IS_STRING(T.someString)",
+        "MATCH (T:Twin) WHERE testgraph.is_string(T.someString) RETURN T"
+    )]
+    [InlineData(
         "SELECT T FROM DIGITALTWINS T WHERE ARRAY_CONTAINS(T.tags, 'tag1')",
         "MATCH (T:Twin) WHERE 'tag1' IN T.tags RETURN T"
     )]
@@ -157,15 +169,15 @@ public class AdtQueryToCypherTests
     )]
     [InlineData(
         "SELECT * FROM DIGITALTWINS WHERE IS_NUMBER(Capacity)",
-        "MATCH (T:Twin) WHERE ((toFloat(T.Capacity) IS NOT NULL OR toInteger(T.Capacity) IS NOT NULL) AND NOT (toString(T.Capacity) = T.Capacity)) RETURN *"
+        "MATCH (T:Twin) WHERE testgraph.is_number(T.Capacity) RETURN *"
     )]
     [InlineData(
         "SELECT * FROM DIGITALTWINS WHERE IS_NUMBER(Capacity) AND Capacity != 0",
-        "MATCH (T:Twin) WHERE ((toFloat(T.Capacity) IS NOT NULL OR toInteger(T.Capacity) IS NOT NULL) AND NOT (toString(T.Capacity) = T.Capacity)) AND NOT (T.Capacity = 0) RETURN *"
+        "MATCH (T:Twin) WHERE testgraph.is_number(T.Capacity) AND NOT (T.Capacity = 0) RETURN *"
     )]
     [InlineData(
         "SELECT T FROM DIGITALTWINS T WHERE IS_NUMBER(T.temperature) AND T.temperature > 20.5",
-        "MATCH (T:Twin) WHERE ((toFloat(T.temperature) IS NOT NULL OR toInteger(T.temperature) IS NOT NULL) AND NOT (toString(T.temperature) = T.temperature)) AND T.temperature > 20.5 RETURN T"
+        "MATCH (T:Twin) WHERE testgraph.is_number(T.temperature) AND T.temperature > 20.5 RETURN T"
     )]
     [InlineData(
         "SELECT TOP(1) FROM digitaltwins WHERE ($dtId IN ['00000-0000-0000-00000','test@example.com'] OR email = 'test@example.com') AND $metadata.$model = 'dtmi:com:arcadis:identity:Invite;1'",
