@@ -1,5 +1,31 @@
 # Konnektr Graph Explorer - Development Progress
 
+**Last Updated**: November 1, 2025  
+**Current Branch**: feat/type-checks  
+**Status**: 🟡 Ready for Real Backend Integration (Phase 6)
+
+---
+
+## 📊 Current State Summary
+
+### Architecture Status
+- **UI/UX**: ✅ 100% Complete (All components functional)
+- **State Management**: ✅ 100% Complete (Zustand stores properly architected)
+- **Graph Visualization**: ✅ 100% Complete (Sigma.js with real data transformation)
+- **Authentication**: ⚠️ 50% Complete (Auth0 only, needs abstraction)
+- **Data Integration**: ⚠️ 30% Complete (Mix of mock and real API calls)
+- **Testing**: ⚠️ 40% Complete (Unit tests exist, need E2E with real backend)
+
+### Critical Findings
+1. **Mock Data Usage**: QueryStore, ModelSidebar, and ModelInspector still use mock data
+2. **Auth Architecture**: Tightly coupled to Auth0 - **needs abstraction for MSAL/ADT support**
+3. **Real Backend**: Not yet tested against actual AgeDigitalTwins API
+4. **Cookie Consent**: ✅ Recently added (GTAG + popup)
+
+**See**: [CODEBASE_REVIEW_2025-11-01.md](./CODEBASE_REVIEW_2025-11-01.md) for comprehensive analysis
+
+---
+
 ## ✅ Completed Features
 
 ### 🔧 **Phase 1-3: Critical Infrastructure**
@@ -51,36 +77,51 @@
 - **Documentation**: Created TESTING.md guide with best practices and examples
 - **CI-Ready**: Tests configured to run in CI/CD pipelines
 
-## 📊 **Known Issues & Limitations**
+## 📊 **Known Issues & Current Limitations**
 
-### ⚠️ **Critical Issues Identified**
+### 🔴 **Critical: Blocking Real Backend Integration**
 
-1. **Graph View Data Mismatch** ✅ **FIXED** (was HIGH PRIORITY)
-   - ~~QueryResults currently passes hard-coded mock data to GraphViewer~~
+1. **Authentication Abstraction Needed** 🔴 **BLOCKING**
+   - Current: Hardcoded to Auth0 provider
+   - Required: Support for Auth0, MSAL (Azure ADT), and Generic OAuth
+   - Impact: Cannot connect to Azure Digital Twins or self-hosted instances
+   - **See**: [CODEBASE_REVIEW Phase 6.2](./CODEBASE_REVIEW_2025-11-01.md#phase-62-implement-authentication-abstraction-medium-risk)
+
+2. **QueryStore Uses Mock Data** 🟡 **HIGH PRIORITY**
+   - Current: `executeQuery()` has hardcoded mock data routing (lines 150-210)
+   - Required: Use Azure SDK `client.queryTwins()` for real queries
+   - Impact: Queries don't execute against real backend
+   - **See**: [CODEBASE_REVIEW Phase 6.3](./CODEBASE_REVIEW_2025-11-01.md#phase-63-replace-querystore-mock-data-high-risk)
+
+3. **Components Using Mock Data** 🟡 **MEDIUM PRIORITY**
+   - `ModelSidebar.tsx`: Uses mockModels and mockDigitalTwins
+   - `ModelInspector.tsx`: Uses mockModels directly
+   - Impact: UI doesn't reflect real backend state
+   - **See**: [CODEBASE_REVIEW Phase 6.4-6.5](./CODEBASE_REVIEW_2025-11-01.md#phase-64-replace-modelsidebar-mock-data-medium-risk)
+
+4. **No Real Backend Testing** 🔴 **CRITICAL**
+   - Current: All testing done with mock data
+   - Required: E2E testing with actual AgeDigitalTwins API
+   - Impact: Unknown production readiness
+   - **See**: [CODEBASE_REVIEW Phase 6.6](./CODEBASE_REVIEW_2025-11-01.md#phase-66-end-to-end-testing-with-real-backend-critical)
+
+### ✅ **Previously Resolved Issues**
+
+1. **Graph View Data Mismatch** ✅ **FIXED**
    - ✅ Created transformation layer to parse query results into graph format
    - ✅ GraphViewer now displays actual query results
    - ✅ Added graceful fallback UI when results aren't graph-compatible
    - **See**: `PHASE_5_1_COMPLETE.md` for implementation details
 
 2. **Duplicate Components** ✅ **RESOLVED**
-   - ~~QueryExplorerSimple.tsx exists but is unused (superseded by Monaco version)~~
-   - ~~QueryResultsImproved.tsx contains advanced nested data features but isn't integrated~~
    - ✅ QueryResultsImproved.tsx deleted after extracting all advanced features
    - **Remaining**: QueryExplorerSimple.tsx (can be archived later)
 
 3. **Missing Advanced Table Features** ✅ **IMPLEMENTED**
-   - ~~QueryResultsImproved.tsx has grouped columns, flat columns, and expandable rows~~
-   - ~~These features handle nested entity structures better~~
-   - ~~Not currently available in the active QueryResults.tsx~~
    - ✅ All advanced table features now integrated into QueryResults.tsx
    - ✅ Four table view modes: Simple, Grouped, Flat, Expandable
    - ✅ Smart view selection based on data structure
    - **Impact**: Complex query results now fully supported
-
-4. **Type Inconsistency** (LOW PRIORITY)
-   - QueryResults accepts `unknown[]`
-   - QueryResultsImproved expects `Record<string, unknown>[]`
-   - **Impact**: Potential runtime type errors
 
 ## 🚀 **How to Use Current Features**
 
@@ -109,11 +150,75 @@
 - Toggle left/right panels using header buttons
 - Panel sizes are preserved during navigation
 
-## ⏳ **Next Phase: Component Consolidation & Enhancement**
+## 🚧 **Current Phase: Real Backend Integration (Phase 6)**
 
-See **QUERY_COMPONENTS_ANALYSIS.md** for complete analysis and implementation plan.
+**Objective**: Replace all mock data with real API calls and abstract authentication layer
 
-### ✅ Priority 1: Fix Graph View (COMPLETED)
+**See**: [CODEBASE_REVIEW_2025-11-01.md](./CODEBASE_REVIEW_2025-11-01.md) for comprehensive implementation plan
+
+### 🔄 **In Progress**
+
+#### Phase 6.1: Extract Reusable Helpers
+- [ ] Move `getModelDisplayName()` to `src/utils/dtdlHelpers.ts`
+- [ ] Move `formatTwinForDisplay()` to `src/utils/dtdlHelpers.ts`
+- [ ] Update imports in affected components
+- **Effort**: 2-4 hours
+- **Risk**: 🟢 Low
+
+#### Phase 6.2: Authentication Abstraction ⚠️ **CRITICAL**
+- [ ] Create `src/services/auth/` directory structure
+- [ ] Implement generic `AuthProvider` with context
+- [ ] Implement `Auth0Provider` (migrate existing)
+- [ ] Implement `MsalProvider` (new, for Azure ADT)
+- [ ] Implement `GenericOAuthProvider` (new, for self-hosted)
+- [ ] Create `TokenCredentialFactory`
+- [ ] Update `useDigitalTwinsClient` hook
+- [ ] Add provider selection in `main.tsx`
+- **Effort**: 1-2 days
+- **Risk**: 🟡 Medium
+- **Why Critical**: Blocks all real backend testing
+
+#### Phase 6.3: Replace QueryStore Mock Data
+- [ ] Implement real query execution via Azure SDK
+- [ ] Remove mock data routing logic
+- [ ] Add query validation and error handling
+- [ ] Update result transformation for real API responses
+- **Effort**: 4-6 hours
+- **Risk**: 🔴 High (core functionality)
+
+#### Phase 6.4: Replace ModelSidebar Mock Data
+- [ ] Update to fetch models from `modelsStore`
+- [ ] Fetch twin counts per model from API
+- [ ] Remove direct mock imports
+- [ ] Add loading/error states
+- **Effort**: 2-3 hours
+- **Risk**: 🟡 Medium
+
+#### Phase 6.5: Replace ModelInspector Mock Data
+- [ ] Update to use `modelsStore` instead of `mockModels`
+- [ ] Handle loading state
+- **Effort**: 1 hour
+- **Risk**: 🟢 Low
+
+#### Phase 6.6: End-to-End Testing with Real Backend
+- [ ] Set up test backend (AgeDigitalTwins API)
+- [ ] Configure Auth0 for dev environment
+- [ ] Load test data in PostgreSQL/AGE
+- [ ] Test all authentication flows
+- [ ] Test all CRUD operations
+- [ ] Test query execution
+- [ ] Test graph visualization
+- [ ] Performance testing
+- **Effort**: 1-2 days
+- **Risk**: 🟡 Medium
+
+---
+
+## ✅ **Completed Phases**
+
+### Phase 5: Component Consolidation & Enhancement (COMPLETED)
+
+#### ✅ Priority 1: Fix Graph View (COMPLETED)
 - ✅ Created data transformation layer to parse query results
 - ✅ Replaced mock data with actual query results in graph view
 - ✅ Added fallback handling for non-graph queries
@@ -122,7 +227,7 @@ See **QUERY_COMPONENTS_ANALYSIS.md** for complete analysis and implementation pl
 - **Files Modified**: `src/components/query/QueryResults.tsx`
 - **Documentation**: `PHASE_5_1_COMPLETE.md`
 
-### ✅ Priority 2: Merge Advanced Table Features (COMPLETED)
+#### ✅ Priority 2: Merge Advanced Table Features (COMPLETED)
 - ✅ Created data structure detector utility for smart view selection
 - ✅ Added four table view modes: Simple, Grouped, Flat, and Expandable
 - ✅ Integrated grouped columns with expandable column headers
@@ -131,7 +236,7 @@ See **QUERY_COMPONENTS_ANALYSIS.md** for complete analysis and implementation pl
 - ✅ Inspector integration works in all table view modes
 - ✅ Removed QueryResultsImproved.tsx after feature extraction
 - ✅ **Refactored QueryResults.tsx for maintainability (817 → 444 lines)**
-- ✅ **Consolidated duplicate helper functions** - removed tableViewHelpers.ts, all components now import from dataStructureDetector.ts
+- ✅ **Consolidated duplicate helper functions** - removed tableViewHelpers.ts
 - **Files Created**: 
   - `src/utils/dataStructureDetector.ts`
   - `src/components/query/table-views/SimpleTableView.tsx`
@@ -142,39 +247,98 @@ See **QUERY_COMPONENTS_ANALYSIS.md** for complete analysis and implementation pl
 - **Files Modified**: `src/components/query/QueryResults.tsx`
 - **Files Deleted**: 
   - `src/components/query/QueryResultsImproved.tsx`
-  - `src/components/query/table-views/tableViewHelpers.ts` (duplicate functions consolidated)
+  - `src/components/query/table-views/tableViewHelpers.ts`
 - **Documentation**: `PHASE_5_2_COMPLETE.md`, `PHASE_5_2_SUMMARY.md`, `TABLE_VIEW_MODES_GUIDE.md`
-- **Features**:
-  - **Simple Table**: Default view, shows nested data as JSON strings
-  - **Grouped Columns**: Expandable column groups for entities with nested properties
-  - **Flat Columns**: All entity properties flattened with entityKey.propertyName naming
-  - **Expandable Rows**: Master-detail view with expandable row sections
-  - Table view mode selector only appears when query results contain nested entities
-  - Smart default view mode based on data complexity analysis
-  - **Refactoring**: Table view components extracted for better maintainability and testability
 
-### Priority 3: Clean Up Duplicates (LOW PRIORITY)
-- Archive or remove QueryExplorerSimple.tsx
-- Remove QueryResultsImproved.tsx after feature extraction
-- Update documentation
-- **Impact**: Reduced code maintenance, clearer component structure
+### Phase 1-4: Foundation (COMPLETED)
+- ✅ Core UI/UX with resizable panels
+- ✅ Monaco editor with Cypher syntax
+- ✅ Sigma.js graph visualization
+- ✅ Inspector system
+- ✅ Query history
+- ✅ State management (Zustand)
+- ✅ Cookie consent popup (GTAG)
 
 ## 🛠 **Technical Stack**
 
-- **Frontend**: React + TypeScript + Vite
+### Core Framework
+- **Frontend**: React 18 + TypeScript + Vite
 - **UI Framework**: Tailwind CSS + Shadcn/UI
-- **State Management**: Zustand stores
+- **State Management**: Zustand (with persist and subscribeWithSelector middleware)
 - **Graph Visualization**: Sigma.js + Graphology
-- **Data Structure**: Azure Digital Twins compatible models
+- **Code Editor**: Monaco Editor (Cypher syntax)
 - **Panel Management**: react-resizable-panels
+
+### Authentication & API
+- **Current**: Auth0 React SDK (@auth0/auth0-react)
+- **API Client**: Azure Digital Twins SDK (@azure/digital-twins-core)
+- **Token Management**: Custom Auth0TokenCredential implementation
+- **Planned**: Multi-provider auth abstraction (Auth0, MSAL, Generic OAuth)
+
+### Data & Types
+- **Data Models**: DTDL-compatible (Azure Digital Twins format)
+- **Type System**: Strict TypeScript (noImplicitAny enabled)
+- **Validation**: DTDLParser integration (planned)
+
+### Testing
+- **Unit Tests**: Vitest + React Testing Library
+- **Coverage**: 100% for utilities (dataStructureDetector)
+- **E2E**: Planned with real backend
+
+### DevOps
+- **Build**: Vite with environment-based configuration
+- **Proxy**: Vite proxy for API calls in development
+- **Analytics**: Google Analytics (GTAG) with cookie consent
 
 ## 🔧 **Development Environment**
 
-- Server running on: `http://localhost:5173`
-- All TypeScript compilation issues resolved
-- Hot module reloading enabled
-- Real-time inspector integration functional
+- **Dev Server**: `http://localhost:5173`
+- **API Proxy**: `http://localhost:5000/api` → Backend
+- **Hot Reload**: ✅ Enabled
+- **TypeScript**: ✅ No compilation errors
+- **Linting**: ESLint with TypeScript rules
+
+### Environment Configuration
+```bash
+# Development (.env.development)
+VITE_API_BASE_URL=http://localhost:5000
+VITE_AUTH0_DOMAIN=auth.konnektr.io
+VITE_AUTH0_CLIENT_ID=xxx
+VITE_AUTH0_AUDIENCE=https://api.graph.konnektr.io
+
+# Production (.env.production)
+VITE_API_BASE_PATH=/api  # Same domain via Envoy Gateway
+VITE_AUTH0_DOMAIN=auth.konnektr.io
+# ... (same auth config)
+```
+
+## 📈 **Project Metrics**
+
+### Code Quality
+- **TypeScript Strictness**: ✅ No `any` types (enforced by copilot-instructions)
+- **Component Size**: Most components < 200 lines
+- **Store Architecture**: 6 Zustand stores, well-separated concerns
+- **Test Coverage**: 100% for utils, 0% for components (needs work)
+
+### Feature Completeness
+- **UI/UX**: 100% (all designed features implemented)
+- **Data Integration**: 30% (stores have API methods, but QueryStore uses mocks)
+- **Authentication**: 50% (Auth0 works, but no MSAL/OAuth support)
+- **Testing**: 40% (unit tests exist, no E2E)
 
 ---
 
-_The Konnektr Graph Explorer now provides a comprehensive digital twin management interface with advanced visualization and inspection capabilities._
+## 🎯 **Next Immediate Steps**
+
+1. **Review & Approve** [CODEBASE_REVIEW_2025-11-01.md](./CODEBASE_REVIEW_2025-11-01.md) architecture proposal
+2. **Begin Phase 6.1**: Extract helper functions (quick win, 2-4 hours)
+3. **Implement Phase 6.2**: Authentication abstraction (critical path, 1-2 days)
+4. **Set Up Test Backend**: AgeDigitalTwins API + Auth0 + test data
+5. **Execute Phase 6.3-6.5**: Replace remaining mock data (1 week)
+6. **Conduct Phase 6.6**: Comprehensive E2E testing (1-2 days)
+
+**Estimated Time to Production-Ready**: 2-3 weeks
+
+---
+
+_The Konnektr Graph Explorer provides a comprehensive digital twin management interface with advanced visualization and inspection capabilities. Currently ready for UI/UX testing, needs backend integration to be production-ready._

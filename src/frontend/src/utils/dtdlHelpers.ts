@@ -167,3 +167,32 @@ export const getPropertyMetadata = (
   }
   return null;
 };
+
+/**
+ * Get display name from model ID
+ * Extracts a human-readable name from DTDL model identifiers
+ * @param modelId - DTDL model identifier (e.g., "dtmi:example:Building;1")
+ * @returns Display name for the model
+ */
+export const getModelDisplayName = (modelId: string): string => {
+  const model = mockModels.find((m) => m.id === modelId);
+  if (model?.displayName) {
+    if (typeof model.displayName === "string") return model.displayName;
+    const displayNames = model.displayName as Record<string, string>;
+    return displayNames.en || Object.values(displayNames)[0] || modelId;
+  }
+  // Fallback: extract name from DTMI (e.g., "dtmi:example:Building;1" -> "Building")
+  return modelId.split(";")[0].split(":").pop() || modelId;
+};
+
+/**
+ * Format twin for display
+ * Currently a pass-through, but provides a hook for future transformations
+ * @param twin - BasicDigitalTwin to format
+ * @returns Formatted twin (currently unchanged)
+ */
+export const formatTwinForDisplay = (twin: BasicDigitalTwin): BasicDigitalTwin => {
+  // Return the twin as-is, maintaining the correct BasicDigitalTwin structure
+  // The displayName should be computed in the UI components when needed using getModelDisplayName
+  return twin;
+};

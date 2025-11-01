@@ -27,8 +27,8 @@ interface MockModel {
 import {
   mockModels as realModels,
   mockDigitalTwins,
-  getModelDisplayName,
 } from "@/mocks/digitalTwinData";
+import { getModelDisplayName } from "@/utils/dtdlHelpers";
 
 const mockModels: MockModel[] = realModels.map((model) => {
   let modelId = "";

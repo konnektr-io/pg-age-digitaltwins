@@ -158,8 +158,10 @@ export const useQueryStore = create<QueryState>()(
           await new Promise((resolve) => setTimeout(resolve, executionTime));
 
           // Import mock data dynamically to avoid circular dependencies
-          const { mockQueryResults, mockDigitalTwins, formatTwinForDisplay } =
-            await import("@/mocks/digitalTwinData");
+          const { mockQueryResults, mockDigitalTwins } = await import(
+            "@/mocks/digitalTwinData"
+          );
+          const { formatTwinForDisplay } = await import("@/utils/dtdlHelpers");
 
           // Simple query routing based on query content
           let results: any[] = [];

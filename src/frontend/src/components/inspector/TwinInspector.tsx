@@ -4,7 +4,7 @@ import { EditableProperty } from "./EditableProperty";
 import { MetadataTooltip } from "@/components/ui/metadata-tooltip";
 import { useDigitalTwinsStore } from "@/stores/digitalTwinsStore";
 import type { BasicDigitalTwin, DigitalTwinPropertyMetadata } from "@/types";
-import { getModelDisplayName } from "@/mocks/digitalTwinData";
+import { getModelDisplayName } from "@/utils/dtdlHelpers";
 
 interface TwinInspectorProps {
   twinId: string;
