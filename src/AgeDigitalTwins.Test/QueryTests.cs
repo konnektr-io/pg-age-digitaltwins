@@ -329,7 +329,7 @@ public class QueryTests : TestBase
             .QueryAsync<JsonDocument>(
                 @$"
             MATCH (t:Twin {{ `$dtId`: 'typecheckroom1' }})
-            RETURN t.$dtId AS id, {Client.GetGraphName()}.is_object(t.dimensions) AS isObj, {Client.GetGraphName()}.is_object(t.name) AS isObjStr, {Client.GetGraphName()}.is_object(t.temperature) AS isObjNum
+            RETURN t.`$dtId` AS id, {Client.GetGraphName()}.is_object(t.dimensions) AS isObj, {Client.GetGraphName()}.is_object(t.name) AS isObjStr, {Client.GetGraphName()}.is_object(t.temperature) AS isObjNum
         "
             )
             .FirstOrDefaultAsync();
@@ -351,7 +351,7 @@ public class QueryTests : TestBase
             .QueryAsync<JsonDocument>(
                 $@"
             MATCH (t:Twin {{ `$dtId`: 'typecheckroom1' }})
-            RETURN t.$dtId AS id, {Client.GetGraphName()}.is_primitive(t.dimensions) AS isPrimMap, {Client.GetGraphName()}.is_primitive(t.name) AS isPrimStr, {Client.GetGraphName()}.is_primitive(t.temperature) AS isPrimNum
+            RETURN t.`$dtId` AS id, {Client.GetGraphName()}.is_primitive(t.dimensions) AS isPrimMap, {Client.GetGraphName()}.is_primitive(t.name) AS isPrimStr, {Client.GetGraphName()}.is_primitive(t.temperature) AS isPrimNum
         "
             )
             .FirstOrDefaultAsync();
@@ -373,7 +373,7 @@ public class QueryTests : TestBase
             .QueryAsync<JsonDocument>(
                 @$"
             MATCH (t:Twin {{ `$dtId`: 'typecheckroom1' }})
-            RETURN t.$dtId AS id, {Client.GetGraphName()}.is_string(t.dimensions) AS isStrMap, {Client.GetGraphName()}.is_string(t.name) AS isStrStr, {Client.GetGraphName()}.is_string(t.temperature) AS isStrNum
+            RETURN t.`$dtId` AS id, {Client.GetGraphName()}.is_string(t.dimensions) AS isStrMap, {Client.GetGraphName()}.is_string(t.name) AS isStrStr, {Client.GetGraphName()}.is_string(t.temperature) AS isStrNum
         "
             )
             .FirstOrDefaultAsync();
@@ -409,7 +409,7 @@ public class QueryTests : TestBase
             .QueryAsync<JsonDocument>(
                 @$"
             MATCH (t:Twin {{ `$dtId`: 'typecheckroom1' }})
-            RETURN t.$dtId AS id, {Client.GetGraphName()}.is_object(t.dimensions) AS isObj, {Client.GetGraphName()}.is_object(t.name) AS isObjStr, {Client.GetGraphName()}.is_object(t.temperature) AS isObjNum
+            RETURN t.`$dtId` AS id, {Client.GetGraphName()}.is_object(t.dimensions) AS isObj, {Client.GetGraphName()}.is_object(t.name) AS isObjStr, {Client.GetGraphName()}.is_object(t.temperature) AS isObjNum
         "
             )
             .FirstOrDefaultAsync();
@@ -423,7 +423,7 @@ public class QueryTests : TestBase
             .QueryAsync<JsonDocument>(
                 $@"
             MATCH (t:Twin {{ `$dtId`: 'typecheckroom1' }})
-            RETURN t.$dtId AS id, {Client.GetGraphName()}.is_primitive(t.dimensions) AS isPrimMap, {Client.GetGraphName()}.is_primitive(t.name) AS isPrimStr, {Client.GetGraphName()}.is_primitive(t.temperature) AS isPrimNum
+            RETURN t.`$dtId` AS id, {Client.GetGraphName()}.is_primitive(t.dimensions) AS isPrimMap, {Client.GetGraphName()}.is_primitive(t.name) AS isPrimStr, {Client.GetGraphName()}.is_primitive(t.temperature) AS isPrimNum
         "
             )
             .FirstOrDefaultAsync();
@@ -437,7 +437,7 @@ public class QueryTests : TestBase
             .QueryAsync<JsonDocument>(
                 @$"
             MATCH (t:Twin {{ `$dtId`: 'typecheckroom1' }})
-            RETURN t.$dtId AS id, {Client.GetGraphName()}.is_string(t.dimensions) AS isStrMap, {Client.GetGraphName()}.is_string(t.name) AS isStrStr, {Client.GetGraphName()}.is_string(t.temperature) AS isStrNum
+            RETURN t.`$dtId` AS id, {Client.GetGraphName()}.is_string(t.dimensions) AS isStrMap, {Client.GetGraphName()}.is_string(t.name) AS isStrStr, {Client.GetGraphName()}.is_string(t.temperature) AS isStrNum
         "
             )
             .FirstOrDefaultAsync();
