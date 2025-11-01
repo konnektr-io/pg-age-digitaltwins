@@ -119,3 +119,13 @@ This repository is an open-source, drop-in replacement for Azure Digital Twins, 
 ---
 
 _Maintainers and contributors: Please read and follow these instructions to ensure the continued quality and reliability of AgeDigitalTwins / Konnektr Graph._
+### TypeScript Strictness
+- **Never use `any` (explicitly or implicitly) in TypeScript code.**
+  - Do not use `any` in type annotations, type assertions, or casts.
+  - Do not use `as any` or assign values to variables typed as `any`.
+  - Avoid all patterns that result in implicit `any` (e.g., missing type annotations, untyped function parameters, or untyped object destructuring).
+  - Use precise, safe types and always prefer explicit, correct typing.
+  - Define proper interfaces and types instead of relying on `Record<string, unknown>` or excessive type guards.
+  - If a type is genuinely unknown, use `unknown` sparingly and perform minimal type narrowing.
+  - Prefer strong typing at the source (interfaces, API responses) rather than defensive type guards everywhere.
+  - All code must pass with `noImplicitAny` enabled.
