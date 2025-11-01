@@ -1,19 +1,17 @@
 import { FileCode2, Layers, Tag, Info } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { mockModels } from "@/mocks/digitalTwinData";
-// TODO Phase 6.5: Refactor to use modelsStore instead of mockModels
+import { useModelsStore } from "@/stores/modelsStore";
 
 interface ModelInspectorProps {
   modelId: string;
 }
 
 export function ModelInspector({ modelId }: ModelInspectorProps) {
-  // TODO Phase 6.5: Replace with: const { models } = useModelsStore();
-  // Find the model in our mock data
-  const modelData = mockModels.find((model) => {
-    return model.model?.["@id"] === modelId;
-  });
+  const { models } = useModelsStore();
+
+  // Find the model by ID
+  const modelData = models.find((m) => m.id === modelId);
 
   if (!modelData) {
     return (

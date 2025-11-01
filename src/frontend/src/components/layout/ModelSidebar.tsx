@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Search,
   Plus,
@@ -12,49 +12,22 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { useInspectorStore } from "@/stores/inspectorStore";
+import { useModelsStore } from "@/stores/modelsStore";
+import { useDigitalTwinsStore } from "@/stores/digitalTwinsStore";
+import { getModelDisplayName } from "@/utils/dtdlHelpers";
 
-// Mock data for development - using real Digital Twin model structure
-interface MockModel {
+// Model display structure for tree view
+interface ModelTreeNode {
   id: string;
   name: string;
   displayName: string;
   count: number;
   expanded?: boolean;
-  children?: MockModel[];
+  children?: ModelTreeNode[];
 }
 
-// Import real model data
-import {
-  mockModels as realModels,
-  mockDigitalTwins,
-} from "@/mocks/digitalTwinData";
-import { getModelDisplayName } from "@/utils/dtdlHelpers";
-
-const mockModels: MockModel[] = realModels.map((model) => {
-  let modelId = "";
-  if (
-    typeof model.model === "object" &&
-    model.model !== null &&
-    "@id" in model.model
-  ) {
-    const idVal = (model.model as Record<string, unknown>)["@id"];
-    if (typeof idVal === "string") {
-      modelId = idVal;
-    }
-  }
-  return {
-    id: modelId,
-    name: modelId.split(":").pop()?.split(";")[0] || "Unknown",
-    displayName: getModelDisplayName(modelId),
-    count: mockDigitalTwins.filter((twin) => twin.$metadata.$model === modelId)
-      .length,
-    expanded: false,
-    children: [],
-  };
-});
-
 interface ModelTreeItemProps {
-  model: MockModel;
+  model: ModelTreeNode;
   level?: number;
   onSelect: (modelId: string) => void;
   selectedId?: string;
@@ -138,13 +111,42 @@ export function ModelSidebar() {
   const [searchQuery, setSearchQuery] = useState("");
   const { selectedItem, setSelectedItem } = useWorkspaceStore();
   const { selectItem } = useInspectorStore();
+  const { models, loadModels } = useModelsStore();
+  const { twins, loadTwins } = useDigitalTwinsStore();
+
+  // Load models and twins on mount
+  useEffect(() => {
+    loadModels();
+    loadTwins();
+  }, [loadModels, loadTwins]);
+
+  // Build model tree nodes from models with twin counts
+  const modelTreeNodes: ModelTreeNode[] = models.map((modelEntry) => {
+    const modelId = modelEntry.id;
+    const displayName = getModelDisplayName(modelId);
+    const name = modelId.split(":").pop()?.split(";")[0] || modelId;
+
+    // Count twins of this model type
+    const count = twins.filter(
+      (twin) => twin.$metadata?.$model === modelId
+    ).length;
+
+    return {
+      id: modelId,
+      name,
+      displayName,
+      count,
+      expanded: false,
+      children: [],
+    };
+  });
 
   const handleModelSelect = (modelId: string) => {
     setSelectedItem({ type: "model", id: modelId });
     selectItem({ type: "model", id: modelId });
   };
 
-  const filteredModels = mockModels.filter(
+  const filteredModels = modelTreeNodes.filter(
     (model) =>
       model.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       model.name.toLowerCase().includes(searchQuery.toLowerCase())
