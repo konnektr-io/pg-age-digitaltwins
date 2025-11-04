@@ -198,8 +198,16 @@ public class ResilientEventSinkWrapper : IEventSink
         return delay > TimeSpan.FromSeconds(60) ? TimeSpan.FromSeconds(60) : delay;
     }
 
-    public int GetQueuedEventCount()
+    public async Task<int> GetQueuedEventCountAsync()
     {
-        return _failedEventsQueue.Sum(item => item.Events.Count);
+        await _queueLock.WaitAsync();
+        try
+        {
+            return _failedEventsQueue.Sum(item => item.Events.Count);
+        }
+        finally
+        {
+            _queueLock.Release();
+        }
     }
 }
