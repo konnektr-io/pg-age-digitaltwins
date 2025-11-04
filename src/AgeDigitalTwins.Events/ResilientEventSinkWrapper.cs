@@ -87,7 +87,7 @@ public class ResilientEventSinkWrapper : IEventSink
                 );
 
                 // Queue for later retry
-                await QueueFailedEventsAsync(events);
+                await QueueFailedEventsAsync(events, cancellationToken);
             }
         }
     }
@@ -170,7 +170,10 @@ public class ResilientEventSinkWrapper : IEventSink
         }
     }
 
-    private async Task QueueFailedEventsAsync(List<CloudEvent> events, CancellationToken cancellationToken)
+    private async Task QueueFailedEventsAsync(
+        List<CloudEvent> events,
+        CancellationToken cancellationToken
+    )
     {
         await _queueLock.WaitAsync(cancellationToken);
         try
