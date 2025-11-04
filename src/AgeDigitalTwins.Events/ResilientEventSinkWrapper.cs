@@ -170,9 +170,9 @@ public class ResilientEventSinkWrapper : IEventSink
         }
     }
 
-    private async Task QueueFailedEventsAsync(List<CloudEvent> events)
+    private async Task QueueFailedEventsAsync(List<CloudEvent> events, CancellationToken cancellationToken)
     {
-        await _queueLock.WaitAsync();
+        await _queueLock.WaitAsync(cancellationToken);
         try
         {
             _failedEventsQueue.Enqueue((events, DateTime.UtcNow, 0));
