@@ -23,7 +23,8 @@ public class KustoEventSink : IEventSink, IDisposable
         _logger = logger;
 
         var kustoConnectionStringBuilder = new KustoConnectionStringBuilder(
-            _options.IngestionUri
+            _options.IngestionUri,
+            _options.Database
         ).WithAadAzureTokenCredentialsAuthentication(credential);
         _ingestClient = KustoIngestFactory.CreateQueuedIngestClient(kustoConnectionStringBuilder);
 

@@ -61,21 +61,21 @@ builder.Services.AddSingleton(sp =>
 });
 
 // Register EventSinkFactory as a singleton
-builder.Services.AddSingleton<EventSinkFactory>(sp =>
+builder.Services.AddSingleton(sp =>
 {
     ILoggerFactory loggerFactory = sp.GetRequiredService<ILoggerFactory>();
     return new EventSinkFactory(builder.Configuration, loggerFactory);
 });
 
 // Register event sinks as a singleton list
-builder.Services.AddSingleton<List<IEventSink>>(sp =>
+builder.Services.AddSingleton(sp =>
 {
     var eventSinkFactory = sp.GetRequiredService<EventSinkFactory>();
     return eventSinkFactory.CreateEventSinks();
 });
 
 // Register event routes as a singleton list
-builder.Services.AddSingleton<List<EventRoute>>(sp =>
+builder.Services.AddSingleton(sp =>
 {
     var eventSinkFactory = sp.GetRequiredService<EventSinkFactory>();
     return eventSinkFactory.GetEventRoutes();
