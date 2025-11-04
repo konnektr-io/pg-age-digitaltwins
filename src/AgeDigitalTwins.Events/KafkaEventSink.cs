@@ -18,6 +18,10 @@ public class KafkaEventSink : IEventSink, IDisposable
 
     private readonly TokenCredential? _credential;
 
+    private bool _isHealthy = true;
+    private string? _lastError;
+    private DateTime? _lastErrorTime;
+
     public KafkaEventSink(KafkaSinkOptions options, TokenCredential? credential, ILogger logger)
     {
         Name = options.Name;
@@ -66,7 +70,13 @@ public class KafkaEventSink : IEventSink, IDisposable
             config.SaslPassword = options.SaslPassword;
             _producer = new ProducerBuilder<string?, byte[]>(config)
                 .SetErrorHandler(
-                    (_, e) => logger.LogError("Kafka producer error: {Error}", e.Reason)
+                    (_, e) =>
+                    {
+                        logger.LogError("Kafka producer error: {Error}", e.Reason);
+                        _isHealthy = false;
+                        _lastError = e.Reason;
+                        _lastErrorTime = DateTime.UtcNow;
+                    }
                 )
                 .SetLogHandler(
                     (_, logMessage) =>
@@ -102,7 +112,13 @@ public class KafkaEventSink : IEventSink, IDisposable
             _producer = new ProducerBuilder<string?, byte[]>(config)
                 .SetOAuthBearerTokenRefreshHandler(TokenRefreshHandler)
                 .SetErrorHandler(
-                    (_, e) => logger.LogError("Kafka producer error: {Error}", e.Reason)
+                    (_, e) =>
+                    {
+                        logger.LogError("Kafka producer error: {Error}", e.Reason);
+                        _isHealthy = false;
+                        _lastError = e.Reason;
+                        _lastErrorTime = DateTime.UtcNow;
+                    }
                 )
                 .SetLogHandler(
                     (_, logMessage) =>
@@ -127,6 +143,11 @@ public class KafkaEventSink : IEventSink, IDisposable
     }
 
     public string Name { get; }
+
+    /// <summary>
+    /// Indicates whether the Kafka producer is healthy and able to send events.
+    /// </summary>
+    public bool IsHealthy => _isHealthy;
 
     public async Task SendEventsAsync(
         IEnumerable<CloudEvent> cloudEvents,
@@ -196,9 +217,14 @@ public class KafkaEventSink : IEventSink, IDisposable
                 eventsList.FirstOrDefault()?.Source?.ToString(),
                 Name
             );
+
+            _isHealthy = true; // Mark as healthy on successful send
         }
         catch (OperationCanceledException)
         {
+            _isHealthy = false;
+            _lastError = "Batch send operation timed out after 5 minutes";
+            _lastErrorTime = DateTime.UtcNow;
             _logger.LogError(
                 "Batch send operation timed out after 5 minutes for Kafka sink '{SinkName}'",
                 Name
@@ -226,6 +252,9 @@ public class KafkaEventSink : IEventSink, IDisposable
         }
         catch (Exception e)
         {
+            _isHealthy = false;
+            _lastError = e.Message;
+            _lastErrorTime = DateTime.UtcNow;
             _logger.LogError(
                 e,
                 "Unexpected error during batch send to Kafka sink '{SinkName}'",
@@ -238,6 +267,9 @@ public class KafkaEventSink : IEventSink, IDisposable
     {
         if (_credential == null)
         {
+            _isHealthy = false;
+            _lastError = "No credential provided";
+            _lastErrorTime = DateTime.UtcNow;
             producer.OAuthBearerSetTokenFailure("No credential provided");
             return;
         }
@@ -252,9 +284,13 @@ public class KafkaEventSink : IEventSink, IDisposable
                 token.ExpiresOn.ToUnixTimeMilliseconds(),
                 "AzureCredential"
             );
+            _isHealthy = true; // Mark as healthy on successful token refresh
         }
         catch (Exception e)
         {
+            _isHealthy = false;
+            _lastError = e.Message;
+            _lastErrorTime = DateTime.UtcNow;
             producer.OAuthBearerSetTokenFailure(e.Message);
         }
     }

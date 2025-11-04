@@ -15,6 +15,7 @@ public class KustoEventSink : IEventSink, IDisposable
     private readonly IKustoQueuedIngestClient _ingestClient;
     private readonly ILogger _logger;
     private readonly Dictionary<string, KustoQueuedIngestionProperties> _ingestionProperties;
+    private bool _isHealthy = true;
 
     public KustoEventSink(KustoSinkOptions options, TokenCredential credential, ILogger logger)
     {
@@ -169,6 +170,11 @@ public class KustoEventSink : IEventSink, IDisposable
 
     public string Name => _options.Name;
 
+    /// <summary>
+    /// Indicates whether the Kusto ingest client is healthy and able to send events.
+    /// </summary>
+    public bool IsHealthy => _isHealthy;
+
     public async Task SendEventsAsync(
         IEnumerable<CloudNative.CloudEvents.CloudEvent> cloudEvents,
         CancellationToken cancellationToken = default
@@ -231,6 +237,7 @@ public class KustoEventSink : IEventSink, IDisposable
                     {
                         if (status.Status != Status.Pending && status.Status != Status.Succeeded)
                         {
+                            _isHealthy = false;
                             _logger.LogError(
                                 "Ingestion to Kusto sink '{SinkName}' failed: {Status}",
                                 Name,
@@ -239,6 +246,7 @@ public class KustoEventSink : IEventSink, IDisposable
                         }
                         else
                         {
+                            _isHealthy = true;
                             _logger.LogDebug(
                                 "Ingestion to Kusto sink '{SinkName}' succeeded: {Status}",
                                 Name,
@@ -256,6 +264,7 @@ public class KustoEventSink : IEventSink, IDisposable
             }
             catch (Exception ex)
             {
+                _isHealthy = false;
                 _logger.LogError(
                     ex,
                     "Ingestion failed for sink {SinkName}: {Reason}",
