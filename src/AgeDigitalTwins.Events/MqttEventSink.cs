@@ -12,6 +12,7 @@ public class MqttEventSink : IEventSink, IDisposable
     private readonly ILogger _logger;
     private readonly string _topic;
     private readonly CloudEventFormatter _formatter = new JsonEventFormatter();
+    private bool _isHealthy = true;
 
     public MqttEventSink(MqttSinkOptions options, ILogger logger)
     {
@@ -35,6 +36,11 @@ public class MqttEventSink : IEventSink, IDisposable
 
     public string Name { get; }
 
+    /// <summary>
+    /// Indicates whether the MQTT client is healthy and able to send events.
+    /// </summary>
+    public bool IsHealthy => _isHealthy && _mqttClient.IsConnected;
+
     public async Task SendEventsAsync(
         IEnumerable<CloudEvent> cloudEvents,
         CancellationToken cancellationToken = default
@@ -42,8 +48,19 @@ public class MqttEventSink : IEventSink, IDisposable
     {
         if (_mqttClient.IsConnected == false)
         {
-            await _mqttClient.ReconnectAsync(cancellationToken: cancellationToken);
+            try
+            {
+                await _mqttClient.ReconnectAsync(cancellationToken: cancellationToken);
+                _isHealthy = true;
+            }
+            catch (Exception e)
+            {
+                _isHealthy = false;
+                _logger.LogError(e, "Failed to reconnect MQTT client for {SinkName}", Name);
+                throw;
+            }
         }
+
         foreach (var cloudEvent in cloudEvents)
         {
             try
@@ -55,6 +72,7 @@ public class MqttEventSink : IEventSink, IDisposable
                 );
 
                 await _mqttClient.PublishAsync(message, cancellationToken);
+                _isHealthy = true;
                 _logger.LogInformation(
                     "Published message {MessageId} of type {EventType} with source {EventSource} to sink '{SinkName}' on topic '{Topic}'",
                     cloudEvent.Id,
@@ -66,6 +84,7 @@ public class MqttEventSink : IEventSink, IDisposable
             }
             catch (Exception e)
             {
+                _isHealthy = false;
                 _logger.LogError(e, "Publishing failed for {SinkName}: {Reason}", Name, e.Message);
             }
         }

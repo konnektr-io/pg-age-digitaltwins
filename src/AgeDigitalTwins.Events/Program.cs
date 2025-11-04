@@ -60,6 +60,27 @@ builder.Services.AddSingleton(sp =>
     return new SharedEventConsumer(eventQueue, logger, sourceUri);
 });
 
+// Register EventSinkFactory as a singleton
+builder.Services.AddSingleton(sp =>
+{
+    ILoggerFactory loggerFactory = sp.GetRequiredService<ILoggerFactory>();
+    return new EventSinkFactory(builder.Configuration, loggerFactory);
+});
+
+// Register event sinks as a singleton list
+builder.Services.AddSingleton(sp =>
+{
+    var eventSinkFactory = sp.GetRequiredService<EventSinkFactory>();
+    return eventSinkFactory.CreateEventSinks();
+});
+
+// Register event routes as a singleton list
+builder.Services.AddSingleton(sp =>
+{
+    var eventSinkFactory = sp.GetRequiredService<EventSinkFactory>();
+    return eventSinkFactory.GetEventRoutes();
+});
+
 // Register Subscription as a singleton
 builder.Services.AddSingleton(sp =>
 {
@@ -95,9 +116,6 @@ builder.Services.AddSingleton(sp =>
     ILogger<AgeDigitalTwinsReplication> subscriptionLogger = sp.GetRequiredService<
         ILogger<AgeDigitalTwinsReplication>
     >();
-    ILoggerFactory loggerFactory = sp.GetRequiredService<ILoggerFactory>();
-
-    EventSinkFactory eventSinkFactory = new(builder.Configuration, loggerFactory);
 
     // Get the shared event queue from DI
     var eventQueue = sp.GetRequiredService<IEventQueue>();
@@ -112,8 +130,11 @@ builder.Services.AddSingleton(sp =>
     );
 });
 
-// Add replication health check
-builder.Services.AddHealthChecks().AddCheck<ReplicationHealthCheck>("replication", tags: ["live"]);
+// Add health checks
+builder
+    .Services.AddHealthChecks()
+    .AddCheck<ReplicationHealthCheck>("replication", tags: ["live"])
+    .AddCheck<EventSinksHealthCheck>("event_sinks", tags: ["live"]);
 
 builder.Services.AddRequestTimeouts();
 builder.Services.AddOutputCache();
@@ -124,6 +145,8 @@ var app = builder.Build();
 var subscription = app.Services.GetRequiredService<AgeDigitalTwinsReplication>();
 var telemetryListener = app.Services.GetRequiredService<TelemetryListener>();
 var sharedEventConsumer = app.Services.GetRequiredService<SharedEventConsumer>();
+var eventSinks = app.Services.GetRequiredService<List<IEventSink>>();
+var eventRoutes = app.Services.GetRequiredService<List<EventRoute>>();
 var logger = app.Services.GetRequiredService<ILogger<Program>>();
 
 var cts = new CancellationTokenSource();
@@ -138,13 +161,7 @@ app.Lifetime.ApplicationStarted.Register(async () =>
         var replicationTask = subscription.RunAsync(cts.Token);
         var telemetryTask = telemetryListener.RunAsync(cts.Token);
 
-        // Start shared event consumer with event sinks and routes
-        var eventSinkFactory = new EventSinkFactory(
-            builder.Configuration,
-            app.Services.GetRequiredService<ILoggerFactory>()
-        );
-        var eventSinks = eventSinkFactory.CreateEventSinks();
-        var eventRoutes = eventSinkFactory.GetEventRoutes();
+        // Start shared event consumer with event sinks and routes from DI
         var consumerTask = sharedEventConsumer.ConsumeEventsAsync(
             eventSinks,
             eventRoutes,

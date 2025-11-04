@@ -33,6 +33,8 @@ public class TestingEventSink : IEventSink
         return Task.CompletedTask;
     }
 
+    public bool IsHealthy => true;
+
     /// <summary>
     /// Gets all captured events as an array.
     /// </summary>
