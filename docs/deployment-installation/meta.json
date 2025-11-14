@@ -4,6 +4,7 @@
     "description": "Deploy Konnektr Graph in various environments",
     "pages": [
         "hosted-konnektr",
+        "comparison",
         "self-host",
         "performance"
     ]

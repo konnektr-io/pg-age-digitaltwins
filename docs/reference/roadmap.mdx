@@ -1,0 +1,154 @@
+---
+title: Roadmap
+icon: Map
+description: Current development status and planned features for Konnektr Graph
+---
+
+This page tracks the current implementation status and planned features for Konnektr Graph. We're actively developing and welcome community feedback on priorities.
+
+## 🎯 SDK Features
+
+### Digital Twins Operations
+- [x] Digital Twins CRUD operations
+- [x] Models CRUD operations
+- [x] Relationships CRUD operations
+- [x] Components management
+- [x] Telemetry publishing
+- [ ] Commands (planned)
+
+### Validation & Data Quality
+- [x] Model Validation with DTDLParser
+- [x] Twin Validation with DTDLParser
+- [x] Update Validation with DTDLParser
+- [ ] Relationship Validation with DTDLParser (in progress)
+
+### Query Engine
+- [x] ADT Query Conversion (to Cypher)
+  - [x] WHERE clauses
+  - [x] MATCH patterns
+  - [x] JOIN operations
+  - [x] IS_OF_MODEL filtering
+  - [x] String functions
+  - [x] Type check functions
+
+### Core Infrastructure
+- [x] Error handling and exception management
+- [x] ETags for optimistic concurrency
+- [x] Pagination support
+- [x] Import Jobs (bulk operations)
+- [x] Delete Jobs (bulk operations)
+- [x] Diagnostics, Tracing and Prometheus metrics
+
+---
+
+## 🌐 API Features
+
+### REST API Endpoints
+- [x] Digital Twins CRUD operations
+- [x] Models CRUD operations
+- [x] Relationships CRUD operations
+- [x] Components CRUD operations
+- [x] Telemetry publishing
+- [x] Import Jobs
+- [x] Delete Jobs
+
+### Security & Performance
+- [x] Authentication (JWT-based)
+- [ ] Authorization (role-based access control) (planned)
+- [x] OpenTelemetry support
+- [x] Rate Limiting
+- [x] Error Handling
+
+---
+
+## 🤖 Model Context Protocol (MCP) Server
+
+Enable LLMs to interact with your digital twin graph:
+
+- [x] Models CRUD operations
+- [x] Digital Twins CRUD operations
+- [x] Relationships CRUD operations
+- [x] Authentication
+
+---
+
+## 🚀 Deployment & Operations
+
+### Infrastructure
+- [x] Dockerize the API
+- [x] Helm chart for Kubernetes deployment
+- [x] PostgreSQL with Apache AGE integration
+- [x] Hosted platform (Konnektr Graph)
+
+### Monitoring & Observability
+- [x] OpenTelemetry integration
+- [x] Prometheus metrics
+- [x] Structured logging
+- [x] Health checks and readiness probes
+
+---
+
+## 📡 Event Routing
+
+### Event Capture
+- [x] Logical replication connection with AgType parser
+- [x] Data History output (Azure Digital Twins format)
+- [x] Event Notification output
+- [x] Event Type Mappings
+- [x] CloudEvents format support
+
+### Event Sinks
+- [x] Kafka sink (including Azure Event Hubs)
+- [x] Kusto sink (Azure Data Explorer / Fabric Real-Time)
+- [x] MQTT sink
+- [ ] Postgres sink (planned)
+- [ ] Custom webhook sink (planned)
+
+### Event Processing
+- [ ] Event filtering by twin type (in progress)
+- [ ] Event filtering by property changes (planned)
+- [ ] Event transformation and enrichment (planned)
+- [ ] Dead letter queue handling (planned)
+
+---
+
+## 📥 Data Ingestion
+
+Planned features for ingesting data into digital twins:
+
+- [ ] MQTT Ingestion (planned)
+- [ ] Kafka Ingestion (planned)
+- [ ] Ingestion Mapping configuration (planned)
+- [ ] CSV/JSON bulk import (planned)
+
+---
+
+## 🔮 Future Enhancements
+
+### Developer Experience
+- [ ] Enhanced MCP capabilities for AI agents
+- [ ] Visual graph explorer UI
+
+### Integration & Ecosystem
+- [ ] More event sink types
+- [ ] Pre-built DTDL model libraries
+
+---
+
+## 📝 Contributing to the Roadmap
+
+We welcome community input on our roadmap! If you have feature requests or want to contribute:
+
+1. **[Open a GitHub Issue](https://github.com/konnektr-io/pg-age-digitaltwins/issues)** - Propose new features
+2. **[Join Discussions](https://github.com/konnektr-io/pg-age-digitaltwins/discussions)** - Vote on priorities
+3. **[Submit a PR](https://github.com/konnektr-io/pg-age-digitaltwins/pulls)** - Implement features yourself
+
+---
+
+## 📅 Release Notes
+
+Major milestones and releases are documented in our [GitHub Releases](https://github.com/konnektr-io/pg-age-digitaltwins/releases).
+
+---
+
+*Last updated: November 2025*
