@@ -106,7 +106,50 @@ builder.Services.Configure<AgeDigitalTwins.ApiService.Configuration.Authorizatio
     builder.Configuration.GetSection("Authorization")
 );
 
-// Add permission service
+// Register the appropriate permission provider based on configuration
+var authorizationConfig = builder
+    .Configuration.GetSection("Authorization")
+    .Get<AgeDigitalTwins.ApiService.Configuration.AuthorizationOptions>();
+
+if (authorizationConfig?.Provider?.Equals("Api", StringComparison.OrdinalIgnoreCase) == true)
+{
+    // Register API permission provider
+    builder.Services.AddMemoryCache(); // Required for caching
+
+    // Configure HttpClient for permissions API
+    builder.Services.AddHttpClient(
+        "PermissionsApi",
+        client =>
+        {
+            if (!string.IsNullOrEmpty(authorizationConfig.ApiProvider?.BaseUrl))
+            {
+                client.BaseAddress = new Uri(authorizationConfig.ApiProvider.BaseUrl);
+            }
+
+            client.Timeout = TimeSpan.FromSeconds(
+                authorizationConfig.ApiProvider?.TimeoutSeconds ?? 10
+            );
+
+            // Add authorization header if configured
+            if (!string.IsNullOrEmpty(authorizationConfig.ApiProvider?.Authorization))
+            {
+                client.DefaultRequestHeaders.Add(
+                    "Authorization",
+                    authorizationConfig.ApiProvider.Authorization
+                );
+            }
+        }
+    );
+
+    builder.Services.AddScoped<IPermissionProvider, ApiPermissionProvider>();
+}
+else
+{
+    // Default to claims-based provider
+    builder.Services.AddScoped<IPermissionProvider, ClaimsPermissionProvider>();
+}
+
+// Add permission service (uses the registered provider)
 builder.Services.AddScoped<IPermissionService, PermissionService>();
 
 // Add authentication only if the environment variable is set
