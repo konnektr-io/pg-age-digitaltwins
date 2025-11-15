@@ -1,4 +1,6 @@
 using System.Text.Json;
+using AgeDigitalTwins.ApiService.Authorization;
+using AgeDigitalTwins.ApiService.Authorization.Models;
 using AgeDigitalTwins.ApiService.Helpers;
 using Json.Patch;
 using Microsoft.AspNetCore.Mvc;
@@ -9,10 +11,9 @@ public static class ComponentsEndpoints
 {
     public static WebApplication MapComponentsEndpoints(this WebApplication app)
     {
-        // Group for Components endpoints with single component rate limiting
+        // Group for Components endpoints
         var componentsGroup = app.MapGroup("/digitaltwins/{twinId}/components")
-            .WithTags("Components")
-            .RequireAuthorization();
+            .WithTags("Components");
 
         // GET Component - Light read operation
         componentsGroup
@@ -32,6 +33,7 @@ public static class ComponentsEndpoints
                     );
                 }
             )
+            .RequirePermission(ResourceType.DigitalTwins, PermissionAction.Read)
             .RequireRateLimiting("LightOperations")
             .WithName("GetComponent")
             .WithSummary("Retrieves a component from a digital twin by its name.");
@@ -60,6 +62,7 @@ public static class ComponentsEndpoints
                     return Results.NoContent();
                 }
             )
+            .RequirePermission(ResourceType.DigitalTwins, PermissionAction.Write)
             .RequireRateLimiting("HeavyOperations")
             .WithName("UpdateComponent")
             .WithSummary("Updates a component on a digital twin using a JSON patch.");

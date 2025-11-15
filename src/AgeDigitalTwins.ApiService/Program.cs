@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using AgeDigitalTwins;
 using AgeDigitalTwins.ApiService;
+using AgeDigitalTwins.ApiService.Authorization;
 using AgeDigitalTwins.ApiService.Configuration;
 using AgeDigitalTwins.ApiService.Extensions;
 using AgeDigitalTwins.ApiService.Middleware;
@@ -100,6 +101,14 @@ else
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
+// Configure authorization options
+builder.Services.Configure<AgeDigitalTwins.ApiService.Configuration.AuthorizationOptions>(
+    builder.Configuration.GetSection("Authorization")
+);
+
+// Add permission service
+builder.Services.AddScoped<IPermissionService, PermissionService>();
+
 // Add authentication only if the environment variable is set
 var enableAuthentication = builder.Configuration.GetValue<bool>("Authentication:Enabled");
 
@@ -130,6 +139,12 @@ if (enableAuthentication)
     builder
         .Services.AddAuthorizationBuilder()
         .SetDefaultPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
+
+    // Add permission-based authorization policies
+    builder.Services.AddAuthorization(options => options.AddPermissionPolicies());
+
+    // Register authorization handler
+    builder.Services.AddSingleton<IAuthorizationHandler, PermissionAuthorizationHandler>();
 }
 else
 {
