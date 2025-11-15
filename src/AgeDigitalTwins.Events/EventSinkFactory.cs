@@ -10,6 +10,7 @@ public class EventSinkFactory(IConfiguration configuration, ILoggerFactory logge
     public virtual List<IEventSink> CreateEventSinks()
     {
         var sinks = new List<IEventSink>();
+        var wrapperLogger = _loggerFactory.CreateLogger<ResilientEventSinkWrapper>();
 
         var kafkaSinks = _configuration
             .GetSection("EventSinks:Kafka")
@@ -21,7 +22,9 @@ public class EventSinkFactory(IConfiguration configuration, ILoggerFactory logge
             {
                 try
                 {
-                    sinks.Add(new KafkaEventSink(kafkaSink, new DefaultAzureCredential(), logger));
+                    var sink = new KafkaEventSink(kafkaSink, new DefaultAzureCredential(), logger);
+                    // Wrap with resilient wrapper for retry logic
+                    sinks.Add(new ResilientEventSinkWrapper(sink, wrapperLogger));
                 }
                 catch (ArgumentException ex)
                 {
@@ -41,7 +44,9 @@ public class EventSinkFactory(IConfiguration configuration, ILoggerFactory logge
             {
                 try
                 {
-                    sinks.Add(new MqttEventSink(mqttSink, logger));
+                    var sink = new MqttEventSink(mqttSink, logger);
+                    // Wrap with resilient wrapper for retry logic
+                    sinks.Add(new ResilientEventSinkWrapper(sink, wrapperLogger));
                 }
                 catch (ArgumentException ex)
                 {
@@ -63,7 +68,9 @@ public class EventSinkFactory(IConfiguration configuration, ILoggerFactory logge
             {
                 try
                 {
-                    sinks.Add(new KustoEventSink(kustoSink, new DefaultAzureCredential(), logger));
+                    var sink = new KustoEventSink(kustoSink, new DefaultAzureCredential(), logger);
+                    // Wrap with resilient wrapper for retry logic
+                    sinks.Add(new ResilientEventSinkWrapper(sink, wrapperLogger));
                 }
                 catch (ArgumentException ex)
                 {

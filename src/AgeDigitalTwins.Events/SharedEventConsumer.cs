@@ -197,7 +197,7 @@ public class SharedEventConsumer
             }
         }
 
-        // Send batched events to each sink
+        // Send batched events to each sink (in parallel, with individual error handling)
         var sinkTasks = sinkEventGroups.Select(async kvp =>
         {
             var sink = kvp.Key;
@@ -216,20 +216,37 @@ public class SharedEventConsumer
                     events.Count,
                     sink.Name
                 );
+                return (Sink: sink.Name, Success: true, Error: (Exception?)null);
             }
             catch (Exception ex)
             {
                 _logger.LogError(
                     ex,
-                    "Failed to send {EventCount} events to sink {SinkName}",
+                    "Failed to send {EventCount} events to sink {SinkName}. Other sinks will continue processing.",
                     events.Count,
                     sink.Name
                 );
-                throw;
+                // Don't throw - allow other sinks to continue processing
+                return (Sink: sink.Name, Success: false, Error: ex);
             }
         });
 
-        await Task.WhenAll(sinkTasks);
+        var results = await Task.WhenAll(sinkTasks);
+
+        // Log summary of sink results
+        var successCount = results.Count(r => r.Success);
+        var failureCount = results.Count(r => !r.Success);
+
+        if (failureCount > 0)
+        {
+            var failedSinks = string.Join(", ", results.Where(r => !r.Success).Select(r => r.Sink));
+            _logger.LogWarning(
+                "Batch processing completed with {SuccessCount} successful and {FailureCount} failed sinks. Failed: {FailedSinks}",
+                successCount,
+                failureCount,
+                failedSinks
+            );
+        }
     }
 
     /// <summary>

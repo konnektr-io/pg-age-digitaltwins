@@ -1,0 +1,245 @@
+---
+title: Hosted vs Self-Hosted Comparison
+icon: Scale
+description: Choose the right deployment option for your digital twin solution - fully managed hosted platform or self-hosted deployment
+---
+
+Konnektr Graph offers two deployment options to fit different needs. This guide will help you choose the right one for your use case.
+
+## Quick Recommendation
+
+<Note>
+**Most users should choose the Hosted Platform** - it's faster to deploy, fully managed, and includes enterprise features out of the box. Self-hosting is recommended only for advanced users with specific requirements.
+</Note>
+
+---
+
+## Feature Comparison
+
+| Feature | Hosted Platform | Self-Hosted |
+|---------|----------------|-------------|
+| **Setup Time** | 5 minutes | 1-2 hours |
+| **Infrastructure Management** | Zero - fully managed | You manage everything |
+| **Automatic Updates** | ✅ Always latest version | ❌ Manual updates required |
+| **Scaling** | ✅ Automatic horizontal scaling | ⚠️ Manual configuration |
+| **High Availability** | ✅ Built-in (multi-zone) | ⚠️ You must configure |
+| **Monitoring & Alerting** | ✅ Included | ⚠️ You must set up |
+| **Backup & Recovery** | ✅ Automated daily backups | ⚠️ You must configure |
+| **Security Updates** | ✅ Automatic | ❌ Manual patching |
+| **Technical Support** | ✅ Included | ⚠️ Community-based |
+
+---
+
+## API & SDK Compatibility
+
+| SDK/API | Hosted Platform | Self-Hosted |
+|---------|----------------|-------------|
+| **Azure Digital Twins SDK** (.NET, Python, JS) | ✅ Fully supported | ✅ Fully supported* |
+| **Native AgeDigitalTwins SDK** | ❌ Not available | ✅ Direct database access |
+| **REST API Compatibility** | ✅ 100% ADT-compatible | ✅ 100% ADT-compatible |
+| **MCP Protocol** | ✅ Available | ✅ Available |
+
+*Requires custom authentication configuration
+
+---
+
+## Authentication & Security
+
+### Hosted Platform
+- **Auth0 Integration** - Managed authentication service
+- **JWT Token Validation** - Industry-standard security
+- **Role-Based Access Control** - Organization and project-level permissions
+- **HTTPS/TLS** - Automatic certificate management
+- **SOC 2 Compliance** - Enterprise security standards (coming soon)
+
+### Self-Hosted
+- **Bring Your Own Identity Provider** - Integrate with any OIDC/OAuth2 provider
+- **Custom Authentication Logic** - Full control over auth flow
+- **Network Policies** - Configure Kubernetes network policies
+- **Certificate Management** - Manual cert-manager setup
+- **Compliance** - You maintain compliance requirements
+
+---
+
+## Event Streaming & Integration
+
+### Hosted Platform
+- **Pre-configured Event Sinks** - Kafka, Kusto, MQTT ready to use
+- **Managed Connectivity** - No firewall or network config needed
+- **Event History** - Built-in event retention
+- **CloudEvents Standard** - All events follow spec
+
+### Self-Hosted
+- **Custom Event Sinks** - Configure any sink you need
+- **Network Configuration** - Full control over event routing
+- **Data Sovereignty** - Events stay in your network
+- **Custom Transformations** - Modify event pipeline
+
+---
+
+## Cost Considerations
+
+### Hosted Platform
+
+**Pricing Model:**
+- Pay-as-you-go based on usage
+- No infrastructure costs
+- Includes monitoring, backups, and support
+- Free tier available for development
+
+**Hidden Savings:**
+- No DevOps team time
+- No infrastructure maintenance
+- No upgrade planning
+- Automatic optimization
+
+**[View Pricing →](https://ktrlplane.konnektr.io/pricing)**
+
+### Self-Hosted
+
+**Infrastructure Costs:**
+- Kubernetes cluster (cloud or on-prem)
+- PostgreSQL with Apache AGE
+- Load balancers and ingress
+- Storage for backups
+- Monitoring tools (Prometheus, Grafana)
+
+**Operational Costs:**
+- DevOps engineer time
+- Database administration
+- Security patching
+- Backup management
+- Capacity planning
+
+---
+
+## When to Choose Hosted Platform
+
+Choose the hosted platform if you:
+
+✅ Want to focus on building digital twin solutions, not infrastructure  
+✅ Need to get started quickly (hours, not weeks)  
+✅ Don't have dedicated DevOps resources  
+✅ Want automatic scaling and high availability  
+✅ Prefer predictable operational costs  
+✅ Need enterprise-grade security and compliance  
+✅ Want to use Azure Digital Twins SDKs (easiest path)  
+
+**Example Use Cases:**
+- Smart building management solutions
+- IoT device fleet management
+- Industrial monitoring applications
+- Proof-of-concept and MVP projects
+- Startups and small teams
+
+---
+
+## When to Choose Self-Hosted
+
+Choose self-hosting if you:
+
+✅ Need direct database access for custom queries  
+✅ Have specific compliance requirements (data residency, air-gapped)  
+✅ Want to use the native AgeDigitalTwins SDK  
+✅ Already have Kubernetes infrastructure and expertise  
+✅ Need to integrate with custom authentication systems  
+✅ Require custom PostgreSQL extensions or configurations  
+✅ Have dedicated DevOps and database teams  
+
+**Example Use Cases:**
+- Highly regulated industries (healthcare, finance)
+- Air-gapped or offline environments
+- Custom graph algorithms and analytics
+- Large enterprises with existing Kubernetes platforms
+- Research projects requiring low-level access
+
+---
+
+## Migration Path
+
+### Hosted to Self-Hosted
+
+If you start with the hosted platform and later need to self-host:
+
+1. **Export your DTDL models** via the API
+2. **Export digital twin data** using bulk export
+3. **Deploy self-hosted infrastructure** using our Helm charts
+4. **Import models and data** into your self-hosted instance
+5. **Update application endpoints** to point to your instance
+
+### Self-Hosted to Hosted
+
+If you start self-hosted and want to move to hosted:
+
+1. **Sign up for Konnektr Platform** at ktrlplane.konnektr.io
+2. **Create a new Graph resource**
+3. **Export data from self-hosted** using bulk export
+4. **Import into hosted instance** via API or UI
+5. **Update authentication** to use Auth0 credentials
+6. **Switch application endpoints** to hosted URLs
+
+---
+
+## Getting Started
+
+### Start with Hosted (Recommended)
+
+1. Visit [ktrlplane.konnektr.io](https://ktrlplane.konnektr.io)
+2. Create your account (free)
+3. Create a new Graph resource
+4. Follow the [Quickstart Guide](../getting-started/quickstart)
+
+### Start with Self-Hosted
+
+1. Review the [Self-Host Deployment Guide](./self-host)
+2. Prepare your Kubernetes cluster
+3. Install via Helm chart
+4. Configure authentication and networking
+5. Follow the [SDK Reference](../reference/sdk)
+
+---
+
+## Support Options
+
+### Hosted Platform
+- **Email Support** - Direct access to engineering team
+- **Documentation** - Comprehensive guides and tutorials
+- **Community** - GitHub Discussions and Slack
+- **SLA** - Uptime guarantees (Enterprise tier)
+
+### Self-Hosted
+- **Community Support** - GitHub Issues and Discussions
+- **Documentation** - Self-hosting guides and troubleshooting
+- **Commercial Support** - Available for enterprise customers
+- **Professional Services** - Custom deployment assistance
+
+---
+
+## Frequently Asked Questions
+
+### Can I switch between hosted and self-hosted later?
+Yes! Both options use the same underlying technology and APIs, making migration straightforward. See the Migration Path section above.
+
+### Do both options support the same features?
+Yes, both have feature parity. The main difference is who manages the infrastructure and which SDKs you can use.
+
+### Is the self-hosted version truly open source?
+Yes! The entire codebase is Apache 2.0 licensed. You have full access to the source code and can modify it as needed.
+
+### What about vendor lock-in?
+Since we're built on standard PostgreSQL and Apache AGE, and support Azure Digital Twins APIs, you have multiple exit strategies and aren't locked into proprietary formats.
+
+### Can I use Azure Digital Twins SDKs with self-hosted?
+Yes, but you'll need to implement a custom credential provider for authentication. The hosted platform provides this out of the box.
+
+---
+
+## Still Not Sure?
+
+<Note>
+Start with the hosted platform - it's free to try and you can always migrate to self-hosted later if your requirements change.
+</Note>
+
+**[Get Started with Hosted →](https://ktrlplane.konnektr.io)**
+
+**Questions?** [Open a GitHub Discussion](https://github.com/konnektr-io/pg-age-digitaltwins/discussions)
