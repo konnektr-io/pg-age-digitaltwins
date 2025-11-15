@@ -323,6 +323,16 @@ public static partial class AdtQueryHelpers
                 );
         }
 
+        // Process ARRAY_CONTAINS function
+        whereClause = ArrayContainsFunctionRegex()
+            .Replace(
+                whereClause,
+                m =>
+                {
+                    return $"{m.Groups[2].Value} IN {m.Groups[1].Value}";
+                }
+            );
+
         // Process string function STARTSWITH
         whereClause = StartsWithFunctionRegex()
             .Replace(
@@ -364,7 +374,7 @@ public static partial class AdtQueryHelpers
             );
 
         // Process IS_DEFINED function
-        whereClause = IsDefinedRegex()
+        whereClause = IsDefinedFunctionRegex()
             .Replace(
                 whereClause,
                 m =>
@@ -373,18 +383,32 @@ public static partial class AdtQueryHelpers
                 }
             );
 
-        // Process IS_NUMBER function
-        whereClause = IsNumberRegex()
+        // Process IS_BOOL function
+        whereClause = IsBoolFunctionRegex()
             .Replace(
                 whereClause,
                 m =>
                 {
                     var property = m.Groups[1].Value;
-                    return $"((toFloat({property}) IS NOT NULL OR toInteger({property}) IS NOT NULL) AND NOT (toString({property}) = {property}))";
+                    return $"({property} = true OR {property} = false)";
                 }
             );
 
-        // TODO: Other type checks
+        // Process IS_NUMBER function
+        whereClause = IsNumberFunctionRegex()
+            .Replace(whereClause, m => $"{graphName}.is_number({m.Groups[1].Value})");
+
+        // Process IS_OBJECT function
+        whereClause = IsObjectFunctionRegex()
+            .Replace(whereClause, m => $"{graphName}.is_object({m.Groups[1].Value})");
+
+        // Process IS_PRIMITIVE function
+        whereClause = IsPrimitiveFunctionRegex()
+            .Replace(whereClause, m => $"{graphName}.is_primitive({m.Groups[1].Value})");
+
+        // Process IS_STRING function
+        whereClause = IsStringFunctionRegex()
+            .Replace(whereClause, m => $"{graphName}.is_string({m.Groups[1].Value})");
 
         // Replace property access with $ character
         whereClause = DollarSignPropertyRegex().Replace(whereClause, m => $"['{m.Value[1..]}']");
@@ -476,6 +500,12 @@ public static partial class AdtQueryHelpers
     )]
     private static partial Regex ContainsFunctionRegex();
 
+    [GeneratedRegex(
+        @"ARRAY_CONTAINS\(([^,]+),\s*([^\)]+)\)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+    )]
+    private static partial Regex ArrayContainsFunctionRegex();
+
     [GeneratedRegex(@"IS_NULL\(([^)]+)\)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex IsNullFunctionRegex();
 
@@ -483,13 +513,16 @@ public static partial class AdtQueryHelpers
         @"IS_DEFINED\(([^)]+)\)",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
     )]
-    private static partial Regex IsDefinedRegex();
+    private static partial Regex IsDefinedFunctionRegex();
 
     [GeneratedRegex(
         @"IS_NUMBER\(([^)]+)\)",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
     )]
-    private static partial Regex IsNumberRegex();
+    private static partial Regex IsNumberFunctionRegex();
+
+    [GeneratedRegex(@"IS_BOOL\(([^)]+)\)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex IsBoolFunctionRegex();
 
     [GeneratedRegex(@"(\.\$[\w]+)")]
     private static partial Regex DollarSignPropertyRegex();
@@ -499,4 +532,22 @@ public static partial class AdtQueryHelpers
 
     [GeneratedRegex("(?<operand1>[^\\s]+)\\s*!=\\s*(?<operand2>[^\\s]+)")]
     private static partial Regex InequalityOperatorRegex();
+
+    [GeneratedRegex(
+        @"IS_PRIMITIVE\(([^)]+)\)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+    )]
+    private static partial Regex IsPrimitiveFunctionRegex();
+
+    [GeneratedRegex(
+        @"IS_STRING\(([^)]+)\)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+    )]
+    private static partial Regex IsStringFunctionRegex();
+
+    [GeneratedRegex(
+        @"IS_OBJECT\(([^)]+)\)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+    )]
+    private static partial Regex IsObjectFunctionRegex();
 }

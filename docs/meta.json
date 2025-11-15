@@ -1,10 +1,8 @@
 {
-    "title": "Konnektr Graph",
+    "title": "Graph",
     "icon": "Lightbulb",
     "description": "Core concepts and fundamental understanding of Konnektr Graph",
     "pages": [
-        "index",
-        "introduction",
         "getting-started",
         "concepts",
         "how-to-guides",

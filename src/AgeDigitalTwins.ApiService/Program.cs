@@ -178,11 +178,10 @@ if (app.Environment.IsDevelopment() || app.Configuration["OpenApi:Enabled"] == "
 
 app.UseExceptionHandler();
 
-app.UseMiddleware<DatabaseProtectionMiddleware>();
-
 // Register weighted query rate limiting middleware and UseRateLimiter only if enabled
 if (enableRateLimiting)
 {
+    app.UseMiddleware<DatabaseProtectionMiddleware>();
     app.UseMiddleware<WeightedQueryRateLimitingMiddleware>();
     app.UseRateLimiter();
 }

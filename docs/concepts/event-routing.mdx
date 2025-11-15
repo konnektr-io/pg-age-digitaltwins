@@ -21,9 +21,9 @@ AgeDigitalTwins generates several types of events:
 
 ### Lifecycle Events
 Captured through PostgreSQL logical replication (durable and replicated):
-- **Twin Events**: `TwinCreate`, `TwinUpdate`, `TwinDelete`
-- **Relationship Events**: `RelationshipCreate`, `RelationshipUpdate`, `RelationshipDelete`
-- **Model Events**: `ModelCreate`, `ModelUpdate`, `ModelDelete`
+ - **Twin Events**: `TwinCreate`, `TwinUpdate`, `TwinDelete`
+ - **Relationship Events**: `RelationshipCreate`, `RelationshipUpdate`, `RelationshipDelete`
+ - **Model Events**: `ModelCreate`, `ModelUpdate`, `ModelDelete` (in progress)
 
 ### Telemetry Events  
 Published through PostgreSQL NOTIFY/LISTEN (real-time, ephemeral):

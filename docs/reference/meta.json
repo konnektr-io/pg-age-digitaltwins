@@ -5,6 +5,7 @@
     "pages": [
         "api",
         "sdk",
-        "configuration"
+        "configuration",
+        "roadmap"
     ]
 }
