@@ -70,9 +70,9 @@ public static class GraphInitialization
                     END IF;
 
                     -- Check inheritance via bases array
-                    EXECUTE format('SELECT m FROM ag_catalog.cypher('{graphName}', $$
+                    EXECUTE format('SELECT m FROM ag_catalog.cypher(''{graphName}'', $$
                         MATCH (m:Model)
-                        WHERE 'dtmi:com:arcadis:app:Activity;1' IN m.bases
+                        WHERE %s IN m.bases
                         RETURN collect(m.id)
                     $$) AS (m agtype)', model_id)
                     INTO models_array;
