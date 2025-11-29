@@ -54,6 +54,7 @@ public static class GraphInitialization
                 PARALLEL SAFE
                 AS $function$
                 DECLARE
+                    sql VARCHAR;
                     twin_model_id agtype;
                     models_array agtype;
                 BEGIN
@@ -70,12 +71,12 @@ public static class GraphInitialization
                     END IF;
 
                     -- Check inheritance via bases array
-                    EXECUTE format('SELECT m FROM ag_catalog.cypher(''{graphName}'', $$
+                    sql := format('SELECT m FROM ag_catalog.cypher(''{graphName}'', $$
                         MATCH (m:Model)
                         WHERE %s IN m.bases
                         RETURN collect(m.id)
-                    $$) AS (m agtype)', model_id)
-                    INTO models_array;
+                    $$) AS (m agtype)', model_id);
+                    EXECUTE sql INTO models_array;
                     
                     -- Check if twin's model ID is in the collected models array
                     RETURN models_array @> ag_catalog.agtype_build_list(twin_model_id);
