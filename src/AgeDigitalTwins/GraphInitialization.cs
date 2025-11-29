@@ -68,7 +68,7 @@ public static class GraphInitialization
                     -- Use the -> operator to drill down into the map.
                     -- Note: keys must be valid agtype strings (e.g. '""$metadata""'::agtype)
                     
-                    twin_model_id := ag_catalog.agtype_access_operator(twin,'""$metadata""'::agtype,'""$model""'::agtype);
+                    twin_model_id := ag_catalog.agtype_access_operator(twin.properties,'""$metadata""','""$model""');
 
                     -------------------------------------------------------------------------
                     -- 2. DIRECT MATCH
@@ -85,28 +85,31 @@ public static class GraphInitialization
                     END IF;
 
                     -------------------------------------------------------------------------
-                    -- 3. NATIVE BASES CHECK
+                    -- 3. OPTIMIZED BASES/INHERITANCE CHECK (The STABLE Cache Point)
                     -------------------------------------------------------------------------
-                    -- Retrieve the 'bases' array directly as agtype.
-                    -- We filter using the -> operator on the properties column.
+                    -- This entire SELECT block is calculated once per statement for a given target_model_id.
+                    -- We collect all Model IDs that should satisfy the ""is_of_model"" check.
+                    SELECT 
+                        ag_catalog.agtype_array_agg(model_id_prop)
+                    INTO descendant_models_array
+                    FROM (
+                        -- 1. Find all models whose bases array contains the target (The true descendants)
+                        SELECT properties -> '""id""'::agtype AS model_id_prop
+                        FROM {graphName}.""Model""
+                        -- Check if the target is contained in the twin's model's bases
+                        WHERE (properties -> '""bases""'::agtype) @> ag_catalog.agtype_build_list(target_model_id)
+                        
+                        UNION ALL
+                        
+                        -- 2. Add the target model itself to the list (since we already checked exact match, this
+                        -- primarily covers the case where the twin IS the target model, ensuring the
+                        -- final check is comprehensive if the direct match was skipped for some reason)
+                        SELECT target_model_id AS model_id_prop
+                    ) AS aggregated_models;
                     
-                    SELECT ag_catalog.agtype_access_operator(model,'""bases""'::agtype)
-                    INTO model_bases
-                    FROM {graphName}.""Model""
-                    WHERE ag_catalog.agtype_access_operator(model,'""id""'::agtype) = twin_model_id
-                    LIMIT 1;
-
-                    -- If the model wasn't found or has no bases field
-                    IF model_bases IS NULL THEN
-                        RETURN false;
-                    END IF;
-
-                    -- Check containment using native AGTYPE operators.
-                    -- The @> operator checks if the left structure contains the right structure.
-                    -- We must wrap the single target_model_id into a list to compare Array vs Array.
-                    -- Example: ['Vehicle', 'Machine'] @> ['Vehicle']
-                    
-                    RETURN model_bases @> ag_catalog.agtype_build_list(target_model_id);
+                    -- Now, check if the twin's model ID is present in this pre-calculated array.
+                    -- This is a highly optimized AGTYPE array containment check.
+                    RETURN descendant_models_array @> ag_catalog.agtype_build_list(twin_model_id);
 
                 END;
                 $function$;"
