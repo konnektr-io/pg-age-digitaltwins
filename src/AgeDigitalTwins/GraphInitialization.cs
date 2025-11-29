@@ -58,10 +58,10 @@ public static class GraphInitialization
                     twin_model_id agtype;
                     models_array agtype;
                 BEGIN
-                    twin_model_id := ag_catalog.agtype_access_operator(twin.properties,'""$metadata""','""$model""');
+                    twin_model_id := ag_catalog.agtype_access_operator(twin,'""$metadata""','""$model""');
                     
-                    -- Compare for direct matches first 
-                    IF twin_model_id = target_model_id THEN
+                    -- Compare for direct matches first
+                    IF twin_model_id = model_id THEN
                         RETURN true;
                     END IF;
 
@@ -76,6 +76,7 @@ public static class GraphInitialization
                         WHERE %s IN m.bases
                         RETURN collect(m.id)
                     $$) AS (m agtype)', model_id);
+                    RAISE NOTICE '%', sql;
                     EXECUTE sql INTO models_array;
                     
                     -- Check if twin's model ID is in the collected models array
@@ -85,8 +86,8 @@ public static class GraphInitialization
             ),
             new(
                 @$"CREATE OR REPLACE FUNCTION {graphName}.agtype_set(target agtype, path agtype, new_value agtype)
-                LANGUAGE plpgsql
-                RETURNS agtype AS $$
+                RETURNS agtype 
+                AS $$
                 DECLARE
                     json_target jsonb;
                     json_new_value jsonb;
@@ -126,8 +127,7 @@ public static class GraphInitialization
             ),
             new(
                 @$"CREATE OR REPLACE FUNCTION {graphName}.agtype_delete_key(target agtype, path agtype)
-                LANGUAGE plpgsql
-                RETURNS agtype 
+                RETURNS agtype
                 AS $$
                 DECLARE
                     json_target jsonb;
@@ -145,12 +145,11 @@ public static class GraphInitialization
                     -- Cast the result back to agtype
                     RETURN json_target::text::agtype;
                 END;
-                $$"
+                $$ LANGUAGE plpgsql;"
             ),
             // IS_OBJECT: returns true if agtype is a map/object
             new(
                 @$"CREATE OR REPLACE FUNCTION {graphName}.is_object(val agtype)
-                LANGUAGE plpgsql
                 RETURNS boolean 
                 PARALLEL SAFE
                 AS $$
@@ -160,13 +159,12 @@ public static class GraphInitialization
                     WHEN others THEN
                         RETURN false;
                 END;
-                $$"
+                $$ LANGUAGE plpgsql;"
             ),
             // IS_NUMBER: returns true if agtype is number
             new(
                 @$"CREATE OR REPLACE FUNCTION {graphName}.is_number(val agtype)
-                LANGUAGE plpgsql
-                RETURNS boolean 
+                RETURNS boolean
                 PARALLEL SAFE
                 AS $$
                 BEGIN
@@ -175,13 +173,12 @@ public static class GraphInitialization
                     WHEN others THEN
                         RETURN false;
                 END;
-                $$"
+                $$ LANGUAGE plpgsql;"
             ),
             // IS_PRIMITIVE: returns true if agtype is string, number, boolean
             new(
                 @$"CREATE OR REPLACE FUNCTION {graphName}.is_primitive(val agtype)
-                LANGUAGE plpgsql
-                RETURNS boolean 
+                RETURNS boolean
                 PARALLEL SAFE
                 AS $$
                 BEGIN
@@ -190,13 +187,12 @@ public static class GraphInitialization
                     WHEN others THEN
                         RETURN false;
                 END;
-                $$"
+                $$ LANGUAGE plpgsql;"
             ),
             // IS_STRING: returns true if agtype is a string
             new(
                 @$"CREATE OR REPLACE FUNCTION {graphName}.is_string(val agtype)
-                LANGUAGE plpgsql
-                RETURNS boolean 
+                RETURNS boolean
                 PARALLEL SAFE
                 AS $$
                 BEGIN
@@ -205,38 +201,39 @@ public static class GraphInitialization
                     WHEN others THEN
                         RETURN false;
                 END;
-                $$"
+                $$ LANGUAGE plpgsql;"
             ),
             new(
                 @$"CREATE OR REPLACE FUNCTION {graphName}.is_of_model_old(twin agtype, model_id agtype, exact boolean default false)
-                RETURNS boolean
-                LANGUAGE plpgsql
-                STABLE
-                PARALLEL SAFE
-                AS $function$
-                DECLARE
-                    sql VARCHAR;
-                    twin_model_id agtype;
-                    result boolean;
-                BEGIN
-                    SELECT ag_catalog.agtype_access_operator(twin,'""$metadata""'::agtype,'""$model""'::agtype) INTO twin_model_id;
-                    IF exact THEN
-                        sql := format('SELECT ''%s'' = ''%s''', twin_model_id, model_id);
-                    ELSE
-                        sql := format('SELECT ''%s'' = ''%s'' OR
-                        EXISTS
-                            (SELECT 1 FROM ag_catalog.cypher(''{graphName}'', $$
-                                MATCH (m:Model)
-                                WHERE m.id = %s AND %s IN m.bases
-                                RETURN m.id
-                            $$) AS (m text))
-                        ', twin_model_id, model_id, twin_model_id, model_id);
-                    END IF;
-                    EXECUTE sql INTO result;
-                    RETURN result;
-                END;
-                $function$"
+                    RETURNS boolean
+                    LANGUAGE plpgsql
+                    STABLE
+                    PARALLEL SAFE
+                    AS $function$
+                    DECLARE
+                        sql VARCHAR;
+                        twin_model_id agtype;
+                        result boolean;
+                    BEGIN
+                        SELECT ag_catalog.agtype_access_operator(twin,'""$metadata""'::agtype,'""$model""'::agtype) INTO twin_model_id;
+                        IF exact THEN
+                            sql := format('SELECT ''%s'' = ''%s''', twin_model_id, model_id);
+                        ELSE
+                            sql := format('SELECT ''%s'' = ''%s'' OR
+                            EXISTS
+                                (SELECT 1 FROM ag_catalog.cypher(''{graphName}'', $$
+                                    MATCH (m:Model)
+                                    WHERE m.id = %s AND %s IN m.bases
+                                    RETURN m.id
+                                $$) AS (m text))
+                            ', twin_model_id, model_id, twin_model_id, model_id);
+                        END IF;
+                        EXECUTE sql INTO result;
+                        RETURN result;
+                    END;
+                    $function$"
             ),
+            /*
             new(
                 @$"CREATE OR REPLACE FUNCTION {graphName}.is_of_model_old2(twin agtype, model_id agtype, exact boolean default false)
                 RETURNS boolean
@@ -268,7 +265,7 @@ public static class GraphInitialization
                     RETURN EXISTS (
                         WITH RECURSIVE model_ancestors AS (
                             -- Base case: start with the child model's internal ID
-                            SELECT m.id as internal_id, 
+                            SELECT m.id as internal_id,
                                    trim(both '""' from ag_catalog.agtype_access_operator(m.properties, '""id""'::agtype)::text) as model_name
                             FROM {graphName}.""Model"" m
                             WHERE trim(both '""' from ag_catalog.agtype_access_operator(m.properties, '""id""'::agtype)::text) = twin_model_id
@@ -287,75 +284,7 @@ public static class GraphInitialization
                     );
                 END;
                 $function$"
-            ),
-            new(
-                @$"CREATE OR REPLACE FUNCTION {graphName}.is_of_model_old3(
-                    twin agtype, 
-                    target_model_id agtype, 
-                    exact boolean DEFAULT false
-                )
-                RETURNS boolean
-                LANGUAGE plpgsql
-                STABLE
-                PARALLEL SAFE
-                AS $function$
-                DECLARE
-                    -- Keep everything as agtype
-                    twin_model_id agtype;
-                    model_bases agtype;
-                BEGIN
-                    -------------------------------------------------------------------------
-                    -- 1. NATIVE EXTRACTION
-                    -------------------------------------------------------------------------
-                    -- Use the -> operator to drill down into the map.
-                    -- Note: keys must be valid agtype strings (e.g. '""$metadata""'::agtype)
-                    
-                    twin_model_id := ag_catalog.agtype_access_operator(twin.properties,'""$metadata""','""$model""');
-
-                    -------------------------------------------------------------------------
-                    -- 2. DIRECT MATCH
-                    -------------------------------------------------------------------------
-                    -- Compare agtype directly. 
-                    -- This works because both are agtype strings (e.g., '""Car""'::agtype)
-                    IF twin_model_id = target_model_id THEN
-                        RETURN true;
-                    END IF;
-
-                    -- Fail fast if exact match was requested or if twin has no model
-                    IF exact OR twin_model_id IS NULL THEN
-                        RETURN false;
-                    END IF;
-
-                    -------------------------------------------------------------------------
-                    -- 3. OPTIMIZED BASES/INHERITANCE CHECK (The STABLE Cache Point)
-                    -------------------------------------------------------------------------
-                    -- This entire SELECT block is calculated once per statement for a given target_model_id.
-                    -- We collect all Model IDs that should satisfy the ""is_of_model"" check.
-                    SELECT 
-                        ag_catalog.agtype_array_agg(model_id_prop)
-                    INTO descendant_models_array
-                    FROM (
-                        -- 1. Find all models whose bases array contains the target (The true descendants)
-                        SELECT properties -> '""id""'::agtype AS model_id_prop
-                        FROM {graphName}.""Model""
-                        -- Check if the target is contained in the twin's model's bases
-                        WHERE (properties -> '""bases""'::agtype) @> ag_catalog.agtype_build_list(target_model_id)
-                        
-                        UNION ALL
-                        
-                        -- 2. Add the target model itself to the list (since we already checked exact match, this
-                        -- primarily covers the case where the twin IS the target model, ensuring the
-                        -- final check is comprehensive if the direct match was skipped for some reason)
-                        SELECT target_model_id AS model_id_prop
-                    ) AS aggregated_models;
-                    
-                    -- Now, check if the twin's model ID is present in this pre-calculated array.
-                    -- This is a highly optimized AGTYPE array containment check.
-                    RETURN descendant_models_array @> ag_catalog.agtype_build_list(twin_model_id);
-
-                END;
-                $function$;"
-            ),
+            ), */
         ];
     }
 }
