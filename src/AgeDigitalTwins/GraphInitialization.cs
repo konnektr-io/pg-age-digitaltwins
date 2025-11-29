@@ -47,72 +47,37 @@ public static class GraphInitialization
         return
         [
             new(
-                @$"CREATE OR REPLACE FUNCTION {graphName}.is_of_model(
-                    twin agtype, 
-                    target_model_id agtype, 
-                    exact boolean DEFAULT false
-                )
+                @$"CREATE OR REPLACE FUNCTION {graphName}.is_of_model(twin agtype, model_id agtype, exact boolean default false)
                 RETURNS boolean
                 LANGUAGE plpgsql
                 STABLE
                 PARALLEL SAFE
                 AS $function$
                 DECLARE
-                    -- Keep everything as agtype
+                    sql VARCHAR;
                     twin_model_id agtype;
-                    model_bases agtype;
+                    result boolean;
                 BEGIN
-                    -------------------------------------------------------------------------
-                    -- 1. NATIVE EXTRACTION
-                    -------------------------------------------------------------------------
-                    -- Use the -> operator to drill down into the map.
-                    -- Note: keys must be valid agtype strings (e.g. '""$metadata""'::agtype)
-                    
                     twin_model_id := ag_catalog.agtype_access_operator(twin.properties,'""$metadata""','""$model""');
 
-                    -------------------------------------------------------------------------
-                    -- 2. DIRECT MATCH
-                    -------------------------------------------------------------------------
-                    -- Compare agtype directly. 
-                    -- This works because both are agtype strings (e.g., '""Car""'::agtype)
                     IF twin_model_id = target_model_id THEN
                         RETURN true;
                     END IF;
 
-                    -- Fail fast if exact match was requested or if twin has no model
-                    IF exact OR twin_model_id IS NULL THEN
+                    IF exact THEN
                         RETURN false;
                     END IF;
 
-                    -------------------------------------------------------------------------
-                    -- 3. OPTIMIZED BASES/INHERITANCE CHECK (The STABLE Cache Point)
-                    -------------------------------------------------------------------------
-                    -- This entire SELECT block is calculated once per statement for a given target_model_id.
-                    -- We collect all Model IDs that should satisfy the ""is_of_model"" check.
-                    SELECT 
-                        ag_catalog.agtype_array_agg(model_id_prop)
-                    INTO descendant_models_array
-                    FROM (
-                        -- 1. Find all models whose bases array contains the target (The true descendants)
-                        SELECT properties -> '""id""'::agtype AS model_id_prop
-                        FROM {graphName}.""Model""
-                        -- Check if the target is contained in the twin's model's bases
-                        WHERE (properties -> '""bases""'::agtype) @> ag_catalog.agtype_build_list(target_model_id)
-                        
-                        UNION ALL
-                        
-                        -- 2. Add the target model itself to the list (since we already checked exact match, this
-                        -- primarily covers the case where the twin IS the target model, ensuring the
-                        -- final check is comprehensive if the direct match was skipped for some reason)
-                        SELECT target_model_id AS model_id_prop
-                    ) AS aggregated_models;
+                    sql := format('SELECT m FROM ag_catalog.cypher('digitaltwins', $$
+                        MATCH (m:Model)
+                        WHERE 'dtmi:com:arcadis:app:Activity;1' IN m.bases
+                        RETURN collect(m.id)
+                    $$) AS (m agtype)', model_id);
+                    EXECUTE sql INTO models_array;
                     
-                    -- Now, check if the twin's model ID is present in this pre-calculated array.
-                    -- This is a highly optimized AGTYPE array containment check.
-                    RETURN descendant_models_array @> ag_catalog.agtype_build_list(twin_model_id);
-
+                    RETURN models_array @> ag_catalog.agtype_build_list(twin_model_id);
                 END;
-                $function$;"
+                $function$"
             ),
             new(
                 @$"CREATE OR REPLACE FUNCTION {graphName}.agtype_set(target agtype, path agtype, new_value agtype)
@@ -318,6 +283,74 @@ public static class GraphInitialization
                     );
                 END;
                 $function$"
+            ),
+            new(
+                @$"CREATE OR REPLACE FUNCTION {graphName}.is_of_model_old3(
+                    twin agtype, 
+                    target_model_id agtype, 
+                    exact boolean DEFAULT false
+                )
+                RETURNS boolean
+                LANGUAGE plpgsql
+                STABLE
+                PARALLEL SAFE
+                AS $function$
+                DECLARE
+                    -- Keep everything as agtype
+                    twin_model_id agtype;
+                    model_bases agtype;
+                BEGIN
+                    -------------------------------------------------------------------------
+                    -- 1. NATIVE EXTRACTION
+                    -------------------------------------------------------------------------
+                    -- Use the -> operator to drill down into the map.
+                    -- Note: keys must be valid agtype strings (e.g. '""$metadata""'::agtype)
+                    
+                    twin_model_id := ag_catalog.agtype_access_operator(twin.properties,'""$metadata""','""$model""');
+
+                    -------------------------------------------------------------------------
+                    -- 2. DIRECT MATCH
+                    -------------------------------------------------------------------------
+                    -- Compare agtype directly. 
+                    -- This works because both are agtype strings (e.g., '""Car""'::agtype)
+                    IF twin_model_id = target_model_id THEN
+                        RETURN true;
+                    END IF;
+
+                    -- Fail fast if exact match was requested or if twin has no model
+                    IF exact OR twin_model_id IS NULL THEN
+                        RETURN false;
+                    END IF;
+
+                    -------------------------------------------------------------------------
+                    -- 3. OPTIMIZED BASES/INHERITANCE CHECK (The STABLE Cache Point)
+                    -------------------------------------------------------------------------
+                    -- This entire SELECT block is calculated once per statement for a given target_model_id.
+                    -- We collect all Model IDs that should satisfy the ""is_of_model"" check.
+                    SELECT 
+                        ag_catalog.agtype_array_agg(model_id_prop)
+                    INTO descendant_models_array
+                    FROM (
+                        -- 1. Find all models whose bases array contains the target (The true descendants)
+                        SELECT properties -> '""id""'::agtype AS model_id_prop
+                        FROM {graphName}.""Model""
+                        -- Check if the target is contained in the twin's model's bases
+                        WHERE (properties -> '""bases""'::agtype) @> ag_catalog.agtype_build_list(target_model_id)
+                        
+                        UNION ALL
+                        
+                        -- 2. Add the target model itself to the list (since we already checked exact match, this
+                        -- primarily covers the case where the twin IS the target model, ensuring the
+                        -- final check is comprehensive if the direct match was skipped for some reason)
+                        SELECT target_model_id AS model_id_prop
+                    ) AS aggregated_models;
+                    
+                    -- Now, check if the twin's model ID is present in this pre-calculated array.
+                    -- This is a highly optimized AGTYPE array containment check.
+                    RETURN descendant_models_array @> ag_catalog.agtype_build_list(twin_model_id);
+
+                END;
+                $function$;"
             ),
         ];
     }
