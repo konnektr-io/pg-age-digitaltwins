@@ -68,7 +68,7 @@ public static class GraphInitialization
                     -- Use the -> operator to drill down into the map.
                     -- Note: keys must be valid agtype strings (e.g. '""$metadata""'::agtype)
                     
-                    twin_model_id := twin -> '""$metadata""'::agtype -> '""$model""'::agtype;
+                    twin_model_id := ag_catalog.agtype_access_operator(twin,'""$metadata""'::agtype,'""$model""'::agtype);
 
                     -------------------------------------------------------------------------
                     -- 2. DIRECT MATCH
@@ -90,10 +90,10 @@ public static class GraphInitialization
                     -- Retrieve the 'bases' array directly as agtype.
                     -- We filter using the -> operator on the properties column.
                     
-                    SELECT properties -> '""bases""'::agtype
+                    SELECT ag_catalog.agtype_access_operator(model,'""bases""'::agtype)
                     INTO model_bases
                     FROM {graphName}.""Model""
-                    WHERE properties -> '""id""'::agtype = twin_model_id
+                    WHERE ag_catalog.agtype_access_operator(model,'""id""'::agtype) = twin_model_id
                     LIMIT 1;
 
                     -- If the model wasn't found or has no bases field
