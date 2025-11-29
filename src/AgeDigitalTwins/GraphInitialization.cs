@@ -54,27 +54,30 @@ public static class GraphInitialization
                 PARALLEL SAFE
                 AS $function$
                 DECLARE
-                    sql VARCHAR;
                     twin_model_id agtype;
                     result boolean;
                 BEGIN
                     twin_model_id := ag_catalog.agtype_access_operator(twin.properties,'""$metadata""','""$model""');
-
+                    
+                    -- Compare for direct matches first 
                     IF twin_model_id = target_model_id THEN
                         RETURN true;
                     END IF;
 
+                    -- If exact match requested, return false
                     IF exact THEN
                         RETURN false;
                     END IF;
 
-                    sql := format('SELECT m FROM ag_catalog.cypher('digitaltwins', $$
+                    -- Check inheritance via bases array
+                    EXECUTE format('SELECT m FROM ag_catalog.cypher('{graphName}', $$
                         MATCH (m:Model)
                         WHERE 'dtmi:com:arcadis:app:Activity;1' IN m.bases
                         RETURN collect(m.id)
-                    $$) AS (m agtype)', model_id);
-                    EXECUTE sql INTO models_array;
+                    $$) AS (m agtype)', model_id)
+                    INTO models_array;
                     
+                    -- Check if twin's model ID is in the collected models array
                     RETURN models_array @> ag_catalog.agtype_build_list(twin_model_id);
                 END;
                 $function$"
