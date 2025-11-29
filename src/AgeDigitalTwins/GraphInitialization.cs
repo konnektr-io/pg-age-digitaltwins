@@ -55,7 +55,7 @@ public static class GraphInitialization
                 AS $function$
                 DECLARE
                     twin_model_id agtype;
-                    result boolean;
+                    models_array agtype;
                 BEGIN
                     twin_model_id := ag_catalog.agtype_access_operator(twin.properties,'""$metadata""','""$model""');
                     
