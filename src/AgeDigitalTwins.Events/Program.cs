@@ -82,7 +82,6 @@ builder.Services.AddSingleton(sp =>
     return eventSinkFactory.GetEventRoutes();
 });
 
-// Register Subscription as a singleton
 // Register DLQService as a singleton
 builder.Services.AddSingleton(sp =>
 {
@@ -94,9 +93,11 @@ builder.Services.AddSingleton(sp =>
 
     var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
     var dataSource = dataSourceBuilder.Build();
-    var logger = sp.GetRequiredService<ILogger<AgeDigitalTwins.Events.DLQService>>();
-    return new AgeDigitalTwins.Events.DLQService(dataSource, logger);
+    var logger = sp.GetRequiredService<ILogger<DLQService>>();
+    return new DLQService(dataSource, logger);
 });
+
+// Register Subscription as a singleton
 builder.Services.AddSingleton(sp =>
 {
     string connectionString =

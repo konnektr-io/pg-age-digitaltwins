@@ -177,27 +177,6 @@ public class ResilientEventSinkWrapper(
         }
     }
 
-    private async Task QueueFailedEventsAsync(
-        List<CloudEvent> events,
-        CancellationToken cancellationToken
-    )
-    {
-        await _queueLock.WaitAsync(cancellationToken);
-        try
-        {
-            _failedEventsQueue.Enqueue((events, DateTime.UtcNow, 0));
-            _logger.LogDebug(
-                "Queued {EventCount} events for later retry. Queue depth: {QueueDepth}",
-                events.Count,
-                _failedEventsQueue.Count
-            );
-        }
-        finally
-        {
-            _queueLock.Release();
-        }
-    }
-
     private TimeSpan CalculateDelay(int attemptNumber)
     {
         // Exponential backoff: 2s, 4s, 8s, 16s, ...
