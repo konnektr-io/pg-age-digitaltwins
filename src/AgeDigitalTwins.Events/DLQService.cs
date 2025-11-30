@@ -1,16 +1,24 @@
 using System.Text.Json;
+using CloudNative.CloudEvents;
+using CloudNative.CloudEvents.SystemTextJson;
 using Npgsql;
 
 namespace AgeDigitalTwins.Events
 {
-    public class DLQService(NpgsqlDataSource dataSource, ILogger? logger = null)
+    public class DLQService
     {
-        private readonly NpgsqlDataSource _dataSource = dataSource;
-        private readonly ILogger? _logger = logger;
+        private readonly NpgsqlDataSource _dataSource;
+        private readonly ILogger? _logger;
         private readonly string _schemaName = "digitaltwins_eventing";
         private readonly string _tableName = "dead_letter_queue";
-        private readonly JsonSerializerOptions _jsonOptions =
-            new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+        private readonly JsonSerializerOptions _jsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+        private static readonly JsonEventFormatter _eventFormatter = new JsonEventFormatter();
+
+        public DLQService(NpgsqlDataSource dataSource, ILogger? logger = null)
+        {
+            _dataSource = dataSource;
+            _logger = logger;
+        }
 
         public async Task InitializeSchemaAsync(CancellationToken cancellationToken = default)
         {
@@ -97,7 +105,14 @@ namespace AgeDigitalTwins.Events
         {
             var eventId = cloudEvent.Id ?? Guid.NewGuid().ToString();
             var eventType = cloudEvent.Type;
-            var payload = JsonSerializer.Serialize(cloudEvent, _jsonOptions);
+            var payload = JsonSerializer.Serialize(new {
+                Id = cloudEvent.Id,
+                Type = cloudEvent.Type,
+                Source = cloudEvent.Source,
+                Subject = cloudEvent.Subject,
+                Time = cloudEvent.Time,
+                Data = cloudEvent.Data
+            }, _jsonOptions);
             var errorMessage = ex.Message;
             var errorStack = ex.ToString();
             var failedAt = DateTime.UtcNow;
