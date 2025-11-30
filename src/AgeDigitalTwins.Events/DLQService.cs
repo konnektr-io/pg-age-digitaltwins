@@ -135,7 +135,7 @@ namespace AgeDigitalTwins.Events
             cmd.Parameters.AddWithValue("event_id", Guid.Parse(eventId));
             cmd.Parameters.AddWithValue("sink_name", sinkName ?? "unknown");
             cmd.Parameters.AddWithValue("event_type", eventType ?? "unknown");
-            cmd.Parameters.AddWithValue("payload", payload);
+            cmd.Parameters.Add("payload", NpgsqlTypes.NpgsqlDbType.Jsonb).Value = payload;
             cmd.Parameters.AddWithValue("error_message", errorMessage ?? "");
             cmd.Parameters.AddWithValue("error_stack", errorStack ?? "");
             cmd.Parameters.AddWithValue("retry_count", retryCount);
