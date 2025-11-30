@@ -11,7 +11,8 @@ namespace AgeDigitalTwins.Events
         private readonly ILogger? _logger;
         private readonly string _schemaName = "digitaltwins_eventing";
         private readonly string _tableName = "dead_letter_queue";
-        private readonly JsonSerializerOptions _jsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+        private readonly JsonSerializerOptions _jsonOptions =
+            new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
         private static readonly JsonEventFormatter _eventFormatter = new JsonEventFormatter();
 
         public DLQService(NpgsqlDataSource dataSource, ILogger? logger = null)
@@ -105,14 +106,18 @@ namespace AgeDigitalTwins.Events
         {
             var eventId = cloudEvent.Id ?? Guid.NewGuid().ToString();
             var eventType = cloudEvent.Type;
-            var payload = JsonSerializer.Serialize(new {
-                Id = cloudEvent.Id,
-                Type = cloudEvent.Type,
-                Source = cloudEvent.Source,
-                Subject = cloudEvent.Subject,
-                Time = cloudEvent.Time,
-                Data = cloudEvent.Data
-            }, _jsonOptions);
+            var payload = JsonSerializer.Serialize(
+                new
+                {
+                    Id = cloudEvent.Id,
+                    Type = cloudEvent.Type,
+                    Source = cloudEvent.Source,
+                    Subject = cloudEvent.Subject,
+                    Time = cloudEvent.Time,
+                    Data = cloudEvent.Data,
+                },
+                _jsonOptions
+            );
             var errorMessage = ex.Message;
             var errorStack = ex.ToString();
             var failedAt = DateTime.UtcNow;
