@@ -53,53 +53,72 @@ public static class GraphInitialization
                 STABLE
                 AS $function$
                 DECLARE
-                    twin_model_id text;
-                    model_id_text text;
+                    twin_props agtype;
+                    twin_model_id agtype;
+                    model_descendants agtype;
                 BEGIN
-                    -- Extract model ID from twin metadata
-                    twin_model_id := ag_catalog.agtype_access_operator(twin,'""$metadata""'::agtype,'""$model""'::agtype)::text;
-                    -- Remove quotes from agtype string values
-                    twin_model_id := trim(both '""' from twin_model_id);
-                    model_id_text := trim(both '""' from model_id::text);
-                    
-                    -- Direct match check first (most common case)
-                    IF twin_model_id = model_id_text THEN
+                    -- Extract properties whether twin is a vertex or already a map
+                    BEGIN
+                        twin_props := ag_catalog.age_vertex_get_properties(twin);
+                    EXCEPTION WHEN others THEN
+                        twin_props := twin;
+                    END;
+
+                    twin_model_id := ag_catalog.agtype_access_operator(twin_props,'""$metadata""','""$model""');
+                    IF twin_model_id IS NULL THEN
+                        RETURN false; -- Missing model metadata
+                    END IF;
+
+                    -- Fast path: direct match
+                    IF twin_model_id = model_id THEN
                         RETURN true;
                     END IF;
-                    
-                    -- If exact match required, return false if direct match failed
+
+                    -- Exact requested, no inheritance traversal
                     IF exact THEN
                         RETURN false;
                     END IF;
-                    
-                    -- Check inheritance using _extends table with recursive CTE
-                    -- This approach works on read replicas and avoids variable-length edge queries
+
+                    -- Try fast path: use precomputed descendants from model if available
+                    BEGIN
+                        SELECT ag_catalog.agtype_access_operator(m.properties,'""descendants""'::agtype)
+                        INTO model_descendants
+                        FROM {graphName}.""Model"" m
+                        WHERE ag_catalog.agtype_access_operator(m.properties,'""id""'::agtype) = model_id;
+                        
+                        IF model_descendants IS NOT NULL AND ag_catalog.agtype_array_length(model_descendants) IS NOT NULL THEN
+                            -- Model has precomputed descendants array, use agtype containment check
+                            -- Check if twin_model_id is in the descendants array using agtype operators
+                            RETURN model_descendants @> ag_catalog.agtype_build_list(twin_model_id);
+                        END IF;
+                    EXCEPTION WHEN others THEN
+                        -- Descendants field missing or error, fall through to legacy traversal
+                    END;
+
+                    -- Fallback: legacy inheritance traversal for backward compatibility
+                    -- (models created before descendants field was added)
                     RETURN EXISTS (
-                        WITH RECURSIVE model_ancestors AS (
-                            -- Base case: start with the child model's internal ID
-                            SELECT m.id as internal_id, 
-                                   trim(both '""' from ag_catalog.agtype_access_operator(m.properties, '""id""'::agtype)::text) as model_name
+                        WITH RECURSIVE ancestors AS (
+                            SELECT m.id AS internal_id,
+                                   ag_catalog.agtype_access_operator(m.properties,'""id""'::agtype) AS mid
                             FROM {graphName}.""Model"" m
-                            WHERE trim(both '""' from ag_catalog.agtype_access_operator(m.properties, '""id""'::agtype)::text) = twin_model_id
-                            
+                            WHERE ag_catalog.agtype_access_operator(m.properties,'""id""'::agtype) = twin_model_id
                             UNION ALL
-                            
-                            -- Recursive case: find parent models through _extends relationships
-                            SELECT parent.id as internal_id,
-                                   trim(both '""' from ag_catalog.agtype_access_operator(parent.properties, '""id""'::agtype)::text) as model_name
-                            FROM model_ancestors ma
-                            JOIN {graphName}.""_extends"" e ON e.start_id = ma.internal_id
+                            SELECT parent.id,
+                                   ag_catalog.agtype_access_operator(parent.properties,'""id""'::agtype) AS mid
+                            FROM ancestors a
+                            JOIN {graphName}.""_extends"" e ON e.start_id = a.internal_id
                             JOIN {graphName}.""Model"" parent ON parent.id = e.end_id
                         )
-                        SELECT 1 FROM model_ancestors
-                        WHERE model_name = model_id_text
+                        SELECT 1 FROM ancestors WHERE mid = model_id
                     );
                 END;
                 $function$"
             ),
             new(
                 @$"CREATE OR REPLACE FUNCTION {graphName}.agtype_set(target agtype, path agtype, new_value agtype)
-                RETURNS agtype AS $$
+                RETURNS agtype 
+                AS $$
                 DECLARE
                     json_target jsonb;
                     json_new_value jsonb;
@@ -139,7 +158,8 @@ public static class GraphInitialization
             ),
             new(
                 @$"CREATE OR REPLACE FUNCTION {graphName}.agtype_delete_key(target agtype, path agtype)
-                RETURNS agtype AS $$
+                RETURNS agtype
+                AS $$
                 DECLARE
                     json_target jsonb;
                     text_path text[];
@@ -161,7 +181,8 @@ public static class GraphInitialization
             // IS_OBJECT: returns true if agtype is a map/object
             new(
                 @$"CREATE OR REPLACE FUNCTION {graphName}.is_object(val agtype)
-                RETURNS boolean AS $$
+                RETURNS boolean 
+                AS $$
                 BEGIN
                     RETURN ag_catalog.age_keys(val) IS NOT NULL;
                 EXCEPTION
@@ -173,7 +194,8 @@ public static class GraphInitialization
             // IS_NUMBER: returns true if agtype is number
             new(
                 @$"CREATE OR REPLACE FUNCTION {graphName}.is_number(val agtype)
-                RETURNS boolean AS $$
+                RETURNS boolean
+                AS $$
                 BEGIN
                     RETURN (ag_catalog.age_tofloat(val) IS NOT NULL OR ag_catalog.age_tointeger(val) IS NOT NULL) AND NOT (ag_catalog.age_tostring(val) = val);
                 EXCEPTION
@@ -185,7 +207,8 @@ public static class GraphInitialization
             // IS_PRIMITIVE: returns true if agtype is string, number, boolean
             new(
                 @$"CREATE OR REPLACE FUNCTION {graphName}.is_primitive(val agtype)
-                RETURNS boolean AS $$
+                RETURNS boolean
+                AS $$
                 BEGIN
                     RETURN ag_catalog.age_tostring(val) IS NOT NULL OR ag_catalog.age_tofloat(val) IS NOT NULL OR val = true OR val = false;
                 EXCEPTION
@@ -197,7 +220,8 @@ public static class GraphInitialization
             // IS_STRING: returns true if agtype is a string
             new(
                 @$"CREATE OR REPLACE FUNCTION {graphName}.is_string(val agtype)
-                RETURNS boolean AS $$
+                RETURNS boolean
+                AS $$
                 BEGIN
                     RETURN ag_catalog.age_tostring(val) = val;
                 EXCEPTION
@@ -205,34 +229,6 @@ public static class GraphInitialization
                         RETURN false;
                 END;
                 $$ LANGUAGE plpgsql;"
-            ),
-            new(
-                @$"CREATE OR REPLACE FUNCTION {graphName}.is_of_model_old(twin agtype, model_id agtype, exact boolean default false)
-                RETURNS boolean
-                LANGUAGE plpgsql
-                AS $function$
-                DECLARE
-                    sql VARCHAR;
-                    twin_model_id agtype;
-                    result boolean;
-                BEGIN
-                    SELECT ag_catalog.agtype_access_operator(twin,'""$metadata""'::agtype,'""$model""'::agtype) INTO twin_model_id;
-                    IF exact THEN
-                        sql := format('SELECT ''%s'' = ''%s''', twin_model_id, model_id);
-                    ELSE
-                        sql := format('SELECT ''%s'' = ''%s'' OR
-                        EXISTS
-                            (SELECT 1 FROM ag_catalog.cypher(''{graphName}'', $$
-                                MATCH (m:Model)
-                                WHERE m.id = %s AND %s IN m.bases
-                                RETURN m.id
-                            $$) AS (m text))
-                        ', twin_model_id, model_id, twin_model_id, model_id);
-                    END IF;
-                    EXECUTE sql INTO result;
-                    RETURN result;
-                END;
-                $function$"
             ),
         ];
     }
