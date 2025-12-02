@@ -358,6 +358,15 @@ public class ModelsTests : TestBase
     [Fact]
     public async Task DeleteAllModels_DeletesAllModels()
     {
+        // Arrange: Create a few models
+        string[] models =
+        [
+            SampleData.DtdlRoom,
+            SampleData.DtdlPlanet,
+            SampleData.DtdlCelestialBody,
+        ];
+        await Client.CreateModelsAsync(models);
+
         // Act: Delete all models
         await Client.DeleteAllModelsAsync();
 
