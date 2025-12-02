@@ -44,6 +44,13 @@ namespace AgeDigitalTwins.Models
         [JsonPropertyName("bases")]
         public string[] Bases { get; set; }
 
+        /// <summary>
+        /// Array of all descendant model IDs (models that extend this model, directly or indirectly).
+        /// Precomputed at model creation time to optimize inheritance queries.
+        /// </summary>
+        [JsonPropertyName("descendants")]
+        public string[]? Descendants { get; set; }
+
         [JsonPropertyName("decommissioned")]
         public bool IsDecommissioned { get; }
 
@@ -55,7 +62,8 @@ namespace AgeDigitalTwins.Models
             IReadOnlyDictionary<string, string> languageDisplayNames,
             IReadOnlyDictionary<string, string> languageDescriptions,
             bool isDecommissioned,
-            string[]? bases
+            string[]? bases,
+            string[]? descendants
         )
         {
             Id = id;
@@ -65,6 +73,7 @@ namespace AgeDigitalTwins.Models
             LanguageDescriptions = languageDescriptions;
             IsDecommissioned = isDecommissioned;
             Bases = bases ?? [];
+            Descendants = descendants;
         }
 
         public DigitalTwinsModelData(Dictionary<string, object?> modelData)
@@ -138,6 +147,12 @@ namespace AgeDigitalTwins.Models
                 && basesValue is List<object> basesList
                     ? [.. basesList.Select(x => (string)x)]
                     : Array.Empty<string>();
+
+            Descendants =
+                modelData.TryGetValue("descendants", out var descendantsValue)
+                && descendantsValue is List<object> descendantsList
+                    ? [.. descendantsList.Select(x => (string)x)]
+                    : null; // null indicates legacy model without precomputed descendants
         }
 
         public DigitalTwinsModelData(string dtdlModel)
@@ -200,6 +215,7 @@ namespace AgeDigitalTwins.Models
             LanguageDescriptions ??= new Dictionary<string, string>();
             IsDecommissioned = false;
             Bases = Array.Empty<string>();
+            Descendants = null; // Will be computed after model creation
         }
     }
 }
