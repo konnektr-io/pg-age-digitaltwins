@@ -68,7 +68,6 @@ jobs:
                        -c parallel_tuple_cost=0 \
                        -c min_parallel_table_scan_size=0 \
                        -c min_parallel_index_scan_size=0 \
-                       -c force_parallel_mode=on \
                        -c listen_addresses='*'"
           else
             docker run --name postgres-test -d \
@@ -87,7 +86,6 @@ jobs:
             docker exec postgres-test psql -U app -d app -c "ALTER SYSTEM SET parallel_tuple_cost = 0;"
             docker exec postgres-test psql -U app -d app -c "ALTER SYSTEM SET min_parallel_table_scan_size = 0;"
             docker exec postgres-test psql -U app -d app -c "ALTER SYSTEM SET min_parallel_index_scan_size = 0;"
-            docker exec postgres-test psql -U app -d app -c "ALTER SYSTEM SET force_parallel_mode = on;"
             docker exec postgres-test psql -U app -d app -c "SELECT pg_reload_conf();"
           fi
           
@@ -158,7 +156,6 @@ jobs:
           echo "Verifying PostgreSQL parallel execution settings:"
           docker exec postgres-test psql -U app -d app -c "SHOW max_parallel_workers_per_gather;"
           docker exec postgres-test psql -U app -d app -c "SHOW max_parallel_workers;"
-          docker exec postgres-test psql -U app -d app -c "SHOW force_parallel_mode;"
           docker exec postgres-test psql -U app -d app -c "SHOW parallel_setup_cost;"
           docker exec postgres-test psql -U app -d app -c "SHOW parallel_tuple_cost;"
 
