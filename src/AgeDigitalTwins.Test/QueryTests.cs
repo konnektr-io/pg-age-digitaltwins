@@ -1075,6 +1075,209 @@ public class QueryTests : TestBase
         Assert.Equal(numTwins, count);
     }
 
+    [Fact]
+    public async Task Performance_IsOfModel_CurrentImplementation()
+    {
+        await IntializeAsync();
+
+        // Clean up any existing twins
+        await foreach (var twin in Client.QueryAsync<JsonDocument>(@"SELECT * FROM DIGITALTWINS"))
+        {
+            await Client.DeleteDigitalTwinAsync(
+                twin!.RootElement.GetProperty("$dtId")!.GetString()!
+            );
+        }
+
+        // Generate a large number of twins for scalability testing
+        const int twinsPerType = 750;
+        var twins = new Dictionary<string, string>(twinsPerType * 4);
+
+        for (int i = 1; i <= twinsPerType; i++)
+        {
+            twins[$"cb{i}"] =
+                $"{{\"$dtId\": \"cb{i}\", \"$metadata\": {{\"$model\": \"dtmi:com:contoso:CelestialBody;1\"}}, \"name\": \"Celestial Body {i}\", \"mass\": {i}.0e24}}";
+            twins[$"p{i}"] =
+                $"{{\"$dtId\": \"p{i}\", \"$metadata\": {{\"$model\": \"dtmi:com:contoso:Planet;1\"}}, \"name\": \"Planet {i}\"}}";
+            twins[$"hp{i}"] =
+                $"{{\"$dtId\": \"hp{i}\", \"$metadata\": {{\"$model\": \"dtmi:com:contoso:HabitablePlanet;1\"}}, \"name\": \"Habitable Planet {i}\", \"hasLife\": {(i % 2 == 0 ? "false" : "true")}}}";
+            twins[$"room{i}"] =
+                $"{{\"$dtId\": \"room{i}\", \"$metadata\": {{\"$model\": \"dtmi:com:adt:dtsample:room;1\"}}, \"name\": \"Room {i}\"}}";
+        }
+
+        // Bulk create twins (in batches to avoid timeouts)
+        const int batchSize = 100; // MaxBatchSize for CreateOrReplaceDigitalTwinsAsync
+        var twinJsonObjects = twins
+            .Values.Select(json => JsonNode.Parse(json)?.AsObject())
+            .Where(obj => obj != null)
+            .ToList();
+
+        for (int i = 0; i < twinJsonObjects.Count; i += batchSize)
+        {
+            var batch = twinJsonObjects.Skip(i).Take(batchSize).ToList();
+            try
+            {
+                var result = await Client.CreateOrReplaceDigitalTwinsAsync<JsonObject>(batch!);
+                Assert.False(result.HasFailures, $"Batch insert error at batch {i / batchSize}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Batch insert error at batch {i / batchSize}: {ex.Message}");
+                throw;
+            }
+        }
+
+        // Diagnostic: Count twins by model type before running performance queries
+        var modelTypes = new[]
+        {
+            "dtmi:com:contoso:CelestialBody;1",
+            "dtmi:com:contoso:Planet;1",
+            "dtmi:com:contoso:HabitablePlanet;1",
+            "dtmi:com:adt:dtsample:room;1",
+        };
+        var modelCounts = new Dictionary<string, int>();
+        int totalTwins = 0;
+        foreach (var model in modelTypes)
+        {
+            int count = 0;
+            await foreach (
+                var twin in Client.QueryAsync<JsonDocument>(
+                    $"SELECT * FROM DIGITALTWINS WHERE $metadata.$model = '{model}'"
+                )
+            )
+            {
+                count++;
+            }
+            modelCounts[model] = count;
+            totalTwins += count;
+        }
+        Console.WriteLine("\n=== Twin Counts by Model Type ===");
+        foreach (var kvp in modelCounts)
+        {
+            Console.WriteLine($"  {kvp.Key}: {kvp.Value}");
+        }
+        Console.WriteLine($"  Total twins: {totalTwins} (expected: {twins.Count})\n");
+        Assert.Equal(twins.Count, totalTwins); // Ensure all twins are present
+
+        // Diagnostic: Output model inheritance edges (CelestialBody, Planet, HabitablePlanet)
+        var inheritanceModels = new[]
+        {
+            "dtmi:com:contoso:CelestialBody;1",
+            "dtmi:com:contoso:Planet;1",
+            "dtmi:com:contoso:HabitablePlanet;1",
+        };
+        Console.WriteLine("=== Model Inheritance Edges ===");
+        foreach (var model in inheritanceModels)
+        {
+            int edgeCount = 0;
+            await foreach (
+                var edge in Client.QueryAsync<JsonDocument>(
+                    $"MATCH (m:Model)-[e:_extends]->(parent:Model) WHERE m.id = '{model}' RETURN m, parent"
+                )
+            )
+            {
+                if (edge != null)
+                {
+                    if (
+                        edge.RootElement.TryGetProperty("m", out var mProp)
+                        && edge.RootElement.TryGetProperty("parent", out var parentProp)
+                    )
+                    {
+                        string? mId = "(no id)";
+                        if (mProp.TryGetProperty("id", out var mIdProp))
+                        {
+                            mId = mIdProp.GetString() ?? "(no id)";
+                        }
+                        string? parentId = "(no id)";
+                        if (parentProp.TryGetProperty("id", out var parentIdProp))
+                        {
+                            parentId = parentIdProp.GetString() ?? "(no id)";
+                        }
+                        Console.WriteLine($"  {mId} EXTENDS {parentId}");
+                        edgeCount++;
+                    }
+                }
+            }
+            if (edgeCount == 0)
+                Console.WriteLine($"  {model} has no EXTENDS edges");
+        }
+
+        // Test queries that will exercise inheritance lookup (current implementation only)
+        (string name, string query, int expectedCount)[] testQueries = new[]
+        {
+            (
+                "CelestialBody inheritance query",
+                "SELECT * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:contoso:CelestialBody;1')",
+                twinsPerType * 3
+            ),
+            (
+                "Planet inheritance query",
+                "SELECT * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:contoso:Planet;1')",
+                twinsPerType * 2
+            ),
+            (
+                "HabitablePlanet direct query",
+                "SELECT * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:contoso:HabitablePlanet;1')",
+                twinsPerType
+            ),
+            (
+                "Room direct query",
+                "SELECT * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:adt:dtsample:room;1')",
+                twinsPerType
+            ),
+        };
+
+        const int iterations = 5; // Number of times to run each query for averaging
+
+        var results = new List<(string name, long totalMs, int expectedCount, int actualCount)>();
+        foreach (var (name, query, expectedCount) in testQueries)
+        {
+            var totalTime = 0L;
+            var actualCount = 0;
+
+            for (int i = 0; i < iterations; i++)
+            {
+                var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+                var count = 0;
+
+                await foreach (var result in Client.QueryAsync<JsonDocument>(query))
+                {
+                    count++;
+                }
+
+                Assert.Equal(expectedCount, count); // Verify correctness
+
+                stopwatch.Stop();
+                totalTime += stopwatch.ElapsedMilliseconds;
+                if (i == 0)
+                    actualCount = count; // Save count from first iteration
+            }
+
+            results.Add((name, totalTime, expectedCount, actualCount));
+        }
+
+        // Output performance results
+        var output = new System.Text.StringBuilder();
+        output.AppendLine("\n=== IS_OF_MODEL Performance ===");
+        output.AppendLine($"Iterations per query: {iterations}");
+        output.AppendLine($"Total twins in database: {twins.Count}");
+        output.AppendLine();
+
+        foreach (var (name, totalMs, expectedCount, actualCount) in results)
+        {
+            var avgMs = totalMs / (double)iterations;
+            output.AppendLine(
+                $"  {name}: {avgMs:F2}ms avg ({totalMs}ms total) - {actualCount}/{expectedCount} results"
+            );
+        }
+
+        // Output to test console - this will show in test output
+        Console.WriteLine(output.ToString());
+
+        // For debugging purposes, also write to a temporary assertion that will always pass
+        // but will show the results in the test output
+        Assert.True(true, output.ToString());
+    }
+
     /* [Fact]
     public async Task Performance_IsOfModel_NewVsOldImplementation()
     {
