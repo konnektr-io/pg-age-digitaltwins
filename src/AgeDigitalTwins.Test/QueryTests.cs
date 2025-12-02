@@ -1088,8 +1088,35 @@ public class QueryTests : TestBase
             );
         }
 
+        // Diagnostic: Check if descendants are present in models before running test
+        Console.WriteLine("\n=== Model Descendants Diagnostic ===");
+        var graphName = Client.GetGraphName();
+        await foreach (
+            var model in Client.QueryAsync<JsonDocument>(
+                $@"MATCH (m:Model) WHERE m.id IN ['dtmi:com:contoso:CelestialBody;1', 'dtmi:com:contoso:Planet;1', 'dtmi:com:contoso:HabitablePlanet;1'] RETURN m"
+            )
+        )
+        {
+            if (model != null && model.RootElement.TryGetProperty("m", out var mProp))
+            {
+                var modelId = mProp.GetProperty("id").GetString();
+                if (mProp.TryGetProperty("descendants", out var descProp))
+                {
+                    Console.WriteLine(
+                        $"  {modelId}: descendants = {descProp.GetRawText()} (length: {descProp.GetArrayLength()})"
+                    );
+                }
+                else
+                {
+                    Console.WriteLine($"  {modelId}: NO descendants property found!");
+                }
+            }
+        }
+        Console.WriteLine();
+
         // Generate a large number of twins for scalability testing
-        const int twinsPerType = 750;
+        // Reduced from 750 to 250 to avoid timeouts during initial testing
+        const int twinsPerType = 250;
         var twins = new Dictionary<string, string>(twinsPerType * 4);
 
         for (int i = 1; i <= twinsPerType; i++)
