@@ -72,8 +72,7 @@ public static class GraphInitialization
                     SELECT ARRAY_AGG(ag_catalog.agtype_access_operator(m.properties, '""id""'::agtype))
                     INTO valid_model_ids
                     FROM {graphName}.""Model"" m
-                    WHERE ag_catalog.agtype_access_operator(m.properties, '""id""'::agtype) = model_id
-                        OR ag_catalog.agtype_access_operator(m.properties, '""bases""'::agtype) @> ag_catalog.agtype_build_list(model_id);
+                    WHERE ag_catalog.agtype_access_operator(m.properties, '""bases""'::agtype) @> ag_catalog.agtype_build_list(model_id);
 
                     RETURN twin_model_id = ANY(valid_model_ids);
                 END;
@@ -203,7 +202,6 @@ public static class GraphInitialization
                     RETURNS boolean
                     LANGUAGE plpgsql
                     STABLE
-                    PARALLEL SAFE
                     AS $function$
                     DECLARE
                         sql VARCHAR;
