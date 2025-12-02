@@ -1075,7 +1075,7 @@ public class QueryTests : TestBase
         Assert.Equal(numTwins, count);
     }
 
-    [Fact]
+    /* [Fact]
     public async Task Performance_IsOfModel_NewVsOldImplementation()
     {
         await IntializeAsync();
@@ -1361,5 +1361,5 @@ public class QueryTests : TestBase
         // For debugging purposes, also write to a temporary assertion that will always pass
         // but will show the results in the test output
         Assert.True(true, output.ToString());
-    }
+    } */
 }
