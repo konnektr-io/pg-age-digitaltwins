@@ -1371,6 +1371,171 @@ $cypher$) AS (t agtype);";
         Assert.True(true, explainOutput);
     }
 
+    [Fact]
+    public async Task Performance_IsOfModel_DirectVsOptimized()
+    {
+        await IntializeAsync();
+
+        // Clean up any existing twins
+        await foreach (var twin in Client.QueryAsync<JsonDocument>(@"SELECT * FROM DIGITALTWINS"))
+        {
+            await Client.DeleteDigitalTwinAsync(
+                twin!.RootElement.GetProperty("$dtId")!.GetString()!
+            );
+        }
+
+        // Generate test twins
+        const int twinsPerType = 250;
+        var twins = new Dictionary<string, string>(twinsPerType * 4);
+
+        for (int i = 1; i <= twinsPerType; i++)
+        {
+            twins[$"cb{i}"] =
+                $"{{\"$dtId\": \"cb{i}\", \"$metadata\": {{\"$model\": \"dtmi:com:contoso:CelestialBody;1\"}}, \"name\": \"Celestial Body {i}\", \"mass\": {i}.0e24}}";
+            twins[$"p{i}"] =
+                $"{{\"$dtId\": \"p{i}\", \"$metadata\": {{\"$model\": \"dtmi:com:contoso:Planet;1\"}}, \"name\": \"Planet {i}\"}}";
+            twins[$"hp{i}"] =
+                $"{{\"$dtId\": \"hp{i}\", \"$metadata\": {{\"$model\": \"dtmi:com:contoso:HabitablePlanet;1\"}}, \"name\": \"Habitable Planet {i}\", \"hasLife\": {(i % 2 == 0 ? "false" : "true")}}}";
+            twins[$"room{i}"] =
+                $"{{\"$dtId\": \"room{i}\", \"$metadata\": {{\"$model\": \"dtmi:com:adt:dtsample:room;1\"}}, \"name\": \"Room {i}\"}}";
+        }
+
+        // Bulk create twins
+        const int batchSize = 100;
+        var twinJsonObjects = twins
+            .Values.Select(json => JsonNode.Parse(json)?.AsObject())
+            .Where(obj => obj != null)
+            .ToList();
+
+        for (int i = 0; i < twinJsonObjects.Count; i += batchSize)
+        {
+            var batch = twinJsonObjects.Skip(i).Take(batchSize).ToList();
+            var result = await Client.CreateOrReplaceDigitalTwinsAsync<JsonObject>(batch!);
+            Assert.False(result.HasFailures, $"Batch insert error at batch {i / batchSize}");
+        }
+
+        var graphName = Client.GetGraphName();
+
+        // Test queries: Direct function call vs Optimized CTE approach
+        (string name, string modelId, int expectedCount)[] testCases = new[]
+        {
+            ("CelestialBody inheritance", "dtmi:com:contoso:CelestialBody;1", twinsPerType * 3),
+            ("Planet inheritance", "dtmi:com:contoso:Planet;1", twinsPerType * 2),
+            ("HabitablePlanet direct", "dtmi:com:contoso:HabitablePlanet;1", twinsPerType),
+            ("Room direct", "dtmi:com:adt:dtsample:room;1", twinsPerType),
+        };
+
+        const int iterations = 5;
+
+        var directResults =
+            new List<(string name, long totalMs, int expectedCount, int actualCount)>();
+        var optimizedResults =
+            new List<(string name, long totalMs, int expectedCount, int actualCount)>();
+
+        foreach (var (name, modelId, expectedCount) in testCases)
+        {
+            // Test DIRECT approach (using is_of_model function)
+            var directQuery =
+                $@"MATCH (t:Twin) WHERE {graphName}.is_of_model(t, '{modelId}') RETURN t";
+
+            var directTotalTime = 0L;
+            var directActualCount = 0;
+
+            for (int i = 0; i < iterations; i++)
+            {
+                var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+                var count = 0;
+
+                await foreach (var result in Client.QueryAsync<JsonDocument>(directQuery))
+                {
+                    count++;
+                }
+
+                stopwatch.Stop();
+                directTotalTime += stopwatch.ElapsedMilliseconds;
+                if (i == 0)
+                    directActualCount = count;
+            }
+
+            Assert.Equal(expectedCount, directActualCount);
+            directResults.Add((name, directTotalTime, expectedCount, directActualCount));
+
+            // Test OPTIMIZED approach (pre-fetch descendants, then filter with IN)
+            var optimizedQuery =
+                $@"
+MATCH (m:Model {{id: '{modelId}'}})
+WITH m.descendants as model_ids
+MATCH (t:Twin)
+WHERE t.`$metadata`.`$model` IN model_ids
+RETURN t";
+
+            var optimizedTotalTime = 0L;
+            var optimizedActualCount = 0;
+
+            for (int i = 0; i < iterations; i++)
+            {
+                var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+                var count = 0;
+
+                await foreach (var result in Client.QueryAsync<JsonDocument>(optimizedQuery))
+                {
+                    count++;
+                }
+
+                stopwatch.Stop();
+                optimizedTotalTime += stopwatch.ElapsedMilliseconds;
+                if (i == 0)
+                    optimizedActualCount = count;
+            }
+
+            Assert.Equal(expectedCount, optimizedActualCount);
+            optimizedResults.Add((name, optimizedTotalTime, expectedCount, optimizedActualCount));
+        }
+
+        // Output performance comparison
+        var output = new System.Text.StringBuilder();
+        output.AppendLine("\n=== IS_OF_MODEL: Direct vs Optimized Performance ===");
+        output.AppendLine($"Iterations per query: {iterations}");
+        output.AppendLine($"Total twins in database: {twins.Count}");
+        output.AppendLine();
+
+        output.AppendLine("DIRECT (is_of_model function):");
+        foreach (var (name, totalMs, expectedCount, actualCount) in directResults)
+        {
+            var avgMs = totalMs / (double)iterations;
+            output.AppendLine(
+                $"  {name}: {avgMs:F2}ms avg ({totalMs}ms total) - {actualCount}/{expectedCount} results"
+            );
+        }
+
+        output.AppendLine();
+        output.AppendLine("OPTIMIZED (pre-fetch descendants + IN):");
+        foreach (var (name, totalMs, expectedCount, actualCount) in optimizedResults)
+        {
+            var avgMs = totalMs / (double)iterations;
+            output.AppendLine(
+                $"  {name}: {avgMs:F2}ms avg ({totalMs}ms total) - {actualCount}/{expectedCount} results"
+            );
+        }
+
+        output.AppendLine();
+        output.AppendLine("PERFORMANCE IMPROVEMENT:");
+        for (int i = 0; i < directResults.Count; i++)
+        {
+            var directAvg = directResults[i].totalMs / (double)iterations;
+            var optimizedAvg = optimizedResults[i].totalMs / (double)iterations;
+            var improvement = ((directAvg - optimizedAvg) / directAvg) * 100;
+            var speedup = directAvg / optimizedAvg;
+
+            output.AppendLine(
+                $"  {testCases[i].name}: {improvement:+0.0;-0.0}% improvement ({speedup:F1}x speedup)"
+            );
+        }
+
+        Console.WriteLine(output.ToString());
+        Assert.True(true, output.ToString());
+    }
+
     /* [Fact]
     public async Task Performance_IsOfModel_NewVsOldImplementation()
     {
