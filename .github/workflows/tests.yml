@@ -77,8 +77,9 @@ jobs:
               -p 5432:5432 \
               --shm-size=512mb \
               apache/age:${{ matrix.age_image }}
-            # Configure parallel execution for Apache image
+            # Configure parallel execution and increase max_connections for Apache image
             sleep 10
+            docker exec postgres-test psql -U app -d app -c "ALTER SYSTEM SET max_connections = 500;"
             docker exec postgres-test psql -U app -d app -c "ALTER SYSTEM SET max_parallel_workers_per_gather = 4;"
             docker exec postgres-test psql -U app -d app -c "ALTER SYSTEM SET max_parallel_workers = 8;"
             docker exec postgres-test psql -U app -d app -c "ALTER SYSTEM SET max_worker_processes = 8;"
@@ -86,7 +87,9 @@ jobs:
             docker exec postgres-test psql -U app -d app -c "ALTER SYSTEM SET parallel_tuple_cost = 0;"
             docker exec postgres-test psql -U app -d app -c "ALTER SYSTEM SET min_parallel_table_scan_size = 0;"
             docker exec postgres-test psql -U app -d app -c "ALTER SYSTEM SET min_parallel_index_scan_size = 0;"
-            docker exec postgres-test psql -U app -d app -c "SELECT pg_reload_conf();"
+            docker stop postgres-test
+            docker start postgres-test
+            sleep 5
           fi
           
           echo "Waiting for container to start..."
