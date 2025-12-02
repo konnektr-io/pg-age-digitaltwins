@@ -1466,7 +1466,7 @@ $cypher$) AS (t agtype);";
 MATCH (m:Model {{id: '{modelId}'}})
 WITH m.descendants as model_ids
 MATCH (t:Twin)
-WHERE t.`$metadata`.`$model` IN model_ids
+WHERE t.`$metadata`.`$model` = '{modelId}' OR t.`$metadata`.`$model` IN model_ids
 RETURN t";
 
             var optimizedTotalTime = 0L;
