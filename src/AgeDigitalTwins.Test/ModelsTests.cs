@@ -354,4 +354,167 @@ public class ModelsTests : TestBase
         await Client.DeleteDigitalTwinAsync(twinId);
         await Client.DeleteModelAsync(modelId);
     }
+
+    [Fact]
+    public async Task DeleteAllModels_DeletesAllModels()
+    {
+        // Arrange: Create a few models
+        string[] models =
+        [
+            SampleData.DtdlPlanet,
+            SampleData.DtdlCelestialBody,
+            SampleData.DtdlCrater,
+            SampleData.DtdlHabitablePlanet,
+        ];
+        await Client.CreateModelsAsync(models);
+
+        // Act: Delete all models
+        await Client.DeleteAllModelsAsync();
+
+        // Assert: No models should remain
+        bool anyModelsExist = false;
+        await foreach (
+            var modelData in Client.GetModelsAsync(new() { IncludeModelDefinition = false })
+        )
+        {
+            anyModelsExist = true;
+            break;
+        }
+        Assert.False(anyModelsExist);
+    }
+
+    [Fact]
+    public async Task CreateModels_DescendantsAndBasesStoredCorrectly()
+    {
+        // Clean up existing models
+        string[] modelIds =
+        [
+            "dtmi:com:contoso:HabitablePlanet;1",
+            "dtmi:com:contoso:Planet;1",
+            "dtmi:com:contoso:CelestialBody;1",
+            "dtmi:com:contoso:Crater;1",
+        ];
+        foreach (var modelId in modelIds)
+        {
+            try
+            {
+                await Client.DeleteModelAsync(modelId);
+            }
+            catch (ModelNotFoundException)
+            {
+                // Ignore if model doesn't exist
+            }
+        }
+
+        // Create models with inheritance hierarchy:
+        // CelestialBody (base)
+        // └─ Planet (extends CelestialBody)
+        //    └─ HabitablePlanet (extends Planet, which transitively extends CelestialBody)
+        string[] models =
+        [
+            SampleData.DtdlCelestialBody,
+            SampleData.DtdlCrater,
+            SampleData.DtdlPlanet,
+            SampleData.DtdlHabitablePlanet,
+        ];
+        var results = await Client.CreateModelsAsync(models);
+
+        // Verify CelestialBody
+        var celestialBody = results.FirstOrDefault(m => m.Id == "dtmi:com:contoso:CelestialBody;1");
+        Assert.NotNull(celestialBody);
+        Assert.Empty(celestialBody.Bases); // CelestialBody has no bases
+        Assert.NotNull(celestialBody.Descendants);
+        Assert.Equal(2, celestialBody.Descendants!.Length); // Planet and HabitablePlanet
+        Assert.Contains("dtmi:com:contoso:Planet;1", celestialBody.Descendants);
+        Assert.Contains("dtmi:com:contoso:HabitablePlanet;1", celestialBody.Descendants);
+
+        // Verify Planet
+        var planet = results.FirstOrDefault(m => m.Id == "dtmi:com:contoso:Planet;1");
+        Assert.NotNull(planet);
+        Assert.Single(planet.Bases);
+        Assert.Contains("dtmi:com:contoso:CelestialBody;1", planet.Bases);
+        Assert.NotNull(planet.Descendants);
+        Assert.Single(planet.Descendants!); // Only HabitablePlanet
+        Assert.Contains("dtmi:com:contoso:HabitablePlanet;1", planet.Descendants);
+
+        // Verify HabitablePlanet
+        var habitablePlanet = results.FirstOrDefault(m =>
+            m.Id == "dtmi:com:contoso:HabitablePlanet;1"
+        );
+        Assert.NotNull(habitablePlanet);
+        Assert.Equal(2, habitablePlanet.Bases.Length);
+        Assert.Contains("dtmi:com:contoso:CelestialBody;1", habitablePlanet.Bases);
+        Assert.Contains("dtmi:com:contoso:Planet;1", habitablePlanet.Bases);
+        Assert.NotNull(habitablePlanet.Descendants);
+        Assert.Empty(habitablePlanet.Descendants!); // No descendants
+
+        // Verify Crater (independent model with component relationship)
+        var crater = results.FirstOrDefault(m => m.Id == "dtmi:com:contoso:Crater;1");
+        Assert.NotNull(crater);
+        Assert.Empty(crater.Bases);
+        Assert.NotNull(crater.Descendants);
+        Assert.Empty(crater.Descendants!);
+    }
+
+    [Fact]
+    public async Task CreateModels_DescendantsPersistedInDatabase()
+    {
+        // Clean up existing models
+        string[] modelIds =
+        [
+            "dtmi:com:contoso:HabitablePlanet;1",
+            "dtmi:com:contoso:Planet;1",
+            "dtmi:com:contoso:CelestialBody;1",
+            "dtmi:com:contoso:Crater;1",
+        ];
+        foreach (var modelId in modelIds)
+        {
+            try
+            {
+                await Client.DeleteModelAsync(modelId);
+            }
+            catch (ModelNotFoundException)
+            {
+                // Ignore if model doesn't exist
+            }
+        }
+
+        // Create models
+        await Client.CreateModelsAsync(
+            [
+                SampleData.DtdlCelestialBody,
+                SampleData.DtdlCrater,
+                SampleData.DtdlPlanet,
+                SampleData.DtdlHabitablePlanet,
+            ]
+        );
+
+        // Retrieve models from database to verify persistence
+        var celestialBody = await Client.GetModelAsync("dtmi:com:contoso:CelestialBody;1");
+        Assert.NotNull(celestialBody.Descendants);
+        Assert.Equal(2, celestialBody.Descendants!.Length);
+        Assert.Contains("dtmi:com:contoso:Planet;1", celestialBody.Descendants);
+        Assert.Contains("dtmi:com:contoso:HabitablePlanet;1", celestialBody.Descendants);
+
+        var planet = await Client.GetModelAsync("dtmi:com:contoso:Planet;1");
+        Assert.NotNull(planet.Descendants);
+        Assert.Single(planet.Descendants!);
+        Assert.Contains("dtmi:com:contoso:HabitablePlanet;1", planet.Descendants);
+
+        var habitablePlanet = await Client.GetModelAsync("dtmi:com:contoso:HabitablePlanet;1");
+        Assert.NotNull(habitablePlanet.Descendants);
+        Assert.Empty(habitablePlanet.Descendants!);
+
+        // Also verify via raw Cypher query to ensure database storage
+        var graphName = Client.GetGraphName();
+        var celestialBodyRaw = await Client
+            .QueryAsync<JsonDocument>(
+                $@"MATCH (m:Model {{id: 'dtmi:com:contoso:CelestialBody;1'}}) RETURN m"
+            )
+            .FirstOrDefaultAsync();
+        Assert.NotNull(celestialBodyRaw);
+        var descendants = celestialBodyRaw.RootElement.GetProperty("m").GetProperty("descendants");
+        Assert.Equal(JsonValueKind.Array, descendants.ValueKind);
+        Assert.Equal(2, descendants.GetArrayLength());
+    }
 }

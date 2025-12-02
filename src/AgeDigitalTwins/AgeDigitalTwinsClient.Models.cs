@@ -153,32 +153,60 @@ MATCH (m:Model {{id: dependency}})
                 ConvertToAsyncEnumerable(dtdlModels),
                 cancellationToken: cancellationToken
             );
-            IEnumerable<DigitalTwinsModelData> modelDatas = dtdlModels.Select(dtdlModel =>
-            {
-                // Prepare the bases array to store all bases (dtmis that the interface extends from)
-                var bases = new List<string>();
-                // Parse the original json and prepare the modelData object
-                var modelData = new DigitalTwinsModelData(dtdlModel);
-                // Find the interface from the objectModel dictionary using the modelId
-                var interfaceInfo = (DTInterfaceInfo)objectModel[new Dtmi(modelData.Id)];
-                // Recursively add all base interfaces to the list of bases
-                void AddBaseInterfaces(DTInterfaceInfo currentInterface)
+
+            // Dictionary to track descendants: key = base model ID, value = list of models that extend it
+            var descendantsMap = new Dictionary<string, HashSet<string>>();
+
+            IEnumerable<DigitalTwinsModelData> modelDatas = dtdlModels
+                .Select(dtdlModel =>
                 {
-                    foreach (DTInterfaceInfo extendedInterface in currentInterface.Extends)
+                    // Prepare the bases array to store all bases (dtmis that the interface extends from)
+                    var bases = new List<string>();
+                    // Parse the original json and prepare the modelData object
+                    var modelData = new DigitalTwinsModelData(dtdlModel);
+                    // Find the interface from the objectModel dictionary using the modelId
+                    var interfaceInfo = (DTInterfaceInfo)objectModel[new Dtmi(modelData.Id)];
+                    // Recursively add all base interfaces to the list of bases
+                    void AddBaseInterfaces(DTInterfaceInfo currentInterface)
                     {
-                        if (!bases.Contains(extendedInterface.Id.AbsoluteUri))
+                        foreach (DTInterfaceInfo extendedInterface in currentInterface.Extends)
                         {
-                            bases.Add(extendedInterface.Id.AbsoluteUri);
-                            AddBaseInterfaces(extendedInterface); // Recursive call
+                            if (!bases.Contains(extendedInterface.Id.AbsoluteUri))
+                            {
+                                bases.Add(extendedInterface.Id.AbsoluteUri);
+
+                                // Track that current model is a descendant of this base
+                                if (!descendantsMap.ContainsKey(extendedInterface.Id.AbsoluteUri))
+                                {
+                                    descendantsMap[extendedInterface.Id.AbsoluteUri] =
+                                        new HashSet<string>();
+                                }
+                                descendantsMap[extendedInterface.Id.AbsoluteUri].Add(modelData.Id);
+
+                                AddBaseInterfaces(extendedInterface); // Recursive call
+                            }
                         }
                     }
+                    // Add the base interfaces to the list of bases (recursively)
+                    AddBaseInterfaces(interfaceInfo);
+                    // Add the collected bases to the modelData
+                    modelData.Bases = bases.ToArray();
+                    return modelData;
+                })
+                .ToList(); // Materialize to ensure descendantsMap is fully populated
+
+            // Now assign descendants to each model
+            foreach (var modelData in modelDatas)
+            {
+                if (descendantsMap.TryGetValue(modelData.Id, out var descendants))
+                {
+                    modelData.Descendants = descendants.ToArray();
                 }
-                // Add the base interfaces to the list of bases (recursively)
-                AddBaseInterfaces(interfaceInfo);
-                // Add the collected bases to the modelData
-                modelData.Bases = bases.ToArray();
-                return modelData;
-            });
+                else
+                {
+                    modelData.Descendants = Array.Empty<string>();
+                }
+            }
             // This is needed as after unwinding, it gets converted to agtype again
             string modelsString =
                 $"['{string.Join("','", modelDatas.Select(m => JsonSerializer.Serialize(m, serializerOptions).Replace("'", "\\'")))}']";
