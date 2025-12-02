@@ -54,9 +54,8 @@ public static class GraphInitialization
                 PARALLEL SAFE
                 AS $function$
                 DECLARE
-                    sql VARCHAR;
                     twin_model_id agtype;
-                    models_array agtype;
+                    valid_model_ids agtype[];
                 BEGIN
                     twin_model_id := ag_catalog.agtype_access_operator(twin,'""$metadata""','""$model""');
                     
@@ -67,19 +66,16 @@ public static class GraphInitialization
 
                     -- If exact match requested, return false
                     IF exact THEN
-                        RETURN false;
-                    END IF;
 
-                    -- Check inheritance via bases array
-                    sql := format('SELECT m FROM ag_catalog.cypher(''{graphName}'', $$
-                        MATCH (m:Model)
-                        WHERE %s IN m.bases
-                        RETURN collect(m.id)
-                    $$) AS (m agtype)', model_id);
-                    EXECUTE sql INTO models_array;
-                    
-                    -- Check if twin's model ID is in the collected models array
-                    RETURN models_array @> ag_catalog.agtype_build_list(twin_model_id);
+                    -- For inheritance match, get the model_id plus all models that inherit from it
+                    -- (i.e., models that have model_id in their bases array)
+                    SELECT ARRAY_AGG(ag_catalog.agtype_access_operator(m.properties, '""id""'::agtype))
+                    INTO valid_model_ids
+                    FROM {graphName}.""Model"" m
+                    WHERE ag_catalog.agtype_access_operator(m.properties, '""id""'::agtype) = model_id
+                        OR ag_catalog.agtype_access_operator(m.properties, '""bases""'::agtype) @> ag_catalog.agtype_build_list(model_id);
+
+                    RETURN twin_model_id = ANY(valid_model_ids);
                 END;
                 $function$"
             ),
