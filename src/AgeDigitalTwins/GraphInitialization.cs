@@ -54,9 +54,8 @@ public static class GraphInitialization
                 PARALLEL SAFE
                 AS $function$
                 DECLARE
-                    sql VARCHAR;
                     twin_model_id agtype;
-                    models_array agtype;
+                    valid_model_ids agtype[];
                 BEGIN
                     twin_model_id := ag_catalog.agtype_access_operator(twin,'""$metadata""','""$model""');
                     
@@ -70,16 +69,14 @@ public static class GraphInitialization
                         RETURN false;
                     END IF;
 
-                    -- Check inheritance via bases array
-                    sql := format('SELECT m FROM ag_catalog.cypher(''{graphName}'', $$
-                        MATCH (m:Model)
-                        WHERE %s IN m.bases
-                        RETURN collect(m.id)
-                    $$) AS (m agtype)', model_id);
-                    EXECUTE sql INTO models_array;
-                    
-                    -- Check if twin's model ID is in the collected models array
-                    RETURN models_array @> ag_catalog.agtype_build_list(twin_model_id);
+                    -- For inheritance match, get the model_id plus all models that inherit from it
+                    -- (i.e., models that have model_id in their bases array)
+                    SELECT ARRAY_AGG(ag_catalog.agtype_access_operator(m.properties, '""id""'::agtype))
+                    INTO valid_model_ids
+                    FROM {graphName}.""Model"" m
+                    WHERE ag_catalog.agtype_access_operator(m.properties, '""bases""'::agtype) @> ag_catalog.agtype_build_list(model_id);
+
+                    RETURN twin_model_id = ANY(valid_model_ids);
                 END;
                 $function$"
             ),
@@ -150,7 +147,6 @@ public static class GraphInitialization
             new(
                 @$"CREATE OR REPLACE FUNCTION {graphName}.is_object(val agtype)
                 RETURNS boolean 
-                PARALLEL SAFE
                 AS $$
                 BEGIN
                     RETURN ag_catalog.age_keys(val) IS NOT NULL;
@@ -164,7 +160,6 @@ public static class GraphInitialization
             new(
                 @$"CREATE OR REPLACE FUNCTION {graphName}.is_number(val agtype)
                 RETURNS boolean
-                PARALLEL SAFE
                 AS $$
                 BEGIN
                     RETURN (ag_catalog.age_tofloat(val) IS NOT NULL OR ag_catalog.age_tointeger(val) IS NOT NULL) AND NOT (ag_catalog.age_tostring(val) = val);
@@ -178,7 +173,6 @@ public static class GraphInitialization
             new(
                 @$"CREATE OR REPLACE FUNCTION {graphName}.is_primitive(val agtype)
                 RETURNS boolean
-                PARALLEL SAFE
                 AS $$
                 BEGIN
                     RETURN ag_catalog.age_tostring(val) IS NOT NULL OR ag_catalog.age_tofloat(val) IS NOT NULL OR val = true OR val = false;
@@ -192,7 +186,6 @@ public static class GraphInitialization
             new(
                 @$"CREATE OR REPLACE FUNCTION {graphName}.is_string(val agtype)
                 RETURNS boolean
-                PARALLEL SAFE
                 AS $$
                 BEGIN
                     RETURN ag_catalog.age_tostring(val) = val;
@@ -204,33 +197,32 @@ public static class GraphInitialization
             ),
             new(
                 @$"CREATE OR REPLACE FUNCTION {graphName}.is_of_model_old(twin agtype, model_id agtype, exact boolean default false)
-                    RETURNS boolean
-                    LANGUAGE plpgsql
-                    STABLE
-                    PARALLEL SAFE
-                    AS $function$
-                    DECLARE
-                        sql VARCHAR;
-                        twin_model_id agtype;
-                        result boolean;
-                    BEGIN
-                        SELECT ag_catalog.agtype_access_operator(twin,'""$metadata""'::agtype,'""$model""'::agtype) INTO twin_model_id;
-                        IF exact THEN
-                            sql := format('SELECT ''%s'' = ''%s''', twin_model_id, model_id);
-                        ELSE
-                            sql := format('SELECT ''%s'' = ''%s'' OR
-                            EXISTS
-                                (SELECT 1 FROM ag_catalog.cypher(''{graphName}'', $$
-                                    MATCH (m:Model)
-                                    WHERE m.id = %s AND %s IN m.bases
-                                    RETURN m.id
-                                $$) AS (m text))
-                            ', twin_model_id, model_id, twin_model_id, model_id);
-                        END IF;
-                        EXECUTE sql INTO result;
-                        RETURN result;
-                    END;
-                    $function$"
+                RETURNS boolean
+                LANGUAGE plpgsql
+                STABLE
+                AS $function$
+                DECLARE
+                    sql VARCHAR;
+                    twin_model_id agtype;
+                    result boolean;
+                BEGIN
+                    SELECT ag_catalog.agtype_access_operator(twin,'""$metadata""'::agtype,'""$model""'::agtype) INTO twin_model_id;
+                    IF exact THEN
+                        sql := format('SELECT ''%s'' = ''%s''', twin_model_id, model_id);
+                    ELSE
+                        sql := format('SELECT ''%s'' = ''%s'' OR
+                        EXISTS
+                            (SELECT 1 FROM ag_catalog.cypher(''{graphName}'', $$
+                                MATCH (m:Model)
+                                WHERE m.id = %s AND %s IN m.bases
+                                RETURN m.id
+                            $$) AS (m text))
+                        ', twin_model_id, model_id, twin_model_id, model_id);
+                    END IF;
+                    EXECUTE sql INTO result;
+                    RETURN result;
+                END;
+                $function$"
             ),
             /*
             new(
