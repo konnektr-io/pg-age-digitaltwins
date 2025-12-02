@@ -1332,15 +1332,16 @@ public class QueryTests : TestBase
         var modelId = "dtmi:com:contoso:CelestialBody;1";
 
         // Apache AGE EXPLAIN ANALYZE syntax
+        // Note: Using $cypher$ for dollar quoting to avoid conflicts with C# string interpolation
         var explainQuery =
             $@"
 EXPLAIN (ANALYZE, VERBOSE, BUFFERS)
 SELECT *
-FROM ag_catalog.cypher('{graphName}', $$
+FROM ag_catalog.cypher('{graphName}', $cypher$
     MATCH (t:Twin)
-    WHERE '{graphName}'.is_of_model(t, '{modelId}')
+    WHERE {graphName}.is_of_model(t, '{modelId}')
     RETURN t
-$$) AS (t agtype);";
+$cypher$) AS (t agtype);";
 
         var output = new System.Text.StringBuilder();
         output.AppendLine("\n=== EXPLAIN ANALYZE for IS_OF_MODEL ===");
