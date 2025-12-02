@@ -66,6 +66,8 @@ public static class GraphInitialization
 
                     -- If exact match requested, return false
                     IF exact THEN
+                        RETURN false;
+                    END IF;
 
                     -- For inheritance match, get the model_id plus all models that inherit from it
                     -- (i.e., models that have model_id in their bases array)
