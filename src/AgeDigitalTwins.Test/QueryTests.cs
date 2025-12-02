@@ -1338,7 +1338,7 @@ EXPLAIN (ANALYZE, VERBOSE, BUFFERS)
 SELECT *
 FROM ag_catalog.cypher('{graphName}', $$
     MATCH (t:Twin)
-    WHERE IS_OF_MODEL(t, '{modelId}')
+    WHERE '{graphName}'.is_of_model(t, '{modelId}')
     RETURN t
 $$) AS (t agtype);";
 
