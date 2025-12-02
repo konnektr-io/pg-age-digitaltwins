@@ -191,8 +191,10 @@ public static partial class AdtQueryHelpers
             throw new InvalidAdtQueryException("Invalid query format: {adtQuery}");
         }
 
-        // Prepare WHERE clause
+        // Prepare WHERE clause and extract IS_OF_MODEL calls for optimization
         string whereClause = string.Empty;
+        List<(string modelId, string modelAlias, string idsAlias)> isOfModelClauses = new();
+
         if (adtQuery.Contains("WHERE", StringComparison.OrdinalIgnoreCase))
         {
             var match = WhereClauseRegex().Match(adtQuery);
@@ -200,10 +202,45 @@ public static partial class AdtQueryHelpers
             {
                 var adtWhereClause = match.Groups[1].Value;
 
-                // Process WHERE clause
-                whereClause = ProcessWhereClause(
+                // Extract all IS_OF_MODEL calls for optimization
+                var isOfModelMatches = IsOfModelRegex().Matches(adtWhereClause);
+                int modelIndex = 1;
+                foreach (Match isOfModelMatch in isOfModelMatches)
+                {
+                    var args = isOfModelMatch.Groups[1].Value.Split(',');
+                    string modelId;
+
+                    // Determine if this is IS_OF_MODEL('model') or IS_OF_MODEL(T, 'model')
+                    if (
+                        args.Length == 1
+                        || (
+                            args.Length == 2
+                            && args[1].Trim().Equals("exact", StringComparison.OrdinalIgnoreCase)
+                        )
+                    )
+                    {
+                        // IS_OF_MODEL('model') or IS_OF_MODEL('model', exact)
+                        modelId = args[0].Trim();
+                    }
+                    else
+                    {
+                        // IS_OF_MODEL(T, 'model') or IS_OF_MODEL(T, 'model', exact)
+                        modelId = args[1].Trim();
+                    }
+
+                    // Only add if not already present
+                    if (!isOfModelClauses.Any(x => x.modelId == modelId))
+                    {
+                        isOfModelClauses.Add((modelId, $"m{modelIndex}", $"model_ids{modelIndex}"));
+                        modelIndex++;
+                    }
+                }
+
+                // Process WHERE clause with IS_OF_MODEL extraction context
+                whereClause = ProcessWhereClauseWithIsOfModel(
                     adtWhereClause,
                     graphName,
+                    isOfModelClauses,
                     usesWildcard
                         && adtQuery.Contains(
                             "FROM RELATIONSHIPS",
@@ -219,7 +256,30 @@ public static partial class AdtQueryHelpers
         }
 
         // Join everything together to form the final Cypher query
+        // Add Model matches if IS_OF_MODEL is used
+        if (isOfModelClauses.Count > 0)
+        {
+            var modelMatches = string.Join(
+                ",",
+                isOfModelClauses.Select(m => $"({m.modelAlias}:Model {{id: {m.modelId}}})")
+            );
+            matchClause = modelMatches + "," + matchClause;
+        }
+
         string cypher = "MATCH " + matchClause;
+
+        // Add WITH clause if IS_OF_MODEL is used
+        if (isOfModelClauses.Count > 0)
+        {
+            var withItems = isOfModelClauses
+                .Select(m => $"{m.modelAlias}.descendants as {m.idsAlias}")
+                .ToList();
+            // Determine twin alias from matchClause
+            var twinAlias = usesWildcard ? "T" : ExtractTwinAliasFromMatchClause(matchClause);
+            withItems.Add(twinAlias);
+            cypher += " WITH " + string.Join(", ", withItems);
+        }
+
         if (!string.IsNullOrEmpty(whereClause))
         {
             if (multiLabelEdgeWhereClauses.Count > 0)
@@ -247,6 +307,87 @@ public static partial class AdtQueryHelpers
             cypher += " " + limitClause;
         }
         return cypher;
+    }
+
+    private static string ExtractTwinAliasFromMatchClause(string matchClause)
+    {
+        // Extract twin alias from patterns like (T:Twin) or (twin:Twin)
+        var match = System.Text.RegularExpressions.Regex.Match(matchClause, @"\((\w+):Twin\)");
+        return match.Success ? match.Groups[1].Value : "T";
+    }
+
+    internal static string ProcessWhereClauseWithIsOfModel(
+        string whereClause,
+        string graphName,
+        List<(string modelId, string modelAlias, string idsAlias)> isOfModelClauses,
+        string? prependAlias = null
+    )
+    {
+        // Create placeholders for model_ids variables to protect them from property prepending
+        // Use brackets to make them look like array access which won't be matched by PropertyAccessWhereClauseRegex
+        Dictionary<string, string> idsPlaceholders = new();
+        int placeholderIndex = 0;
+        foreach (var modelInfo in isOfModelClauses)
+        {
+            var placeholder = $"['__MODELIDS_{placeholderIndex}__']";
+            idsPlaceholders[placeholder] = modelInfo.idsAlias;
+            placeholderIndex++;
+        }
+
+        // First process IS_OF_MODEL calls with optimization using placeholders
+        int currentPlaceholder = 0;
+        whereClause = IsOfModelRegex()
+            .Replace(
+                whereClause,
+                m =>
+                {
+                    var args = m.Groups[1].Value.Split(',');
+                    string modelId;
+                    string twinAlias = prependAlias ?? "T";
+
+                    // Determine if this is IS_OF_MODEL('model') or IS_OF_MODEL(T, 'model')
+                    if (
+                        args.Length == 1
+                        || (
+                            args.Length == 2
+                            && args[1].Trim().Equals("exact", StringComparison.OrdinalIgnoreCase)
+                        )
+                    )
+                    {
+                        // IS_OF_MODEL('model') or IS_OF_MODEL('model', exact)
+                        modelId = args[0].Trim();
+                    }
+                    else
+                    {
+                        // IS_OF_MODEL(T, 'model') or IS_OF_MODEL(T, 'model', exact)
+                        twinAlias = args[0].Trim();
+                        modelId = args[1].Trim();
+                    }
+
+                    // Find the corresponding model alias and placeholder
+                    var modelInfoIndex = isOfModelClauses.FindIndex(x => x.modelId == modelId);
+                    if (modelInfoIndex >= 0)
+                    {
+                        var placeholder = $"['__MODELIDS_{modelInfoIndex}__']";
+                        // Generate: (T['$metadata']['$model'] = 'modelId' OR T['$metadata']['$model'] IN placeholder)
+                        return $"({twinAlias}['$metadata']['$model'] = {modelId} OR {twinAlias}['$metadata']['$model'] IN {placeholder})";
+                    }
+
+                    // Fallback (should not happen if extraction worked correctly)
+                    return $"{graphName}.is_of_model({twinAlias},{modelId})";
+                }
+            );
+
+        // Now process the rest of the WHERE clause using the original logic
+        whereClause = ProcessWhereClause(whereClause, graphName, prependAlias);
+
+        // Replace placeholders back with actual model_ids variable names
+        foreach (var kvp in idsPlaceholders)
+        {
+            whereClause = whereClause.Replace(kvp.Key, kvp.Value);
+        }
+
+        return whereClause;
     }
 
     internal static string ProcessWhereClause(
@@ -277,48 +418,6 @@ public static partial class AdtQueryHelpers
                     m =>
                     {
                         return $"{prependAlias}.{m.Value}";
-                    }
-                );
-
-            // Process IS_OF_MODEL function
-            whereClause = IsOfModelRegex()
-                .Replace(
-                    whereClause,
-                    m =>
-                    {
-                        var args = m.Groups[1].Value.Split(',');
-                        var modelId = args[0].Trim();
-                        // We need to remove T.exact (not exact), because the prependAlias was already added
-                        if (
-                            args.Length > 1
-                            && args[1].Trim().Equals("T.exact", StringComparison.OrdinalIgnoreCase)
-                        )
-                        {
-                            return $"{graphName}.is_of_model({prependAlias},{modelId},true)";
-                        }
-                        return $"{graphName}.is_of_model({prependAlias},{modelId})";
-                    }
-                );
-        }
-        else
-        {
-            // Process IS_OF_MODEL function without prepend alias (alias/twin collection should already be defined in caught group)
-            whereClause = IsOfModelRegex()
-                .Replace(
-                    whereClause,
-                    m =>
-                    {
-                        var args = m.Groups[1].Value.Split(',');
-                        var twinCollection = args[0].Trim();
-                        var modelId = args[1].Trim();
-                        if (
-                            args.Length > 2
-                            && args[2].Trim().Equals("exact", StringComparison.OrdinalIgnoreCase)
-                        )
-                        {
-                            return $"{graphName}.is_of_model({twinCollection},{modelId},true)";
-                        }
-                        return $"{graphName}.is_of_model({twinCollection},{modelId})";
                     }
                 );
         }

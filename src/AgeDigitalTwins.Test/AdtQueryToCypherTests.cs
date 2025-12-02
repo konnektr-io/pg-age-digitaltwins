@@ -24,7 +24,7 @@ public class AdtQueryToCypherTests
     )]
     [InlineData(
         "SELECT * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:adt:dtsample:room;1')",
-        "MATCH (T:Twin) WHERE testgraph.is_of_model(T,'dtmi:com:adt:dtsample:room;1') RETURN *"
+        "MATCH (m1:Model {id: 'dtmi:com:adt:dtsample:room;1'}),(T:Twin) WITH m1.descendants as model_ids1, T WHERE (T['$metadata']['$model'] = 'dtmi:com:adt:dtsample:room;1' OR T['$metadata']['$model'] IN model_ids1) RETURN *"
     )]
     [InlineData(
         "SELECT * FROM DIGITALTWINS WHERE STARTSWITH(name, 'foo')",
@@ -76,11 +76,11 @@ public class AdtQueryToCypherTests
     )]
     [InlineData(
         "SELECT * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:adt:dtsample:room;1') AND name = 'foo'",
-        "MATCH (T:Twin) WHERE testgraph.is_of_model(T,'dtmi:com:adt:dtsample:room;1') AND T.name = 'foo' RETURN *"
+        "MATCH (m1:Model {id: 'dtmi:com:adt:dtsample:room;1'}),(T:Twin) WITH m1.descendants as model_ids1, T WHERE (T['$metadata']['$model'] = 'dtmi:com:adt:dtsample:room;1' OR T['$metadata']['$model'] IN model_ids1) AND T.name = 'foo' RETURN *"
     )]
     [InlineData(
         "SELECT T FROM DIGITALTWINS T WHERE IS_OF_MODEL(T,'dtmi:com:adt:dtsample:room;1') AND T.name = 'foo'",
-        "MATCH (T:Twin) WHERE testgraph.is_of_model(T,'dtmi:com:adt:dtsample:room;1') AND T.name = 'foo' RETURN T"
+        "MATCH (m1:Model {id: 'dtmi:com:adt:dtsample:room;1'}),(T:Twin) WITH m1.descendants as model_ids1, T WHERE (T['$metadata']['$model'] = 'dtmi:com:adt:dtsample:room;1' OR T['$metadata']['$model'] IN model_ids1) AND T.name = 'foo' RETURN T"
     )]
     [InlineData(
         "SELECT * FROM RELATIONSHIPS WHERE $sourceId = 'root'",
@@ -161,7 +161,7 @@ public class AdtQueryToCypherTests
     )]
     [InlineData(
         "SELECT TOP(50) FROM DIGITALTWINS WHERE (CONTAINS(email,'test') OR CONTAINS(name,'test') OR CONTAINS($dtId,'test')) AND (IS_OF_MODEL('dtmi:com:example:identity:User;1') OR IS_OF_MODEL('dtmi:com:example:identity:Invite;1'))",
-        "MATCH (T:Twin) WHERE (T.email CONTAINS 'test' OR T.name CONTAINS 'test' OR T['$dtId'] CONTAINS 'test') AND (testgraph.is_of_model(T,'dtmi:com:example:identity:User;1') OR testgraph.is_of_model(T,'dtmi:com:example:identity:Invite;1')) RETURN * LIMIT 50"
+        "MATCH (m1:Model {id: 'dtmi:com:example:identity:User;1'}),(m2:Model {id: 'dtmi:com:example:identity:Invite;1'}),(T:Twin) WITH m1.descendants as model_ids1, m2.descendants as model_ids2, T WHERE (T.email CONTAINS 'test' OR T.name CONTAINS 'test' OR T['$dtId'] CONTAINS 'test') AND ((T['$metadata']['$model'] = 'dtmi:com:example:identity:User;1' OR T['$metadata']['$model'] IN model_ids1) OR (T['$metadata']['$model'] = 'dtmi:com:example:identity:Invite;1' OR T['$metadata']['$model'] IN model_ids2)) RETURN * LIMIT 50"
     )]
     [InlineData(
         "SELECT TOP (50) twin FROM DIGITALTWINS twin WHERE CONTAINS(twin.$dtId,'test') OR CONTAINS(twin.name,'test') OR CONTAINS(twin.displayName,'test') OR CONTAINS(twin.tag,'test') OR CONTAINS(twin.label,'test')",
