@@ -76,7 +76,6 @@ public static class GraphInitialization
                         WHERE %s IN m.bases
                         RETURN collect(m.id)
                     $$) AS (m agtype)', model_id);
-                    RAISE NOTICE '%', sql;
                     EXECUTE sql INTO models_array;
                     
                     -- Check if twin's model ID is in the collected models array
