@@ -91,7 +91,7 @@ jobs:
             docker start postgres-test
             sleep 5
           fi
-          
+
           echo "Waiting for container to start..."
           sleep 10
           echo "Container status:"
@@ -105,7 +105,7 @@ jobs:
           if [ "${{ matrix.type }}" = "cnpg" ]; then
             DB_NAME="app"
           fi
-          
+
           for i in {1..45}; do
             # Check if container is still running
             if ! docker ps | grep -q postgres-test; then
@@ -131,7 +131,7 @@ jobs:
           echo "Final container logs:";
           docker logs postgres-test;
           exit 1;
-      
+
       - name: Initialize database with AGE extension
         run: |
           if [ "${{ matrix.type }}" = "cnpg" ]; then
@@ -168,7 +168,7 @@ jobs:
           if [ "${{ matrix.type }}" = "cnpg" ]; then
             export CNPG_TEST=true
           fi
-          
+
           if [ "${{ github.event.inputs.test_project }}" == "All" ] || [ -z "${{ github.event.inputs.test_project }}" ]; then
             if [ -n "${{ github.event.inputs.filter }}" ]; then
               dotnet test './src' --logger 'GitHubActions' --logger 'console;verbosity=normal' --blame-hang --blame-hang-timeout 5m --filter "${{ github.event.inputs.filter }}" -- RunConfiguration.MaxCpuCount=2
