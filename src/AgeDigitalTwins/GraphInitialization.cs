@@ -51,7 +51,6 @@ public static class GraphInitialization
                 RETURNS boolean
                 LANGUAGE plpgsql
                 STABLE
-                PARALLEL SAFE
                 AS $function$
                 DECLARE
                     twin_model_id agtype;
