@@ -161,6 +161,11 @@ jobs:
 
       - name: Test
         run: |
+          # Set CNPG_TEST environment variable for CNPG images
+          if [ "${{ matrix.type }}" = "cnpg" ]; then
+            export CNPG_TEST=true
+          fi
+          
           if [ "${{ github.event.inputs.test_project }}" == "All" ] || [ -z "${{ github.event.inputs.test_project }}" ]; then
             if [ -n "${{ github.event.inputs.filter }}" ]; then
               dotnet test './src' --logger 'GitHubActions' --logger 'console;verbosity=normal' --blame-hang --blame-hang-timeout 5m --filter "${{ github.event.inputs.filter }}" -- RunConfiguration.MaxCpuCount=2

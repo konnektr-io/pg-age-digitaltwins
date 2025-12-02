@@ -147,7 +147,6 @@ public static class GraphInitialization
             new(
                 @$"CREATE OR REPLACE FUNCTION {graphName}.is_object(val agtype)
                 RETURNS boolean 
-                PARALLEL SAFE
                 AS $$
                 BEGIN
                     RETURN ag_catalog.age_keys(val) IS NOT NULL;
@@ -161,7 +160,6 @@ public static class GraphInitialization
             new(
                 @$"CREATE OR REPLACE FUNCTION {graphName}.is_number(val agtype)
                 RETURNS boolean
-                PARALLEL SAFE
                 AS $$
                 BEGIN
                     RETURN (ag_catalog.age_tofloat(val) IS NOT NULL OR ag_catalog.age_tointeger(val) IS NOT NULL) AND NOT (ag_catalog.age_tostring(val) = val);
@@ -175,7 +173,6 @@ public static class GraphInitialization
             new(
                 @$"CREATE OR REPLACE FUNCTION {graphName}.is_primitive(val agtype)
                 RETURNS boolean
-                PARALLEL SAFE
                 AS $$
                 BEGIN
                     RETURN ag_catalog.age_tostring(val) IS NOT NULL OR ag_catalog.age_tofloat(val) IS NOT NULL OR val = true OR val = false;
@@ -189,7 +186,6 @@ public static class GraphInitialization
             new(
                 @$"CREATE OR REPLACE FUNCTION {graphName}.is_string(val agtype)
                 RETURNS boolean
-                PARALLEL SAFE
                 AS $$
                 BEGIN
                     RETURN ag_catalog.age_tostring(val) = val;
@@ -201,32 +197,32 @@ public static class GraphInitialization
             ),
             new(
                 @$"CREATE OR REPLACE FUNCTION {graphName}.is_of_model_old(twin agtype, model_id agtype, exact boolean default false)
-                    RETURNS boolean
-                    LANGUAGE plpgsql
-                    STABLE
-                    AS $function$
-                    DECLARE
-                        sql VARCHAR;
-                        twin_model_id agtype;
-                        result boolean;
-                    BEGIN
-                        SELECT ag_catalog.agtype_access_operator(twin,'""$metadata""'::agtype,'""$model""'::agtype) INTO twin_model_id;
-                        IF exact THEN
-                            sql := format('SELECT ''%s'' = ''%s''', twin_model_id, model_id);
-                        ELSE
-                            sql := format('SELECT ''%s'' = ''%s'' OR
-                            EXISTS
-                                (SELECT 1 FROM ag_catalog.cypher(''{graphName}'', $$
-                                    MATCH (m:Model)
-                                    WHERE m.id = %s AND %s IN m.bases
-                                    RETURN m.id
-                                $$) AS (m text))
-                            ', twin_model_id, model_id, twin_model_id, model_id);
-                        END IF;
-                        EXECUTE sql INTO result;
-                        RETURN result;
-                    END;
-                    $function$"
+                RETURNS boolean
+                LANGUAGE plpgsql
+                STABLE
+                AS $function$
+                DECLARE
+                    sql VARCHAR;
+                    twin_model_id agtype;
+                    result boolean;
+                BEGIN
+                    SELECT ag_catalog.agtype_access_operator(twin,'""$metadata""'::agtype,'""$model""'::agtype) INTO twin_model_id;
+                    IF exact THEN
+                        sql := format('SELECT ''%s'' = ''%s''', twin_model_id, model_id);
+                    ELSE
+                        sql := format('SELECT ''%s'' = ''%s'' OR
+                        EXISTS
+                            (SELECT 1 FROM ag_catalog.cypher(''{graphName}'', $$
+                                MATCH (m:Model)
+                                WHERE m.id = %s AND %s IN m.bases
+                                RETURN m.id
+                            $$) AS (m text))
+                        ', twin_model_id, model_id, twin_model_id, model_id);
+                    END IF;
+                    EXECUTE sql INTO result;
+                    RETURN result;
+                END;
+                $function$"
             ),
             /*
             new(

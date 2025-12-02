@@ -50,7 +50,17 @@ builder.AddNpgsqlMultihostDataSource(
     },
     configureDataSourceBuilder: dataSourceBuilder =>
     {
-        dataSourceBuilder.UseAge(true);
+        // UseAge(true) for CNPG images, UseAge() for Apache AGE images
+        // Default to CNPG (true) for backward compatibility
+        var useCnpgAge = builder.Configuration.GetValue("Parameters:UseCnpgAge", true);
+        if (useCnpgAge)
+        {
+            dataSourceBuilder.UseAge(true);
+        }
+        else
+        {
+            dataSourceBuilder.UseAge();
+        }
     }
 );
 
