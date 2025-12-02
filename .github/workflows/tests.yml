@@ -77,8 +77,11 @@ jobs:
               -p 5432:5432 \
               --shm-size=512mb \
               apache/age:${{ matrix.age_image }}
-            # Configure parallel execution and increase max_connections for Apache image
+            # Configure parallel execution, logical replication, and increase max_connections for Apache image
             sleep 10
+            docker exec postgres-test psql -U app -d app -c "ALTER SYSTEM SET wal_level = logical;"
+            docker exec postgres-test psql -U app -d app -c "ALTER SYSTEM SET max_replication_slots = 10;"
+            docker exec postgres-test psql -U app -d app -c "ALTER SYSTEM SET max_wal_senders = 10;"
             docker exec postgres-test psql -U app -d app -c "ALTER SYSTEM SET max_connections = 500;"
             docker exec postgres-test psql -U app -d app -c "ALTER SYSTEM SET max_parallel_workers_per_gather = 4;"
             docker exec postgres-test psql -U app -d app -c "ALTER SYSTEM SET max_parallel_workers = 8;"
@@ -87,6 +90,7 @@ jobs:
             docker exec postgres-test psql -U app -d app -c "ALTER SYSTEM SET parallel_tuple_cost = 0;"
             docker exec postgres-test psql -U app -d app -c "ALTER SYSTEM SET min_parallel_table_scan_size = 0;"
             docker exec postgres-test psql -U app -d app -c "ALTER SYSTEM SET min_parallel_index_scan_size = 0;"
+            echo "Restarting PostgreSQL to apply configuration changes..."
             docker stop postgres-test
             docker start postgres-test
             sleep 5
@@ -96,8 +100,6 @@ jobs:
           sleep 10
           echo "Container status:"
           docker ps -a | grep postgres-test
-          echo "Container logs:"
-          docker logs postgres-test
 
       - name: Wait for PostgreSQL to be ready
         run: |
