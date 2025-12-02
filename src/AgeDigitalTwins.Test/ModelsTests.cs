@@ -361,9 +361,10 @@ public class ModelsTests : TestBase
         // Arrange: Create a few models
         string[] models =
         [
-            SampleData.DtdlRoom,
             SampleData.DtdlPlanet,
             SampleData.DtdlCelestialBody,
+            SampleData.DtdlCrater,
+            SampleData.DtdlHabitablePlanet,
         ];
         await Client.CreateModelsAsync(models);
 
