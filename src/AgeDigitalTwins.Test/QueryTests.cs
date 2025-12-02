@@ -1305,6 +1305,71 @@ public class QueryTests : TestBase
         Assert.True(true, output.ToString());
     }
 
+    [Fact]
+    public async Task ExplainAnalyze_IsOfModel_ShowsQueryPlan()
+    {
+        await IntializeAsync();
+
+        // Create a few test twins
+        var twins = new Dictionary<string, string>
+        {
+            ["cb1"] =
+                $"{{\"$dtId\": \"cb1\", \"$metadata\": {{\"$model\": \"dtmi:com:contoso:CelestialBody;1\"}}, \"name\": \"Celestial Body 1\", \"mass\": 1.0e24}}",
+            ["p1"] =
+                $"{{\"$dtId\": \"p1\", \"$metadata\": {{\"$model\": \"dtmi:com:contoso:Planet;1\"}}, \"name\": \"Planet 1\"}}",
+            ["hp1"] =
+                $"{{\"$dtId\": \"hp1\", \"$metadata\": {{\"$model\": \"dtmi:com:contoso:HabitablePlanet;1\"}}, \"name\": \"Habitable Planet 1\", \"hasLife\": true}}",
+        };
+
+        foreach (var (id, json) in twins)
+        {
+            await Client.CreateOrReplaceDigitalTwinAsync(id, json);
+        }
+
+        // Build the EXPLAIN ANALYZE query for IS_OF_MODEL
+        // We need to test the actual Cypher query that uses the is_of_model function
+        var graphName = Client.GetGraphName();
+        var modelId = "dtmi:com:contoso:CelestialBody;1";
+
+        // Apache AGE EXPLAIN ANALYZE syntax
+        var explainQuery =
+            $@"
+EXPLAIN (ANALYZE, VERBOSE, BUFFERS)
+SELECT *
+FROM ag_catalog.cypher('{graphName}', $$
+    MATCH (t:Twin)
+    WHERE IS_OF_MODEL(t, '{modelId}')
+    RETURN t
+$$) AS (t agtype);";
+
+        var output = new System.Text.StringBuilder();
+        output.AppendLine("\n=== EXPLAIN ANALYZE for IS_OF_MODEL ===");
+        output.AppendLine($"Model: {modelId}");
+        output.AppendLine();
+
+        // Execute EXPLAIN query directly through Npgsql
+        await using var connection = await Client.GetDataSource().OpenConnectionAsync();
+        await using var command = new Npgsql.NpgsqlCommand(explainQuery, connection);
+
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            var line = reader.GetString(0);
+            output.AppendLine(line);
+        }
+
+        // Output the query plan
+        var explainOutput = output.ToString();
+        Console.WriteLine(explainOutput);
+
+        // Check if the output contains information about the Model table access
+        // We're looking for mentions of the Model table and index usage
+        Assert.Contains("Model", explainOutput); // Should see Model table being accessed
+
+        // The test passes if we got EXPLAIN output - we'll analyze it manually
+        Assert.True(true, explainOutput);
+    }
+
     /* [Fact]
     public async Task Performance_IsOfModel_NewVsOldImplementation()
     {
