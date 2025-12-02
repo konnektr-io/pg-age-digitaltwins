@@ -7,6 +7,7 @@ namespace AgeDigitalTwins.Test;
 public class TestBase : IAsyncDisposable
 {
     private readonly AgeDigitalTwinsClient _client;
+    private readonly NpgsqlMultiHostDataSource _dataSource;
 
     public TestBase()
     {
