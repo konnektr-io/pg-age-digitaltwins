@@ -7,6 +7,7 @@ namespace AgeDigitalTwins.Test;
 public class TestBase : IAsyncDisposable
 {
     private readonly AgeDigitalTwinsClient _client;
+    private readonly NpgsqlMultiHostDataSource _dataSource;
 
     public TestBase()
     {
@@ -24,7 +25,16 @@ public class TestBase : IAsyncDisposable
             new(connectionString) { SearchPath = "ag_catalog, \"$user\", public" };
         NpgsqlDataSourceBuilder dataSourceBuilder = new(connectionStringBuilder.ConnectionString);
 
-        var _dataSource = dataSourceBuilder.UseAge(true).BuildMultiHost();
+        // UseAge(true) for CNPG images, controlled by CNPG_TEST env var
+        var cnpgTest = Environment.GetEnvironmentVariable("CNPG_TEST");
+        if (!string.IsNullOrEmpty(cnpgTest) && cnpgTest.ToLowerInvariant() == "true")
+        {
+            _dataSource = dataSourceBuilder.UseAge(true).BuildMultiHost();
+        }
+        else
+        {
+            _dataSource = dataSourceBuilder.UseAge().BuildMultiHost();
+        }
 
         _client = new AgeDigitalTwinsClient(
             _dataSource,

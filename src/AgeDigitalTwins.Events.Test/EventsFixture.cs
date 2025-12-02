@@ -42,7 +42,17 @@ public class EventsFixture : IAsyncDisposable
             new(connectionString) { SearchPath = "ag_catalog, \"$user\", public" };
         NpgsqlDataSourceBuilder dataSourceBuilder = new(connectionStringBuilder.ConnectionString);
 
-        var dataSource = dataSourceBuilder.UseAge(true).BuildMultiHost();
+        // UseAge(true) for CNPG images, controlled by CNPG_TEST env var
+        var cnpgTest = Environment.GetEnvironmentVariable("CNPG_TEST");
+        NpgsqlMultiHostDataSource dataSource;
+        if (!string.IsNullOrEmpty(cnpgTest) && cnpgTest.ToLowerInvariant() == "true")
+        {
+            dataSource = dataSourceBuilder.UseAge(true).BuildMultiHost();
+        }
+        else
+        {
+            dataSource = dataSourceBuilder.UseAge().BuildMultiHost();
+        }
 
         Client = new AgeDigitalTwinsClient(
             dataSource,
