@@ -53,31 +53,94 @@ public static class GraphInitialization
                 STABLE
                 AS $function$
                 DECLARE
+                    twin_props agtype;
                     twin_model_id agtype;
-                    valid_model_ids agtype[];
+                    model_descendants agtype;
                 BEGIN
-                    twin_model_id := ag_catalog.agtype_access_operator(twin,'""$metadata""','""$model""');
-                    
-                    -- Compare for direct matches first
+                    -- Extract properties whether twin is a vertex or already a map
+                    BEGIN
+                        twin_props := ag_catalog.age_vertex_get_properties(twin);
+                    EXCEPTION WHEN others THEN
+                        twin_props := twin;
+                    END;
+
+                    twin_model_id := ag_catalog.agtype_access_operator(twin_props,'""$metadata""','""$model""');
+                    IF twin_model_id IS NULL THEN
+                        RETURN false; -- Missing model metadata
+                    END IF;
+
+                    -- Fast path: direct match
                     IF twin_model_id = model_id THEN
                         RETURN true;
                     END IF;
 
-                    -- If exact match requested, return false
+                    -- Exact requested, no inheritance traversal
                     IF exact THEN
                         RETURN false;
                     END IF;
 
-                    -- For inheritance match, get the model_id plus all models that inherit from it
-                    -- (i.e., models that have model_id in their bases array)
-                    SELECT ARRAY_AGG(ag_catalog.agtype_access_operator(m.properties, '""id""'::agtype))
-                    INTO valid_model_ids
-                    FROM {graphName}.""Model"" m
-                    WHERE ag_catalog.agtype_access_operator(m.properties, '""bases""'::agtype) @> ag_catalog.agtype_build_list(model_id);
+                    -- Try fast path: use precomputed descendants from model if available
+                    BEGIN
+                        SELECT ag_catalog.agtype_access_operator(m.properties,'""descendants""'::agtype)
+                        INTO model_descendants
+                        FROM {graphName}.""Model"" m
+                        WHERE ag_catalog.agtype_access_operator(m.properties,'""id""'::agtype) = model_id;
+                        
+                        IF model_descendants IS NOT NULL THEN
+                            -- Model has precomputed descendants, check membership
+                            RETURN twin_model_id = ANY(
+                                SELECT jsonb_array_elements_text(model_descendants::jsonb)::text::agtype
+                            );
+                        END IF;
+                    EXCEPTION WHEN others THEN
+                        -- Descendants field missing or error, fall through to legacy traversal
+                    END;
 
-                    RETURN twin_model_id = ANY(valid_model_ids);
+                    -- Fallback: legacy inheritance traversal for backward compatibility
+                    -- (models created before descendants field was added)
+                    RETURN EXISTS (
+                        WITH RECURSIVE ancestors AS (
+                            SELECT m.id AS internal_id,
+                                   ag_catalog.agtype_access_operator(m.properties,'""id""'::agtype) AS mid
+                            FROM {graphName}.""Model"" m
+                            WHERE ag_catalog.agtype_access_operator(m.properties,'""id""'::agtype) = twin_model_id
+                            UNION ALL
+                            SELECT parent.id,
+                                   ag_catalog.agtype_access_operator(parent.properties,'""id""'::agtype) AS mid
+                            FROM ancestors a
+                            JOIN {graphName}.""_extends"" e ON e.start_id = a.internal_id
+                            JOIN {graphName}.""Model"" parent ON parent.id = e.end_id
+                        )
+                        SELECT 1 FROM ancestors WHERE mid = model_id
+                    );
                 END;
                 $function$"
+            ),
+            // Helper: return array of model ids that are descendants (child, grandchild, ...) of the given model_id.
+            // include_self=true will also include the input model_id.
+            new(
+                @$"CREATE OR REPLACE FUNCTION {graphName}.get_model_descendants_ids(model_id agtype, include_self boolean default true)
+                RETURNS agtype[]
+                STABLE
+                AS $$
+                WITH RECURSIVE descendants AS (
+                    -- Optionally include the model_id itself
+                    SELECT m.id AS internal_id,
+                           ag_catalog.agtype_access_operator(m.properties, '""id""'::agtype) AS model_name
+                    FROM {graphName}.""Model"" m
+                    WHERE include_self AND ag_catalog.agtype_access_operator(m.properties, '""id""'::agtype) = model_id
+
+                    UNION ALL
+
+                    -- Traverse children via _extends: child (start_id) -> parent (end_id)
+                    SELECT child.id AS internal_id,
+                           ag_catalog.agtype_access_operator(child.properties, '""id""'::agtype) AS model_name
+                    FROM descendants d
+                    JOIN {graphName}.""_extends"" e ON e.end_id = d.internal_id
+                    JOIN {graphName}.""Model"" child ON child.id = e.start_id
+                )
+                SELECT ARRAY_AGG(model_name) FROM descendants;
+                $$ LANGUAGE sql;"
             ),
             new(
                 @$"CREATE OR REPLACE FUNCTION {graphName}.agtype_set(target agtype, path agtype, new_value agtype)
@@ -193,35 +256,6 @@ public static class GraphInitialization
                         RETURN false;
                 END;
                 $$ LANGUAGE plpgsql;"
-            ),
-            new(
-                @$"CREATE OR REPLACE FUNCTION {graphName}.is_of_model_old(twin agtype, model_id agtype, exact boolean default false)
-                RETURNS boolean
-                LANGUAGE plpgsql
-                STABLE
-                AS $function$
-                DECLARE
-                    sql VARCHAR;
-                    twin_model_id agtype;
-                    result boolean;
-                BEGIN
-                    SELECT ag_catalog.agtype_access_operator(twin,'""$metadata""'::agtype,'""$model""'::agtype) INTO twin_model_id;
-                    IF exact THEN
-                        sql := format('SELECT ''%s'' = ''%s''', twin_model_id, model_id);
-                    ELSE
-                        sql := format('SELECT ''%s'' = ''%s'' OR
-                        EXISTS
-                            (SELECT 1 FROM ag_catalog.cypher(''{graphName}'', $$
-                                MATCH (m:Model)
-                                WHERE m.id = %s AND %s IN m.bases
-                                RETURN m.id
-                            $$) AS (m text))
-                        ', twin_model_id, model_id, twin_model_id, model_id);
-                    END IF;
-                    EXECUTE sql INTO result;
-                    RETURN result;
-                END;
-                $function$"
             ),
             /*
             new(
