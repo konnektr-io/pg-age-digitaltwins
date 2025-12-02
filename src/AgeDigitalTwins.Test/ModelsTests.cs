@@ -354,4 +354,22 @@ public class ModelsTests : TestBase
         await Client.DeleteDigitalTwinAsync(twinId);
         await Client.DeleteModelAsync(modelId);
     }
+
+    [Fact]
+    public async Task DeleteAllModels_DeletesAllModels()
+    {
+        // Act: Delete all models
+        await Client.DeleteAllModelsAsync();
+
+        // Assert: No models should remain
+        bool anyModelsExist = false;
+        await foreach (
+            var modelData in Client.GetModelsAsync(new() { IncludeModelDefinition = false })
+        )
+        {
+            anyModelsExist = true;
+            break;
+        }
+        Assert.False(anyModelsExist);
+    }
 }
