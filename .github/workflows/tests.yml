@@ -24,27 +24,72 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - age_image: release_PG16_1.6.0
+            type: apache
+            pg_version: 16
+          - age_image: release_PG17_1.6.0
+            type: apache
+            pg_version: 17
+          - age_image: 16-1.6.0-standard-trixie
+            type: cnpg
+            pg_version: 16
+          - age_image: 17-1.6.0-standard-trixie
+            type: cnpg
+            pg_version: 17
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Start custom PostgreSQL container
         run: |
-          docker run --name postgres-test -d \
-            -e POSTGRES_PASSWORD=app \
-            -p 5432:5432 \
-            --shm-size=512mb \
-            ghcr.io/konnektr-io/age:16-1.6.0-standard-trixie \
-            bash -c "initdb -D /var/lib/postgresql/data --username=app --pwfile=<(echo app) && \
-                     echo 'host all all 0.0.0.0/0 trust' >> /var/lib/postgresql/data/pg_hba.conf && \
-                     echo 'local all all trust' >> /var/lib/postgresql/data/pg_hba.conf && \
-                     postgres -D /var/lib/postgresql/data \
-                     -c wal_level=logical \
-                     -c max_connections=1000 \
-                     -c shared_buffers=256MB \
-                     -c max_replication_slots=10 \
-                     -c max_wal_senders=10 \
-                     -c listen_addresses='*'"
+          if [ "${{ matrix.type }}" = "cnpg" ]; then
+            docker run --name postgres-test -d \
+              -e POSTGRES_PASSWORD=app \
+              -p 5432:5432 \
+              --shm-size=512mb \
+              ghcr.io/konnektr-io/age:${{ matrix.age_image }} \
+              bash -c "initdb -D /var/lib/postgresql/data --username=app --pwfile=<(echo app) && \
+                       echo 'host all all 0.0.0.0/0 trust' >> /var/lib/postgresql/data/pg_hba.conf && \
+                       echo 'local all all trust' >> /var/lib/postgresql/data/pg_hba.conf && \
+                       postgres -D /var/lib/postgresql/data \
+                       -c wal_level=logical \
+                       -c max_connections=1000 \
+                       -c shared_buffers=256MB \
+                       -c max_replication_slots=10 \
+                       -c max_wal_senders=10 \
+                       -c max_parallel_workers_per_gather=4 \
+                       -c max_parallel_workers=8 \
+                       -c max_worker_processes=8 \
+                       -c parallel_setup_cost=0 \
+                       -c parallel_tuple_cost=0 \
+                       -c min_parallel_table_scan_size=0 \
+                       -c min_parallel_index_scan_size=0 \
+                       -c force_parallel_mode=on \
+                       -c listen_addresses='*'"
+          else
+            docker run --name postgres-test -d \
+              -e POSTGRES_USER=app \
+              -e POSTGRES_PASSWORD=app \
+              -e POSTGRES_DB=app \
+              -p 5432:5432 \
+              --shm-size=512mb \
+              apache/age:${{ matrix.age_image }}
+            # Configure parallel execution for Apache image
+            sleep 10
+            docker exec postgres-test psql -U app -d app -c "ALTER SYSTEM SET max_parallel_workers_per_gather = 4;"
+            docker exec postgres-test psql -U app -d app -c "ALTER SYSTEM SET max_parallel_workers = 8;"
+            docker exec postgres-test psql -U app -d app -c "ALTER SYSTEM SET max_worker_processes = 8;"
+            docker exec postgres-test psql -U app -d app -c "ALTER SYSTEM SET parallel_setup_cost = 0;"
+            docker exec postgres-test psql -U app -d app -c "ALTER SYSTEM SET parallel_tuple_cost = 0;"
+            docker exec postgres-test psql -U app -d app -c "ALTER SYSTEM SET min_parallel_table_scan_size = 0;"
+            docker exec postgres-test psql -U app -d app -c "ALTER SYSTEM SET min_parallel_index_scan_size = 0;"
+            docker exec postgres-test psql -U app -d app -c "ALTER SYSTEM SET force_parallel_mode = on;"
+            docker exec postgres-test psql -U app -d app -c "SELECT pg_reload_conf();"
+          fi
           
           echo "Waiting for container to start..."
           sleep 10
@@ -55,6 +100,11 @@ jobs:
 
       - name: Wait for PostgreSQL to be ready
         run: |
+          DB_NAME="app"
+          if [ "${{ matrix.type }}" = "cnpg" ]; then
+            DB_NAME="app"
+          fi
+          
           for i in {1..45}; do
             # Check if container is still running
             if ! docker ps | grep -q postgres-test; then
@@ -66,7 +116,7 @@ jobs:
               exit 1;
             fi
             
-            if docker exec postgres-test pg_isready -U app -d app 2>/dev/null; then
+            if docker exec postgres-test pg_isready -U app -d $DB_NAME 2>/dev/null; then
               echo "PostgreSQL is ready";
               sleep 5;
               exit 0;
@@ -83,11 +133,18 @@ jobs:
       
       - name: Initialize database with AGE extension
         run: |
-          echo "Creating app database..."
-          docker exec postgres-test createdb -U app app
-          echo "Running initialization script..."
-          docker exec -i postgres-test psql -U app -d app < "${{ github.workspace }}/src/data/init.sql"
-          echo "Database initialized successfully"
+          if [ "${{ matrix.type }}" = "cnpg" ]; then
+            echo "Creating app database..."
+            docker exec postgres-test createdb -U app app
+            echo "Running initialization script..."
+            docker exec -i postgres-test psql -U app -d app < "${{ github.workspace }}/src/data/init.sql"
+            echo "Database initialized successfully"
+          else
+            echo "Apache AGE image already has database initialized"
+            echo "Running initialization script..."
+            docker exec -i postgres-test psql -U app -d app < "${{ github.workspace }}/src/data/init.sql"
+            echo "Database initialized successfully"
+          fi
 
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
@@ -96,9 +153,18 @@ jobs:
             8.0.x
             9.0.x
 
+      - name: Verify parallel execution is enabled
+        run: |
+          echo "Verifying PostgreSQL parallel execution settings:"
+          docker exec postgres-test psql -U app -d app -c "SHOW max_parallel_workers_per_gather;"
+          docker exec postgres-test psql -U app -d app -c "SHOW max_parallel_workers;"
+          docker exec postgres-test psql -U app -d app -c "SHOW force_parallel_mode;"
+          docker exec postgres-test psql -U app -d app -c "SHOW parallel_setup_cost;"
+          docker exec postgres-test psql -U app -d app -c "SHOW parallel_tuple_cost;"
+
       - name: Test
         run: |
-          if [ "${{ github.event.inputs.test_project }}" == "All" ]; then
+          if [ "${{ github.event.inputs.test_project }}" == "All" ] || [ -z "${{ github.event.inputs.test_project }}" ]; then
             if [ -n "${{ github.event.inputs.filter }}" ]; then
               dotnet test './src' --logger 'GitHubActions' --logger 'console;verbosity=normal' --blame-hang --blame-hang-timeout 5m --filter "${{ github.event.inputs.filter }}" -- RunConfiguration.MaxCpuCount=2
             else
