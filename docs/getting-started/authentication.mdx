@@ -1,0 +1,142 @@
+---
+title: Authentication
+icon: Key
+---
+
+# Authentication
+
+Konnektr Graph uses Auth0 for authentication. Each project automatically receives machine-to-machine (M2M) client credentials for programmatic access.
+
+## Getting Your Credentials
+
+1. Navigate to your project in [KtrlPlane](https://ktrlplane.konnektr.io)
+2. View the **API Authentication** section on the project overview page
+3. Your credentials will include:
+   - **Client ID**: Your application identifier
+   - **Client Secret**: Your application secret (keep this secure!)
+   - **Audience**: `https://graph.konnektr.io`)
+
+## Authentication Flow
+
+Konnektr Graph uses the OAuth 2.0 Client Credentials flow:
+
+1. Request an access token from Auth0 using your client credentials
+2. Include the access token in your API requests
+
+### Step 1: Get an Access Token
+
+<Tabs>
+  <Tab title="cURL">
+    ```bash
+    curl --request POST \
+      --url https://auth.konnektr.io/oauth/token \
+      --header 'content-type: application/json' \
+      --data '{
+        "client_id": "YOUR_CLIENT_ID",
+        "client_secret": "YOUR_CLIENT_SECRET",
+        "audience": "https://graph.konnektr.io",
+        "grant_type": "client_credentials"
+      }'
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    import requests
+
+    token_url = "https://auth.konnektr.io/oauth/token"
+    token_data = {
+        "client_id": "YOUR_CLIENT_ID",
+        "client_secret": "YOUR_CLIENT_SECRET",
+        "audience": "https://graph.konnektr.io",
+        "grant_type": "client_credentials"
+    }
+    response = requests.post(token_url, json=token_data)
+    access_token = response.json()["access_token"]
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    const axios = require('axios');
+
+    const tokenUrl = 'https://auth.konnektr.io/oauth/token';
+    const tokenData = {
+      client_id: 'YOUR_CLIENT_ID',
+      client_secret: 'YOUR_CLIENT_SECRET',
+      audience: 'https://graph.konnektr.io',
+      grant_type: 'client_credentials'
+    };
+    const response = await axios.post(tokenUrl, tokenData);
+    const accessToken = response.data.access_token;
+    ```
+  </Tab>
+  <Tab title="C#">
+    ```csharp
+    using System.Net.Http;
+    using System.Text.Json;
+
+    var tokenUrl = "https://auth.konnektr.io/oauth/token";
+    var tokenData = new {
+        client_id = "YOUR_CLIENT_ID",
+        client_secret = "YOUR_CLIENT_SECRET",
+        audience = "https://graph.konnektr.io",
+        grant_type = "client_credentials"
+    };
+    var response = await httpClient.PostAsJsonAsync(tokenUrl, tokenData);
+    var result = await response.Content.ReadFromJsonAsync<TokenResponse>();
+    var accessToken = result.access_token;
+    ```
+  </Tab>
+</Tabs>
+
+### Step 2: Use the Token in API Requests
+
+Include the access token in the `Authorization` header:
+
+```bash
+curl --request GET \
+  --url https://YOUR_RESOURCE_ID.api.graph.konnektr.io/digitaltwins \
+  --header 'authorization: Bearer YOUR_ACCESS_TOKEN'
+```
+
+## Token Management
+
+- **Token Expiration**: Access tokens expire after a set period (typically 24 hours)
+- **Token Refresh**: When a token expires, request a new one using the same credentials
+- **Token Caching**: Cache tokens in your application until they expire to reduce API calls
+
+## Security Best Practices
+
+1. **Never expose credentials**: Keep your client secret secure and never commit it to version control
+2. **Use environment variables**: Store credentials in environment variables or secure secret management systems
+3. **Rotate credentials**: Regularly rotate your credentials if compromised
+4. **Monitor access**: Review access logs in KtrlPlane for suspicious activity
+5. **Least privilege**: Only grant necessary permissions to your applications
+
+## Using with Azure Digital Twins SDKs
+
+If you're using Azure Digital Twins SDKs, you'll need to implement a custom credential provider:
+
+See our [Using Azure Digital Twins SDKs guide](/docs/graph/how-to-guides/using-azure-digital-twins-sdks) for detailed instructions.
+
+## Troubleshooting
+
+### Invalid Client
+
+- Verify your client ID and secret are correct
+- Check that the credentials haven't been revoked in KtrlPlane
+
+### Invalid Audience
+
+- Ensure the audience matches your Graph API URL exactly
+- The audience should be `https://YOUR_PROJECT_ID.api.graph.konnektr.io`
+
+### Token Expired
+
+- Request a new token using your credentials
+- Implement automatic token refresh in your application
+
+## Next Steps
+
+- [Quick Start Guide](/docs/graph/getting-started/quickstart) - Get started with your first digital twin
+- [API Reference](/docs/graph/reference/api) - Explore the full API
+- [Using Azure SDKs](/docs/graph/how-to-guides/using-azure-digital-twins-sdks) - Use familiar Azure SDKs

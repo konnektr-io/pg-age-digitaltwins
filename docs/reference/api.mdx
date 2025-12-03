@@ -5,6 +5,16 @@ icon: Code
 
 The Konnektr Graph API is fully compatible with the [Azure Digital Twins Data Plane REST API](https://learn.microsoft.com/en-us/rest/api/digital-twins/dataplane/twins?view=rest-dataplane-2023-10-31). You can use existing Azure Digital Twins client libraries and tools with this API.
 
+## Authentication
+
+All API requests must include a valid access token in the Authorization header:
+
+```
+Authorization: Bearer YOUR_ACCESS_TOKEN
+```
+
+See the [Authentication Guide](/docs/graph/getting-started/authentication) for instructions on obtaining access tokens.
+
 ## API Endpoints
 
 ### Hosted Konnektr Graph

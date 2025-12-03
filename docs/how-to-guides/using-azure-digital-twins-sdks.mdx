@@ -9,6 +9,14 @@ You can use the official Azure Digital Twins SDKs (Python, .NET, JavaScript) to 
 
 Konnektr Graph uses Auth0 for authentication instead of Azure AD, so you **cannot** use `DefaultAzureCredential` or other Azure identity providers. Instead, you must implement a custom `TokenCredential` that obtains tokens from Auth0.
 
+### Getting Your Credentials
+
+You can find your client credentials in the KtrlPlane dashboard:
+
+1. Navigate to your project in [KtrlPlane](https://ktrlplane.konnektr.io)
+2. View the **API Authentication** section on the project overview page
+3. Copy your Client ID and Client Secret
+
 ### Auth0 Configuration
 - **Domain**: `auth.konnektr.io`  
 - **Audience**: `https://api.graph.konnektr.io`

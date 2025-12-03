@@ -5,6 +5,10 @@ icon: Footprints
 
 Your first steps with Konnektr Graph after creating your resource.
 
+<Callout type="info">
+  **Authentication Required**: All API requests require authentication. See the [Authentication Guide](./authentication) to get your credentials from KtrlPlane.
+</Callout>
+
 ## Authentication with Auth0
 
 Since Konnektr Graph uses Auth0 instead of Azure AD, you can't use the default `DefaultAzureCredential`. Instead, you need to implement a custom `TokenCredential` that gets tokens from Auth0.
