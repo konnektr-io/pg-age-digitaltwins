@@ -19,6 +19,7 @@ var builder = WebApplication.CreateBuilder(args);
 // Add service defaults & Aspire client integrations.
 builder.AddServiceDefaults();
 
+
 // Add Npgsql multihost data source with custom settings.
 builder.AddNpgsqlMultihostDataSource(
     "agedb",
@@ -116,17 +117,18 @@ builder.Services.Configure<AgeDigitalTwins.ApiService.Configuration.Authorizatio
     builder.Configuration.GetSection("Authorization")
 );
 
-// Register the appropriate permission provider based on configuration
+// Register permission providers
 var authorizationConfig = builder
     .Configuration.GetSection("Authorization")
     .Get<AgeDigitalTwins.ApiService.Configuration.AuthorizationOptions>();
 
+// Always register the claims provider
+builder.Services.AddScoped<ClaimsPermissionProvider>();
+
+// Conditionally register the API provider and its dependencies
 if (authorizationConfig?.Provider?.Equals("Api", StringComparison.OrdinalIgnoreCase) == true)
 {
-    // Register API permission provider
-    builder.Services.AddMemoryCache(); // Required for caching
-
-    // Configure HttpClient for permissions API
+    builder.Services.AddMemoryCache();
     builder.Services.AddHttpClient(
         "PermissionsApi",
         client =>
@@ -135,29 +137,32 @@ if (authorizationConfig?.Provider?.Equals("Api", StringComparison.OrdinalIgnoreC
             {
                 client.BaseAddress = new Uri(authorizationConfig.ApiProvider.BaseUrl);
             }
-
-            client.Timeout = TimeSpan.FromSeconds(
-                authorizationConfig.ApiProvider?.TimeoutSeconds ?? 10
-            );
-
-            // Add authorization header if configured
+            client.Timeout = TimeSpan.FromSeconds(authorizationConfig.ApiProvider?.TimeoutSeconds ?? 10);
             if (!string.IsNullOrEmpty(authorizationConfig.ApiProvider?.Authorization))
             {
-                client.DefaultRequestHeaders.Add(
-                    "Authorization",
-                    authorizationConfig.ApiProvider.Authorization
-                );
+                client.DefaultRequestHeaders.Add("Authorization", authorizationConfig.ApiProvider.Authorization);
             }
         }
     );
+    builder.Services.AddScoped<ApiPermissionProvider>();
+}
 
-    builder.Services.AddScoped<IPermissionProvider, ApiPermissionProvider>();
-}
-else
+// Register the CompositePermissionProvider as the single IPermissionProvider for the app
+builder.Services.AddScoped<IPermissionProvider>(sp =>
 {
-    // Default to claims-based provider
-    builder.Services.AddScoped<IPermissionProvider, ClaimsPermissionProvider>();
-}
+    var logger = sp.GetRequiredService<ILogger<CompositePermissionProvider>>();
+    var providers = new List<IPermissionProvider>
+    {
+        sp.GetRequiredService<ClaimsPermissionProvider>()
+    };
+
+    if (authorizationConfig?.Provider?.Equals("Api", StringComparison.OrdinalIgnoreCase) == true)
+    {
+        providers.Add(sp.GetRequiredService<ApiPermissionProvider>());
+    }
+
+    return new CompositePermissionProvider(providers, logger);
+});
 
 // Add permission service (uses the registered provider)
 builder.Services.AddScoped<IPermissionService, PermissionService>();
