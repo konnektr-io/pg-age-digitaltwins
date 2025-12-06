@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using AgeDigitalTwins;
 using AgeDigitalTwins.ApiService;
+using AgeDigitalTwins.ApiService.Authorization;
 using AgeDigitalTwins.ApiService.Configuration;
 using AgeDigitalTwins.ApiService.Extensions;
 using AgeDigitalTwins.ApiService.Middleware;
@@ -110,6 +111,57 @@ else
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
+// Configure authorization options
+builder.Services.Configure<AgeDigitalTwins.ApiService.Configuration.AuthorizationOptions>(
+    builder.Configuration.GetSection("Authorization")
+);
+
+// Register the appropriate permission provider based on configuration
+var authorizationConfig = builder
+    .Configuration.GetSection("Authorization")
+    .Get<AgeDigitalTwins.ApiService.Configuration.AuthorizationOptions>();
+
+if (authorizationConfig?.Provider?.Equals("Api", StringComparison.OrdinalIgnoreCase) == true)
+{
+    // Register API permission provider
+    builder.Services.AddMemoryCache(); // Required for caching
+
+    // Configure HttpClient for permissions API
+    builder.Services.AddHttpClient(
+        "PermissionsApi",
+        client =>
+        {
+            if (!string.IsNullOrEmpty(authorizationConfig.ApiProvider?.BaseUrl))
+            {
+                client.BaseAddress = new Uri(authorizationConfig.ApiProvider.BaseUrl);
+            }
+
+            client.Timeout = TimeSpan.FromSeconds(
+                authorizationConfig.ApiProvider?.TimeoutSeconds ?? 10
+            );
+
+            // Add authorization header if configured
+            if (!string.IsNullOrEmpty(authorizationConfig.ApiProvider?.Authorization))
+            {
+                client.DefaultRequestHeaders.Add(
+                    "Authorization",
+                    authorizationConfig.ApiProvider.Authorization
+                );
+            }
+        }
+    );
+
+    builder.Services.AddScoped<IPermissionProvider, ApiPermissionProvider>();
+}
+else
+{
+    // Default to claims-based provider
+    builder.Services.AddScoped<IPermissionProvider, ClaimsPermissionProvider>();
+}
+
+// Add permission service (uses the registered provider)
+builder.Services.AddScoped<IPermissionService, PermissionService>();
+
 // Add authentication only if the environment variable is set
 var enableAuthentication = builder.Configuration.GetValue<bool>("Authentication:Enabled");
 
@@ -140,6 +192,12 @@ if (enableAuthentication)
     builder
         .Services.AddAuthorizationBuilder()
         .SetDefaultPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
+
+    // Add permission-based authorization policies
+    builder.Services.AddAuthorization(options => options.AddPermissionPolicies());
+
+    // Register authorization handler
+    builder.Services.AddSingleton<IAuthorizationHandler, PermissionAuthorizationHandler>();
 }
 else
 {
