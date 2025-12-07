@@ -50,9 +50,9 @@ public class ApiProviderOptions
 
     /// <summary>
     /// Gets or sets the endpoint path for checking permissions.
-    /// Default is "/api/v1/permissions/check".
+    /// Default is "/permissions/check".
     /// </summary>
-    public string CheckEndpoint { get; set; } = "/api/v1/permissions/check";
+    public string CheckEndpoint { get; set; } = "/permissions/check";
 
     /// <summary>
     /// Gets or sets the resource name to check permissions for.

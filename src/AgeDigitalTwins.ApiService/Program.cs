@@ -272,7 +272,7 @@ app.MapModelsEndpoints();
 app.MapImportJobEndpoints();
 
 // When the client is initiated, a new graph will automatically be created if the specified graph doesn't exist
-// Creating and dropping graphs should be done in the control plane
+// These endpoint are not meant to be used in production
 if (app.Environment.IsDevelopment())
 {
     app.MapGraphEndpoints();
