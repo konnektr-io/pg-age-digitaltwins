@@ -69,4 +69,27 @@ public static class PermissionExtensions
             }
         }
     }
+
+    /// <summary>
+    /// Adds permissive authorization policies that allow all requests.
+    /// Used when authorization is disabled to prevent "policy not found" errors.
+    /// </summary>
+    /// <param name="options">The authorization options.</param>
+    public static void AddPermissivePermissionPolicies(this AuthorizationOptions options)
+    {
+        // Add a permissive policy for each resource/action combination
+        foreach (ResourceType resource in Enum.GetValues<ResourceType>())
+        {
+            foreach (PermissionAction action in Enum.GetValues<PermissionAction>())
+            {
+                var permission = new Permission(resource, action);
+                var policyName = $"Permission:{permission}";
+
+                options.AddPolicy(
+                    policyName,
+                    policy => policy.RequireAssertion(_ => true)
+                );
+            }
+        }
+    }
 }

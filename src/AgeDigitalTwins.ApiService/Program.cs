@@ -145,69 +145,80 @@ if (enableAuthentication)
         .Services.AddAuthorizationBuilder()
         .SetDefaultPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
 
-    if (enableAuthorization)
+    // Always register permission policies to avoid "policy not found" errors
+    // When authorization is disabled, policies will allow all requests
+    builder.Services.AddAuthorization(options =>
     {
-
-        // Configure authorization options
-        builder.Services.Configure<AgeDigitalTwins.ApiService.Configuration.AuthorizationOptions>(
-            builder.Configuration.GetSection("Authorization")
-        );
-
-        // Register permission providers
-        var authorizationConfig = builder
-            .Configuration.GetSection("Authorization")
-            .Get<AgeDigitalTwins.ApiService.Configuration.AuthorizationOptions>();
-
-        // Always register the claims provider
-        builder.Services.AddScoped<ClaimsPermissionProvider>();
-
-        // Conditionally register the API provider and its dependencies
-        if (authorizationConfig?.Provider?.Equals("Api", StringComparison.OrdinalIgnoreCase) == true)
+        if (enableAuthorization)
         {
-            builder.Services.AddMemoryCache();
-            builder.Services.AddHttpClient(
-                "PermissionsApi",
-                client =>
-                {
-                    if (!string.IsNullOrEmpty(authorizationConfig.ApiProvider?.BaseUrl))
-                    {
-                        client.BaseAddress = new Uri(authorizationConfig.ApiProvider.BaseUrl);
-                    }
-                    client.Timeout = TimeSpan.FromSeconds(authorizationConfig.ApiProvider?.TimeoutSeconds ?? 10);
-                    if (!string.IsNullOrEmpty(authorizationConfig.ApiProvider?.Authorization))
-                    {
-                        client.DefaultRequestHeaders.Add("Authorization", authorizationConfig.ApiProvider.Authorization);
-                    }
-                }
+            // Configure authorization options
+            builder.Services.Configure<AgeDigitalTwins.ApiService.Configuration.AuthorizationOptions>(
+                builder.Configuration.GetSection("Authorization")
             );
-            builder.Services.AddScoped<ApiPermissionProvider>();
-        }
 
-        // Register the CompositePermissionProvider as the single IPermissionProvider for the app
-        builder.Services.AddScoped<IPermissionProvider>(sp =>
-        {
-            var logger = sp.GetRequiredService<ILogger<CompositePermissionProvider>>();
-            var providers = new List<IPermissionProvider>
-            {
-                sp.GetRequiredService<ClaimsPermissionProvider>()
-            };
+            // Register permission providers
+            var authorizationConfig = builder
+                .Configuration.GetSection("Authorization")
+                .Get<AgeDigitalTwins.ApiService.Configuration.AuthorizationOptions>();
 
+            // Always register the claims provider
+            builder.Services.AddScoped<ClaimsPermissionProvider>();
+
+            // Conditionally register the API provider and its dependencies
             if (authorizationConfig?.Provider?.Equals("Api", StringComparison.OrdinalIgnoreCase) == true)
             {
-                providers.Add(sp.GetRequiredService<ApiPermissionProvider>());
+                builder.Services.AddMemoryCache();
+                builder.Services.AddHttpClient(
+                    "PermissionsApi",
+                    client =>
+                    {
+                        if (!string.IsNullOrEmpty(authorizationConfig.ApiProvider?.BaseUrl))
+                        {
+                            client.BaseAddress = new Uri(authorizationConfig.ApiProvider.BaseUrl);
+                        }
+                        client.Timeout = TimeSpan.FromSeconds(authorizationConfig.ApiProvider?.TimeoutSeconds ?? 10);
+                        if (!string.IsNullOrEmpty(authorizationConfig.ApiProvider?.Authorization))
+                        {
+                            client.DefaultRequestHeaders.Add("Authorization", authorizationConfig.ApiProvider.Authorization);
+                        }
+                    }
+                );
+                builder.Services.AddScoped<ApiPermissionProvider>();
             }
 
-            return new CompositePermissionProvider(providers, logger);
-        });
+            // Register the CompositePermissionProvider as the single IPermissionProvider for the app
+            builder.Services.AddScoped<IPermissionProvider>(sp =>
+            {
+                var logger = sp.GetRequiredService<ILogger<CompositePermissionProvider>>();
+                var providers = new List<IPermissionProvider>
+                {
+                    sp.GetRequiredService<ClaimsPermissionProvider>()
+                };
 
-        // Add permission service (uses the registered provider)
-        builder.Services.AddScoped<IPermissionService, PermissionService>();
-        // Add permission-based authorization policies
-        builder.Services.AddAuthorization(options => options.AddPermissionPolicies());
+                if (authorizationConfig?.Provider?.Equals("Api", StringComparison.OrdinalIgnoreCase) == true)
+                {
+                    providers.Add(sp.GetRequiredService<ApiPermissionProvider>());
+                }
 
-        // Register authorization handler
-        builder.Services.AddSingleton<IAuthorizationHandler, PermissionAuthorizationHandler>();
-    }
+                return new CompositePermissionProvider(providers, logger);
+            });
+
+            // Add permission service (uses the registered provider)
+            builder.Services.AddScoped<IPermissionService, PermissionService>();
+            
+            // Add permission-based authorization policies with actual requirements
+            options.AddPermissionPolicies();
+
+            // Register authorization handler
+            builder.Services.AddSingleton<IAuthorizationHandler, PermissionAuthorizationHandler>();
+        }
+        else
+        {
+            // Authorization is disabled - register permissive policies for all permissions
+            // This prevents "policy not found" errors while allowing all requests
+            options.AddPermissivePermissionPolicies();
+        }
+    });
 }
 else
 {
@@ -215,6 +226,12 @@ else
     builder
         .Services.AddAuthorizationBuilder()
         .SetDefaultPolicy(new AuthorizationPolicyBuilder().RequireAssertion(_ => true).Build());
+    
+    // Register permissive permission policies to avoid "policy not found" errors
+    builder.Services.AddAuthorization(options =>
+    {
+        options.AddPermissivePermissionPolicies();
+    });
 }
 
 // Add job resumption service
