@@ -197,10 +197,6 @@ if (enableAuthentication)
     builder
         .Services.AddAuthorizationBuilder()
         .SetDefaultPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
-
-    builder
-        .Services.AddAuthorizationBuilder()
-        .SetDefaultPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
 }
 else
 {
