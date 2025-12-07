@@ -405,7 +405,7 @@ RETURN rel";
             }
         }
         else
-            return default;
+            throw new ArgumentException("Failed to create or replace relationship");
     }
 
     /// <summary>
