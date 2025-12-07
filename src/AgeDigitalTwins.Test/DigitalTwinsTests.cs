@@ -321,7 +321,7 @@ public class DigitalTwinsTests : TestBase
             @"[{""op"": ""replace"", ""path"": ""/temperature"", ""value"": 10}]"
         )!;
 
-        var exception = await Assert.ThrowsAsync<ArgumentException>(
+        var exception = await Assert.ThrowsAsync<ValidationFailedException>(
             () => Client.UpdateDigitalTwinAsync(digitalTwin!.Id, jsonPatch)
         );
 
@@ -346,7 +346,7 @@ public class DigitalTwinsTests : TestBase
             @"[{""op"": ""remove"", ""path"": ""/temperature""}]"
         )!;
 
-        var exception = await Assert.ThrowsAsync<ArgumentException>(
+        var exception = await Assert.ThrowsAsync<ValidationFailedException>(
             () => Client.UpdateDigitalTwinAsync(digitalTwin!.Id, jsonPatch)
         );
 
