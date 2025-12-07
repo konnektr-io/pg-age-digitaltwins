@@ -18,7 +18,8 @@ public static class GraphEndpoints
                 {
                     return client.CreateGraphAsync(cancellationToken);
                 }
-            );
+            )
+            .RequirePermission(ResourceType.Graph, PermissionAction.Write);
 
         // This endpoint is only used for cleanup in tests
         app.MapDelete(
@@ -30,7 +31,8 @@ public static class GraphEndpoints
                 {
                     return client.DropGraphAsync(cancellationToken);
                 }
-            );
+            )
+            .RequirePermission(ResourceType.Graph, PermissionAction.Delete);
 
         return app;
     }

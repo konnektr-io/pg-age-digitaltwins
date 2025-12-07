@@ -198,11 +198,9 @@ if (enableAuthentication)
         .Services.AddAuthorizationBuilder()
         .SetDefaultPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
 
-    // Add permission-based authorization policies
-    builder.Services.AddAuthorization(options => options.AddPermissionPolicies());
-
-    // Register authorization handler
-    builder.Services.AddSingleton<IAuthorizationHandler, PermissionAuthorizationHandler>();
+    builder
+        .Services.AddAuthorizationBuilder()
+        .SetDefaultPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
 }
 else
 {
@@ -211,6 +209,12 @@ else
         .Services.AddAuthorizationBuilder()
         .SetDefaultPolicy(new AuthorizationPolicyBuilder().RequireAssertion(_ => true).Build());
 }
+
+// Add permission-based authorization policies
+builder.Services.AddAuthorization(options => options.AddPermissionPolicies());
+
+// Register authorization handler
+builder.Services.AddSingleton<IAuthorizationHandler, PermissionAuthorizationHandler>();
 
 // Add job resumption service
 builder.Services.AddHostedService<JobResumptionService>();
@@ -272,7 +276,7 @@ app.MapModelsEndpoints();
 app.MapImportJobEndpoints();
 
 // When the client is initiated, a new graph will automatically be created if the specified graph doesn't exist
-// These endpoint are not meant to be used in production
+// Creating and dropping graphs should be done in the control plane
 if (app.Environment.IsDevelopment())
 {
     app.MapGraphEndpoints();
