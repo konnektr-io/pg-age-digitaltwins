@@ -112,63 +112,10 @@ else
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
-// Configure authorization options
-builder.Services.Configure<AgeDigitalTwins.ApiService.Configuration.AuthorizationOptions>(
-    builder.Configuration.GetSection("Authorization")
-);
-
-// Register permission providers
-var authorizationConfig = builder
-    .Configuration.GetSection("Authorization")
-    .Get<AgeDigitalTwins.ApiService.Configuration.AuthorizationOptions>();
-
-// Always register the claims provider
-builder.Services.AddScoped<ClaimsPermissionProvider>();
-
-// Conditionally register the API provider and its dependencies
-if (authorizationConfig?.Provider?.Equals("Api", StringComparison.OrdinalIgnoreCase) == true)
-{
-    builder.Services.AddMemoryCache();
-    builder.Services.AddHttpClient(
-        "PermissionsApi",
-        client =>
-        {
-            if (!string.IsNullOrEmpty(authorizationConfig.ApiProvider?.BaseUrl))
-            {
-                client.BaseAddress = new Uri(authorizationConfig.ApiProvider.BaseUrl);
-            }
-            client.Timeout = TimeSpan.FromSeconds(authorizationConfig.ApiProvider?.TimeoutSeconds ?? 10);
-            if (!string.IsNullOrEmpty(authorizationConfig.ApiProvider?.Authorization))
-            {
-                client.DefaultRequestHeaders.Add("Authorization", authorizationConfig.ApiProvider.Authorization);
-            }
-        }
-    );
-    builder.Services.AddScoped<ApiPermissionProvider>();
-}
-
-// Register the CompositePermissionProvider as the single IPermissionProvider for the app
-builder.Services.AddScoped<IPermissionProvider>(sp =>
-{
-    var logger = sp.GetRequiredService<ILogger<CompositePermissionProvider>>();
-    var providers = new List<IPermissionProvider>
-    {
-        sp.GetRequiredService<ClaimsPermissionProvider>()
-    };
-
-    if (authorizationConfig?.Provider?.Equals("Api", StringComparison.OrdinalIgnoreCase) == true)
-    {
-        providers.Add(sp.GetRequiredService<ApiPermissionProvider>());
-    }
-
-    return new CompositePermissionProvider(providers, logger);
-});
-
-// Add permission service (uses the registered provider)
-builder.Services.AddScoped<IPermissionService, PermissionService>();
-
 // Add authentication only if the environment variable is set
 var enableAuthentication = builder.Configuration.GetValue<bool>("Authentication:Enabled");
+
+var enableAuthorization = builder.Configuration.GetValue<bool>("Authorization:Enabled");
 
 if (enableAuthentication)
 {
@@ -197,6 +144,70 @@ if (enableAuthentication)
     builder
         .Services.AddAuthorizationBuilder()
         .SetDefaultPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
+
+    if (enableAuthorization)
+    {
+
+        // Configure authorization options
+        builder.Services.Configure<AgeDigitalTwins.ApiService.Configuration.AuthorizationOptions>(
+            builder.Configuration.GetSection("Authorization")
+        );
+
+        // Register permission providers
+        var authorizationConfig = builder
+            .Configuration.GetSection("Authorization")
+            .Get<AgeDigitalTwins.ApiService.Configuration.AuthorizationOptions>();
+
+        // Always register the claims provider
+        builder.Services.AddScoped<ClaimsPermissionProvider>();
+
+        // Conditionally register the API provider and its dependencies
+        if (authorizationConfig?.Provider?.Equals("Api", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            builder.Services.AddMemoryCache();
+            builder.Services.AddHttpClient(
+                "PermissionsApi",
+                client =>
+                {
+                    if (!string.IsNullOrEmpty(authorizationConfig.ApiProvider?.BaseUrl))
+                    {
+                        client.BaseAddress = new Uri(authorizationConfig.ApiProvider.BaseUrl);
+                    }
+                    client.Timeout = TimeSpan.FromSeconds(authorizationConfig.ApiProvider?.TimeoutSeconds ?? 10);
+                    if (!string.IsNullOrEmpty(authorizationConfig.ApiProvider?.Authorization))
+                    {
+                        client.DefaultRequestHeaders.Add("Authorization", authorizationConfig.ApiProvider.Authorization);
+                    }
+                }
+            );
+            builder.Services.AddScoped<ApiPermissionProvider>();
+        }
+
+        // Register the CompositePermissionProvider as the single IPermissionProvider for the app
+        builder.Services.AddScoped<IPermissionProvider>(sp =>
+        {
+            var logger = sp.GetRequiredService<ILogger<CompositePermissionProvider>>();
+            var providers = new List<IPermissionProvider>
+            {
+                sp.GetRequiredService<ClaimsPermissionProvider>()
+            };
+
+            if (authorizationConfig?.Provider?.Equals("Api", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                providers.Add(sp.GetRequiredService<ApiPermissionProvider>());
+            }
+
+            return new CompositePermissionProvider(providers, logger);
+        });
+
+        // Add permission service (uses the registered provider)
+        builder.Services.AddScoped<IPermissionService, PermissionService>();
+        // Add permission-based authorization policies
+        builder.Services.AddAuthorization(options => options.AddPermissionPolicies());
+
+        // Register authorization handler
+        builder.Services.AddSingleton<IAuthorizationHandler, PermissionAuthorizationHandler>();
+    }
 }
 else
 {
@@ -205,12 +216,6 @@ else
         .Services.AddAuthorizationBuilder()
         .SetDefaultPolicy(new AuthorizationPolicyBuilder().RequireAssertion(_ => true).Build());
 }
-
-// Add permission-based authorization policies
-builder.Services.AddAuthorization(options => options.AddPermissionPolicies());
-
-// Register authorization handler
-builder.Services.AddSingleton<IAuthorizationHandler, PermissionAuthorizationHandler>();
 
 // Add job resumption service
 builder.Services.AddHostedService<JobResumptionService>();
