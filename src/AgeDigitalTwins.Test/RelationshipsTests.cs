@@ -152,7 +152,7 @@ public class RelationshipTests : TestBase
         var relationship =
             @"{""$relationshipId"": ""rel1"", ""$sourceId"": ""room1"", ""$relationshipName"": ""rel_has_sensors"", ""$targetId"": ""nonexistent_sensor""}";
 
-        await Assert.ThrowsAsync<Exception>(
+        await Assert.ThrowsAsync<ArgumentException>(
             () => Client.CreateOrReplaceRelationshipAsync(
                 "room1",
                 "rel1",
