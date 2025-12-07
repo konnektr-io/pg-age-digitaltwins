@@ -558,6 +558,12 @@ RETURN t";
         try
         {
             var patchResult = patch.Apply(patchedTwinNode);
+            if (!string.IsNullOrEmpty(patchResult.Error))
+            {
+                throw new ValidationFailedException(
+                    $"Failed to apply patch: {patchResult.Error}"
+                );
+            }
             if (patchResult.Result is null)
             {
                 throw new ValidationFailedException("Failed to apply patch: result is null");
