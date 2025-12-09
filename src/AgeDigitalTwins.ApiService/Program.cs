@@ -173,10 +173,6 @@ if (enableAuthentication)
                         client.BaseAddress = new Uri(authorizationConfig.ApiProvider.BaseUrl);
                     }
                     client.Timeout = TimeSpan.FromSeconds(authorizationConfig.ApiProvider?.TimeoutSeconds ?? 10);
-                    if (!string.IsNullOrEmpty(authorizationConfig.ApiProvider?.Authorization))
-                    {
-                        client.DefaultRequestHeaders.Add("Authorization", authorizationConfig.ApiProvider.Authorization);
-                    }
                 }
             );
             builder.Services.AddScoped<ApiPermissionProvider>();
