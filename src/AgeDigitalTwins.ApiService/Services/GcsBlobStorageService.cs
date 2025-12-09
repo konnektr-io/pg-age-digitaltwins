@@ -89,7 +89,6 @@ public class GcsBlobStorageService : IBlobStorageService
         var uploadStream = initialData != null
             ? new GcsUploadStream(bucket, objectName, _logger, initialData)
             : new GcsUploadStream(bucket, objectName, _logger);
-        uploadStream.SetStorageClient(storageClient);
         return uploadStream;
     }
 
@@ -98,7 +97,6 @@ public class GcsBlobStorageService : IBlobStorageService
     /// </summary>
     private class GcsUploadStream : MemoryStream
     {
-        private StorageClient _storageClient;
         private readonly string _bucket;
         private readonly string _objectName;
         private readonly ILogger _logger;
@@ -120,10 +118,6 @@ public class GcsBlobStorageService : IBlobStorageService
             _logger = logger;
         }
 
-        public void SetStorageClient(StorageClient storageClient)
-        {
-            _storageClient = storageClient;
-        }
 
         protected override void Dispose(bool disposing)
         {
@@ -133,7 +127,8 @@ public class GcsBlobStorageService : IBlobStorageService
                 {
                     Position = 0;
                     _logger.LogDebug("Uploading stream to GCS: {Bucket}/{Object}", _bucket, _objectName);
-                    _storageClient.UploadObject(_bucket, _objectName, null, this);
+                    using var storageClient = StorageClient.Create(); // Uses default GCP credentials
+                    storageClient.UploadObject(_bucket, _objectName, null, this);
                     _logger.LogInformation("Successfully uploaded stream to GCS: {Bucket}/{Object}", _bucket, _objectName);
                 }
                 catch (Exception ex)
@@ -144,7 +139,6 @@ public class GcsBlobStorageService : IBlobStorageService
                 finally
                 {
                     _disposed = true;
-                    _storageClient?.Dispose();
                 }
             }
             base.Dispose(disposing);

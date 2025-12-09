@@ -92,7 +92,6 @@ public class AwsS3BlobStorageService : IBlobStorageService
         var uploadStream = initialData != null
             ? new S3UploadStream(bucket, key, _logger, initialData)
             : new S3UploadStream(bucket, key, _logger);
-        uploadStream.SetS3Client(s3Client);
         return uploadStream;
     }
 
@@ -101,7 +100,6 @@ public class AwsS3BlobStorageService : IBlobStorageService
     /// </summary>
     private class S3UploadStream : MemoryStream
     {
-        private IAmazonS3 _s3Client;
         private readonly string _bucket;
         private readonly string _key;
         private readonly ILogger _logger;
@@ -123,11 +121,6 @@ public class AwsS3BlobStorageService : IBlobStorageService
             _logger = logger;
         }
 
-        public void SetS3Client(IAmazonS3 s3Client)
-        {
-            _s3Client = s3Client;
-        }
-
         protected override void Dispose(bool disposing)
         {
             if (!_disposed && disposing)
@@ -142,7 +135,8 @@ public class AwsS3BlobStorageService : IBlobStorageService
                         InputStream = this,
                     };
                     _logger.LogDebug("Uploading stream to S3: {Bucket}/{Key}", _bucket, _key);
-                    _s3Client.PutObjectAsync(putRequest).GetAwaiter().GetResult();
+                    using var s3Client = new AmazonS3Client(); // Uses default credentials chain
+                    s3Client.PutObjectAsync(putRequest).GetAwaiter().GetResult();
                     _logger.LogInformation("Successfully uploaded stream to S3: {Bucket}/{Key}", _bucket, _key);
                 }
                 catch (Exception ex)
@@ -153,7 +147,6 @@ public class AwsS3BlobStorageService : IBlobStorageService
                 finally
                 {
                     _disposed = true;
-                    _s3Client?.Dispose();
                 }
             }
             base.Dispose(disposing);
