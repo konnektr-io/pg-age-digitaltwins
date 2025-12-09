@@ -223,12 +223,17 @@ else
 // Only register blob and job resumption services if jobs are enabled
 if (jobsEnabled)
 {
-    // Always register Azure and Default blob storage services as singletons
+    // Register only Azure and Default blob storage services and the router
     builder.Services.AddSingleton<AzureBlobStorageService>();
     builder.Services.AddSingleton<DefaultBlobStorageService>();
-
-    // Register router as singleton
-    builder.Services.AddSingleton<IBlobStorageService, BlobStorageServiceRouter>();
+    builder.Services.AddSingleton<IBlobStorageService>(sp =>
+        new BlobStorageServiceRouter(
+            sp.GetRequiredService<AzureBlobStorageService>(),
+            sp.GetRequiredService<DefaultBlobStorageService>(),
+            sp.GetRequiredService<ILogger<BlobStorageServiceRouter>>(),
+            sp.GetRequiredService<ILoggerFactory>()
+        )
+    );
     builder.Services.AddHostedService<JobResumptionService>();
 }
 

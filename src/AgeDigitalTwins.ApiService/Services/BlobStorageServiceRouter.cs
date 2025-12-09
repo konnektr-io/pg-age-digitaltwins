@@ -12,22 +12,19 @@ public class BlobStorageServiceRouter : IBlobStorageService
 {
     private readonly AzureBlobStorageService _azureService;
     private readonly DefaultBlobStorageService _defaultService;
-    private readonly AwsS3BlobStorageService _awsService;
-    private readonly GcsBlobStorageService _gcsService;
     private readonly ILogger<BlobStorageServiceRouter> _logger;
+    private readonly ILoggerFactory _loggerFactory;
 
     public BlobStorageServiceRouter(
         AzureBlobStorageService azureService,
         DefaultBlobStorageService defaultService,
-        AwsS3BlobStorageService awsService,
-        GcsBlobStorageService gcsService,
-        ILogger<BlobStorageServiceRouter> logger)
+        ILogger<BlobStorageServiceRouter> logger,
+        ILoggerFactory loggerFactory)
     {
         _azureService = azureService;
         _defaultService = defaultService;
-        _awsService = awsService;
-        _gcsService = gcsService;
         _logger = logger;
+        _loggerFactory = loggerFactory;
     }
 
     private static string DetectProvider(Uri blobUri)
@@ -47,9 +44,17 @@ public class BlobStorageServiceRouter : IBlobStorageService
             case "Azure":
                 return _azureService.GetReadStreamAsync(blobUri);
             case "S3":
-                return _awsService.GetReadStreamAsync(blobUri);
+            {
+                var awsLogger = _loggerFactory.CreateLogger<AwsS3BlobStorageService>();
+                var awsService = new AwsS3BlobStorageService(awsLogger);
+                return awsService.GetReadStreamAsync(blobUri);
+            }
             case "GCS":
-                return _gcsService.GetReadStreamAsync(blobUri);
+            {
+                var gcsLogger = _loggerFactory.CreateLogger<GcsBlobStorageService>();
+                var gcsService = new GcsBlobStorageService(gcsLogger);
+                return gcsService.GetReadStreamAsync(blobUri);
+            }
             default:
                 _logger.LogWarning("Unknown or unsupported blob provider for URI: {BlobUri}. Using default.", blobUri);
                 return _defaultService.GetReadStreamAsync(blobUri);
@@ -63,9 +68,17 @@ public class BlobStorageServiceRouter : IBlobStorageService
             case "Azure":
                 return _azureService.GetWriteStreamAsync(blobUri);
             case "S3":
-                return _awsService.GetWriteStreamAsync(blobUri);
+            {
+                var awsLogger = _loggerFactory.CreateLogger<AwsS3BlobStorageService>();
+                var awsService = new AwsS3BlobStorageService(awsLogger);
+                return awsService.GetWriteStreamAsync(blobUri);
+            }
             case "GCS":
-                return _gcsService.GetWriteStreamAsync(blobUri);
+            {
+                var gcsLogger = _loggerFactory.CreateLogger<GcsBlobStorageService>();
+                var gcsService = new GcsBlobStorageService(gcsLogger);
+                return gcsService.GetWriteStreamAsync(blobUri);
+            }
             default:
                 _logger.LogWarning("Unknown or unsupported blob provider for URI: {BlobUri}. Using default.", blobUri);
                 return _defaultService.GetWriteStreamAsync(blobUri);
@@ -79,9 +92,17 @@ public class BlobStorageServiceRouter : IBlobStorageService
             case "Azure":
                 return _azureService.GetWriteStreamAsync(blobUri, appendMode);
             case "S3":
-                return _awsService.GetWriteStreamAsync(blobUri, appendMode);
+            {
+                var awsLogger = _loggerFactory.CreateLogger<AwsS3BlobStorageService>();
+                var awsService = new AwsS3BlobStorageService(awsLogger);
+                return awsService.GetWriteStreamAsync(blobUri, appendMode);
+            }
             case "GCS":
-                return _gcsService.GetWriteStreamAsync(blobUri, appendMode);
+            {
+                var gcsLogger = _loggerFactory.CreateLogger<GcsBlobStorageService>();
+                var gcsService = new GcsBlobStorageService(gcsLogger);
+                return gcsService.GetWriteStreamAsync(blobUri, appendMode);
+            }
             default:
                 _logger.LogWarning("Unknown or unsupported blob provider for URI: {BlobUri}. Using default.", blobUri);
                 return _defaultService.GetWriteStreamAsync(blobUri, appendMode);
