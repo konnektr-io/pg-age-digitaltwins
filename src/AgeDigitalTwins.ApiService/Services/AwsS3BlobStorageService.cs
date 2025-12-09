@@ -1,12 +1,11 @@
 using System;
 using System.IO;
 using System.Threading.Tasks;
+using Amazon.S3;
+using Amazon.S3.Model;
 using Microsoft.Extensions.Logging;
 
 namespace AgeDigitalTwins.ApiService.Services;
-
-using Amazon.S3;
-using Amazon.S3.Model;
 
 /// <summary>
 /// AWS S3 implementation of blob storage service.
@@ -66,12 +65,33 @@ public class AwsS3BlobStorageService : IBlobStorageService
     public async Task<Stream> GetWriteStreamAsync(Uri blobUri, bool appendMode)
     {
         var (bucket, key) = ParseS3Uri(blobUri);
+        byte[]? initialData = null;
         if (appendMode)
         {
-            _logger.LogWarning("S3 does not support append mode. Overwriting object: {Bucket}/{Key}", bucket, key);
+            try
+            {
+                // Try to download existing object
+                var response = await _s3Client.GetObjectAsync(bucket, key);
+                using (var ms = new MemoryStream())
+                {
+                    await response.ResponseStream.CopyToAsync(ms);
+                    initialData = ms.ToArray();
+                    _logger.LogInformation("Loaded existing S3 object for append: {Bucket}/{Key}, size={Size}", bucket, key, initialData.Length);
+                }
+            }
+            catch (AmazonS3Exception ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                _logger.LogInformation("No existing S3 object to append for: {Bucket}/{Key}", bucket, key);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to load existing S3 object for append: {Bucket}/{Key}. Will start fresh.", bucket, key);
+            }
         }
-        // Return a MemoryStream that uploads to S3 on dispose
-        var uploadStream = new S3UploadStream(_s3Client, bucket, key, _logger);
+        // Return a MemoryStream that uploads to S3 on dispose, initialized with previous data if appendMode
+        var uploadStream = initialData != null
+            ? new S3UploadStream(_s3Client, bucket, key, _logger, initialData)
+            : new S3UploadStream(_s3Client, bucket, key, _logger);
         return uploadStream;
     }
 
@@ -87,6 +107,16 @@ public class AwsS3BlobStorageService : IBlobStorageService
         private bool _disposed;
 
         public S3UploadStream(IAmazonS3 s3Client, string bucket, string key, ILogger logger)
+            : base()
+        {
+            _s3Client = s3Client;
+            _bucket = bucket;
+            _key = key;
+            _logger = logger;
+        }
+
+        public S3UploadStream(IAmazonS3 s3Client, string bucket, string key, ILogger logger, byte[] initialData)
+            : base(initialData)
         {
             _s3Client = s3Client;
             _bucket = bucket;
