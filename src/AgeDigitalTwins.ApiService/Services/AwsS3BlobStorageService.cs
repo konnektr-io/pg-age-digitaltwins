@@ -13,12 +13,10 @@ namespace AgeDigitalTwins.ApiService.Services;
 public class AwsS3BlobStorageService : IBlobStorageService
 {
     private readonly ILogger<AwsS3BlobStorageService> _logger;
-    private readonly IAmazonS3 _s3Client;
 
     public AwsS3BlobStorageService(ILogger<AwsS3BlobStorageService> logger)
     {
         _logger = logger;
-        _s3Client = new AmazonS3Client(); // Uses default credentials chain
     }
 
     private static (string bucket, string key) ParseS3Uri(Uri uri)
@@ -44,8 +42,9 @@ public class AwsS3BlobStorageService : IBlobStorageService
         var (bucket, key) = ParseS3Uri(blobUri);
         try
         {
+            using var s3Client = new AmazonS3Client(); // Uses default credentials chain
             _logger.LogDebug("Getting S3 object: bucket={Bucket}, key={Key}", bucket, key);
-            var response = await _s3Client.GetObjectAsync(bucket, key);
+            var response = await s3Client.GetObjectAsync(bucket, key);
             _logger.LogInformation("Successfully opened read stream for S3 object: {Bucket}/{Key}", bucket, key);
             return response.ResponseStream;
         }
@@ -66,12 +65,13 @@ public class AwsS3BlobStorageService : IBlobStorageService
     {
         var (bucket, key) = ParseS3Uri(blobUri);
         byte[]? initialData = null;
+        IAmazonS3 s3Client = new AmazonS3Client();
         if (appendMode)
         {
             try
             {
                 // Try to download existing object
-                var response = await _s3Client.GetObjectAsync(bucket, key);
+                var response = await s3Client.GetObjectAsync(bucket, key);
                 using (var ms = new MemoryStream())
                 {
                     await response.ResponseStream.CopyToAsync(ms);
@@ -90,8 +90,9 @@ public class AwsS3BlobStorageService : IBlobStorageService
         }
         // Return a MemoryStream that uploads to S3 on dispose, initialized with previous data if appendMode
         var uploadStream = initialData != null
-            ? new S3UploadStream(_s3Client, bucket, key, _logger, initialData)
-            : new S3UploadStream(_s3Client, bucket, key, _logger);
+            ? new S3UploadStream(bucket, key, _logger, initialData)
+            : new S3UploadStream(bucket, key, _logger);
+        uploadStream.SetS3Client(s3Client);
         return uploadStream;
     }
 
@@ -100,28 +101,31 @@ public class AwsS3BlobStorageService : IBlobStorageService
     /// </summary>
     private class S3UploadStream : MemoryStream
     {
-        private readonly IAmazonS3 _s3Client;
+        private IAmazonS3 _s3Client;
         private readonly string _bucket;
         private readonly string _key;
         private readonly ILogger _logger;
         private bool _disposed;
 
-        public S3UploadStream(IAmazonS3 s3Client, string bucket, string key, ILogger logger)
+        public S3UploadStream(string bucket, string key, ILogger logger)
             : base()
         {
-            _s3Client = s3Client;
             _bucket = bucket;
             _key = key;
             _logger = logger;
         }
 
-        public S3UploadStream(IAmazonS3 s3Client, string bucket, string key, ILogger logger, byte[] initialData)
+        public S3UploadStream(string bucket, string key, ILogger logger, byte[] initialData)
             : base(initialData)
         {
-            _s3Client = s3Client;
             _bucket = bucket;
             _key = key;
             _logger = logger;
+        }
+
+        public void SetS3Client(IAmazonS3 s3Client)
+        {
+            _s3Client = s3Client;
         }
 
         protected override void Dispose(bool disposing)
@@ -149,6 +153,7 @@ public class AwsS3BlobStorageService : IBlobStorageService
                 finally
                 {
                     _disposed = true;
+                    _s3Client?.Dispose();
                 }
             }
             base.Dispose(disposing);

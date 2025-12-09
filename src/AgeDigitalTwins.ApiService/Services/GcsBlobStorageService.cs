@@ -13,12 +13,10 @@ using Google.Cloud.Storage.V1;
 public class GcsBlobStorageService : IBlobStorageService
 {
     private readonly ILogger<GcsBlobStorageService> _logger;
-    private readonly StorageClient _storageClient;
 
     public GcsBlobStorageService(ILogger<GcsBlobStorageService> logger)
     {
         _logger = logger;
-        _storageClient = StorageClient.Create(); // Uses default GCP credentials
     }
 
     private static (string bucket, string objectName) ParseGcsUri(Uri uri)
@@ -44,8 +42,9 @@ public class GcsBlobStorageService : IBlobStorageService
         var (bucket, objectName) = ParseGcsUri(blobUri);
         try
         {
+            using var storageClient = StorageClient.Create(); // Uses default GCP credentials
             var ms = new MemoryStream();
-            await _storageClient.DownloadObjectAsync(bucket, objectName, ms);
+            await storageClient.DownloadObjectAsync(bucket, objectName, ms);
             ms.Position = 0;
             _logger.LogInformation("Successfully opened read stream for GCS object: {Bucket}/{Object}", bucket, objectName);
             return ms;
@@ -67,12 +66,13 @@ public class GcsBlobStorageService : IBlobStorageService
     {
         var (bucket, objectName) = ParseGcsUri(blobUri);
         byte[]? initialData = null;
+        StorageClient storageClient = StorageClient.Create();
         if (appendMode)
         {
             try
             {
                 var ms = new MemoryStream();
-                await _storageClient.DownloadObjectAsync(bucket, objectName, ms);
+                await storageClient.DownloadObjectAsync(bucket, objectName, ms);
                 initialData = ms.ToArray();
                 _logger.LogInformation("Loaded existing GCS object for append: {Bucket}/{Object}, size={Size}", bucket, objectName, initialData.Length);
             }
@@ -87,8 +87,9 @@ public class GcsBlobStorageService : IBlobStorageService
         }
         // Return a MemoryStream that uploads to GCS on dispose, initialized with previous data if appendMode
         var uploadStream = initialData != null
-            ? new GcsUploadStream(_storageClient, bucket, objectName, _logger, initialData)
-            : new GcsUploadStream(_storageClient, bucket, objectName, _logger);
+            ? new GcsUploadStream(bucket, objectName, _logger, initialData)
+            : new GcsUploadStream(bucket, objectName, _logger);
+        uploadStream.SetStorageClient(storageClient);
         return uploadStream;
     }
 
@@ -97,28 +98,31 @@ public class GcsBlobStorageService : IBlobStorageService
     /// </summary>
     private class GcsUploadStream : MemoryStream
     {
-        private readonly StorageClient _storageClient;
+        private StorageClient _storageClient;
         private readonly string _bucket;
         private readonly string _objectName;
         private readonly ILogger _logger;
         private bool _disposed;
 
-        public GcsUploadStream(StorageClient storageClient, string bucket, string objectName, ILogger logger)
+        public GcsUploadStream(string bucket, string objectName, ILogger logger)
             : base()
         {
-            _storageClient = storageClient;
             _bucket = bucket;
             _objectName = objectName;
             _logger = logger;
         }
 
-        public GcsUploadStream(StorageClient storageClient, string bucket, string objectName, ILogger logger, byte[] initialData)
+        public GcsUploadStream(string bucket, string objectName, ILogger logger, byte[] initialData)
             : base(initialData)
         {
-            _storageClient = storageClient;
             _bucket = bucket;
             _objectName = objectName;
             _logger = logger;
+        }
+
+        public void SetStorageClient(StorageClient storageClient)
+        {
+            _storageClient = storageClient;
         }
 
         protected override void Dispose(bool disposing)
@@ -140,6 +144,7 @@ public class GcsBlobStorageService : IBlobStorageService
                 finally
                 {
                     _disposed = true;
+                    _storageClient?.Dispose();
                 }
             }
             base.Dispose(disposing);
