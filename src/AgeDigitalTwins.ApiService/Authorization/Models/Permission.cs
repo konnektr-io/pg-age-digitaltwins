@@ -39,6 +39,7 @@ public sealed class Permission : IEquatable<Permission>
             ResourceType.Relationships => "digitaltwins/relationships",
             ResourceType.Models => "models",
             ResourceType.JobsImports => "jobs/imports",
+            ResourceType.JobsDeletions => "jobs/deletions",
             _ => throw new ArgumentOutOfRangeException(nameof(Resource)),
         };
 

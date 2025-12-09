@@ -29,4 +29,9 @@ public enum ResourceType
     /// Import job operations.
     /// </summary>
     JobsImports,
+
+    /// <summary>
+    /// Deletion job operations.
+    /// </summary>
+    JobsDeletions,
 }
