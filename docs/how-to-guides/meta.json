@@ -4,8 +4,6 @@
     "description": "Step-by-step guides for common tasks and workflows",
     "pages": [
         "migration-guide",
-        "integration-guide",
-        "troubleshooting",
         "using-azure-digital-twins-sdks",
         "working-with-telemetry",
         "working-with-components"

@@ -21,7 +21,7 @@ Migrate from other DTDL-compatible platforms.
 ### Option A: Hosted Konnektr Graph (Recommended)
 1. Create account at [ktrlplane.konnektr.io](https://ktrlplane.konnektr.io)
 2. Deploy a new Konnektr Graph resource
-3. Get your endpoint: `https://your-graph-name.api.graph.konnektr.io`
+3. Get your endpoint: `https://your-resource-id.api.graph.konnektr.io`
 4. Set up Auth0 authentication
 
 ### Option B: Self-Hosted Konnektr Graph
@@ -67,12 +67,12 @@ adt_url = "https://your-adt-instance.api.eus.digitaltwins.azure.net"
 adt_client = DigitalTwinsClient(adt_url, DefaultAzureCredential())
 
 # AgeDigitalTwins configuration
-age_base_url = "https://your-age-instance.com/api"
+age_base_url = "https://your-resource-id.api.graph.konnektr.io"
 age_headers = {"Authorization": "Bearer your-token"}
 
 # Copy models
 def copy_models():
-    models = adt_client.list_models()
+    models = adt_client.list_models(include_model_definition=True)
     for model in models:
         response = requests.post(f"{age_base_url}/models", 
                                json=model.serialize(), 
@@ -89,9 +89,20 @@ def copy_twins():
                               headers=age_headers)
         print(f"Copied twin: {twin['$dtId']}")
 
+# Copy relationships
+def copy_relationships():
+    query = "SELECT * FROM relationships"
+    relationships = adt_client.query_twins(query)
+    for rel in relationships:
+        response = requests.put(f"{age_base_url}/digitaltwins/{rel['$sourceId']}/relationships/{rel['$relationshipId']}", 
+                              json=rel, 
+                              headers=age_headers)
+        print(f"Copied relationship: {rel['$relationshipId']}")
+
 if __name__ == "__main__":
     copy_models()
     copy_twins()
+    copy_relationships()
 ```
 
 **How to Run:**
@@ -121,13 +132,14 @@ public class AdtMigration
             credential);
             
         ageClient = new HttpClient();
-        ageClient.BaseAddress = new Uri("https://your-age-instance.com/api/");
+        ageClient.BaseAddress = new Uri("https://your-resource-id.api.graph.konnektr.io/");
         ageClient.DefaultRequestHeaders.Add("Authorization", "Bearer your-token");
     }
     
     public async Task CopyModelsAsync()
     {
-        await foreach (var model in adtClient.GetModelsAsync())
+        var options = new GetModelsOptions { IncludeModelDefinition = true };
+        await foreach (var model in adtClient.GetModelsAsync(options))
         {
             var json = JsonSerializer.Serialize(model);
             var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
@@ -145,6 +157,20 @@ public class AdtMigration
             var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
             await ageClient.PutAsync($"digitaltwins/{((dynamic)twin).Id}", content);
             Console.WriteLine($"Copied twin: {((dynamic)twin).Id}");
+        }
+    }
+    
+    public async Task CopyRelationshipsAsync()
+    {
+        var query = "SELECT * FROM relationships";
+        await foreach (var rel in adtClient.QueryAsync<object>(query))
+        {
+            var sourceId = ((dynamic)rel).sourceId;
+            var relationshipId = ((dynamic)rel).relationshipId;
+            var json = JsonSerializer.Serialize(rel);
+            var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+            await ageClient.PutAsync($"digitaltwins/{sourceId}/relationships/{relationshipId}", content);
+            Console.WriteLine($"Copied relationship: {relationshipId}");
         }
     }
 }
@@ -169,11 +195,11 @@ const credential = new DefaultAzureCredential();
 const adtClient = new DigitalTwinsClient(adtUrl, credential);
 
 // AgeDigitalTwins configuration
-const ageBaseUrl = 'https://your-age-instance.com/api';
+const ageBaseUrl = 'https://your-resource-id.api.graph.konnektr.io';
 const ageHeaders = { 'Authorization': 'Bearer your-token' };
 
 async function copyModels() {
-    const models = adtClient.listModels();
+    const models = adtClient.listModels({ includeModelDefinition: true });
     for await (const model of models) {
         await axios.post(`${ageBaseUrl}/models`, model, { headers: ageHeaders });
         console.log(`Copied model: ${model.id}`);
@@ -190,9 +216,20 @@ async function copyTwins() {
     }
 }
 
+async function copyRelationships() {
+    const query = 'SELECT * FROM relationships';
+    const relationships = adtClient.queryTwins(query);
+    for await (const rel of relationships) {
+        await axios.put(`${ageBaseUrl}/digitaltwins/${rel.$sourceId}/relationships/${rel.$relationshipId}`, 
+                       rel, { headers: ageHeaders });
+        console.log(`Copied relationship: ${rel.$relationshipId}`);
+    }
+}
+
 async function main() {
     await copyModels();
     await copyTwins();
+    await copyRelationships();
 }
 
 main().catch(console.error);

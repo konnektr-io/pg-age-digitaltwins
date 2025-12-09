@@ -23,13 +23,13 @@ Konnektr Graph is a high-performance, Azure Digital Twins-compatible digital twi
 After your resource is deployed, you’ll receive a unique endpoint:
 
 ```
-https://your-graph-name.api.graph.konnektr.io
+https://your-resource-id.api.graph.konnektr.io
 ```
 
 You can open the Graph Explorer at:
 
 ```
-https://explorer.graph.konnektr.io?x-adt-url=your-graph-name.api.graph.konnektr.io
+https://explorer.graph.konnektr.io?x-adt-url=your-resource-id.api.graph.konnektr.io
 ```
 
 ## Authentication (Auth0)
@@ -40,7 +40,7 @@ Use these values for token requests:
 
 - Token endpoint: https://auth.konnektr.io/oauth/token
 - Audience: https://graph.konnektr.io
-- Grant type: client_credentials (M2M) or Authorization Code (user auth)
+- Grant type: client_credentials (M2M) or Device Code (user auth)
 
 ## Copy‑paste code samples
 
@@ -76,7 +76,7 @@ curl -s -X POST \
             ]
         }
     ]' \
-    https://your-graph-name.api.graph.konnektr.io/models
+    https://your-resource-id.api.graph.konnektr.io/models
 
 # 3) Create a simple twin using that model
 curl -s -X PUT \
@@ -88,14 +88,14 @@ curl -s -X PUT \
         "name": "Sample Room",
         "temperature": 21.5
     }' \
-    https://your-graph-name.api.graph.konnektr.io/digitaltwins/room-1
+    https://your-resource-id.api.graph.konnektr.io/digitaltwins/room-1
 
 # 4) Query twins (returns the twin we just created)
 curl -s -X POST \
     -H "authorization: Bearer $ACCESS_TOKEN" \
     -H "content-type: application/json" \
     --data '{ "query": "SELECT * FROM digitaltwins" }' \
-    https://your-graph-name.api.graph.konnektr.io/query
+    https://your-resource-id.api.graph.konnektr.io/query
 ```
 
 ### Python
@@ -117,7 +117,7 @@ access_token = token_response.json().get("access_token")
 headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
 
 # 2) Upload DTDL model
-models_url = "https://your-graph-name.api.graph.konnektr.io/models"
+models_url = "https://your-resource-id.api.graph.konnektr.io/models"
 model_payload = [
         {
                 "@id": "dtmi:com:sample:Room;1",
@@ -133,7 +133,7 @@ model_payload = [
 requests.post(models_url, json=model_payload, headers=headers)
 
 # 3) Create twin
-put_twin_url = "https://your-graph-name.api.graph.konnektr.io/digitaltwins/room-1"
+put_twin_url = "https://your-resource-id.api.graph.konnektr.io/digitaltwins/room-1"
 twin_payload = {
         "$dtId": "room-1",
         "$metadata": { "$model": "dtmi:com:sample:Room;1" },
@@ -143,7 +143,7 @@ twin_payload = {
 requests.put(put_twin_url, json=twin_payload, headers=headers)
 
 # 4) Query twins
-query_url = "https://your-graph-name.api.graph.konnektr.io/query"
+query_url = "https://your-resource-id.api.graph.konnektr.io/query"
 query_payload = {"query": "SELECT * FROM digitaltwins"}
 query_response = requests.post(query_url, json=query_payload, headers=headers)
 print(query_response.json())
@@ -168,7 +168,7 @@ const accessToken = token.access_token;
 const headers = { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' };
 
 // 2) Upload DTDL model
-await axios.post('https://your-graph-name.api.graph.konnektr.io/models', [
+await axios.post('https://your-resource-id.api.graph.konnektr.io/models', [
     {
         '@id': 'dtmi:com:sample:Room;1',
         '@type': 'Interface',
@@ -182,7 +182,7 @@ await axios.post('https://your-graph-name.api.graph.konnektr.io/models', [
 ], { headers });
 
 // 3) Create twin
-await axios.put('https://your-graph-name.api.graph.konnektr.io/digitaltwins/room-1', {
+await axios.put('https://your-resource-id.api.graph.konnektr.io/digitaltwins/room-1', {
     '$dtId': 'room-1',
     '$metadata': { '$model': 'dtmi:com:sample:Room;1' },
     name: 'Sample Room',
@@ -190,7 +190,7 @@ await axios.put('https://your-graph-name.api.graph.konnektr.io/digitaltwins/room
 }, { headers });
 
 // 4) Query twins
-const { data } = await axios.post('https://your-graph-name.api.graph.konnektr.io/query', { query: 'SELECT * FROM digitaltwins' }, { headers });
+const { data } = await axios.post('https://your-resource-id.api.graph.konnektr.io/query', { query: 'SELECT * FROM digitaltwins' }, { headers });
 console.log(data);
 ```
 
@@ -228,7 +228,7 @@ var modelPayload = new [] {
                 }
         }
 };
-await http.PostAsJsonAsync("https://your-graph-name.api.graph.konnektr.io/models", modelPayload);
+await http.PostAsJsonAsync("https://your-resource-id.api.graph.konnektr.io/models", modelPayload);
 
 // 3) Create twin
 var twinPayload = new {
@@ -237,11 +237,11 @@ var twinPayload = new {
         name = "Sample Room",
         temperature = 21.5
 };
-await http.PutAsJsonAsync("https://your-graph-name.api.graph.konnektr.io/digitaltwins/room-1", twinPayload);
+await http.PutAsJsonAsync("https://your-resource-id.api.graph.konnektr.io/digitaltwins/room-1", twinPayload);
 
 // 4) Query twins
 var queryPayload = new { query = "SELECT * FROM digitaltwins" };
-var queryResp = await http.PostAsJsonAsync("https://your-graph-name.api.graph.konnektr.io/query", queryPayload);
+var queryResp = await http.PostAsJsonAsync("https://your-resource-id.api.graph.konnektr.io/query", queryPayload);
 Console.WriteLine(await queryResp.Content.ReadAsStringAsync());
 ```
 
@@ -253,7 +253,7 @@ try:
         # Reuse "client" from your SDK setup if using Azure SDKs
         # For raw REST, you can call /models and count results
         import requests
-        resp = requests.post("https://your-graph-name.api.graph.konnektr.io/query", json={"query": "SELECT * FROM models"}, headers=headers)
+        resp = requests.post("https://your-resource-id.api.graph.konnektr.io/query", json={"query": "SELECT * FROM models"}, headers=headers)
         print(f"✅ Connected successfully! Status: {resp.status_code}")
 except Exception as e:
         print(f"❌ Connection failed: {e}")
