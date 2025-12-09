@@ -29,9 +29,4 @@ public enum ResourceType
     /// Import job operations.
     /// </summary>
     JobsImports,
-
-    /// <summary>
-    /// Graph operations (Create/Drop graph).
-    /// </summary>
-    Graph,
 }
