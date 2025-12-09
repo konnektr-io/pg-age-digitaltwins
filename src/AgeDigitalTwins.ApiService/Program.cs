@@ -100,14 +100,12 @@ builder.Services.AddExceptionHandler<ExceptionHandler>();
 
 // Add blob storage service
 // Use Azure Blob Storage for production, fallback to default for testing/development
-if (builder.Environment.IsDevelopment())
-{
-    builder.Services.AddSingleton<IBlobStorageService, DefaultBlobStorageService>();
-}
-else
-{
-    builder.Services.AddSingleton<IBlobStorageService, AzureBlobStorageService>();
-}
+// Register all blob storage services and the router
+builder.Services.AddSingleton<AzureBlobStorageService>();
+builder.Services.AddSingleton<DefaultBlobStorageService>();
+builder.Services.AddSingleton<AwsS3BlobStorageService>();
+builder.Services.AddSingleton<GcsBlobStorageService>();
+builder.Services.AddSingleton<IBlobStorageService, BlobStorageServiceRouter>();
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
