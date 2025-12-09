@@ -1,0 +1,291 @@
+---
+title: Using Graph Explorer
+icon: Network
+---
+
+Graph Explorer is a web-based application for managing, querying, and visualizing your digital twin data. It supports both Konnektr Graph and Azure Digital Twins instances.
+
+## Access Graph Explorer
+
+For hosted Konnektr Graph instances, open Graph Explorer with your resource URL:
+
+```
+https://explorer.graph.konnektr.io?x-adt-host=your-resource-id.api.graph.konnektr.io
+```
+
+## Key Features
+
+- **Query Editor** - Write Cypher/SQL queries with syntax highlighting
+- **Multiple Views** - Table, graph network, and raw JSON visualization
+- **Model Browser** - Explore DTDL models in a hierarchical tree
+- **Inspector Panel** - Deep dive into twins, relationships, and models
+- **Relationship Management** - Create and manage twin relationships visually
+
+## User Interface
+
+Graph Explorer uses a three-panel layout:
+
+1. **Left Panel** - Browse DTDL models in a tree structure
+2. **Center Panel** - Query editor and results
+3. **Right Panel** - Inspector for detailed item views
+
+Click panel icons in the header to show/hide panels. Drag panel edges to resize.
+
+## Authentication
+
+### KtrlPlane Platform
+
+If you have a Konnektr Platform account:
+
+1. Click **Sign In** in the header
+2. Log in with your KtrlPlane credentials
+3. Your managed Graph resources appear automatically
+
+### Custom Connections
+
+For custom or Azure Digital Twins instances:
+
+1. Click **Connection Selector** → **+ Add Connection**
+2. Choose authentication method:
+   - **None** - For local/open endpoints
+   - **MSAL** - For Azure Digital Twins
+   - **Auth0** - For custom Konnektr Graph instances
+3. Enter endpoint URL and credentials
+4. Click **Add Connection**
+
+## Working with Models
+
+### Viewing Models
+
+The left panel displays DTDL models in a tree:
+- Models that extend others appear as children
+- Badge shows twin count per model
+- Click any model to view details in Inspector
+
+### Importing Models
+
+**Method 1: Paste JSON**
+
+1. Click **+ Import** in Models panel
+2. Select **Paste JSON** tab
+3. Paste DTDL JSON (single model object or array)
+4. Click **Import**
+
+**Method 2: Upload Files**
+
+1. Click **+ Import**
+2. Select **Upload Files** tab
+3. Drag and drop `.json` files or click to browse
+4. Click **Import**
+
+### Creating Twins from Models
+
+1. Hover over a model in the tree
+2. Click the **+ Create Twin** icon
+3. Enter a Twin ID (or leave blank for auto-generation)
+4. Click **Create**
+
+## Querying Digital Twins
+
+### Writing Queries
+
+**Cypher Examples (Konnektr Graph):**
+
+```cypher
+// Get all twins
+MATCH (twin) RETURN twin
+
+// Get twins by model
+MATCH (twin) 
+WHERE twin.$metadata.$model = 'dtmi:example:Building;1' 
+RETURN twin
+
+// Get twins with relationships
+MATCH (source)-[rel]->(target) 
+RETURN source, rel, target
+
+// Filter by property
+MATCH (twin) 
+WHERE twin.temperature > 25 
+RETURN twin
+```
+
+**SQL Examples (Azure Digital Twins):**
+
+```sql
+-- Get all twins
+SELECT * FROM DIGITALTWINS
+
+-- Get twins by model
+SELECT * FROM DIGITALTWINS 
+WHERE IS_OF_MODEL('dtmi:example:Building;1')
+
+-- Get relationships
+SELECT source, relationship, target
+FROM DIGITALTWINS source
+JOIN relationship ON source.$dtId = relationship.$sourceId
+JOIN target ON relationship.$targetId = target.$dtId
+```
+
+### Running Queries
+
+1. Type or paste query in the editor
+2. Click **Run Query**
+3. View results below
+
+### Query History
+
+Click **History** in the query toolbar to:
+- View recent queries with timestamps
+- One-click reload previous queries
+- Automatically persists across sessions
+
+## Visualizing Results
+
+Switch between three view modes:
+
+### Table View
+
+Structured table with:
+- **Display Names** (💬) - Human-readable property names from DTDL
+- **Layout Modes** - Simple, Grouped, Flat, or Expandable rows
+- **Pagination** - 50 rows per page
+- **Export** - Download results as CSV
+
+### Graph View
+
+Interactive network visualization:
+- Nodes represent digital twins (colored by model)
+- Edges show relationships
+- Click nodes to inspect
+- Auto-layout with circular arrangement
+
+Best for understanding relationships and network topology.
+
+### Raw View
+
+Unprocessed JSON response for debugging and verification.
+
+## Inspector Panel
+
+The Inspector shows detailed information for selected items.
+
+### Twin Inspector
+
+**Identity:**
+- Twin ID, Model ID, Metadata (ETag, upload time)
+
+**Properties:**
+- View and edit all twin properties inline
+- Click value to edit, press Enter to save
+- Type indicators and validation
+
+**Relationships:**
+- **Outgoing** - Relationships from this twin
+- **Incoming** - Relationships to this twin
+- Click to navigate between connected twins
+
+**Actions:**
+- Create new relationships
+- Edit properties
+- Delete relationships
+
+### Relationship Inspector
+
+**Details:**
+- Relationship ID and type
+- Source and target twins (clickable)
+- Visual arrow showing direction
+- Custom relationship properties
+
+### Model Inspector
+
+**Definition:**
+- Model ID, Display name, Description
+- Parent models (if using extends)
+
+**Contents:**
+- **Properties** - Data fields with types and schemas
+- **Relationships** - Allowed relationship types and targets
+- **Components** - Nested components
+- **Telemetry** - Telemetry definitions
+
+## Managing Relationships
+
+### Creating Relationships
+
+1. Open a twin in the Inspector
+2. Scroll to **Relationships** section
+3. Click **+ Create Relationship**
+4. Select relationship type and target twin
+5. Click **Create**
+
+**Target Twin Search:**
+- Type to search by ID, name, or display name
+- Automatically filtered by target model constraints
+- Select from dropdown
+
+### Deleting Relationships
+
+1. Open twin in Inspector
+2. Find relationship in **Relationships** section
+3. Click **delete icon** (🗑️)
+4. Confirm deletion
+
+## Best Practices
+
+### Query Performance
+
+- Use WHERE clauses early to reduce result sets
+- Limit results with `TOP (n)` or `LIMIT` for large datasets
+- Specify needed columns instead of `SELECT *`
+
+### Model Management
+
+- Use descriptive model IDs and display names
+- Add descriptions to document models
+- Version models in IDs (e.g., `dtmi:example:Room;1`)
+- Test models before creating production twins
+
+### Data Organization
+
+- Use consistent naming conventions for twin IDs
+- Choose meaningful property names
+- Use descriptive relationship names
+- Leverage model hierarchy with `extends`
+
+## Troubleshooting
+
+### Connection Issues
+
+**"Failed to connect to endpoint"**
+- Verify endpoint URL is correct
+- Check authentication credentials
+- Ensure Graph instance is running
+- Check network connectivity and firewalls
+
+**"Authentication failed"**
+- Re-enter credentials in connection settings
+- Verify you have correct permissions
+- Check token expiration (sign out and back in)
+- For KtrlPlane connections, refresh the connection list
+
+### Query Errors
+
+**"Query syntax error"**
+- Verify query syntax (Cypher for Konnektr Graph, SQL for Azure Digital Twins)
+- Check for typos in property names
+- Ensure model IDs are quoted and complete
+- Review query examples above
+
+**"No results returned"**
+- Verify twins exist matching your query
+- Check filter conditions
+- Try simpler query first (e.g., `SELECT * FROM DIGITALTWINS`)
+- Confirm correct connection is selected
+
+## Additional Resources
+
+- [Querying Concepts](../concepts/querying) - Query language reference
+- [DTDL Models](../concepts/dtdl) - Understanding model definitions
+- [Working with Relationships](../concepts/querying) - Relationship query patterns

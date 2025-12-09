@@ -1,4 +1,6 @@
 using System.Text.Json;
+using AgeDigitalTwins.ApiService.Authorization;
+using AgeDigitalTwins.ApiService.Authorization.Models;
 using AgeDigitalTwins.ApiService.Helpers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -64,6 +66,7 @@ public static class QueryEndpoints
                     return Results.Json(page);
                 }
             )
+            .RequirePermission(ResourceType.Query, PermissionAction.Action)
             .RequireRateLimiting("WeightedQueryPolicy")
             .WithMetadata(new Middleware.WeightedQueryPolicyAttribute())
             .WithName("Query")

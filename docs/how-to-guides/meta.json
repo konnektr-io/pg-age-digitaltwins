@@ -5,6 +5,7 @@
     "pages": [
         "migration-guide",
         "using-azure-digital-twins-sdks",
+        "graph-explorer",
         "working-with-telemetry",
         "working-with-components"
     ]

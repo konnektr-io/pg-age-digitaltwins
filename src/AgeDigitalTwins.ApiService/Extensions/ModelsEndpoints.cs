@@ -1,4 +1,6 @@
 using System.Text.Json;
+using AgeDigitalTwins.ApiService.Authorization;
+using AgeDigitalTwins.ApiService.Authorization.Models;
 using AgeDigitalTwins.ApiService.Helpers;
 using AgeDigitalTwins.ApiService.Models;
 using AgeDigitalTwins.Models;
@@ -11,9 +13,7 @@ public static class ModelsEndpoints
 {
     public static WebApplication MapModelsEndpoints(this WebApplication app)
     {
-        var modelsGroup = app.MapGroup("/models")
-            .WithTags("Models")
-            .RequireRateLimiting("AdminOperations");
+        var modelsGroup = app.MapGroup("/models").WithTags("Models");
 
         modelsGroup
             .MapGet(
@@ -57,6 +57,8 @@ public static class ModelsEndpoints
                     );
                 }
             )
+            .RequirePermission(ResourceType.Models, PermissionAction.Read)
+            .RequireRateLimiting("AdminOperations")
             .WithName("ListModels")
             .WithSummary("Lists all models in the digital twins graph.");
 
@@ -76,6 +78,8 @@ public static class ModelsEndpoints
                     );
                 }
             )
+            .RequirePermission(ResourceType.Models, PermissionAction.Write)
+            .RequireRateLimiting("AdminOperations")
             .WithName("CreateModels")
             .WithSummary("Creates new models in the digital twins graph.");
 
@@ -92,6 +96,8 @@ public static class ModelsEndpoints
                     return Results.NoContent();
                 }
             )
+            .RequirePermission(ResourceType.Models, PermissionAction.Delete)
+            .RequireRateLimiting("AdminOperations")
             .WithName("DeleteAllModels")
             .WithSummary("Deletes all models in the digital twins graph.");
 
@@ -109,6 +115,8 @@ public static class ModelsEndpoints
                     return Results.NoContent();
                 }
             )
+            .RequirePermission(ResourceType.Models, PermissionAction.Delete)
+            .RequireRateLimiting("AdminOperations")
             .WithName("DeleteModel")
             .WithSummary("Deletes a specific model by its ID.");
 
