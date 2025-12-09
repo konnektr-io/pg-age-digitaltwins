@@ -11,6 +11,7 @@
     <PackageReference Include="AWSSDK.S3" Version="4.0.14.1" />
     <PackageReference Include="Azure.Identity" Version="1.17.0" />
     <PackageReference Include="Azure.Storage.Blobs" Version="12.26.0" />
+    <PackageReference Include="Google.Cloud.Storage.V1" Version="4.13.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.10" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.10" />
     <PackageReference Include="Npgsql.OpenTelemetry" Version="9.0.4" />
