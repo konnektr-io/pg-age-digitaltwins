@@ -11,7 +11,7 @@ Konnektr Graph uses Auth0 for authentication instead of Azure AD, so you **canno
 
 ### Auth0 Configuration
 - **Domain**: `auth.konnektr.io`  
-- **Audience**: `https://api.graph.konnektr.io`
+- **Audience**: `https://graph.konnektr.io`
 - **Grant Type**: `client_credentials` (service-to-service)
 
 ## Python SDK
@@ -68,12 +68,12 @@ credential = KonnektrTokenCredential(
     domain="auth.konnektr.io",
     client_id="your-client-id",
     client_secret="your-client-secret", 
-    audience="https://api.graph.konnektr.io"
+    audience="https://graph.konnektr.io"
 )
 
 # Create client
 client = DigitalTwinsClient(
-    endpoint="https://your-graph-name.api.graph.konnektr.io",
+    endpoint="https://your-resource-id.api.graph.konnektr.io",
     credential=credential
 )
 
@@ -177,12 +177,12 @@ var credential = new KonnektrTokenCredential(
     domain: "auth.konnektr.io",
     clientId: "your-client-id",
     clientSecret: "your-client-secret",
-    audience: "https://api.graph.konnektr.io"
+    audience: "https://graph.konnektr.io"
 );
 
 // Create client
 var client = new DigitalTwinsClient(
-    new Uri("https://your-graph-name.api.graph.konnektr.io"),
+    new Uri("https://your-resource-id.api.graph.konnektr.io"),
     credential
 );
 
@@ -274,12 +274,12 @@ const credential = new KonnektrTokenCredential(
     'auth.konnektr.io',
     'your-client-id',
     'your-client-secret',
-    'https://api.graph.konnektr.io'
+    'https://graph.konnektr.io'
 );
 
 // Create client
 const client = new DigitalTwinsClient(
-    'https://your-graph-name.api.graph.konnektr.io',
+    'https://your-resource-id.api.graph.konnektr.io',
     credential
 );
 
@@ -321,8 +321,8 @@ For security, store your credentials as environment variables:
 KONNEKTR_CLIENT_ID=your-client-id
 KONNEKTR_CLIENT_SECRET=your-client-secret
 KONNEKTR_DOMAIN=auth.konnektr.io
-KONNEKTR_AUDIENCE=https://api.graph.konnektr.io
-KONNEKTR_ENDPOINT=https://your-graph-name.api.graph.konnektr.io
+KONNEKTR_AUDIENCE=https://graph.konnektr.io
+KONNEKTR_ENDPOINT=https://your-resource-id.api.graph.konnektr.io
 ```
 
 Then load them in your application:
@@ -349,7 +349,7 @@ Common authentication errors and solutions:
 
 - **401 Unauthorized**: Check your client credentials and ensure they're valid
 - **403 Forbidden**: Verify your Auth0 application has the correct permissions
-- **Invalid audience**: Ensure you're using `https://api.graph.konnektr.io`
+- **Invalid audience**: Ensure you're using `https://graph.konnektr.io`
 - **Token expired**: The custom credential should handle renewal automatically
 
 > **Note:** Unlike Azure Digital Twins which uses Azure AD, Konnektr Graph requires Auth0 authentication. You cannot use Azure identity providers like `DefaultAzureCredential`, `AzureCliCredential`, or `ManagedIdentityCredential`.
