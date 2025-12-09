@@ -5,28 +5,123 @@ using Microsoft.Extensions.Logging;
 
 namespace AgeDigitalTwins.ApiService.Services;
 
+using Amazon.S3;
+using Amazon.S3.Model;
+
 /// <summary>
-/// AWS S3 implementation of blob storage service (stub).
+/// AWS S3 implementation of blob storage service.
 /// </summary>
-public class AwsS3BlobStorageService(ILogger<AwsS3BlobStorageService> logger) : IBlobStorageService
+public class AwsS3BlobStorageService : IBlobStorageService
 {
-    private readonly ILogger<AwsS3BlobStorageService> _logger = logger;
+    private readonly ILogger<AwsS3BlobStorageService> _logger;
+    private readonly IAmazonS3 _s3Client;
 
-    public Task<Stream> GetReadStreamAsync(Uri blobUri)
+    public AwsS3BlobStorageService(ILogger<AwsS3BlobStorageService> logger)
     {
-        _logger.LogWarning("AWS S3 blob access not yet implemented: {BlobUri}", blobUri);
-        throw new NotImplementedException("AWS S3 blob access not yet implemented.");
+        _logger = logger;
+        _s3Client = new AmazonS3Client(); // Uses default credentials chain
     }
 
-    public Task<Stream> GetWriteStreamAsync(Uri blobUri)
+    private static (string bucket, string key) ParseS3Uri(Uri uri)
     {
-        _logger.LogWarning("AWS S3 blob write not yet implemented: {BlobUri}", blobUri);
-        throw new NotImplementedException("AWS S3 blob write not yet implemented.");
+        // Support s3://bucket/key and https://bucket.s3.amazonaws.com/key
+        if (uri.Scheme == "s3")
+        {
+            var bucket = uri.Host;
+            var key = uri.AbsolutePath.TrimStart('/');
+            return (bucket, key);
+        }
+        if (uri.Host.EndsWith(".s3.amazonaws.com"))
+        {
+            var bucket = uri.Host.Substring(0, uri.Host.IndexOf(".s3.amazonaws.com"));
+            var key = uri.AbsolutePath.TrimStart('/');
+            return (bucket, key);
+        }
+        throw new ArgumentException($"Invalid S3 URI format: {uri}");
     }
 
-    public Task<Stream> GetWriteStreamAsync(Uri blobUri, bool appendMode)
+    public async Task<Stream> GetReadStreamAsync(Uri blobUri)
     {
-        _logger.LogWarning("AWS S3 blob write (appendMode) not yet implemented: {BlobUri}", blobUri);
-        throw new NotImplementedException("AWS S3 blob write (appendMode) not yet implemented.");
+        var (bucket, key) = ParseS3Uri(blobUri);
+        try
+        {
+            _logger.LogDebug("Getting S3 object: bucket={Bucket}, key={Key}", bucket, key);
+            var response = await _s3Client.GetObjectAsync(bucket, key);
+            _logger.LogInformation("Successfully opened read stream for S3 object: {Bucket}/{Key}", bucket, key);
+            return response.ResponseStream;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get read stream for S3 object: {Bucket}/{Key}", bucket, key);
+            throw;
+        }
+    }
+
+    public async Task<Stream> GetWriteStreamAsync(Uri blobUri)
+    {
+        // S3 does not support direct streaming writes; use a MemoryStream and upload on dispose
+        return await GetWriteStreamAsync(blobUri, appendMode: false);
+    }
+
+    public async Task<Stream> GetWriteStreamAsync(Uri blobUri, bool appendMode)
+    {
+        var (bucket, key) = ParseS3Uri(blobUri);
+        if (appendMode)
+        {
+            _logger.LogWarning("S3 does not support append mode. Overwriting object: {Bucket}/{Key}", bucket, key);
+        }
+        // Return a MemoryStream that uploads to S3 on dispose
+        var uploadStream = new S3UploadStream(_s3Client, bucket, key, _logger);
+        return uploadStream;
+    }
+
+    /// <summary>
+    /// MemoryStream that uploads to S3 on dispose.
+    /// </summary>
+    private class S3UploadStream : MemoryStream
+    {
+        private readonly IAmazonS3 _s3Client;
+        private readonly string _bucket;
+        private readonly string _key;
+        private readonly ILogger _logger;
+        private bool _disposed;
+
+        public S3UploadStream(IAmazonS3 s3Client, string bucket, string key, ILogger logger)
+        {
+            _s3Client = s3Client;
+            _bucket = bucket;
+            _key = key;
+            _logger = logger;
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (!_disposed && disposing)
+            {
+                try
+                {
+                    Position = 0;
+                    var putRequest = new PutObjectRequest
+                    {
+                        BucketName = _bucket,
+                        Key = _key,
+                        InputStream = this,
+                    };
+                    _logger.LogDebug("Uploading stream to S3: {Bucket}/{Key}", _bucket, _key);
+                    _s3Client.PutObjectAsync(putRequest).GetAwaiter().GetResult();
+                    _logger.LogInformation("Successfully uploaded stream to S3: {Bucket}/{Key}", _bucket, _key);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to upload stream to S3: {Bucket}/{Key}", _bucket, _key);
+                    throw;
+                }
+                finally
+                {
+                    _disposed = true;
+                }
+            }
+            base.Dispose(disposing);
+        }
     }
 }
