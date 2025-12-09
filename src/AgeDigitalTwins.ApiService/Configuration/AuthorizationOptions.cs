@@ -73,8 +73,24 @@ public class ApiProviderOptions
     public int TimeoutSeconds { get; set; } = 10;
 
     /// <summary>
-    /// Gets or sets the authorization header value (e.g., "Bearer {token}").
-    /// If null, the current user's JWT will be forwarded.
+    /// Gets or sets the OAuth2 token endpoint for client credentials flow.
+    /// Example: "https://YOUR_DOMAIN/oauth/token"
     /// </summary>
-    public string? Authorization { get; set; }
+    public string TokenEndpoint { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the audience for the M2M token.
+    /// Example: "https://api.ktrlplane.konnektr.io"
+    /// </summary>
+    public string Audience { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the client ID for client credentials auth.
+    /// </summary>
+    public string ClientId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the client secret for client credentials auth.
+    /// </summary>
+    public string ClientSecret { get; set; } = string.Empty;
 }

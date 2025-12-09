@@ -29,6 +29,61 @@ public class ApiPermissionProvider : IPermissionProvider
         _options = options.Value;
         _logger = logger;
     }
+    
+    // Token cache for client credentials
+    private class TokenCacheEntry
+    {
+        public string AccessToken { get; set; } = string.Empty;
+        public DateTimeOffset ExpiresAt { get; set; }
+    }
+
+    private TokenCacheEntry? _tokenCache;
+    private readonly object _tokenLock = new();
+
+    private async Task<string> GetAccessTokenAsync(CancellationToken cancellationToken)
+    {
+        // Use cached token if valid
+        if (_tokenCache != null && _tokenCache.ExpiresAt > DateTimeOffset.UtcNow.AddMinutes(1))
+        {
+            return _tokenCache.AccessToken;
+        }
+
+        var api = _options.ApiProvider;
+        if (api == null || string.IsNullOrEmpty(api.TokenEndpoint) || string.IsNullOrEmpty(api.ClientId) || string.IsNullOrEmpty(api.ClientSecret) || string.IsNullOrEmpty(api.Audience))
+        {
+            throw new InvalidOperationException("API provider client credentials configuration is missing.");
+        }
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, api.TokenEndpoint);
+        request.Content = new FormUrlEncodedContent(new[]
+        {
+            new KeyValuePair<string, string>("grant_type", "client_credentials"),
+            new KeyValuePair<string, string>("client_id", api.ClientId),
+            new KeyValuePair<string, string>("client_secret", api.ClientSecret),
+            new KeyValuePair<string, string>("audience", api.Audience)
+        });
+
+        using var client = new HttpClient();
+        var response = await client.SendAsync(request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        var json = await response.Content.ReadAsStringAsync(cancellationToken);
+        using var doc = JsonDocument.Parse(json);
+        var accessToken = doc.RootElement.GetProperty("access_token").GetString();
+        var expiresIn = doc.RootElement.TryGetProperty("expires_in", out var exp) ? exp.GetInt32() : 3600;
+        if (string.IsNullOrEmpty(accessToken))
+            throw new InvalidOperationException("No access_token in client credentials response.");
+
+        var entry = new TokenCacheEntry
+        {
+            AccessToken = accessToken,
+            ExpiresAt = DateTimeOffset.UtcNow.AddSeconds(expiresIn - 30) // buffer
+        };
+        lock (_tokenLock)
+        {
+            _tokenCache = entry;
+        }
+        return accessToken;
+    }
 
     /// <inheritdoc />
     public async Task<IReadOnlyCollection<Permission>> GetPermissionsAsync(
@@ -70,9 +125,9 @@ public class ApiPermissionProvider : IPermissionProvider
         // Call API to get permissions
         try
         {
-            var resourceName = _options.ApiProvider?.ResourceName ?? "digitaltwins";
-            var endpoint =
-                $"{_options.ApiProvider?.CheckEndpoint ?? "/api/v1/permissions/check"}?scopeType=resource&scopeId={resourceName}";
+            var api = _options.ApiProvider;
+            var resourceName = api?.ResourceName ?? "digitaltwins";
+            var endpoint = $"{api?.CheckEndpoint ?? "/api/v1/permissions/check"}?scopeType=resource&scopeId={resourceName}&userId={Uri.EscapeDataString(userId ?? "")}";
 
             _logger.LogDebug(
                 "Fetching permissions for user {UserId} from API: {Endpoint}",
@@ -80,7 +135,13 @@ public class ApiPermissionProvider : IPermissionProvider
                 endpoint
             );
 
-            var response = await _httpClient.GetAsync(endpoint, cancellationToken);
+            // Get M2M token
+            var token = await GetAccessTokenAsync(cancellationToken);
+
+            var request = new HttpRequestMessage(HttpMethod.Get, endpoint);
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            var response = await _httpClient.SendAsync(request, cancellationToken);
             response.EnsureSuccessStatusCode();
 
             var content = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -91,7 +152,7 @@ public class ApiPermissionProvider : IPermissionProvider
 
             // Cache the result
             var cacheExpiration = TimeSpan.FromMinutes(
-                _options.ApiProvider?.CacheExpirationMinutes ?? 5
+                api?.CacheExpirationMinutes ?? 5
             );
             _cache.Set(cacheKey, permissions, cacheExpiration);
 
