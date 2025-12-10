@@ -37,6 +37,7 @@ public static class CypherQueryPrompts
             Twins are labeled as `Twin` and models are labeled as `Model`.
             Relationships are labeled with the relationship name.
             The `dtmi` of a twin is stored in the `$metadata.$model` property.
+            The ID of a twin is stored in the `$dtId` property.
             """;
     }
 
@@ -50,6 +51,7 @@ public static class CypherQueryPrompts
             Twins are labeled as `Twin` and models are labeled as `Model`.
             Relationships are labeled with the relationship name.
             The `dtmi` of a twin is stored in the `$metadata.$model` property.
+            The ID of a twin is stored in the `$dtId` property.
             """;
     }
 }
