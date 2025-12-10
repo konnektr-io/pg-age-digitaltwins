@@ -64,7 +64,8 @@ builder.Services.AddSingleton(sp =>
 builder.Services.AddSingleton(sp =>
 {
     ILoggerFactory loggerFactory = sp.GetRequiredService<ILoggerFactory>();
-    return new EventSinkFactory(builder.Configuration, loggerFactory);
+    var dlqService = sp.GetRequiredService<AgeDigitalTwins.Events.DLQService>();
+    return new EventSinkFactory(builder.Configuration, loggerFactory, dlqService);
 });
 
 // Register event sinks as a singleton list
@@ -79,6 +80,21 @@ builder.Services.AddSingleton(sp =>
 {
     var eventSinkFactory = sp.GetRequiredService<EventSinkFactory>();
     return eventSinkFactory.GetEventRoutes();
+});
+
+// Register DLQService as a singleton
+builder.Services.AddSingleton(sp =>
+{
+    string connectionString =
+        builder.Configuration.GetConnectionString("agedb")
+        ?? builder.Configuration["ConnectionStrings:agedb"]
+        ?? builder.Configuration["AgeConnectionString"]
+        ?? throw new InvalidOperationException("Connection string is required.");
+
+    var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
+    var dataSource = dataSourceBuilder.Build();
+    var logger = sp.GetRequiredService<ILogger<DLQService>>();
+    return new DLQService(dataSource, logger);
 });
 
 // Register Subscription as a singleton
@@ -168,6 +184,9 @@ app.Lifetime.ApplicationStarted.Register(async () =>
             cts.Token
         );
 
+        // Initialize DLQ schema/table
+        var dlqService = app.Services.GetRequiredService<AgeDigitalTwins.Events.DLQService>();
+        await dlqService.InitializeSchemaAsync(cts.Token);
         logger.LogInformation("All event processing services started successfully");
 
         // Wait for any service to complete (which should only happen on cancellation or error)

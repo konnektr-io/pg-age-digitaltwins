@@ -2,15 +2,24 @@ using CloudNative.CloudEvents;
 
 namespace AgeDigitalTwins.Events;
 
+using System.Text.Json;
+using Npgsql;
+
 /// <summary>
 /// Wraps an event sink with retry logic and exponential backoff for resilient event delivery.
 /// </summary>
-public class ResilientEventSinkWrapper : IEventSink
+public class ResilientEventSinkWrapper(
+    IEventSink innerSink,
+    ILogger logger,
+    DLQService dlqService,
+    int maxRetries = 3,
+    TimeSpan? initialDelay = null
+) : IEventSink
 {
-    private readonly IEventSink _innerSink;
-    private readonly ILogger _logger;
-    private readonly int _maxRetries;
-    private readonly TimeSpan _initialDelay;
+    private readonly IEventSink _innerSink = innerSink;
+    private readonly ILogger _logger = logger;
+    private readonly int _maxRetries = maxRetries;
+    private readonly TimeSpan _initialDelay = initialDelay ?? TimeSpan.FromSeconds(2);
     private readonly Queue<(
         List<CloudEvent> Events,
         DateTime FailedAt,
@@ -18,18 +27,7 @@ public class ResilientEventSinkWrapper : IEventSink
     )> _failedEventsQueue = new();
     private readonly SemaphoreSlim _queueLock = new(1, 1);
 
-    public ResilientEventSinkWrapper(
-        IEventSink innerSink,
-        ILogger logger,
-        int maxRetries = 3,
-        TimeSpan? initialDelay = null
-    )
-    {
-        _innerSink = innerSink;
-        _logger = logger;
-        _maxRetries = maxRetries;
-        _initialDelay = initialDelay ?? TimeSpan.FromSeconds(2);
-    }
+    private readonly DLQService _dlqService = dlqService;
 
     public string Name => _innerSink.Name;
 
@@ -80,14 +78,23 @@ public class ResilientEventSinkWrapper : IEventSink
             {
                 _logger.LogError(
                     ex,
-                    "All {MaxRetries} retry attempts failed for sink {SinkName}. Queueing {EventCount} events for later retry.",
+                    "All {MaxRetries} retry attempts failed for sink {SinkName}. Persisting {EventCount} events to DLQ.",
                     _maxRetries,
                     Name,
                     events.Count
                 );
 
-                // Queue for later retry
-                await QueueFailedEventsAsync(events, cancellationToken);
+                // Persist each event to DLQ table
+                foreach (var cloudEvent in events)
+                {
+                    await _dlqService.PersistEventAsync(
+                        cloudEvent,
+                        Name,
+                        ex,
+                        _maxRetries,
+                        cancellationToken
+                    );
+                }
             }
         }
     }
@@ -163,27 +170,6 @@ public class ResilientEventSinkWrapper : IEventSink
                     }
                 }
             }
-        }
-        finally
-        {
-            _queueLock.Release();
-        }
-    }
-
-    private async Task QueueFailedEventsAsync(
-        List<CloudEvent> events,
-        CancellationToken cancellationToken
-    )
-    {
-        await _queueLock.WaitAsync(cancellationToken);
-        try
-        {
-            _failedEventsQueue.Enqueue((events, DateTime.UtcNow, 0));
-            _logger.LogDebug(
-                "Queued {EventCount} events for later retry. Queue depth: {QueueDepth}",
-                events.Count,
-                _failedEventsQueue.Count
-            );
         }
         finally
         {

@@ -14,9 +14,10 @@ public class TestingEventSinkFactory : EventSinkFactory
     public TestingEventSinkFactory(
         IConfiguration configuration,
         ILoggerFactory loggerFactory,
-        TestingEventSink testSink
+        TestingEventSink testSink,
+        DLQService? dlqService = null
     )
-        : base(configuration, loggerFactory)
+        : base(configuration, loggerFactory, dlqService ?? new DLQService(null!, null))
     {
         _testSink = testSink;
     }
