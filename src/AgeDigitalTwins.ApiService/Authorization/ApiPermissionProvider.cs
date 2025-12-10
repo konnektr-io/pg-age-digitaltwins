@@ -63,8 +63,8 @@ public class ApiPermissionProvider : IPermissionProvider
             new KeyValuePair<string, string>("audience", api.Audience)
         });
 
-        using var client = new HttpClient();
-        var response = await client.SendAsync(request, cancellationToken);
+        // Use the injected _httpClient for token requests as well
+        var response = await _httpClient.SendAsync(request, cancellationToken);
         response.EnsureSuccessStatusCode();
         var json = await response.Content.ReadAsStringAsync(cancellationToken);
         using var doc = JsonDocument.Parse(json);
