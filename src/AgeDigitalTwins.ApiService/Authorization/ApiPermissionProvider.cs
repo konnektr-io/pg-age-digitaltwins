@@ -110,9 +110,7 @@ public class ApiPermissionProvider : IPermissionProvider
 
         // Check cache first
         var cacheKey = $"permissions:{userId}";
-        if (
-            _cache.TryGetValue<IReadOnlyCollection<Permission>>(cacheKey, out var cachedPermissions)
-        )
+        if (_cache.TryGetValue<IReadOnlyCollection<Permission>>(cacheKey, out var cachedPermissions))
         {
             _logger.LogDebug(
                 "Retrieved {Count} permissions from cache for user {UserId}",
@@ -121,6 +119,8 @@ public class ApiPermissionProvider : IPermissionProvider
             );
             return cachedPermissions ?? Array.Empty<Permission>();
         }
+
+        _logger.LogDebug("Calling check permissions API for user {UserId}", userId);
 
         // Call API to get permissions
         try
