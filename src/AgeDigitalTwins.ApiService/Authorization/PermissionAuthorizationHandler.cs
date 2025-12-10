@@ -8,19 +8,19 @@ namespace AgeDigitalTwins.ApiService.Authorization;
 /// </summary>
 public class PermissionAuthorizationHandler : AuthorizationHandler<PermissionRequirement>
 {
-    private readonly IPermissionService _permissionService;
+    private readonly IPermissionProvider _permissionProvider;
     private readonly ILogger<PermissionAuthorizationHandler> _logger;
 
     public PermissionAuthorizationHandler(
-        IPermissionService permissionService,
+        IPermissionProvider permissionProvider,
         ILogger<PermissionAuthorizationHandler> logger
     )
     {
-        _permissionService = permissionService;
+        _permissionProvider = permissionProvider;
         _logger = logger;
     }
 
-    protected override Task HandleRequirementAsync(
+    protected override async Task HandleRequirementAsync(
         AuthorizationHandlerContext context,
         PermissionRequirement requirement
     )
@@ -28,11 +28,14 @@ public class PermissionAuthorizationHandler : AuthorizationHandler<PermissionReq
         if (context.User?.Identity?.IsAuthenticated != true)
         {
             _logger.LogDebug("User is not authenticated");
-            return Task.CompletedTask;
+            return;
         }
 
         // Check if user has the required permission
-        if (_permissionService.HasPermission(context.User, requirement.RequiredPermission))
+        var permissions = await _permissionProvider.GetPermissionsAsync(context.User);
+        var hasPermission = permissions.Any(p => p.Grants(requirement.RequiredPermission));
+
+        if (hasPermission)
         {
             _logger.LogDebug(
                 "User has required permission: {Permission}",
@@ -48,7 +51,5 @@ public class PermissionAuthorizationHandler : AuthorizationHandler<PermissionReq
                 context.User.Identity.Name ?? "Unknown"
             );
         }
-
-        return Task.CompletedTask;
     }
 }
