@@ -244,57 +244,70 @@ main().catch(console.error);
 
 ---
 
-### B. Exporting to JSON-LD and Importing using the Import Jobs API
+### B. Exporting to NDJSON for Import Jobs
 
-For large migrations or when using the import API, you can export your data to a JSON-LD file and upload it to blob storage for import.
+For bulk migration, you must export your data to NDJSON format compatible with the Import Jobs API. The NDJSON file must follow a specific structure:
 
-#### Example Export Script (Python)
+#### NDJSON Format Structure
 
-```python title="export_to_jsonld.py"
-# Example script to export Azure Digital Twins data to JSON-LD format
-from azure.identity import DefaultAzureCredential
-from azure.digitaltwins.core import DigitalTwinsClient
+Each section is a line-delimited JSON object. The required sections are:
+
+```
+{"Section": "Header"}
+{"fileVersion": "1.0.0", "author": "your-name", "organization": "your-org"}
+{"Section": "Models"}
+<DTDL model JSON, one per line>
+{"Section": "Twins"}
+<Twin JSON, one per line>
+{"Section": "Relationships"}
+<Relationship JSON, one per line>
+```
+
+See [Azure Digital Twins Bulk Import NDJSON Generator](https://github.com/Azure-Samples/azure-digital-twins-getting-started/tree/main/bulk-import/ndjson-generator) for a .NET sample that generates NDJSON files.
+
+#### Example NDJSON Generator (.NET)
+
+```python title="ndjson_generator.py"
 import json
 
-# Azure Digital Twins configuration
-adt_url = "https://your-adt-instance.api.eus.digitaltwins.azure.net"
-adt_client = DigitalTwinsClient(adt_url, DefaultAzureCredential())
+def write_ndjson(models, twins, relationships, file_path, header=None):
+    with open(file_path, 'w', encoding='utf-8') as f:
+        # Header section
+        f.write(json.dumps({"Section": "Header"}) + '\n')
+        if header is None:
+            header_obj = {"fileVersion": "1.0.0", "author": "authorName", "organization": "organization"}
+        else:
+            header_obj = header
+        f.write(json.dumps(header_obj) + '\n')
 
-def export_to_jsonld():
-    export_data = {
-        "@context": "https://www.w3.org/ns/activitystreams",
-        "@type": "Collection",
-        "models": [],
-        "twins": [],
-        "relationships": []
-    }
-    
-    # Export models
-    models = adt_client.list_models()
-    for model in models:
-        export_data["models"].append(model.serialize())
-    
-    # Export twins
-    query = "SELECT * FROM digitaltwins"
-    twins = adt_client.query_twins(query)
-    for twin in twins:
-        export_data["twins"].append(twin)
-    
-    # Export relationships
-    rel_query = "SELECT * FROM relationships"
-    relationships = adt_client.query_twins(rel_query)
-    for rel in relationships:
-        export_data["relationships"].append(rel)
-    
-    # Save to file
-    with open('export.jsonld', 'w') as f:
-        json.dump(export_data, f, indent=2)
-    
-    print("Export completed: export.jsonld")
+        # Models section
+        f.write(json.dumps({"Section": "Models"}) + '\n')
+        for model in models:
+            # model should be a dict or already serialized string
+            if isinstance(model, str):
+                f.write(model.strip().replace('\n', '') + '\n')
+            else:
+                f.write(json.dumps(model) + '\n')
 
-if __name__ == "__main__":
-    export_to_jsonld()
+        # Twins section
+        f.write(json.dumps({"Section": "Twins"}) + '\n')
+        for twin in twins:
+            f.write(json.dumps(twin) + '\n')
+
+        # Relationships section
+        f.write(json.dumps({"Section": "Relationships"}) + '\n')
+        for rel in relationships:
+            f.write(json.dumps(rel) + '\n')
 ```
+This function writes the NDJSON file in the required format. Pass lists of models, twins, and relationships as Python dicts or JSON strings. Each object is written on a single line.
+
+#### Authentication for Konnektr Graph
+
+When importing to Konnektr Graph, use Auth0 authentication (see [Using Azure Digital Twins SDKs](./using-azure-digital-twins-sdks)).
+
+**Important:** Do not use JSON-LD format for import jobs. Only NDJSON with the required headers and sections is supported.
+
+---
 
 #### Steps
 1. Run the export script to generate `export.jsonld`.

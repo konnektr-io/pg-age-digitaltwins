@@ -6,6 +6,7 @@
         "migration-guide",
         "using-azure-digital-twins-sdks",
         "graph-explorer",
+        "import-jobs",
         "working-with-telemetry",
         "working-with-components"
     ]

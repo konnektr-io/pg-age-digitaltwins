@@ -130,21 +130,40 @@ public class AzureBlobStorageService(ILogger<AzureBlobStorageService> logger) : 
         }
     }
 
-    private static BlobClient CreateBlobClient(Uri blobUri)
+    private static bool HasSasToken(Uri blobUri)
     {
-        // Use managed identity for authentication (preferred for Azure-hosted applications)
-        // Falls back to other credential types as appropriate
-        var credential = new DefaultAzureCredential();
-
-        return new BlobClient(blobUri, credential);
+        // SAS tokens typically start with ?sv= and include at least sig, se, sp, etc.
+        var query = blobUri.Query;
+        return !string.IsNullOrWhiteSpace(query) && query.Contains("sv=") && query.Contains("sig=");
     }
 
-    private static AppendBlobClient CreateAppendBlobClient(Uri blobUri)
+    private BlobClient CreateBlobClient(Uri blobUri)
     {
-        // Use managed identity for authentication (preferred for Azure-hosted applications)
-        // Falls back to other credential types as appropriate
-        var credential = new DefaultAzureCredential();
+        if (HasSasToken(blobUri))
+        {
+            _logger.LogDebug("Detected SAS token in blob URI, using anonymous access: {BlobUri}", blobUri);
+            return new BlobClient(blobUri);
+        }
+        else
+        {
+            _logger.LogDebug("No SAS token detected, using managed identity: {BlobUri}", blobUri);
+            var credential = new DefaultAzureCredential();
+            return new BlobClient(blobUri, credential);
+        }
+    }
 
-        return new AppendBlobClient(blobUri, credential);
+    private AppendBlobClient CreateAppendBlobClient(Uri blobUri)
+    {
+        if (HasSasToken(blobUri))
+        {
+            _logger.LogDebug("Detected SAS token in blob URI, using anonymous access: {BlobUri}", blobUri);
+            return new AppendBlobClient(blobUri);
+        }
+        else
+        {
+            _logger.LogDebug("No SAS token detected, using managed identity: {BlobUri}", blobUri);
+            var credential = new DefaultAzureCredential();
+            return new AppendBlobClient(blobUri, credential);
+        }
     }
 }
