@@ -1,9 +1,10 @@
 using System.Text.Json;
 using Json.Patch;
+using Microsoft.AspNetCore.Authorization;
 
 namespace AgeDigitalTwins.MCPServerSSE.Tools;
 
-[McpServerToolType]
+[McpServerToolType, Authorize("age-dt")]
 public static class DigitalTwinsTools
 {
     [McpServerTool, Description("Creates or replaces a digital twin.")]

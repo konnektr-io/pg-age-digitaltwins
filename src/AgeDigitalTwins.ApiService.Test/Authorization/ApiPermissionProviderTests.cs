@@ -40,10 +40,6 @@ public class ApiPermissionProviderTests
                 ResourceName = "digitaltwins",
                 CacheExpirationMinutes = 5,
                 TimeoutSeconds = 10,
-                TokenEndpoint = "https://test.api.com/oauth/token",
-                Audience = "https://test.api.com/api",
-                ClientId = "dummy-client-id",
-                ClientSecret = "dummy-client-secret"
             },
         };
     }
@@ -133,21 +129,6 @@ public class ApiPermissionProviderTests
 
         var permissionStrings = new[] { "digitaltwins/read", "models/write" };
 
-        // Mock token endpoint response
-        var tokenResponse = new HttpResponseMessage
-        {
-            StatusCode = HttpStatusCode.OK,
-            Content = new StringContent("{\"access_token\":\"dummy-token\",\"expires_in\":3600}")
-        };
-
-        // Mock permissions API response
-        var permissionsResponse = new HttpResponseMessage
-        {
-            StatusCode = HttpStatusCode.OK,
-            Content = new StringContent(JsonSerializer.Serialize(permissionStrings)),
-        };
-
-        int callCount = 0;
         _httpHandlerMock
             .Protected()
             .Setup<Task<HttpResponseMessage>>(
@@ -155,16 +136,13 @@ public class ApiPermissionProviderTests
                 ItExpr.IsAny<HttpRequestMessage>(),
                 ItExpr.IsAny<CancellationToken>()
             )
-            .ReturnsAsync((HttpRequestMessage req, CancellationToken ct) =>
-            {
-                // First call is token endpoint, second is permissions API
-                if (callCount == 0)
+            .ReturnsAsync(
+                new HttpResponseMessage
                 {
-                    callCount++;
-                    return tokenResponse;
+                    StatusCode = HttpStatusCode.OK,
+                    Content = new StringContent(JsonSerializer.Serialize(permissionStrings)),
                 }
-                return permissionsResponse;
-            });
+            );
 
         object? cacheValue = null;
         _cacheMock.Setup(c => c.TryGetValue(It.IsAny<object>(), out cacheValue)).Returns(false);

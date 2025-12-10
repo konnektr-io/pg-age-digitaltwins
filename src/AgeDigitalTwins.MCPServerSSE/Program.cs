@@ -77,7 +77,15 @@ if (enableAuthentication)
         })
         .AddMcp();
 
-    builder.Services.AddAuthorization();
+    builder.Services.AddAuthorization(options =>
+    {
+        options.AddPolicy(
+            "age-dt",
+            policy =>
+                policy.RequireAuthenticatedUser()
+                    .RequireClaim("scope", "age-dt:*")
+        );
+    });
 }
 
 builder.Services.AddHttpContextAccessor();
@@ -86,14 +94,6 @@ builder.Services
     .WithToolsFromAssembly()
     .WithHttpTransport();
 
-// Add Semantic Kernel
-builder
-    .Services.AddKernel()
-    .AddOpenAIChatCompletion(
-        builder.Configuration["AzureOpenAI:ChatCompletionDeploymentName"]!,
-        builder.Configuration["AzureOpenAI:ApiKey"]!,
-        builder.Configuration["AzureOpenAI:Endpoint"]!
-    );
 
 var app = builder.Build();
 
@@ -101,35 +101,6 @@ if (enableAuthentication)
 {
     app.UseAuthentication();
     app.UseAuthorization();
-
-    var mcpServerOptions = app.Services.GetRequiredService<McpServerOptions>();
-    var httpContextAccessor = app.Services.GetRequiredService<IHttpContextAccessor>();
-
-    mcpServerOptions.Filters.CallToolFilters.Add(async (context, next) =>
-    {
-        var user = httpContextAccessor.HttpContext?.User;
-
-        if (user == null || user.Identity?.IsAuthenticated != true)
-        {
-            throw new McpProtocolException(McpErrorCode.PermissionDenied, "Authentication failed.");
-        }
-
-        var toolName = context.Params.Tool;
-        var requiredPermission = $"age-dt:{toolName}";
-
-        if (
-            !user.HasClaim(c => c.Type == "scope" && c.Value.Contains(requiredPermission))
-            && !user.HasClaim(c => c.Type == "scope" && c.Value.Contains("age-dt:*"))
-        )
-        {
-            throw new McpProtocolException(
-                McpErrorCode.PermissionDenied,
-                $"Authorization failed. Missing required permission: {requiredPermission}"
-            );
-        }
-
-        return await next(context);
-    });
 }
 
 if (enableAuthentication)
