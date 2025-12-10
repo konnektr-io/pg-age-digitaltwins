@@ -137,4 +137,27 @@ public class RelationshipTests : TestBase
         Assert.Equal("moon1", relElem.GetProperty("$targetId").GetString());
         Assert.Equal("earth", relElem.GetProperty("$sourceId").GetString());
     }
+
+    [Fact]
+    public async Task CreateRelationshipAsync_RelationshipWithInvalidTarget_ThrowsException()
+    {
+        // Load required models
+        string[] models = [SampleData.DtdlRoom, SampleData.DtdlTemperatureSensor];
+        await Client.CreateModelsAsync(models);
+
+        var roomTwin =
+            @"{""$dtId"": ""room1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""Room 1""}";
+        await Client.CreateOrReplaceDigitalTwinAsync("room1", roomTwin);
+
+        var relationship =
+            @"{""$relationshipId"": ""rel1"", ""$sourceId"": ""room1"", ""$relationshipName"": ""rel_has_sensors"", ""$targetId"": ""nonexistent_sensor""}";
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => Client.CreateOrReplaceRelationshipAsync(
+                "room1",
+                "rel1",
+                relationship
+            )
+        );
+    }
 }

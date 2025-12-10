@@ -1,4 +1,6 @@
 using System.Text.Json;
+using AgeDigitalTwins.ApiService.Authorization;
+using AgeDigitalTwins.ApiService.Authorization.Models;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AgeDigitalTwins.ApiService.Extensions;
@@ -7,10 +9,8 @@ public static class TelemetryEndpoints
 {
     public static WebApplication MapTelemetryEndpoints(this WebApplication app)
     {
-        // Group for Telemetry endpoints with light rate limiting (telemetry is typically high volume)
-        var telemetryGroup = app.MapGroup("/digitaltwins/{twinId}/telemetry")
-            .WithTags("Telemetry")
-            .RequireAuthorization();
+        // Group for Telemetry endpoints
+        var telemetryGroup = app.MapGroup("/digitaltwins/{twinId}/telemetry").WithTags("Telemetry");
 
         // POST Telemetry - Light operation as it's just a pass-through
         telemetryGroup
@@ -36,6 +36,7 @@ public static class TelemetryEndpoints
                     return Results.NoContent();
                 }
             )
+            .RequirePermission(ResourceType.DigitalTwins, PermissionAction.Write)
             .RequireRateLimiting("LightOperations")
             .WithName("PublishTelemetry")
             .WithSummary("Publishes telemetry data for a digital twin.");
@@ -66,6 +67,7 @@ public static class TelemetryEndpoints
                     return Results.NoContent();
                 }
             )
+            .RequirePermission(ResourceType.DigitalTwins, PermissionAction.Write)
             .RequireRateLimiting("LightOperations")
             .WithName("PublishComponentTelemetry")
             .WithSummary("Publishes telemetry data for a specific component of a digital twin.");

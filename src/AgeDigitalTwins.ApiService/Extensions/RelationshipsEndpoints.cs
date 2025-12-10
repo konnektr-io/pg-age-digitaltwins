@@ -1,4 +1,6 @@
 using System.Text.Json;
+using AgeDigitalTwins.ApiService.Authorization;
+using AgeDigitalTwins.ApiService.Authorization.Models;
 using AgeDigitalTwins.ApiService.Helpers;
 using AgeDigitalTwins.ApiService.Models;
 using Json.Patch;
@@ -10,10 +12,8 @@ public static class RelationshipsEndpoints
 {
     public static WebApplication MapRelationshipsEndpoints(this WebApplication app)
     {
-        // Group for relationship endpoints - these are part of Digital Twins API
-        var relationshipsGroup = app.MapGroup("/digitaltwins")
-            .WithTags("Relationships")
-            .RequireAuthorization();
+        // Group for relationship endpoints
+        var relationshipsGroup = app.MapGroup("/digitaltwins").WithTags("Relationships");
 
         // GET Incoming Relationships - Light read operation
         relationshipsGroup
@@ -42,6 +42,7 @@ public static class RelationshipsEndpoints
                     );
                 }
             )
+            .RequirePermission(ResourceType.Relationships, PermissionAction.Read)
             .RequireRateLimiting("LightOperations")
             .WithName("ListIncomingRelationships")
             .WithSummary("Lists all incoming relationships for a digital twin.");
@@ -77,6 +78,7 @@ public static class RelationshipsEndpoints
                     );
                 }
             )
+            .RequirePermission(ResourceType.Relationships, PermissionAction.Read)
             .RequireRateLimiting("LightOperations")
             .WithName("ListRelationships")
             .WithSummary("Lists all relationships for a digital twin.");
@@ -99,6 +101,7 @@ public static class RelationshipsEndpoints
                     );
                 }
             )
+            .RequirePermission(ResourceType.Relationships, PermissionAction.Read)
             .RequireRateLimiting("LightOperations")
             .WithName("GetRelationship")
             .WithSummary("Retrieves a specific relationship by its ID.");
@@ -126,6 +129,7 @@ public static class RelationshipsEndpoints
                     );
                 }
             )
+            .RequirePermission(ResourceType.Relationships, PermissionAction.Write)
             .RequireRateLimiting("HeavyOperations")
             .WithName("CreateOrReplaceRelationship")
             .WithSummary("Creates or replaces a relationship for a digital twin.");
@@ -154,6 +158,7 @@ public static class RelationshipsEndpoints
                     return Results.NoContent();
                 }
             )
+            .RequirePermission(ResourceType.Relationships, PermissionAction.Write)
             .RequireRateLimiting("HeavyOperations")
             .WithName("UpdateRelationship")
             .WithSummary("Updates a specific relationship for a digital twin.");
@@ -173,6 +178,7 @@ public static class RelationshipsEndpoints
                     return Results.NoContent();
                 }
             )
+            .RequirePermission(ResourceType.Relationships, PermissionAction.Delete)
             .RequireRateLimiting("HeavyOperations")
             .WithName("DeleteRelationship")
             .WithSummary("Deletes a specific relationship for a digital twin.");

@@ -1,4 +1,6 @@
 using System.Text.Json;
+using AgeDigitalTwins.ApiService.Authorization;
+using AgeDigitalTwins.ApiService.Authorization.Models;
 using AgeDigitalTwins.ApiService.Helpers;
 using Json.Patch;
 using Microsoft.AspNetCore.Mvc;
@@ -9,10 +11,8 @@ public static class DigitalTwinsEndpoints
 {
     public static WebApplication MapDigitalTwinsEndpoints(this WebApplication app)
     {
-        // Group for Digital Twins endpoints with single twin rate limiting
-        var digitalTwinsGroup = app.MapGroup("/digitaltwins")
-            .WithTags("Digital Twins")
-            .RequireAuthorization();
+        // Group for Digital Twins endpoints
+        var digitalTwinsGroup = app.MapGroup("/digitaltwins").WithTags("Digital Twins");
 
         // GET Digital Twin - Light read operation
         digitalTwinsGroup
@@ -27,6 +27,7 @@ public static class DigitalTwinsEndpoints
                     return client.GetDigitalTwinAsync<JsonDocument>(id, cancellationToken);
                 }
             )
+            .RequirePermission(ResourceType.DigitalTwins, PermissionAction.Read)
             .RequireRateLimiting("LightOperations")
             .WithName("GetDigitalTwin")
             .WithSummary("Retrieves a digital twin by its ID.");
@@ -52,6 +53,7 @@ public static class DigitalTwinsEndpoints
                     );
                 }
             )
+            .RequirePermission(ResourceType.DigitalTwins, PermissionAction.Write)
             .RequireRateLimiting("HeavyOperations")
             .WithName("CreateOrReplaceDigitalTwin")
             .WithSummary("Creates or replaces a digital twin by its ID.");
@@ -73,6 +75,7 @@ public static class DigitalTwinsEndpoints
                     return Results.NoContent();
                 }
             )
+            .RequirePermission(ResourceType.DigitalTwins, PermissionAction.Write)
             .RequireRateLimiting("HeavyOperations")
             .WithName("UpdateDigitalTwin")
             .WithSummary("Updates a digital twin by its ID.");
@@ -91,6 +94,7 @@ public static class DigitalTwinsEndpoints
                     return Results.NoContent();
                 }
             )
+            .RequirePermission(ResourceType.DigitalTwins, PermissionAction.Delete)
             .RequireRateLimiting("HeavyOperations")
             .WithName("DeleteDigitalTwin")
             .WithSummary("Deletes a digital twin by its ID.");

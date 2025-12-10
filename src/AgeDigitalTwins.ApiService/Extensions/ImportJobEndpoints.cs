@@ -1,4 +1,6 @@
 using System.ComponentModel.DataAnnotations;
+using AgeDigitalTwins.ApiService.Authorization;
+using AgeDigitalTwins.ApiService.Authorization.Models;
 using AgeDigitalTwins.ApiService.Models;
 using AgeDigitalTwins.ApiService.Services;
 using AgeDigitalTwins.Models;
@@ -20,12 +22,12 @@ public static class ImportJobEndpoints
     {
         var jobs = app.MapGroup("/jobs/imports")
             .WithTags("Import Jobs")
-            .WithDescription("Import job management endpoints")
-            .RequireRateLimiting("AdminOperations");
+            .WithDescription("Import job management endpoints");
 
         // Create/Start Import Job
         jobs.MapPut("/{id}", CreateImportJobAsync)
-            .RequireAuthorization()
+            .RequirePermission(ResourceType.JobsImports, PermissionAction.Write)
+            .RequireRateLimiting("AdminOperations")
             .WithName("CreateImportJob")
             .WithSummary("Create and start a new import job")
             .WithDescription(
@@ -38,16 +40,18 @@ public static class ImportJobEndpoints
 
         // Get Import Job by ID
         jobs.MapGet("/{id}", GetImportJobAsync)
+            .RequirePermission(ResourceType.JobsImports, PermissionAction.Read)
+            .RequireRateLimiting("AdminOperations")
             .WithName("GetImportJob")
             .WithSummary("Get import job by ID")
             .WithDescription("Retrieves the status and details of an import job by its ID.")
             .Produces<ImportJob>()
-            .ProducesProblem(StatusCodes.Status404NotFound)
-            .RequireAuthorization();
+            .ProducesProblem(StatusCodes.Status404NotFound);
 
         // List Import Jobs
         jobs.MapGet("/", ListImportJobsAsync)
-            .RequireAuthorization()
+            .RequirePermission(ResourceType.JobsImports, PermissionAction.Read)
+            .RequireRateLimiting("AdminOperations")
             .WithName("ListImportJobs")
             .WithSummary("List all import jobs")
             .WithDescription("Retrieves a list of all import jobs with optional pagination.")
@@ -55,7 +59,8 @@ public static class ImportJobEndpoints
 
         // Cancel Import Job
         jobs.MapPost("/{id}/cancel", CancelImportJobAsync)
-            .RequireAuthorization()
+            .RequirePermission(ResourceType.JobsImports, PermissionAction.Action)
+            .RequireRateLimiting("AdminOperations")
             .WithName("CancelImportJob")
             .WithSummary("Cancel an import job")
             .WithDescription(
@@ -67,7 +72,8 @@ public static class ImportJobEndpoints
 
         // Delete Import Job
         jobs.MapDelete("/{id}", DeleteImportJobAsync)
-            .RequireAuthorization()
+            .RequirePermission(ResourceType.JobsImports, PermissionAction.Delete)
+            .RequireRateLimiting("AdminOperations")
             .WithName("DeleteImportJob")
             .WithSummary("Delete an import job")
             .WithDescription(
@@ -78,7 +84,8 @@ public static class ImportJobEndpoints
 
         // Resume Import Job
         jobs.MapPost("/{id}/resume", ResumeImportJobAsync)
-            .RequireAuthorization()
+            .RequirePermission(ResourceType.JobsImports, PermissionAction.Action)
+            .RequireRateLimiting("AdminOperations")
             .WithName("ResumeImportJob")
             .WithSummary("Resume an import job")
             .WithDescription(

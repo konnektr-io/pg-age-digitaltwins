@@ -337,6 +337,56 @@ public class DigitalTwinsTests : TestBase
     }
 
     [Fact]
+    public async Task UpdateDigitalTwinAsync_ReplaceNewProperty_ShouldFail()
+    {
+        // Load required models
+        string[] models = [SampleData.DtdlCrater];
+        await Client.CreateModelsAsync(models);
+
+        // Create digital twin
+        var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinCrater);
+        var createdTwin = await Client.CreateOrReplaceDigitalTwinAsync(
+            digitalTwin!.Id,
+            digitalTwin
+        );
+
+        JsonPatch jsonPatch = JsonSerializer.Deserialize<JsonPatch>(
+            @"[{""op"": ""replace"", ""path"": ""/temperature"", ""value"": 10}]"
+        )!;
+
+        var exception = await Assert.ThrowsAsync<ValidationFailedException>(
+            () => Client.UpdateDigitalTwinAsync(digitalTwin!.Id, jsonPatch)
+        );
+
+        Assert.Contains("temperature", exception.Message);
+    }
+    
+    [Fact]
+    public async Task UpdateDigitalTwinAsync_RemoveNewProperty_ShouldFail()
+    {
+        // Load required models
+        string[] models = [SampleData.DtdlCrater];
+        await Client.CreateModelsAsync(models);
+
+        // Create digital twin
+        var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinCrater);
+        var createdTwin = await Client.CreateOrReplaceDigitalTwinAsync(
+            digitalTwin!.Id,
+            digitalTwin
+        );
+
+        JsonPatch jsonPatch = JsonSerializer.Deserialize<JsonPatch>(
+            @"[{""op"": ""remove"", ""path"": ""/temperature""}]"
+        )!;
+
+        var exception = await Assert.ThrowsAsync<ValidationFailedException>(
+            () => Client.UpdateDigitalTwinAsync(digitalTwin!.Id, jsonPatch)
+        );
+
+        Assert.Contains("temperature", exception.Message);
+    }
+
+    [Fact]
     public async Task UpdateDigitalTwinAsync_SourceTime_Updated()
     {
         // Load required models

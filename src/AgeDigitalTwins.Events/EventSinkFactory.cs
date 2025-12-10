@@ -2,10 +2,15 @@ using Azure.Identity;
 
 namespace AgeDigitalTwins.Events;
 
-public class EventSinkFactory(IConfiguration configuration, ILoggerFactory loggerFactory)
+public class EventSinkFactory(
+    IConfiguration configuration,
+    ILoggerFactory loggerFactory,
+    DLQService dlqService
+)
 {
     private readonly IConfiguration _configuration = configuration;
     private readonly ILoggerFactory _loggerFactory = loggerFactory;
+    private readonly DLQService _dlqService = dlqService;
 
     public virtual List<IEventSink> CreateEventSinks()
     {
@@ -24,7 +29,7 @@ public class EventSinkFactory(IConfiguration configuration, ILoggerFactory logge
                 {
                     var sink = new KafkaEventSink(kafkaSink, new DefaultAzureCredential(), logger);
                     // Wrap with resilient wrapper for retry logic
-                    sinks.Add(new ResilientEventSinkWrapper(sink, wrapperLogger));
+                    sinks.Add(new ResilientEventSinkWrapper(sink, wrapperLogger, _dlqService));
                 }
                 catch (ArgumentException ex)
                 {
@@ -46,7 +51,7 @@ public class EventSinkFactory(IConfiguration configuration, ILoggerFactory logge
                 {
                     var sink = new MqttEventSink(mqttSink, logger);
                     // Wrap with resilient wrapper for retry logic
-                    sinks.Add(new ResilientEventSinkWrapper(sink, wrapperLogger));
+                    sinks.Add(new ResilientEventSinkWrapper(sink, wrapperLogger, _dlqService));
                 }
                 catch (ArgumentException ex)
                 {
@@ -70,7 +75,7 @@ public class EventSinkFactory(IConfiguration configuration, ILoggerFactory logge
                 {
                     var sink = new KustoEventSink(kustoSink, new DefaultAzureCredential(), logger);
                     // Wrap with resilient wrapper for retry logic
-                    sinks.Add(new ResilientEventSinkWrapper(sink, wrapperLogger));
+                    sinks.Add(new ResilientEventSinkWrapper(sink, wrapperLogger, _dlqService));
                 }
                 catch (ArgumentException ex)
                 {

@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using AgeDigitalTwins;
 using AgeDigitalTwins.ApiService;
+using AgeDigitalTwins.ApiService.Authorization;
 using AgeDigitalTwins.ApiService.Configuration;
 using AgeDigitalTwins.ApiService.Extensions;
 using AgeDigitalTwins.ApiService.Middleware;
@@ -17,6 +18,10 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add service defaults & Aspire client integrations.
 builder.AddServiceDefaults();
+
+// Read config for enabling Jobs (import jobs, resumption, and blob storage)
+var jobsEnabled = builder.Configuration.GetValue("Parameters:JobsEnabled", true);
+
 
 // Add Npgsql multihost data source with custom settings.
 builder.AddNpgsqlMultihostDataSource(
@@ -96,22 +101,14 @@ builder.Services.AddSingleton(sp =>
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<ExceptionHandler>();
 
-// Add blob storage service
-// Use Azure Blob Storage for production, fallback to default for testing/development
-if (builder.Environment.IsDevelopment())
-{
-    builder.Services.AddSingleton<IBlobStorageService, DefaultBlobStorageService>();
-}
-else
-{
-    builder.Services.AddSingleton<IBlobStorageService, AzureBlobStorageService>();
-}
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
 // Add authentication only if the environment variable is set
 var enableAuthentication = builder.Configuration.GetValue<bool>("Authentication:Enabled");
+// Add authorization only if the environment variable is set
+var enableAuthorization = builder.Configuration.GetValue<bool>("Authorization:Enabled");
 
 if (enableAuthentication)
 {
@@ -140,6 +137,72 @@ if (enableAuthentication)
     builder
         .Services.AddAuthorizationBuilder()
         .SetDefaultPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
+
+    if (enableAuthorization)
+    {
+        // Configure authorization options
+        builder.Services.Configure<AgeDigitalTwins.ApiService.Configuration.AuthorizationOptions>(
+            builder.Configuration.GetSection("Authorization")
+        );
+
+        // Register permission providers
+        var authorizationConfig = builder
+            .Configuration.GetSection("Authorization")
+            .Get<AgeDigitalTwins.ApiService.Configuration.AuthorizationOptions>();
+
+        // Always register the claims provider
+        builder.Services.AddScoped<ClaimsPermissionProvider>();
+
+        // Conditionally register the API provider and its dependencies
+        if (authorizationConfig?.Provider?.Equals("Api", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            builder.Services.AddMemoryCache();
+            builder.Services.AddHttpClient(
+                "PermissionsApi",
+                client =>
+                {
+                    if (!string.IsNullOrEmpty(authorizationConfig.ApiProvider?.BaseUrl))
+                    {
+                        client.BaseAddress = new Uri(authorizationConfig.ApiProvider.BaseUrl);
+                    }
+                    client.Timeout = TimeSpan.FromSeconds(authorizationConfig.ApiProvider?.TimeoutSeconds ?? 10);
+                }
+            );
+            builder.Services.AddScoped<ApiPermissionProvider>();
+        }
+
+        // Register the CompositePermissionProvider as the single IPermissionProvider for the app
+        builder.Services.AddScoped<IPermissionProvider>(sp =>
+        {
+            var logger = sp.GetRequiredService<ILogger<CompositePermissionProvider>>();
+            var providers = new List<IPermissionProvider>
+            {
+                sp.GetRequiredService<ClaimsPermissionProvider>()
+            };
+
+            if (authorizationConfig?.Provider?.Equals("Api", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                providers.Add(sp.GetRequiredService<ApiPermissionProvider>());
+            }
+
+            return new CompositePermissionProvider(providers, logger);
+        });
+
+        // Add permission service (uses the registered provider)
+        builder.Services.AddScoped<IPermissionService, PermissionService>();
+        
+        // Add permission-based authorization policies with actual requirements
+        builder.Services.AddAuthorization(options => options.AddPermissionPolicies());
+
+        // Register authorization handler
+        builder.Services.AddSingleton<IAuthorizationHandler, PermissionAuthorizationHandler>();
+    }
+    else
+    {
+        // Authorization is disabled - register permissive policies for all permissions
+        // This prevents "policy not found" errors while allowing all requests
+        builder.Services.AddAuthorization(options => options.AddPermissivePermissionPolicies());
+    }
 }
 else
 {
@@ -147,10 +210,28 @@ else
     builder
         .Services.AddAuthorizationBuilder()
         .SetDefaultPolicy(new AuthorizationPolicyBuilder().RequireAssertion(_ => true).Build());
+    
+    // Register permissive permission policies to avoid "policy not found" errors
+    builder.Services.AddAuthorization(options => options.AddPermissivePermissionPolicies());
 }
 
-// Add job resumption service
-builder.Services.AddHostedService<JobResumptionService>();
+
+// Only register blob and job resumption services if jobs are enabled
+if (jobsEnabled)
+{
+    // Register only Azure and Default blob storage services and the router
+    builder.Services.AddSingleton<AzureBlobStorageService>();
+    builder.Services.AddSingleton<DefaultBlobStorageService>();
+    builder.Services.AddSingleton<IBlobStorageService>(sp =>
+        new BlobStorageServiceRouter(
+            sp.GetRequiredService<AzureBlobStorageService>(),
+            sp.GetRequiredService<DefaultBlobStorageService>(),
+            sp.GetRequiredService<ILogger<BlobStorageServiceRouter>>(),
+            sp.GetRequiredService<ILoggerFactory>()
+        )
+    );
+    builder.Services.AddHostedService<JobResumptionService>();
+}
 
 builder.Services.AddRequestTimeouts();
 builder.Services.AddOutputCache();
@@ -200,13 +281,17 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 // Map endpoints for Age Digital Twins API
+
 app.MapDigitalTwinsEndpoints();
 app.MapComponentsEndpoints();
 app.MapTelemetryEndpoints();
 app.MapRelationshipsEndpoints();
 app.MapQueryEndpoints();
 app.MapModelsEndpoints();
-app.MapImportJobEndpoints();
+if (jobsEnabled)
+{
+    app.MapImportJobEndpoints();
+}
 
 // When the client is initiated, a new graph will automatically be created if the specified graph doesn't exist
 // Creating and dropping graphs should be done in the control plane
