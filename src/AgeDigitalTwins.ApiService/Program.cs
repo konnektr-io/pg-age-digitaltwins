@@ -188,13 +188,10 @@ if (enableAuthentication)
             return new CompositePermissionProvider(providers, logger);
         });
 
-        // Add permission service (uses the registered provider)
-        builder.Services.AddScoped<IPermissionService, PermissionService>();
-
         // Add permission-based authorization policies with actual requirements
         builder.Services.AddAuthorization(options => options.AddPermissionPolicies());
 
-        // Register authorization handler
+        // Register authorization handler (inject provider directly)
         builder.Services.AddSingleton<IAuthorizationHandler, PermissionAuthorizationHandler>();
     }
     else
