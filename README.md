@@ -1,4 +1,5 @@
 # Konnektr Graph
+
 ### Digital Twins for Apache AGE
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
@@ -12,6 +13,7 @@
 ## 🚀 Quick Links
 
 <!-- - **[Hosted Platform](https://ktrlplane.konnektr.io)** - Start building in minutes (recommended) -->
+
 - **[Documentation](https://docs.konnektr.io/docs/graph/)** - Complete guides and API reference
 - **[Quickstart Guide](https://docs.konnektr.io/docs/graph/getting-started/quickstart)** - Get started in 5 minutes
 - **[Self-Host Guide](https://docs.konnektr.io/docs/graph/deployment-installation/self-host)** - Deploy in your infrastructure
@@ -21,24 +23,28 @@
 ## ✨ Key Features
 
 ### 🔄 Azure Digital Twins Compatible
+
 - **Drop-in replacement** for Azure Digital Twins API
 - **Use standard Azure SDKs** (.NET, Python, JavaScript)
 - **Easy migration** from Azure with minimal code changes
 - Full DTDL (Digital Twins Definition Language) support
 
 ### 🎯 Built for Performance
+
 - **PostgreSQL + Apache AGE** - Enterprise-grade graph database
 - **Powerful Cypher queries** - Complex graph traversals
 - **Horizontal scaling** - Handles millions of twins
 - **Real-time eventing** - Stream state changes instantly
 
 ### 🔌 Event Streaming
+
 - **Multiple sinks** - Kafka, Azure Data Explorer, MQTT, and more
 - **CloudEvents standard** - Industry-standard event format
 - **Flexible routing** - Route events based on type and filters
 - **Durable & real-time** - Both lifecycle and telemetry events
 
 ### 🤖 AI-Ready
+
 - **Model Context Protocol (MCP)** - Native LLM integration
 - **Semantic queries** - AI-powered twin discovery
 - **Rich metadata** - DTDL models provide structured context
@@ -96,15 +102,15 @@ helm install my-graph konnektr/agedigitaltwins -f values.yaml
 
 ## 📊 Deployment Options
 
-|  | Hosted | Self-Hosted |
-|---|---|---|
-| **Setup Time** | 5 minutes | 1-2 hours |
-| **Maintenance** | Zero - fully managed | You manage updates |
-| **Scaling** | Automatic | Manual configuration |
-| **Azure SDK Compatible** | ✅ Yes | ✅ Yes |
-| **Direct DB Access** | ❌ No | ✅ Yes |
-| **Custom Auth** | Auth0 (managed) | BYO identity provider |
-| **Best For** | Most users | Advanced users, compliance needs |
+|                          | Hosted               | Self-Hosted                      |
+| ------------------------ | -------------------- | -------------------------------- |
+| **Setup Time**           | 5 minutes            | 1-2 hours                        |
+| **Maintenance**          | Zero - fully managed | You manage updates               |
+| **Scaling**              | Automatic            | Manual configuration             |
+| **Azure SDK Compatible** | ✅ Yes               | ✅ Yes                           |
+| **Direct DB Access**     | ❌ No                | ✅ Yes                           |
+| **Custom Auth**          | Auth0 (managed)      | BYO identity provider            |
+| **Best For**             | Most users           | Advanced users, compliance needs |
 
 **[→ See detailed comparison](https://docs.konnektr.io/docs/graph/deployment-installation/comparison)**
 
