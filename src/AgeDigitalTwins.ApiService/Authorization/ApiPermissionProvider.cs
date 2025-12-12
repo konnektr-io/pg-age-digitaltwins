@@ -144,9 +144,15 @@ public class ApiPermissionProvider : IPermissionProvider
             var response = await _httpClient.SendAsync(request, cancellationToken);
             response.EnsureSuccessStatusCode();
 
+
             var content = await response.Content.ReadAsStringAsync(cancellationToken);
-            var permissionStrings =
-                JsonSerializer.Deserialize<string[]>(content) ?? Array.Empty<string>();
+            using var doc = JsonDocument.Parse(content);
+            var permissionsProp = doc.RootElement.GetProperty("permissions");
+            var permissionStrings = permissionsProp.EnumerateArray()
+                .Select(e => e.GetString())
+                .Where(s => !string.IsNullOrEmpty(s))
+                .Cast<string>()
+                .ToArray();
 
             var permissions = PermissionParser.ParseMany(permissionStrings).ToList().AsReadOnly();
 
