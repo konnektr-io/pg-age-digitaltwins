@@ -38,5 +38,5 @@ public enum ResourceType
     /// <summary>
     /// MCP tools access - used by MCP server for tool invocation permissions.
     /// </summary>
-    McpTools,
+    Mcp,
 }

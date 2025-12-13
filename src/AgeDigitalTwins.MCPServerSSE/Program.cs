@@ -1,5 +1,6 @@
 using AgeDigitalTwins;
 using AgeDigitalTwins.ServiceDefaults.Authorization;
+using AgeDigitalTwins.ServiceDefaults.Authorization.Models;
 using AgeDigitalTwins.MCPServerSSE.Configuration;
 using AgeDigitalTwins.MCPServerSSE.Endpoints;
 using AgeDigitalTwins.MCPServerSSE.Middleware;
@@ -144,7 +145,7 @@ if (enableAuthentication)
     }
 }
 
-builder.Services.AddMcpServer().WithToolsFromAssembly().WithHttpTransport();
+builder.Services.AddMcpServer().WithPromptsFromAssembly().WithToolsFromAssembly().WithHttpTransport();
 
 var app = builder.Build();
 
@@ -165,7 +166,17 @@ if (enableAuthentication)
 
 if (enableAuthentication)
 {
-    app.MapMcp().RequireAuthorization();
+    if (enableAuthorization)
+    {
+        // Use policy-based authorization with specific permission requirement
+        // This uses the same pattern as API Service endpoints
+        app.MapMcp().RequirePermission(ResourceType.Mcp, PermissionAction.Wildcard);
+    }
+    else
+    {
+        // Only require authentication, no permission check
+        app.MapMcp().RequireAuthorization();
+    }
 }
 else
 {

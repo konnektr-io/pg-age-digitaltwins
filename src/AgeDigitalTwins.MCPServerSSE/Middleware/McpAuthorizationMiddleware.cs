@@ -8,8 +8,9 @@ using AgeDigitalTwins.ServiceDefaults.Configuration;
 namespace AgeDigitalTwins.MCPServerSSE.Middleware;
 
 /// <summary>
-/// Middleware for enforcing MCP authorization based on scopes and permissions.
-/// Validates that requests have required OAuth scopes and permissions to access MCP tools.
+/// Middleware for enforcing MCP OAuth scope requirements (RFC 9728).
+/// Validates that requests have required OAuth scopes (e.g., "mcp:tools").
+/// Permission checking is handled separately by the policy-based authorization system.
 /// </summary>
 public class McpAuthorizationMiddleware
 {
@@ -27,7 +28,7 @@ public class McpAuthorizationMiddleware
         _logger = logger;
     }
 
-    public async Task InvokeAsync(HttpContext context, IPermissionProvider? permissionProvider = null)
+    public async Task InvokeAsync(HttpContext context)
     {
         // Skip for metadata endpoints
         if (context.Request.Path.StartsWithSegments("/.well-known"))
@@ -50,14 +51,16 @@ public class McpAuthorizationMiddleware
             return;
         }
 
-        // Check required scopes
+        // Check required OAuth scopes (MCP-specific requirement from RFC 9728)
+        // Note: Permission checking is handled by the policy-based authorization system,
+        // not in this middleware. This middleware only validates OAuth scopes.
         var scopes = context.User
             .FindAll("scope")
             .SelectMany(c => c.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        var hasRequiredScope = _options.RequiredScopes.Any(required =>
+        var hasRequiredScope = _options.RequiredScopes.Length == 0 || _options.RequiredScopes.Any(required =>
             scopes.Contains(required, StringComparer.OrdinalIgnoreCase));
 
         if (!hasRequiredScope)
@@ -77,30 +80,6 @@ public class McpAuthorizationMiddleware
                 scope = string.Join(" ", _options.RequiredScopes)
             });
             return;
-        }
-
-        // Check for MCP tool permission if permission provider is available
-        if (permissionProvider != null)
-        {
-            var permissions = await permissionProvider.GetPermissionsAsync(context.User);
-            var requiredPermission = new Permission(ResourceType.McpTools, PermissionAction.Wildcard);
-            
-            if (!permissions.Any(p => p.Grants(requiredPermission)))
-            {
-                _logger.LogWarning(
-                    "User {User} lacks required permission: {Permission}",
-                    context.User.FindFirst("sub")?.Value ?? "Unknown",
-                    requiredPermission
-                );
-
-                context.Response.StatusCode = StatusCodes.Status403Forbidden;
-                await context.Response.WriteAsJsonAsync(new
-                {
-                    error = "insufficient_permissions",
-                    error_description = "Required permission: mcp/tools"
-                });
-                return;
-            }
         }
 
         _logger.LogDebug(

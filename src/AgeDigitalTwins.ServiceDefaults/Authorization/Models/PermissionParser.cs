@@ -63,7 +63,7 @@ public static class PermissionParser
             "models" => ResourceType.Models,
             "jobs/imports" => ResourceType.JobsImports,
             "jobs/imports/cancel" => ResourceType.JobsImports, // Cancel is a job action
-            "mcp" => ResourceType.McpTools, // Special case: MCP tools
+            "mcp" => ResourceType.Mcp, // Special case: MCP tools
             _ => (ResourceType)(-1), // Invalid
         };
 

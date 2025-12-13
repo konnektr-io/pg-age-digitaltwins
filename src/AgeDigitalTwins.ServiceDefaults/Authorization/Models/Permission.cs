@@ -40,7 +40,7 @@ public sealed class Permission : IEquatable<Permission>
             ResourceType.Models => "models",
             ResourceType.JobsImports => "jobs/imports",
             ResourceType.JobsDeletions => "jobs/deletions",
-            ResourceType.McpTools => "mcp/tools",
+            ResourceType.Mcp => "mcp/tools",
             _ => throw new ArgumentOutOfRangeException(nameof(Resource)),
         };
 
