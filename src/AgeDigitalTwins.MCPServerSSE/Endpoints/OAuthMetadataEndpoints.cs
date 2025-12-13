@@ -1,4 +1,5 @@
 using AgeDigitalTwins.MCPServerSSE.Configuration;
+using AgeDigitalTwins.ServiceDefaults.Configuration;
 using Microsoft.Extensions.Options;
 
 namespace AgeDigitalTwins.MCPServerSSE.Endpoints;

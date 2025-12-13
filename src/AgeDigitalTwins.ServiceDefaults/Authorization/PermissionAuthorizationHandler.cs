@@ -1,8 +1,7 @@
-using AgeDigitalTwins.ServiceDefaults.Authorization;
-using AgeDigitalTwins.ApiService.Services;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.Logging;
 
-namespace AgeDigitalTwins.ApiService.Authorization;
+namespace AgeDigitalTwins.ServiceDefaults.Authorization;
 
 /// <summary>
 /// Authorization handler for permission-based authorization.

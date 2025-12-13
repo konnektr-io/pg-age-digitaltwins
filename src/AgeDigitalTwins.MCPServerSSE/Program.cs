@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Npgsql;
 using Npgsql.Age;
+using Microsoft.AspNetCore.Authorization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -80,21 +81,67 @@ if (enableAuthentication)
 
     if (enableAuthorization)
     {
-        // Register permission providers based on configuration
-        var authzConfig = builder.Configuration.GetSection("Authorization").Get<AuthorizationOptions>();
         
-        // Default to claims provider (uses shared implementation from ServiceDefaults)
+        // Configure authorization options
+        builder.Services.Configure<AgeDigitalTwins.ServiceDefaults.Configuration.AuthorizationOptions>(
+            builder.Configuration.GetSection("Authorization")
+        );
+
+        // Register permission providers
+        var authorizationConfig = builder
+            .Configuration.GetSection("Authorization")
+            .Get<AgeDigitalTwins.ServiceDefaults.Configuration.AuthorizationOptions>();
+
+        // Always register the claims provider
+        builder.Services.AddScoped<ClaimsPermissionProvider>();
+
+        // Conditionally register the API provider and its dependencies
+        if (authorizationConfig?.Provider?.Equals("Api", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            builder.Services.AddMemoryCache();
+            builder.Services.AddHttpClient(
+                "PermissionsApi",
+                client =>
+                {
+                    if (!string.IsNullOrEmpty(authorizationConfig.ApiProvider?.BaseUrl))
+                    {
+                        client.BaseAddress = new Uri(authorizationConfig.ApiProvider.BaseUrl);
+                    }
+                    client.Timeout = TimeSpan.FromSeconds(authorizationConfig.ApiProvider?.TimeoutSeconds ?? 10);
+                }
+            );
+            builder.Services.AddScoped<ApiPermissionProvider>();
+        }
+
+        // Register the CompositePermissionProvider as the single IPermissionProvider for the app
         builder.Services.AddScoped<IPermissionProvider>(sp =>
         {
-            var logger = sp.GetRequiredService<ILogger<ClaimsPermissionProvider>>();
-            return new ClaimsPermissionProvider(
-                authzConfig?.PermissionsClaimName ?? "permissions",
-                logger
-            );
-        });
-    }
+            var logger = sp.GetRequiredService<ILogger<CompositePermissionProvider>>();
+            var providers = new List<IPermissionProvider>
+            {
+                sp.GetRequiredService<ClaimsPermissionProvider>()
+            };
 
-    builder.Services.AddAuthorization();
+            if (authorizationConfig?.Provider?.Equals("Api", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                providers.Add(sp.GetRequiredService<ApiPermissionProvider>());
+            }
+
+            return new CompositePermissionProvider(providers, logger);
+        });
+
+        // Add permission-based authorization policies with actual requirements
+        builder.Services.AddAuthorization(options => options.AddPermissionPolicies());
+
+        // Register authorization handler (inject provider directly)
+        builder.Services.AddSingleton<IAuthorizationHandler, PermissionAuthorizationHandler>();
+    }
+    else
+    {
+        // Authorization is disabled - register permissive policies for all permissions
+        // This prevents "policy not found" errors while allowing all requests
+        builder.Services.AddAuthorization(options => options.AddPermissivePermissionPolicies());
+    }
 }
 
 builder.Services.AddMcpServer().WithToolsFromAssembly().WithHttpTransport();

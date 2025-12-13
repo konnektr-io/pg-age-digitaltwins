@@ -2,11 +2,11 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using AgeDigitalTwins;
 using AgeDigitalTwins.ApiService;
-using AgeDigitalTwins.ApiService.Authorization;
 using AgeDigitalTwins.ApiService.Configuration;
 using AgeDigitalTwins.ApiService.Extensions;
 using AgeDigitalTwins.ApiService.Middleware;
 using AgeDigitalTwins.ApiService.Services;
+using AgeDigitalTwins.ServiceDefaults.Authorization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.IdentityModel.Tokens;
@@ -141,14 +141,14 @@ if (enableAuthentication)
     if (enableAuthorization)
     {
         // Configure authorization options
-        builder.Services.Configure<AgeDigitalTwins.ApiService.Configuration.AuthorizationOptions>(
+        builder.Services.Configure<AgeDigitalTwins.ServiceDefaults.Configuration.AuthorizationOptions>(
             builder.Configuration.GetSection("Authorization")
         );
 
         // Register permission providers
         var authorizationConfig = builder
             .Configuration.GetSection("Authorization")
-            .Get<AgeDigitalTwins.ApiService.Configuration.AuthorizationOptions>();
+            .Get<AgeDigitalTwins.ServiceDefaults.Configuration.AuthorizationOptions>();
 
         // Always register the claims provider
         builder.Services.AddScoped<ClaimsPermissionProvider>();

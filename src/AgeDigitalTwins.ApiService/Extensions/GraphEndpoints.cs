@@ -1,5 +1,4 @@
-using AgeDigitalTwins.ApiService.Authorization;
-using AgeDigitalTwins.ApiService.Authorization.Models;
+using AgeDigitalTwins.ServiceDefaults.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AgeDigitalTwins.ApiService.Extensions;

@@ -1,7 +1,8 @@
 using AgeDigitalTwins.ServiceDefaults.Authorization.Models;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Builder;
 
-namespace AgeDigitalTwins.ApiService.Authorization;
+namespace AgeDigitalTwins.ServiceDefaults.Authorization;
 
 /// <summary>
 /// Extension methods for applying permission-based authorization to endpoints.

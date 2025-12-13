@@ -3,6 +3,7 @@ using AgeDigitalTwins.ServiceDefaults.Authorization;
 using AgeDigitalTwins.ServiceDefaults.Authorization.Models;
 using AgeDigitalTwins.MCPServerSSE.Configuration;
 using Microsoft.Extensions.Options;
+using AgeDigitalTwins.ServiceDefaults.Configuration;
 
 namespace AgeDigitalTwins.MCPServerSSE.Middleware;
 

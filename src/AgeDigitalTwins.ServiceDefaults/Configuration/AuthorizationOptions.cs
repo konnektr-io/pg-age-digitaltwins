@@ -1,4 +1,4 @@
-namespace AgeDigitalTwins.MCPServerSSE.Configuration;
+namespace AgeDigitalTwins.ServiceDefaults.Configuration;
 
 /// <summary>
 /// Configuration options for authorization.
@@ -24,16 +24,16 @@ public class AuthorizationOptions
     public string PermissionsClaimName { get; set; } = "permissions";
 
     /// <summary>
-    /// Gets or sets the required scopes for MCP access.
-    /// Default is ["mcp:tools"].
+    /// Gets or sets the required scopes.
+    /// Should be ["mcp:tools"] for mcp access.
     /// </summary>
-    public string[] RequiredScopes { get; set; } = ["mcp:tools"];
+    public string[] RequiredScopes { get; set; } = [];
 
     /// <summary>
     /// Gets or sets the supported scopes.
-    /// Default is ["mcp:tools", "mcp:resources"].
+    /// Should be ["mcp:tools", "mcp:resources"] for MCP.
     /// </summary>
-    public string[] ScopesSupported { get; set; } = ["mcp:tools", "mcp:resources"];
+    public string[] ScopesSupported { get; set; } = [];
 
     /// <summary>
     /// Gets or sets the API provider configuration.
