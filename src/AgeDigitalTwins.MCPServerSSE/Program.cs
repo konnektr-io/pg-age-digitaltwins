@@ -1,11 +1,18 @@
 using AgeDigitalTwins;
+using AgeDigitalTwins.ServiceDefaults.Authorization;
+using AgeDigitalTwins.MCPServerSSE.Configuration;
+using AgeDigitalTwins.MCPServerSSE.Endpoints;
+using AgeDigitalTwins.MCPServerSSE.Middleware;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
-using ModelContextProtocol.AspNetCore.Authentication;
 using Npgsql;
 using Npgsql.Age;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Configuration
+builder.Services.Configure<OAuthMetadataOptions>(builder.Configuration.GetSection("MCP"));
+builder.Services.Configure<AuthorizationOptions>(builder.Configuration.GetSection("Authorization"));
 
 // Add Npgsql multihost data source with custom settings.
 builder.AddNpgsqlMultihostDataSource(
@@ -45,15 +52,12 @@ builder.Services.AddSingleton(sp =>
 
 // Add authentication only if the environment variable is set
 var enableAuthentication = builder.Configuration.GetValue<bool>("Authentication:Enabled");
+var enableAuthorization = builder.Configuration.GetValue<bool>("Authorization:Enabled");
 
 if (enableAuthentication)
 {
     builder
-        .Services.AddAuthentication(options =>
-        {
-            options.DefaultChallengeScheme = McpAuthenticationDefaults.AuthenticationScheme;
-            options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-        })
+        .Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         .AddJwtBearer(jwtOptions =>
         {
             string? metadataAddress = builder.Configuration["Authentication:MetadataAddress"];
@@ -72,20 +76,43 @@ if (enableAuthentication)
             };
 
             jwtOptions.MapInboundClaims = false;
-        })
-        .AddMcp();
+        });
+
+    if (enableAuthorization)
+    {
+        // Register permission providers based on configuration
+        var authzConfig = builder.Configuration.GetSection("Authorization").Get<AuthorizationOptions>();
+        
+        // Default to claims provider (uses shared implementation from ServiceDefaults)
+        builder.Services.AddScoped<IPermissionProvider>(sp =>
+        {
+            var logger = sp.GetRequiredService<ILogger<ClaimsPermissionProvider>>();
+            return new ClaimsPermissionProvider(
+                authzConfig?.PermissionsClaimName ?? "permissions",
+                logger
+            );
+        });
+    }
 
     builder.Services.AddAuthorization();
 }
 
-builder.Services.AddHttpContextAccessor();
 builder.Services.AddMcpServer().WithToolsFromAssembly().WithHttpTransport();
 
 var app = builder.Build();
 
+// OAuth metadata endpoints (must be before authentication middleware)
+app.MapOAuthMetadataEndpoints();
+
 if (enableAuthentication)
 {
     app.UseAuthentication();
+    
+    if (enableAuthorization)
+    {
+        app.UseMiddleware<McpAuthorizationMiddleware>();
+    }
+    
     app.UseAuthorization();
 }
 

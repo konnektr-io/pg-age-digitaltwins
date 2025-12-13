@@ -1,5 +1,6 @@
 using System.Security.Claims;
-using AgeDigitalTwins.ApiService.Authorization.Models;
+using AgeDigitalTwins.ServiceDefaults.Authorization;
+using AgeDigitalTwins.ServiceDefaults.Authorization.Models;
 
 namespace AgeDigitalTwins.ApiService.Authorization;
 

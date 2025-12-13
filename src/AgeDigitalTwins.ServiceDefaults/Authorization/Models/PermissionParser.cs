@@ -1,6 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 
-namespace AgeDigitalTwins.ApiService.Authorization.Models;
+namespace AgeDigitalTwins.ServiceDefaults.Authorization.Models;
 
 /// <summary>
 /// Parses permission strings in Azure Digital Twins format.
@@ -10,7 +10,7 @@ public static class PermissionParser
     /// <summary>
     /// Parses a permission string in the format "resource/action" or "resource/subresource/action".
     /// </summary>
-    /// <param name="permissionString">The permission string to parse (e.g., "digitaltwins/read", "digitaltwins/relationships/write").</param>
+    /// <param name="permissionString">The permission string to parse (e.g., "digitaltwins/read", "mcp/tools").</param>
     /// <param name="permission">The parsed permission if successful.</param>
     /// <returns>True if parsing was successful; otherwise, false.</returns>
     public static bool TryParse(
@@ -41,6 +41,7 @@ public static class PermissionParser
             "delete" => PermissionAction.Delete,
             "action" => PermissionAction.Action,
             "*" => PermissionAction.Wildcard,
+            "tools" => PermissionAction.Wildcard, // Special case: "mcp/tools" means all MCP tool actions
             _ => (PermissionAction)(-1), // Invalid
         };
 
@@ -62,6 +63,7 @@ public static class PermissionParser
             "models" => ResourceType.Models,
             "jobs/imports" => ResourceType.JobsImports,
             "jobs/imports/cancel" => ResourceType.JobsImports, // Cancel is a job action
+            "mcp" => ResourceType.McpTools, // Special case: MCP tools
             _ => (ResourceType)(-1), // Invalid
         };
 
@@ -85,7 +87,7 @@ public static class PermissionParser
         if (!TryParse(permissionString, out var permission))
         {
             throw new ArgumentException(
-                $"Invalid permission format: '{permissionString}'. Expected format: 'resource/action' (e.g., 'digitaltwins/read').",
+                $"Invalid permission format: '{permissionString}'. Expected format: 'resource/action' (e.g., 'digitaltwins/read', 'mcp/tools').",
                 nameof(permissionString)
             );
         }

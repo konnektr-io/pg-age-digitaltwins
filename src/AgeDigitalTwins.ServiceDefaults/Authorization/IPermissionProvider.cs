@@ -1,10 +1,12 @@
-// This file is kept for backward compatibility but now uses the shared implementation
-using AgeDigitalTwins.ServiceDefaults.Authorization;
+using System.Security.Claims;
+using AgeDigitalTwins.ServiceDefaults.Authorization.Models;
 
-namespace AgeDigitalTwins.ApiService.Authorization;
+namespace AgeDigitalTwins.ServiceDefaults.Authorization;
 
-// Re-export the shared interface
-public interface IPermissionProvider : ServiceDefaults.Authorization.IPermissionProvider
+/// <summary>
+/// Defines a strategy for retrieving user permissions from different sources.
+/// </summary>
+public interface IPermissionProvider
 {
     /// <summary>
     /// Retrieves permissions for the specified user.

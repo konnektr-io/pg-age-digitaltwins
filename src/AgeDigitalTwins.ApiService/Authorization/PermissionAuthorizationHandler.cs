@@ -1,3 +1,4 @@
+using AgeDigitalTwins.ServiceDefaults.Authorization;
 using AgeDigitalTwins.ApiService.Services;
 using Microsoft.AspNetCore.Authorization;
 
