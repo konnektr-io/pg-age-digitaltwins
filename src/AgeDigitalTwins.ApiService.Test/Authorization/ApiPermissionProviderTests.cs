@@ -145,7 +145,7 @@ public class ApiPermissionProviderTests
         var permissionsResponse = new HttpResponseMessage
         {
             StatusCode = HttpStatusCode.OK,
-            Content = new StringContent(JsonSerializer.Serialize(permissionStrings)),
+            Content = new StringContent("{\"permissions\":" + JsonSerializer.Serialize(permissionStrings) + "}"),
         };
 
         int callCount = 0;
