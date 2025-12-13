@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Json.Patch;
+using AgeDigitalTwins.Exceptions;
 
 namespace AgeDigitalTwins.MCPServerSSE.Tools;
 
@@ -246,6 +247,77 @@ public static class DigitalTwinsTools
         catch (Exception ex)
         {
              return $"Failed to perform hybrid search: {ex.Message}";
+        }
+    }
+
+    [McpServerTool, Description("Creates or replaces digital twin models from DTDL definitions.")]
+    public static async Task<string> CreateModels(
+        AgeDigitalTwinsClient client,
+        [Description("List of DTDL model JSON strings")] IEnumerable<string> models,
+        CancellationToken cancellationToken = default
+    )
+    {
+        try
+        {
+            var createdModels = await client.CreateModelsAsync(models, cancellationToken);
+            return $"Successfully created {createdModels.Count} models.";
+        }
+        catch (ModelAlreadyExistsException ex)
+        {
+             return $"Failed to create models: {ex.Message}";
+        }
+        catch (DTDLParserParsingException ex)
+        {
+             return $"Failed to parse DTDL: {ex.Message}. Please correct the model definition.";
+        }
+        catch (Exception ex)
+        {
+             return $"An error occurred while creating models: {ex.Message}";
+        }
+    }
+
+    [McpServerTool, Description("Searches for models using semantic vector search and/or keyword matching.")]
+    public static async Task<string> SearchModels(
+        AgeDigitalTwinsClient client,
+        [Description("The textual query for keyword matching (searches display name, description, ID)")] string? query = null,
+        [Description("The vector embedding for semantic search")] double[]? vector = null,
+        [Description("Max results to return")] int limit = 10,
+        CancellationToken cancellationToken = default
+    )
+    {
+        try
+        {
+            var results = await client.SearchModelsAsync(query, vector, limit, cancellationToken);
+            // Return simplified results to save context
+            var simplifiedResults = results.Select(m => new { 
+                id = m.Id, 
+                displayName = m.LanguageDisplayNames.GetValueOrDefault("en") ?? m.LanguageDisplayNames.Values.FirstOrDefault(),
+                description = m.LanguageDescriptions.GetValueOrDefault("en") ?? m.LanguageDescriptions.Values.FirstOrDefault()
+            });
+            return JsonSerializer.Serialize(simplifiedResults, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (Exception ex)
+        {
+            return $"Search failed: {ex.Message}";
+        }
+    }
+
+    [McpServerTool, Description("Updates the embedding vector for an existing model.")]
+    public static async Task<string> UpdateModelEmbedding(
+        AgeDigitalTwinsClient client,
+        [Description("The ID of the model to update")] string modelId,
+        [Description("The new vector embedding")] double[] vector,
+        CancellationToken cancellationToken = default
+    )
+    {
+        try
+        {
+            await client.UpdateModelEmbeddingAsync(modelId, vector, cancellationToken);
+            return $"Successfully updated embedding for model '{modelId}'.";
+        }
+        catch (Exception ex)
+        {
+            return $"Failed to update embedding: {ex.Message}";
         }
     }
 }

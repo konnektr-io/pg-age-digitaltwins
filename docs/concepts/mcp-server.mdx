@@ -8,6 +8,9 @@ The AgeDigitalTwins MCP Server allows LLMs to interact with a semantic graph mem
 The server provides tools to understand the semantic data model:
 - `GetModels`: Returns a lightweight summary of available models (ID and Display Name). Use this to explore the domain.
 - `GetModel`: Returns the **fully flattened** DTDL definition of a specific model. This includes all inherited properties, relationships, and components from base models, giving the LLM a complete view of the schema without needing to traverse the inheritance hierarchy manually.
+- `SearchModels`: Performs a hybrid search (semantic vector + lexical keyword) to find relevant models.
+- `CreateModels`: Allows creating new DTDL models.
+- `UpdateModelEmbedding`: Updates the vector embedding for a model to enable semantic search.
 
 ### 2. Cypher Query Generation
 The server is designed to help LLMs generate optimized Cypher queries for Apache AGE.

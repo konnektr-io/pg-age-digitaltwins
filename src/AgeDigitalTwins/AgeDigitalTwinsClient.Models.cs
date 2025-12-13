@@ -665,4 +665,113 @@ RETURN COUNT(m) AS deletedCount";
             ["components"] = components
         };
     }
+
+
+    /// <summary>
+    /// Updates the embedding for a specific model asynchronously.
+    /// </summary>
+    /// <param name="modelId">The ID of the model to update.</param>
+    /// <param name="embedding">The vector embedding.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    public virtual async Task UpdateModelEmbeddingAsync(
+        string modelId,
+        double[] embedding,
+        CancellationToken cancellationToken = default
+    )
+    {
+        string vectorString = JsonSerializer.Serialize(embedding);
+        string cypher = $@"MATCH (m:Model {{id: '{modelId}'}}) SET m.embedding = {vectorString}::vector";
+        
+        await using var connection = await _dataSource.OpenConnectionAsync(
+             TargetSessionAttributes.ReadWrite,
+             cancellationToken
+         );
+        await using var command = connection.CreateCypherCommand(_graphName, cypher);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Searches for models using both vector similarity and lexical search.
+    /// </summary>
+    /// <param name="query">The search query string (lexical).</param>
+    /// <param name="vector">The search vector (optional).</param>
+    /// <param name="limit">Max results to return.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A list of matching DigitalTwinsModelData.</returns>
+    public virtual async Task<IEnumerable<DigitalTwinsModelData>> SearchModelsAsync(
+        string? query,
+        double[]? vector,
+        int limit = 10,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (string.IsNullOrWhiteSpace(query) && vector == null)
+        {
+             // If no criteria, regular list with limit
+             var models = new List<DigitalTwinsModelData>();
+             await foreach(var m in GetModelsAsync(cancellationToken: cancellationToken))
+             {
+                 if (models.Count >= limit) break;
+                 if (m != null) models.Add(m);
+             }
+             return models;
+        }
+
+        string cypher;
+        if (vector != null)
+        {
+             string vectorString = JsonSerializer.Serialize(vector);
+             string whereClause = !string.IsNullOrWhiteSpace(query)
+                 ? $" WHERE (toLower(toString(m.displayName)) CONTAINS toLower('{query.Replace("'", "\\'")}') OR toLower(toString(m.description)) CONTAINS toLower('{query.Replace("'", "\\'")}') OR toLower(m.id) CONTAINS toLower('{query.Replace("'", "\\'")}' )) "
+                 : "";
+                 
+             // Hybrid: Vector + Filter
+             cypher = $@"
+                MATCH (m:Model)
+                {whereClause}
+                RETURN m
+                ORDER BY l2_distance(m.embedding, {vectorString}::vector) ASC
+                LIMIT {limit}";
+        }
+        else
+        {
+             // Lexical only
+             // Using CONTAINS (case-insensitive simulation via toLower)
+             // Note: m.displayName and m.description are maps, so toString(m.displayName) might result in valid JSON string which contains the value. 
+             // Ideally we should look into specific language values, but generic string check is a good approximation for 'CONTAINS'.
+             string q = query!.Replace("'", "\\'");
+             cypher = $@"
+                MATCH (m:Model)
+                WHERE toLower(toString(m.displayName)) CONTAINS toLower('{q}') 
+                   OR toLower(toString(m.description)) CONTAINS toLower('{q}')
+                   OR toLower(m.id) CONTAINS toLower('{q}')
+                RETURN m
+                LIMIT {limit}";
+        }
+
+        await using var connection = await _dataSource.OpenConnectionAsync(
+             TargetSessionAttributes.PreferStandby,
+             cancellationToken
+         );
+
+        await using var command = connection.CreateCypherCommand(_graphName, cypher);
+        
+        var results = new List<DigitalTwinsModelData>();
+        try {
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                 var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
+                 var vertex = (Vertex)agResult;
+                 results.Add(new DigitalTwinsModelData(vertex.Properties));
+            }
+        }
+        catch (Exception)
+        {
+            // Fallback or rethrow? 
+            // If vector search fails (e.g., extensions not installed), we might bubble it up.
+            throw;
+        }
+        return results;
+    }
 }

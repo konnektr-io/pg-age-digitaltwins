@@ -27,6 +27,7 @@ public static class CypherQueryPrompt
 4. **Vector / Hybrid Search**:
    - If a property is defined as an embedding (Array<Double>), use pgvector functions.
    - Syntax: `MATCH (t:Twin) RETURN t ORDER BY l2_distance(t.propertyName, [vector_values]) ASC LIMIT 10`
+   - You can also use `cosine_distance` if appropriate for the embedding type.
    - Always verify the embedding property name from the DTDL model.
 
 5. **Filtering**:
