@@ -1,0 +1,530 @@
+---
+title: Authentication & Authorization
+description: How to authenticate and manage access to Konnektr Graph
+---
+
+# Authentication & Authorization
+
+Konnektr Graph uses OAuth 2.1 with JWT Bearer tokens for authentication and fine-grained, permission-based authorization for access control.
+
+## Hosted Version (Recommended)
+
+When using the hosted Konnektr Graph service, authentication and authorization are fully managed for you.
+
+### Getting Your Credentials
+
+1. **Sign up** at [ktrlplane.konnektr.io](https://ktrlplane.konnektr.io)
+2. **Create a Graph resource** in your organization
+3. **Get your API credentials** from the resource dashboard
+
+Your credentials include:
+- **Client ID** - Identifies your application
+- **Client Secret** - Secret key for authentication
+- **Audience** - The API identifier (e.g., `https://graph.konnektr.io`)
+- **Authority** - The OAuth server URL (e.g., `https://auth.konnektr.io`)
+
+### Authenticating Requests
+
+Use OAuth 2.1 Client Credentials flow to get an access token:
+
+```bash
+curl -X POST https://auth.konnektr.io/oauth/token \
+  -H "Content-Type: application/json" \
+  -d '{
+    "client_id": "YOUR_CLIENT_ID",
+    "client_secret": "YOUR_CLIENT_SECRET",
+    "audience": "https://graph.konnektr.io",
+    "grant_type": "client_credentials"
+  }'
+```
+
+Response:
+```json
+{
+  "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "Bearer",
+  "expires_in": 86400
+}
+```
+
+Use the access token in all API requests:
+
+```bash
+curl https://your-resource-id.api.graph.konnektr.io/digitaltwins/twin-1 \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+### Using Azure Digital Twins SDKs
+
+You can use the standard Azure Digital Twins SDKs with Konnektr Graph:
+
+```python
+# Python
+from azure.digitaltwins.core import DigitalTwinsClient
+from azure.core.credentials import AccessToken
+from datetime import datetime
+import requests
+
+# Get token from Konnektr Auth
+token_response = requests.post(
+    "https://auth.konnektr.io/oauth/token",
+    json={
+        "client_id": "YOUR_CLIENT_ID",
+        "client_secret": "YOUR_CLIENT_SECRET",
+        "audience": "https://graph.konnektr.io",
+        "grant_type": "client_credentials"
+    }
+)
+access_token = token_response.json()["access_token"]
+
+# Create custom credential
+class StaticTokenCredential:
+    def __init__(self, token):
+        self.token = token
+    
+    def get_token(self, *scopes, **kwargs):
+        expires_on = int(datetime.now().timestamp()) + 3600
+        return AccessToken(self.token, expires_on)
+
+# Connect to Konnektr Graph
+client = DigitalTwinsClient(
+    "https://your-resource-id.api.graph.konnektr.io",
+    StaticTokenCredential(access_token)
+)
+
+# Use the client
+twin = client.get_digital_twin("my-twin-id")
+```
+
+### Managing Permissions
+
+Permissions are managed in the Konnektr Control Plane. See the [Access Control documentation](https://docs.konnektr.io/docs/ktrlplane/concepts/access-control) for details on:
+
+- Creating users and service accounts
+- Assigning roles and permissions
+- Managing organization and project access
+- Setting up custom permission policies
+
+**Common Permissions:**
+
+| Permission | Description |
+|------------|-------------|
+| `digitaltwins/read` | Read digital twins and components |
+| `digitaltwins/write` | Create and update digital twins |
+| `digitaltwins/delete` | Delete digital twins |
+| `digitaltwins/relationships/read` | Read relationships |
+| `digitaltwins/relationships/write` | Create and update relationships |
+| `digitaltwins/relationships/delete` | Delete relationships |
+| `models/read` | Read DTDL models |
+| `models/write` | Create and update models |
+| `query/read` | Execute Cypher queries |
+| `mcp/*` | Access MCP tools (for AI assistants) |
+
+### MCP Server Authentication
+
+When using the MCP Server for AI assistants, you need both an OAuth scope and permission:
+
+- **OAuth Scope**: `mcp:tools` (protocol-level access)
+- **Permission**: `mcp/*` (application-level access)
+
+Configure your MCP client with your credentials:
+
+```json
+{
+  "mcpServers": {
+    "konnektr-graph": {
+      "url": "https://your-resource-id.mcp.graph.konnektr.io",
+      "transport": {
+        "type": "sse"
+      },
+      "auth": {
+        "type": "oauth2",
+        "token_url": "https://auth.konnektr.io/oauth/token",
+        "client_id": "YOUR_CLIENT_ID",
+        "client_secret": "YOUR_CLIENT_SECRET",
+        "audience": "https://graph.konnektr.io",
+        "scope": "mcp:tools"
+      }
+    }
+  }
+}
+```
+
+## Self-Hosted Version
+
+When self-hosting Konnektr Graph, you need to configure your own authentication provider.
+
+### Supported Providers
+
+Konnektr Graph works with any OAuth 2.1 / OpenID Connect provider:
+
+- Auth0
+- Azure AD / Microsoft Entra ID
+- Keycloak
+- Okta
+- Custom OAuth 2.1 server
+
+### Configuration
+
+Set these environment variables or update `appsettings.json`:
+
+**API Service:**
+
+```bash
+# Enable authentication
+Authentication__Enabled=true
+Authentication__Authority=https://your-auth-provider.com
+Authentication__Audience=https://your-graph-api.com
+Authentication__Issuer=https://your-auth-provider.com/
+
+# Enable authorization
+Authorization__Enabled=true
+Authorization__Provider=Claims
+Authorization__PermissionsClaimName=permissions
+```
+
+**MCP Server:**
+
+```bash
+# Enable authentication
+Authentication__Enabled=true
+Authentication__Authority=https://your-auth-provider.com
+Authentication__Audience=https://your-graph-api.com
+Authentication__Issuer=https://your-auth-provider.com/
+
+# Enable authorization with MCP scopes
+Authorization__Enabled=true
+Authorization__Provider=Claims
+Authorization__PermissionsClaimName=permissions
+Authorization__RequiredScopes__0=mcp:tools
+
+# MCP metadata
+MCP__ServerName=My Graph MCP Server
+MCP__Version=1.0.0
+MCP__ResourceServerUrl=https://your-mcp-server.com
+```
+
+### JWT Token Requirements
+
+Your OAuth provider must issue JWT tokens with these claims:
+
+```json
+{
+  "sub": "user-or-service-account-id",
+  "aud": "https://your-graph-api.com",
+  "iss": "https://your-auth-provider.com/",
+  "scope": "mcp:tools",
+  "permissions": [
+    "digitaltwins/read",
+    "digitaltwins/write",
+    "mcp/*"
+  ]
+}
+```
+
+**Required Claims:**
+- `sub` - Subject (user/service account identifier)
+- `aud` - Audience (must match your configured audience)
+- `iss` - Issuer (must match your configured issuer)
+
+**Optional but Recommended:**
+- `scope` - OAuth scopes (required for MCP: `mcp:tools`)
+- `permissions` - Array of permission strings
+
+### Permission Providers
+
+You can choose how permissions are provided:
+
+#### 1. JWT Claims (Default)
+
+Permissions are embedded in the JWT token's `permissions` claim:
+
+```json
+{
+  "Authorization": {
+    "Provider": "Claims",
+    "PermissionsClaimName": "permissions"
+  }
+}
+```
+
+**Pros:**
+- Fast (no external calls)
+- Works offline
+- Simple setup
+
+**Cons:**
+- Permissions baked into token (can't revoke until expiry)
+- Larger token size
+
+#### 2. API Provider
+
+Fetch permissions from an external API on each request:
+
+```json
+{
+  "Authorization": {
+    "Provider": "Api",
+    "ApiProvider": {
+      "BaseUrl": "https://your-permission-api.com",
+      "CheckEndpoint": "/api/v1/permissions/check",
+      "ResourceName": "graph-instance-123",
+      "CacheExpirationMinutes": 5,
+      "TimeoutSeconds": 10
+    }
+  }
+}
+```
+
+**Pros:**
+- Dynamic permissions (can revoke immediately)
+- Centralized permission management
+- Smaller token size
+
+**Cons:**
+- Requires external API call
+- Potential latency
+- Dependency on external service
+
+### Configuring Your Auth Provider
+
+#### Auth0 Example
+
+1. **Create an API** in Auth0 Dashboard
+   - Name: `Konnektr Graph`
+   - Identifier: `https://your-graph-api.com`
+   
+2. **Create a Machine-to-Machine Application**
+   - Authorize it for your API
+   - Note the Client ID and Secret
+
+3. **Add Permissions** (in API settings)
+   - Add each permission as a scope (e.g., `digitaltwins:read`, `mcp:tools`)
+
+4. **Configure Rules** (optional)
+   - Add custom claims to include permissions array
+
+#### Azure AD Example
+
+1. **Register an Application**
+   - Note the Application (client) ID
+   - Create a client secret
+
+2. **Expose an API**
+   - Set Application ID URI: `https://your-graph-api.com`
+   - Add scopes for each permission
+
+3. **App Roles** (optional)
+   - Define app roles for permission groups
+   - Assign users/service principals to roles
+
+4. **Token Configuration**
+   - Add optional claims to include permissions
+
+### OAuth Discovery
+
+Both API Service and MCP Server expose an OAuth discovery endpoint at:
+
+```
+/.well-known/oauth-protected-resource
+```
+
+This endpoint returns RFC 9728 Protected Resource Metadata:
+
+```json
+{
+  "resource": "https://your-server.com",
+  "authorization_servers": ["https://your-auth-provider.com"],
+  "scopes_supported": ["mcp:tools", "mcp:resources"],
+  "bearer_methods_supported": ["header"]
+}
+```
+
+## Error Responses
+
+Understanding error responses helps troubleshoot authentication and authorization issues.
+
+### 401 Unauthorized
+
+Returned when no valid JWT token is provided:
+
+```json
+{
+  "error": "unauthorized",
+  "error_description": "Authentication required. Please provide a valid Bearer token.",
+  "resource_metadata": "https://your-server/.well-known/oauth-protected-resource"
+}
+```
+
+**HTTP Headers:**
+```
+WWW-Authenticate: Bearer realm="mcp", resource_metadata="https://..."
+```
+
+**Common Causes:**
+- Missing `Authorization` header
+- Expired token
+- Invalid token signature
+- Token from wrong issuer
+
+**Solution:** Get a fresh access token from your OAuth provider.
+
+### 403 Forbidden - Missing Scope (MCP Only)
+
+Returned when OAuth scope is missing:
+
+```json
+{
+  "error": "insufficient_scope",
+  "error_description": "Required scopes: mcp:tools",
+  "scope": "mcp:tools"
+}
+```
+
+**Common Causes:**
+- Token doesn't include required OAuth scope
+- Scope not configured in OAuth provider
+
+**Solution:** 
+- **Hosted:** Ensure your client credentials have `mcp:tools` scope assigned
+- **Self-hosted:** Configure your OAuth provider to include the scope in tokens
+
+### 403 Forbidden - Missing Permission
+
+Returned when permission is missing:
+
+```json
+{
+  "type": "https://tools.ietf.org/html/rfc7231#section-6.5.3",
+  "title": "Forbidden",
+  "status": 403,
+  "detail": "User lacks required permission: digitaltwins/read"
+}
+```
+
+**Common Causes:**
+- User/service account doesn't have required permission
+- Permission not included in JWT token
+- Permission API call failed (if using API provider)
+
+**Solution:**
+- **Hosted:** Assign permissions in [Konnektr Control Plane](https://docs.konnektr.io/docs/ktrlplane/concepts/access-control)
+- **Self-hosted:** Add permissions to JWT token or configure permission API
+
+## Troubleshooting
+
+### Debugging Authentication
+
+**Check your token:**
+
+```bash
+# Decode JWT (using jwt.io or jwt-cli)
+echo "YOUR_TOKEN" | jwt decode -
+
+# Verify claims:
+# - aud: Must match your configured audience
+# - iss: Must match your configured issuer
+# - exp: Must be in the future
+# - permissions: Must include required permissions
+```
+
+**Test authentication:**
+
+```bash
+# Try accessing a public endpoint
+curl https://your-server/.well-known/oauth-protected-resource
+
+# Try with your token
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+     https://your-server/digitaltwins/twin-1
+```
+
+### Common Issues
+
+**Issue: "401 Unauthorized" with valid token**
+
+Possible causes:
+- Token audience doesn't match configured audience
+- Token issuer doesn't match configured issuer
+- Clock skew (token not yet valid or expired)
+
+Solution: Check your `Authentication:Audience` and `Authentication:Issuer` configuration.
+
+**Issue: "403 Forbidden" for all requests**
+
+Possible causes:
+- Permissions not configured
+- Wrong permission claim name
+- Permission provider not working
+
+Solution:
+1. Check `Authorization:PermissionsClaimName` matches your token
+2. Verify permissions are in the token
+3. Check logs for permission provider errors
+
+**Issue: MCP client can't connect**
+
+Possible causes:
+- Wrong OAuth configuration
+- Missing `mcp:tools` scope
+- Network/firewall issues
+
+Solution:
+1. Verify OAuth endpoint URLs
+2. Check client credentials
+3. Ensure `mcp:tools` scope is requested and granted
+4. Test OAuth flow manually with curl
+
+### Enabling Debug Logging
+
+**Self-hosted only:**
+
+Add to `appsettings.Development.json`:
+
+```json
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore.Authentication": "Debug",
+      "Microsoft.AspNetCore.Authorization": "Debug",
+      "AgeDigitalTwins.ServiceDefaults.Authorization": "Debug"
+    }
+  }
+}
+```
+
+This logs:
+- JWT validation steps
+- Permission checks
+- Authorization decisions
+
+## Security Best Practices
+
+### Token Management
+
+- **Rotate secrets regularly** - Change client secrets every 90 days
+- **Use short token expiry** - Keep tokens valid for 1 hour or less
+- **Secure token storage** - Never commit tokens to source control
+- **Use HTTPS only** - Always use encrypted connections
+
+### Permission Design
+
+- **Principle of least privilege** - Grant minimum permissions needed
+- **Separate read/write** - Don't use wildcards unless necessary
+- **Audit permissions** - Review access regularly
+- **Use service accounts** - Dedicated credentials for applications
+
+### Self-Hosted Considerations
+
+- **Secure OAuth provider** - Use established providers (Auth0, Azure AD)
+- **Monitor auth logs** - Watch for suspicious patterns
+- **Implement rate limiting** - Prevent brute force attacks
+- **Keep software updated** - Apply security patches promptly
+
+## Further Reading
+
+- [Konnektr Access Control](https://docs.konnektr.io/docs/ktrlplane/concepts/access-control) - Managing users and permissions in hosted version
+- [MCP OAuth Specification](https://spec.modelcontextprotocol.io/specification/2024-11-05/security/) - MCP security requirements
+- [RFC 9728: Protected Resource Metadata](https://www.rfc-editor.org/rfc/rfc9728.html) - OAuth discovery standard
+- [OAuth 2.1 Specification](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-10) - Latest OAuth standard

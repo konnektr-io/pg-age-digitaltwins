@@ -2,6 +2,57 @@
 
 The AgeDigitalTwins MCP Server allows LLMs to interact with a semantic graph memory based on Azure Digital Twins (DTDL) and Apache AGE (PostgreSQL). This enables building "self-healing" AI memory systems that enforce data schema and support hybrid vector search.
 
+## Authentication & Authorization
+
+The MCP Server uses OAuth 2.1 with JWT Bearer tokens for authentication and policy-based authorization for access control.
+
+### Requirements
+
+To access the MCP server, clients must provide:
+
+1. **OAuth Scope**: `mcp:tools` - Required by the MCP OAuth 2.1 specification (RFC 9728)
+2. **Permission**: `mcp/*` - Application-level permission to access MCP tools
+
+### How It Works
+
+```
+Request with JWT Token
+  ↓
+1. JWT Authentication - Validates token from Auth0
+  ↓
+2. OAuth Scope Check - Verifies "mcp:tools" scope (MCP-specific)
+  ↓
+3. Permission Check - Verifies "mcp/*" permission (policy-based)
+  ↓
+4. Tool Execution
+```
+
+For detailed information about the authorization architecture, see [Authorization Architecture](/docs/advanced-topics/authorization-architecture).
+
+### Configuration
+
+```json
+{
+  "Authentication": {
+    "Enabled": true,
+    "Authority": "https://auth.konnektr.io",
+    "Audience": "https://graph.konnektr.io",
+    "Issuer": "https://auth.konnektr.io/"
+  },
+  "Authorization": {
+    "Enabled": true,
+    "Provider": "Claims",
+    "PermissionsClaimName": "permissions",
+    "RequiredScopes": ["mcp:tools"],
+    "ScopesSupported": ["mcp:tools", "mcp:resources"]
+  }
+}
+```
+
+### OAuth Discovery
+
+The server implements RFC 9728 (Protected Resource Metadata) at `/.well-known/oauth-protected-resource` for OAuth client discovery.
+
 ## Features
 
 ### 1. Model Management
@@ -43,9 +94,28 @@ The system supports semantic search using `pgvector`.
 
 ## Usage Guide for Agents
 
+### Prerequisites
+
+Before using the MCP server, ensure you have:
+- Valid OAuth 2.1 JWT token from Auth0
+- `mcp:tools` scope in your token
+- `mcp/*` permission in your token claims
+
+### Workflow
+
 1. **Understand the Domain**: Call `GetModels` to see what types of entities exist.
 2. **Inspect Schema**: Call `GetModel(modelId)` to understand the properties and relationships of a specific type.
 3. **Search**: 
    - Use `HybridMemorySearch` if you have a vector or need semantic similarity.
    - Use `ExploreGraphNeighborhood` to walk the graph.
    - For complex queries, generate Cypher using the `GenerateQueryPrompt` guidance.
+
+### Error Handling
+
+The server returns standard OAuth 2.1 error responses:
+
+- **401 Unauthorized**: Missing or invalid JWT token
+- **403 Forbidden (insufficient_scope)**: Missing required OAuth scope
+- **403 Forbidden**: Missing required permission
+
+All responses include the `/.well-known/oauth-protected-resource` URL for client configuration discovery.
