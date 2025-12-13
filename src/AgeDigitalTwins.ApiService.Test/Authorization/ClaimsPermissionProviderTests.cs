@@ -1,7 +1,7 @@
 using System.Security.Claims;
-using AgeDigitalTwins.ApiService.Authorization;
-using AgeDigitalTwins.ApiService.Authorization.Models;
-using AgeDigitalTwins.ApiService.Configuration;
+using AgeDigitalTwins.ServiceDefaults.Authorization;
+using AgeDigitalTwins.ServiceDefaults.Authorization.Models;
+using AgeDigitalTwins.ServiceDefaults.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;

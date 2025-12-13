@@ -1,4 +1,4 @@
-namespace AgeDigitalTwins.ApiService.Authorization.Models;
+namespace AgeDigitalTwins.ServiceDefaults.Authorization.Models;
 
 /// <summary>
 /// Defines the permission actions aligned with Azure Digital Twins.

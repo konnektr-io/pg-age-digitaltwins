@@ -54,6 +54,9 @@ namespace AgeDigitalTwins.Models
         [JsonPropertyName("decommissioned")]
         public bool IsDecommissioned { get; }
 
+        [JsonPropertyName("embedding")]
+        public double[]? Embedding { get; set; }
+
         [JsonConstructor]
         public DigitalTwinsModelData(
             string id,
@@ -63,7 +66,8 @@ namespace AgeDigitalTwins.Models
             IReadOnlyDictionary<string, string> languageDescriptions,
             bool isDecommissioned,
             string[]? bases,
-            string[]? descendants
+            string[]? descendants,
+            double[]? embedding
         )
         {
             Id = id;
@@ -74,6 +78,7 @@ namespace AgeDigitalTwins.Models
             IsDecommissioned = isDecommissioned;
             Bases = bases ?? [];
             Descendants = descendants;
+            Embedding = embedding;
         }
 
         public DigitalTwinsModelData(Dictionary<string, object?> modelData)
@@ -153,6 +158,14 @@ namespace AgeDigitalTwins.Models
                 && descendantsValue is List<object> descendantsList
                     ? [.. descendantsList.Select(x => (string)x)]
                     : null; // null indicates legacy model without precomputed descendants
+
+            Embedding =
+                modelData.TryGetValue("embedding", out var embeddingValue)
+                && embeddingValue is List<object> embeddingList
+                    ? [.. embeddingList.Select(x => Convert.ToDouble(x))]
+                    :_ = modelData.TryGetValue("embedding", out var embeddingVectorValue) && embeddingVectorValue is double[] embeddingVector
+                        ? embeddingVector
+                        : null;
         }
 
         public DigitalTwinsModelData(string dtdlModel)
@@ -215,7 +228,10 @@ namespace AgeDigitalTwins.Models
             LanguageDescriptions ??= new Dictionary<string, string>();
             IsDecommissioned = false;
             Bases = Array.Empty<string>();
+            IsDecommissioned = false;
+            Bases = Array.Empty<string>();
             Descendants = null; // Will be computed after model creation
+            Embedding = null;
         }
     }
 }

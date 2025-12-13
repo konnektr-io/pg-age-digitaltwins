@@ -1,8 +1,8 @@
-namespace AgeDigitalTwins.ApiService.Authorization.Models;
+namespace AgeDigitalTwins.ServiceDefaults.Authorization.Models;
 
 /// <summary>
 /// Represents a permission with resource and action components.
-/// Format: "resource/action" (e.g., "digitaltwins/read").
+/// Format: "resource/action" (e.g., "digitaltwins/read", "mcp/tools").
 /// </summary>
 public sealed class Permission : IEquatable<Permission>
 {
@@ -40,6 +40,7 @@ public sealed class Permission : IEquatable<Permission>
             ResourceType.Models => "models",
             ResourceType.JobsImports => "jobs/imports",
             ResourceType.JobsDeletions => "jobs/deletions",
+            ResourceType.Mcp => "mcp/tools",
             _ => throw new ArgumentOutOfRangeException(nameof(Resource)),
         };
 

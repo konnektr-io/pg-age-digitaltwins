@@ -1,4 +1,4 @@
-namespace AgeDigitalTwins.ApiService.Authorization.Models;
+namespace AgeDigitalTwins.ServiceDefaults.Authorization.Models;
 
 /// <summary>
 /// Defines the resource types for authorization aligned with Azure Digital Twins permissions.
@@ -34,4 +34,9 @@ public enum ResourceType
     /// Deletion job operations.
     /// </summary>
     JobsDeletions,
+
+    /// <summary>
+    /// MCP tools access - used by MCP server for tool invocation permissions.
+    /// </summary>
+    Mcp,
 }

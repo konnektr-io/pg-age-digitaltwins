@@ -1,6 +1,6 @@
 using System.Text.Json;
-using AgeDigitalTwins.ApiService.Authorization;
-using AgeDigitalTwins.ApiService.Authorization.Models;
+using AgeDigitalTwins.ServiceDefaults.Authorization;
+using AgeDigitalTwins.ServiceDefaults.Authorization.Models;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AgeDigitalTwins.ApiService.Extensions;

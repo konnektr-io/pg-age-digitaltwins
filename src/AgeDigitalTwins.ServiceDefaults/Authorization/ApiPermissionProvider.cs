@@ -1,11 +1,13 @@
 using System.Security.Claims;
 using System.Text.Json;
-using AgeDigitalTwins.ApiService.Authorization.Models;
-using AgeDigitalTwins.ApiService.Configuration;
+using AgeDigitalTwins.ServiceDefaults.Authorization;
+using AgeDigitalTwins.ServiceDefaults.Authorization.Models;
+using AgeDigitalTwins.ServiceDefaults.Configuration;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Logging;
 
-namespace AgeDigitalTwins.ApiService.Authorization;
+namespace AgeDigitalTwins.ServiceDefaults.Authorization;
 
 /// <summary>
 /// Permission provider that retrieves permissions from an external API with caching.

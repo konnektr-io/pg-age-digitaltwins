@@ -1,7 +1,7 @@
 using System.Security.Claims;
-using AgeDigitalTwins.ApiService.Authorization.Models;
+using AgeDigitalTwins.ServiceDefaults.Authorization.Models;
 
-namespace AgeDigitalTwins.ApiService.Authorization;
+namespace AgeDigitalTwins.ServiceDefaults.Authorization;
 
 /// <summary>
 /// Defines a strategy for retrieving user permissions from different sources.

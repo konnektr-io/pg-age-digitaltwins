@@ -1,9 +1,11 @@
 using System.Security.Claims;
-using AgeDigitalTwins.ApiService.Authorization.Models;
-using AgeDigitalTwins.ApiService.Configuration;
+using AgeDigitalTwins.ServiceDefaults.Authorization;
+using AgeDigitalTwins.ServiceDefaults.Authorization.Models;
+using AgeDigitalTwins.ServiceDefaults.Configuration;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace AgeDigitalTwins.ApiService.Authorization;
+namespace AgeDigitalTwins.ServiceDefaults.Authorization;
 
 /// <summary>
 /// Permission provider that extracts permissions from JWT claims.

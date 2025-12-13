@@ -1,8 +1,8 @@
 using System.Net;
 using System.Security.Claims;
 using System.Text.Json;
-using AgeDigitalTwins.ApiService.Authorization;
-using AgeDigitalTwins.ApiService.Authorization.Models;
+using AgeDigitalTwins.ServiceDefaults.Authorization;
+using AgeDigitalTwins.ServiceDefaults.Authorization.Models;
 using AgeDigitalTwins.ApiService.Configuration;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
@@ -10,6 +10,7 @@ using Microsoft.Extensions.Options;
 using Moq;
 using Moq.Protected;
 using Xunit;
+using AgeDigitalTwins.ServiceDefaults.Configuration;
 
 namespace AgeDigitalTwins.ApiService.Test.Authorization;
 
@@ -144,7 +145,7 @@ public class ApiPermissionProviderTests
         var permissionsResponse = new HttpResponseMessage
         {
             StatusCode = HttpStatusCode.OK,
-            Content = new StringContent(JsonSerializer.Serialize(permissionStrings)),
+            Content = new StringContent("{\"permissions\":" + JsonSerializer.Serialize(permissionStrings) + "}"),
         };
 
         int callCount = 0;

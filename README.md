@@ -27,7 +27,7 @@
 - **Drop-in replacement** for Azure Digital Twins API
 - **Use standard Azure SDKs** (.NET, Python, JavaScript)
 - **Easy migration** from Azure with minimal code changes
-- Full DTDL (Digital Twins Definition Language) support
+- Full **DTDL** (Digital Twins Definition Language) support
 
 ### 🎯 Built for Performance
 - **PostgreSQL + Apache AGE** - Enterprise-grade graph database

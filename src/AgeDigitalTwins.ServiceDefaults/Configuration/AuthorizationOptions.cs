@@ -1,4 +1,4 @@
-namespace AgeDigitalTwins.ApiService.Configuration;
+namespace AgeDigitalTwins.ServiceDefaults.Configuration;
 
 /// <summary>
 /// Configuration options for authorization.
@@ -24,11 +24,16 @@ public class AuthorizationOptions
     public string PermissionsClaimName { get; set; } = "permissions";
 
     /// <summary>
-    /// Gets or sets a value indicating whether to use strict validation.
-    /// When true, requests without valid permissions will be rejected.
-    /// When false, requests with missing/invalid permissions will be logged but allowed (for migration).
+    /// Gets or sets the required scopes.
+    /// Should be ["mcp:tools"] for mcp access.
     /// </summary>
-    public bool StrictMode { get; set; } = true;
+    public string[] RequiredScopes { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the supported scopes.
+    /// Should be ["mcp:tools", "mcp:resources"] for MCP.
+    /// </summary>
+    public string[] ScopesSupported { get; set; } = [];
 
     /// <summary>
     /// Gets or sets the API provider configuration.

@@ -1,4 +1,4 @@
-using AgeDigitalTwins.ApiService.Authorization.Models;
+using AgeDigitalTwins.ServiceDefaults.Authorization.Models;
 using Xunit;
 
 namespace AgeDigitalTwins.ApiService.Test.Authorization;

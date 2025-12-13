@@ -1,7 +1,8 @@
 using System.Security.Claims;
-using AgeDigitalTwins.ApiService.Authorization.Models;
+using AgeDigitalTwins.ServiceDefaults.Authorization.Models;
+using Microsoft.Extensions.Logging;
 
-namespace AgeDigitalTwins.ApiService.Authorization;
+namespace AgeDigitalTwins.ServiceDefaults.Authorization;
 
 public class CompositePermissionProvider : IPermissionProvider
 {
