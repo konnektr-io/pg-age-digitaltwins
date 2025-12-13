@@ -581,4 +581,88 @@ RETURN COUNT(m) AS deletedCount";
 
         return modelId;
     }
+    /// <summary>
+    /// Retrieves a model with its schema flattened (including inherited properties, relationships, and components).
+    /// </summary>
+    /// <param name="modelId">The ID of the model to retrieve.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A dictionary representing the flattened model schema.</returns>
+    public async Task<Dictionary<string, object>> GetModelExpandedAsync(
+        string modelId,
+        CancellationToken cancellationToken = default
+    )
+    {
+        var dtmi = new Dtmi(modelId);
+        var parsedModel = await _modelParser.ParseAsync(
+            ConvertToAsyncEnumerable(new[] { modelId }),
+            cancellationToken: cancellationToken
+        );
+        
+        var targetInterface = parsedModel.Values
+            .OfType<DTInterfaceInfo>()
+            .FirstOrDefault(i => i.Id == dtmi)
+            ?? throw new ModelNotFoundException($"Model {modelId} not found or is not an interface.");
+
+        var properties = new Dictionary<string, object>();
+        var relationships = new Dictionary<string, object>();
+        var components = new Dictionary<string, object>();
+
+        // Helper to collect contents recursively
+        void CollectContents(DTInterfaceInfo iface)
+        {
+            // Traverse parents first to allow overriding (though DTDL usually forbids shadowing, this establishes order)
+            foreach (var parent in iface.Extends)
+            {
+                CollectContents(parent);
+            }
+
+            foreach (var content in iface.Contents.Values)
+            {
+                if (content is DTPropertyInfo prop)
+                {
+                    properties[prop.Name] = new
+                    {
+                        name = prop.Name,
+                        schema = prop.Schema.Id.AbsoluteUri,
+                        description = prop.Description.Values.FirstOrDefault() ?? "",
+                        writable = prop.Writable
+                    };
+                }
+                else if (content is DTRelationshipInfo rel)
+                {
+                    relationships[rel.Name] = new
+                    {
+                        name = rel.Name,
+                        target = rel.Target?.AbsoluteUri,
+                        description = rel.Description.Values.FirstOrDefault() ?? "",
+                        properties = rel.Properties.ToDictionary(
+                            p => p.Name,
+                            p => new { schema = p.Schema.Id.AbsoluteUri }
+                        )
+                    };
+                }
+                else if (content is DTComponentInfo comp)
+                {
+                    components[comp.Name] = new
+                    {
+                        name = comp.Name,
+                        schema = comp.Schema.Id.AbsoluteUri,
+                        description = comp.Description.Values.FirstOrDefault() ?? ""
+                    };
+                }
+            }
+        }
+
+        CollectContents(targetInterface);
+
+        return new Dictionary<string, object>
+        {
+            ["id"] = targetInterface.Id.AbsoluteUri,
+            ["displayName"] = targetInterface.DisplayName.Values.FirstOrDefault() ?? "",
+            ["description"] = targetInterface.Description.Values.FirstOrDefault() ?? "",
+            ["properties"] = properties,
+            ["relationships"] = relationships,
+            ["components"] = components
+        };
+    }
 }
