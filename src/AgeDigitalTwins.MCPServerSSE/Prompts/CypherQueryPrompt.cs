@@ -31,8 +31,9 @@ public static class CypherQueryPrompt
    - Always verify the embedding property name from the DTDL model.
 
 5. **Filtering**:
+   - Access twin ID via `t.`$dtId``.
+   - Access model ID via `t.`$metadata`.`$model``.
    - Access properties directly, e.g., `t.temperature`.
-   - Access metadata via `t.`$metadata`.`$model`` or `t.`$dtId``.
 ";
     }
 }

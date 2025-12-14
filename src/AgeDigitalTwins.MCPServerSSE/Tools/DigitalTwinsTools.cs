@@ -276,7 +276,7 @@ public static class DigitalTwinsTools
         }
     }
 
-    [McpServerTool, Description("Searches for models using semantic vector search and/or keyword matching.")]
+    [McpServerTool, Description("Searches for models using semantic vector search and/or keyword matching. Use GetModel to retrieve the model details.")]
     public static async Task<string> SearchModels(
         AgeDigitalTwinsClient client,
         [Description("The textual query for keyword matching (searches display name, description, ID)")] string? query = null,
