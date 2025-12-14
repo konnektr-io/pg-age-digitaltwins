@@ -4,7 +4,11 @@ using CloudNative.CloudEvents.SystemTextJson;
 using MQTTnet;
 using MQTTnet.Formatter;
 
-namespace AgeDigitalTwins.Events;
+namespace AgeDigitalTwins.Events.Sinks.Mqtt;
+
+using AgeDigitalTwins.Events.Abstractions;
+using AgeDigitalTwins.Events.Core.Events;
+
 
 public class MqttEventSink : IEventSink, IDisposable
 {
@@ -97,24 +101,3 @@ public class MqttEventSink : IEventSink, IDisposable
     }
 }
 
-public class MqttSinkOptions : SinkOptions
-{
-    public required string Broker { get; set; }
-    public required int Port { get; set; }
-    public required string Topic { get; set; }
-    public required string ClientId { get; set; }
-    public required string Username { get; set; }
-    public required string Password { get; set; }
-    public string ProtocolVersion { get; set; } = "5.0.0";
-
-    public MqttProtocolVersion GetProtocolVersion()
-    {
-        return ProtocolVersion switch
-        {
-            "3.1.0" => MqttProtocolVersion.V310,
-            "3.1.1" => MqttProtocolVersion.V311,
-            "5.0.0" => MqttProtocolVersion.V500,
-            _ => MqttProtocolVersion.Unknown,
-        };
-    }
-}

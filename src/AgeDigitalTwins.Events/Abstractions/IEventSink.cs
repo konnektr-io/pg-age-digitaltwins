@@ -1,6 +1,6 @@
 using CloudNative.CloudEvents;
 
-namespace AgeDigitalTwins.Events;
+namespace AgeDigitalTwins.Events.Abstractions;
 
 public interface IEventSink
 {

@@ -1,6 +1,6 @@
 using System.Text.Json.Nodes;
 
-namespace AgeDigitalTwins.Events;
+namespace AgeDigitalTwins.Events.Core.Events;
 
 public class EventData(string id, string graphName, string tableName, DateTime? timestamp = null)
 {

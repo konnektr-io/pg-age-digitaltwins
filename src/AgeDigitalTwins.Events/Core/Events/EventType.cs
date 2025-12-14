@@ -1,4 +1,4 @@
-namespace AgeDigitalTwins.Events;
+namespace AgeDigitalTwins.Events.Core.Events;
 
 public enum EventType
 {

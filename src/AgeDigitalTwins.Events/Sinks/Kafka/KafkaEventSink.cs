@@ -4,7 +4,11 @@ using CloudNative.CloudEvents.Kafka;
 using CloudNative.CloudEvents.SystemTextJson;
 using Confluent.Kafka;
 
-namespace AgeDigitalTwins.Events;
+namespace AgeDigitalTwins.Events.Sinks.Kafka;
+
+using AgeDigitalTwins.Events.Abstractions;
+using AgeDigitalTwins.Events.Core.Events;
+
 
 public class KafkaEventSink : IEventSink, IDisposable
 {
@@ -62,6 +66,11 @@ public class KafkaEventSink : IEventSink, IDisposable
                 QueueBufferingMaxMessages = 10000, // Allow more messages in producer queue
                 QueueBufferingMaxKbytes = 524288, // 512MB producer buffer
             };
+
+        if (Enum.TryParse<SecurityProtocol>(options.SecurityProtocol, true, out var securityProtocol))
+        {
+            config.SecurityProtocol = securityProtocol;
+        }
 
         if (saslMechanism == SaslMechanism.Plain)
         {
@@ -274,7 +283,7 @@ public class KafkaEventSink : IEventSink, IDisposable
             return;
         }
 
-        TokenRequestContext request = new([scope]);
+        TokenRequestContext request = new TokenRequestContext(new[] { scope });
 
         try
         {
@@ -303,11 +312,3 @@ public class KafkaEventSink : IEventSink, IDisposable
     }
 }
 
-public class KafkaSinkOptions : SinkOptions
-{
-    public required string BrokerList { get; set; }
-    public required string Topic { get; set; }
-    public string? SaslMechanism { get; set; } // Can be PLAIN or OAUTHBEARER for entra id
-    public string? SaslUsername { get; set; }
-    public string? SaslPassword { get; set; }
-}

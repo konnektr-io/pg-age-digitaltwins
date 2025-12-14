@@ -7,8 +7,11 @@ using Npgsql;
 using Npgsql.Replication;
 using Npgsql.Replication.PgOutput;
 using Npgsql.Replication.PgOutput.Messages;
+using AgeDigitalTwins.Events.Abstractions;
+using AgeDigitalTwins.Events.Core.Events;
 
-namespace AgeDigitalTwins.Events;
+
+namespace AgeDigitalTwins.Events.Core.Services;
 
 public class AgeDigitalTwinsReplication : IAsyncDisposable
 {

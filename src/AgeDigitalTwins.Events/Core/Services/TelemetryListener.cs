@@ -1,8 +1,12 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Npgsql;
+using AgeDigitalTwins.Events.Abstractions;
+using AgeDigitalTwins.Events.Core.Events;
 
-namespace AgeDigitalTwins.Events;
+
+
+namespace AgeDigitalTwins.Events.Core.Services;
 
 /// <summary>
 /// Service that listens for telemetry events via PostgreSQL NOTIFY

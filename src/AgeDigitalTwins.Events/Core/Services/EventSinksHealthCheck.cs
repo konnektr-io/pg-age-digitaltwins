@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using AgeDigitalTwins.Events.Abstractions;
 
-namespace AgeDigitalTwins.Events;
+
+namespace AgeDigitalTwins.Events.Core.Services;
 
 /// <summary>
 /// Health check that monitors the status of all registered event sinks (Kafka, MQTT, Kusto, etc.).

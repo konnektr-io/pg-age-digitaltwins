@@ -3,7 +3,7 @@ using CloudNative.CloudEvents;
 using Json.More;
 using Json.Patch;
 
-namespace AgeDigitalTwins.Events;
+namespace AgeDigitalTwins.Events.Core.Events;
 
 public static class CloudEventFactory
 {

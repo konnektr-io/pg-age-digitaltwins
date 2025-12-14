@@ -1,4 +1,4 @@
-namespace AgeDigitalTwins.Events;
+namespace AgeDigitalTwins.Events.Abstractions;
 
 public abstract class SinkOptions
 {
