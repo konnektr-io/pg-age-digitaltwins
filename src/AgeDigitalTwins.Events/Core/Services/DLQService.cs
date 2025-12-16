@@ -3,7 +3,7 @@ using CloudNative.CloudEvents;
 using CloudNative.CloudEvents.SystemTextJson;
 using Npgsql;
 
-namespace AgeDigitalTwins.Events
+namespace AgeDigitalTwins.Events.Core.Services
 {
     public class DLQService
     {

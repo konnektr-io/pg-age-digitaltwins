@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
-namespace AgeDigitalTwins.Events;
+namespace AgeDigitalTwins.Events.Core.Services;
 
 /// <summary>
 /// Health check that monitors the status of the PostgreSQL logical replication connection.

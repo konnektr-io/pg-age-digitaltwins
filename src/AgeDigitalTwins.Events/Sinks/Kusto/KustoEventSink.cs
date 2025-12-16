@@ -7,7 +7,12 @@ using Kusto.Data.Common;
 using Kusto.Data.Ingestion;
 using Kusto.Ingest;
 
-namespace AgeDigitalTwins.Events;
+namespace AgeDigitalTwins.Events.Sinks.Kusto;
+
+using AgeDigitalTwins.Events.Abstractions;
+using AgeDigitalTwins.Events.Core.Events;
+
+
 
 public class KustoEventSink : IEventSink, IDisposable
 {
@@ -285,12 +290,3 @@ public class KustoEventSink : IEventSink, IDisposable
     }
 }
 
-public class KustoSinkOptions : SinkOptions
-{
-    public required string IngestionUri { get; set; }
-    public required string Database { get; set; }
-    public string? PropertyEventsTable { get; set; }
-    public string? TwinLifeCycleEventsTable { get; set; }
-    public string? RelationshipLifeCycleEventsTable { get; set; }
-    // EventTypeMappings now uses SinkEventType (inherited)
-}

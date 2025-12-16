@@ -2,6 +2,16 @@ using Azure.Identity;
 
 namespace AgeDigitalTwins.Events;
 
+using AgeDigitalTwins.Events.Abstractions;
+using AgeDigitalTwins.Events.Sinks.Kafka;
+using AgeDigitalTwins.Events.Sinks.Mqtt;
+using AgeDigitalTwins.Events.Sinks.Kusto;
+using AgeDigitalTwins.Events.Sinks.Base;
+using AgeDigitalTwins.Events.Core.Events;
+using AgeDigitalTwins.Events.Core.Services;
+using AgeDigitalTwins.Events.Core.Auth;
+
+
 public class EventSinkFactory(
     IConfiguration configuration,
     ILoggerFactory loggerFactory,
@@ -27,7 +37,7 @@ public class EventSinkFactory(
             {
                 try
                 {
-                    var sink = new KafkaEventSink(kafkaSink, new DefaultAzureCredential(), logger);
+                    var sink = new KafkaEventSink(kafkaSink, CredentialFactory.CreateCredential(kafkaSink.TenantId, kafkaSink.ClientId, kafkaSink.ClientSecret), logger);
                     // Wrap with resilient wrapper for retry logic
                     sinks.Add(new ResilientEventSinkWrapper(sink, wrapperLogger, _dlqService));
                 }
@@ -73,7 +83,7 @@ public class EventSinkFactory(
             {
                 try
                 {
-                    var sink = new KustoEventSink(kustoSink, new DefaultAzureCredential(), logger);
+                    var sink = new KustoEventSink(kustoSink, CredentialFactory.CreateCredential(kustoSink.TenantId, kustoSink.ClientId, kustoSink.ClientSecret), logger);
                     // Wrap with resilient wrapper for retry logic
                     sinks.Add(new ResilientEventSinkWrapper(sink, wrapperLogger, _dlqService));
                 }

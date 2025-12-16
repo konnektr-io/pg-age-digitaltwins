@@ -1,8 +1,11 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using CloudNative.CloudEvents;
+using AgeDigitalTwins.Events.Abstractions;
+using AgeDigitalTwins.Events.Core.Events;
 
-namespace AgeDigitalTwins.Events;
+
+namespace AgeDigitalTwins.Events.Core.Services;
 
 /// <summary>
 /// Shared event consumer that processes events from the shared queue

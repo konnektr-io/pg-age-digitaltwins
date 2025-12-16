@@ -1,6 +1,9 @@
 using CloudNative.CloudEvents;
+using AgeDigitalTwins.Events.Abstractions;
+using AgeDigitalTwins.Events.Core.Services;
 
-namespace AgeDigitalTwins.Events;
+
+namespace AgeDigitalTwins.Events.Sinks.Base;
 
 using System.Text.Json;
 using Npgsql;
