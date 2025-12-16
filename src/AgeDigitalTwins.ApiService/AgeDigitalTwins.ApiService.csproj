@@ -1,23 +1,23 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Aspire.Npgsql" Version="9.5.1" />
-    <PackageReference Include="AWSSDK.S3" Version="4.0.14.1" />
-    <PackageReference Include="Azure.Identity" Version="1.17.0" />
+    <PackageReference Include="Aspire.Npgsql" Version="13.0.2" />
+    <PackageReference Include="AWSSDK.S3" Version="4.0.14.3" />
+    <PackageReference Include="Azure.Identity" Version="1.17.1" />
     <PackageReference Include="Azure.Storage.Blobs" Version="12.26.0" />
     <PackageReference Include="Google.Cloud.Storage.V1" Version="4.13.0" />
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.10" />
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.10" />
-    <PackageReference Include="Npgsql.OpenTelemetry" Version="9.0.4" />
-    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.13.1" />
-    <PackageReference Include="Scalar.AspNetCore" Version="2.9.0" />
-    <PackageReference Include="System.Linq.Async" Version="6.0.3" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.1" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.1" />
+    <PackageReference Include="Npgsql.OpenTelemetry" Version="10.0.0" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.14.0" />
+    <PackageReference Include="Scalar.AspNetCore" Version="2.11.6" />
+    <PackageReference Include="System.Linq.Async" Version="7.0.0" />
   </ItemGroup>
 
   <ItemGroup>
