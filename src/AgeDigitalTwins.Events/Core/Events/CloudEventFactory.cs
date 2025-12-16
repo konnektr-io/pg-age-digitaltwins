@@ -536,7 +536,7 @@ public static class CloudEventFactory
         // First pass: process normal patch operations
         foreach (PatchOperation op in enhancedPatch.Operations)
         {
-            if (op.Path.Count == 0 && op.Value == null)
+            if (op.Path.SegmentCount == 0 && op.Value == null)
             {
                 // Skip empty operations
                 continue;
@@ -640,13 +640,13 @@ public static class CloudEventFactory
         // Collect all non-metadata operations
         foreach (PatchOperation op in originalPatch.Operations)
         {
-            if (op.Path.Count > 0 && op.Path[0] == "$metadata")
+            if (op.Path.SegmentCount > 0 && op.Path[0] == "$metadata")
             {
                 continue;
             }
-            if (op.Path.Count > 0)
+            if (op.Path.SegmentCount > 0)
             {
-                propertiesWithOperations.Add(op.Path[0]);
+                propertiesWithOperations.Add(op.Path[0].ToString());
             }
         }
 
@@ -654,12 +654,12 @@ public static class CloudEventFactory
         List<PatchOperation> additionalOperations = new();
         foreach (PatchOperation op in originalPatch.Operations)
         {
-            if (op.Path.Count > 0 && op.Path[0] == "$metadata")
+            if (op.Path.SegmentCount > 0 && op.Path[0] == "$metadata")
             {
                 // Check if this is a lastUpdateTime change for a property that doesn't have an explicit operation
-                if (op.Path.Count >= 3 && op.Path[2] == "lastUpdateTime")
+                if (op.Path.SegmentCount >= 3 && op.Path[2] == "lastUpdateTime")
                 {
-                    var propertyName = op.Path[1];
+                    var propertyName = op.Path[1].ToString();
                     if (!propertiesWithOperations.Contains(propertyName))
                     {
                         // This property was updated with the same value - create a replace operation
