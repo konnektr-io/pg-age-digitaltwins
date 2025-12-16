@@ -74,6 +74,15 @@ public static class GraphInitialization
                         RETURN true;
                     END IF;
 
+                    -- If model_id is an array, check if twin_model_id is in it
+                    BEGIN
+                        IF model_id @> ag_catalog.agtype_build_list(twin_model_id) THEN
+                            RETURN true;
+                        END IF;
+                    EXCEPTION WHEN others THEN
+                        -- model_id is not an array, ignore
+                    END;
+
                     -- Exact requested, no inheritance traversal
                     IF exact THEN
                         RETURN false;
@@ -86,7 +95,7 @@ public static class GraphInitialization
                         FROM {graphName}.""Model"" m
                         WHERE ag_catalog.agtype_access_operator(m.properties,'""id""'::agtype) = model_id;
                         
-                        IF model_descendants IS NOT NULL AND ag_catalog.agtype_array_length(model_descendants) IS NOT NULL THEN
+                        IF model_descendants IS NOT NULL THEN
                             -- Model has precomputed descendants array, use agtype containment check
                             -- Check if twin_model_id is in the descendants array using agtype operators
                             RETURN model_descendants @> ag_catalog.agtype_build_list(twin_model_id);
@@ -229,6 +238,27 @@ public static class GraphInitialization
                         RETURN false;
                 END;
                 $$ LANGUAGE plpgsql;"
+            ),
+            new(
+                // NOTE: This function returns the model id itself plus its descendants. Consider renaming to model_and_descendants for clarity.
+                @$"CREATE OR REPLACE FUNCTION {graphName}.model_and_descendants(model_id agtype)
+                RETURNS agtype
+                LANGUAGE plpgsql
+                STABLE
+                AS $function$
+                DECLARE
+                    descendants agtype;
+                BEGIN
+                    SELECT ag_catalog.agtype_access_operator(m.properties, '""descendants""'::agtype)
+                    INTO descendants
+                    FROM {graphName}.""Model"" m
+                    WHERE ag_catalog.agtype_access_operator(m.properties, '""id""'::agtype) = model_id;
+                    IF descendants IS NULL THEN
+                        RETURN ag_catalog.agtype_build_list(model_id); -- Only itself if not found
+                    END IF;
+                    RETURN ag_catalog.agtype_build_list(model_id) || descendants; -- Itself + descendants
+                END;
+                $function$"
             ),
         ];
     }

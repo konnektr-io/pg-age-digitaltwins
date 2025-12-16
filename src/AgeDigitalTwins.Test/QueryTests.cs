@@ -1,3 +1,4 @@
+   
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -1535,7 +1536,109 @@ RETURN t";
         Console.WriteLine(output.ToString());
         Assert.True(true, output.ToString());
     }
+    
+    [Fact]
+    public async Task Performance_IsOfModel_WithModelAndDescendantsArray()
+    {
+        await IntializeAsync();
 
+        // Clean up any existing twins
+        await foreach (var twin in Client.QueryAsync<JsonDocument>(@"SELECT * FROM DIGITALTWINS"))
+        {
+            await Client.DeleteDigitalTwinAsync(
+                twin!.RootElement.GetProperty("$dtId")!.GetString()!
+            );
+        }
+
+        // Generate test twins
+        const int twinsPerType = 250;
+        var twins = new Dictionary<string, string>(twinsPerType * 4);
+
+        for (int i = 1; i <= twinsPerType; i++)
+        {
+            twins[$"cb{i}"] =
+                $"{{\"$dtId\": \"cb{i}\", \"$metadata\": {{\"$model\": \"dtmi:com:contoso:CelestialBody;1\"}}, \"name\": \"Celestial Body {i}\", \"mass\": {i}.0e24}}";
+            twins[$"p{i}"] =
+                $"{{\"$dtId\": \"p{i}\", \"$metadata\": {{\"$model\": \"dtmi:com:contoso:Planet;1\"}}, \"name\": \"Planet {i}\"}}";
+            twins[$"hp{i}"] =
+                $"{{\"$dtId\": \"hp{i}\", \"$metadata\": {{\"$model\": \"dtmi:com:contoso:HabitablePlanet;1\"}}, \"name\": \"Habitable Planet {i}\", \"hasLife\": {(i % 2 == 0 ? "false" : "true")}}}";
+            twins[$"room{i}"] =
+                $"{{\"$dtId\": \"room{i}\", \"$metadata\": {{\"$model\": \"dtmi:com:adt:dtsample:room;1\"}}, \"name\": \"Room {i}\"}}";
+        }
+
+        // Bulk create twins
+        const int batchSize = 100;
+        var twinJsonObjects = twins
+            .Values.Select(json => JsonNode.Parse(json)?.AsObject())
+            .Where(obj => obj != null)
+            .ToList();
+
+        for (int i = 0; i < twinJsonObjects.Count; i += batchSize)
+        {
+            var batch = twinJsonObjects.Skip(i).Take(batchSize).ToList();
+            var result = await Client.CreateOrReplaceDigitalTwinsAsync<JsonObject>(batch!);
+            Assert.False(result.HasFailures, $"Batch insert error at batch {i / batchSize}");
+        }
+
+        var graphName = Client.GetGraphName();
+
+        // Test queries: using is_of_model(model_and_descendants('{modelId}'))
+        (string name, string modelId, int expectedCount)[] testCases = new[]
+        {
+            ("CelestialBody inheritance", "dtmi:com:contoso:CelestialBody;1", twinsPerType * 3),
+            ("Planet inheritance", "dtmi:com:contoso:Planet;1", twinsPerType * 2),
+            ("HabitablePlanet direct", "dtmi:com:contoso:HabitablePlanet;1", twinsPerType),
+            ("Room direct", "dtmi:com:adt:dtsample:room;1", twinsPerType),
+        };
+
+        const int iterations = 5;
+        var arrayArgResults = new List<(string name, long totalMs, int expectedCount, int actualCount)>();
+
+        foreach (var (name, modelId, expectedCount) in testCases)
+        {
+            // Test using is_of_model with model_and_descendants array argument
+            var arrayArgQuery = $@"MATCH (t:Twin) WHERE {graphName}.is_of_model(t, {graphName}.model_and_descendants('{modelId}')) RETURN t";
+
+            var totalTime = 0L;
+            var actualCount = 0;
+
+            for (int i = 0; i < iterations; i++)
+            {
+                var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+                var count = 0;
+
+                await foreach (var result in Client.QueryAsync<JsonDocument>(arrayArgQuery))
+                {
+                    count++;
+                }
+
+                stopwatch.Stop();
+                totalTime += stopwatch.ElapsedMilliseconds;
+                if (i == 0)
+                    actualCount = count;
+            }
+
+            Assert.Equal(expectedCount, actualCount);
+            arrayArgResults.Add((name, totalTime, expectedCount, actualCount));
+        }
+
+        // Output performance comparison
+        var output = new System.Text.StringBuilder();
+        output.AppendLine("\n=== IS_OF_MODEL: model_and_descendants(array arg) Performance ===");
+        output.AppendLine($"Iterations per query: {iterations}");
+        output.AppendLine($"Total twins in database: {twins.Count}");
+        output.AppendLine();
+
+        foreach (var (name, totalMs, expectedCount, actualCount) in arrayArgResults)
+        {
+            var avgMs = totalMs / (double)iterations;
+            output.AppendLine($"  {name}: {avgMs:F2}ms avg ({totalMs}ms total) - {actualCount}/{expectedCount} results");
+        }
+
+        Console.WriteLine(output.ToString());
+        Assert.True(true, output.ToString());
+    }
+    
     /* [Fact]
     public async Task Performance_IsOfModel_NewVsOldImplementation()
     {
