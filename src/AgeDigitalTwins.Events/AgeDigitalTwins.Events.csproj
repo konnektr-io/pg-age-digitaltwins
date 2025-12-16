@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
@@ -16,8 +16,8 @@
     <PackageReference Include="CloudNative.CloudEvents.Kafka" Version="2.8.0" />
     <PackageReference Include="CloudNative.CloudEvents.SystemTextJson" Version="2.8.0" />
     <PackageReference Include="Confluent.Kafka" Version="2.12.0" />
-    <PackageReference Include="JsonPatch.Net" Version="3.3.0" />
-    <PackageReference Include="Microsoft.Azure.Kusto.Ingest" Version="14.0.1" />
+    <PackageReference Include="JsonPatch.Net" Version="4.0.0" />
+    <PackageReference Include="Microsoft.Azure.Kusto.Ingest" Version="14.0.3" />
     <PackageReference Include="MQTTnet" Version="5.0.1.1416" />
   </ItemGroup>
 
