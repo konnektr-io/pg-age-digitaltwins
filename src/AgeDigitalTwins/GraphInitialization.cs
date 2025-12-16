@@ -95,7 +95,7 @@ public static class GraphInitialization
                         FROM {graphName}.""Model"" m
                         WHERE ag_catalog.agtype_access_operator(m.properties,'""id""'::agtype) = model_id;
                         
-                        IF model_descendants IS NOT NULL AND ag_catalog.agtype_array_length(model_descendants) IS NOT NULL THEN
+                        IF model_descendants IS NOT NULL THEN
                             -- Model has precomputed descendants array, use agtype containment check
                             -- Check if twin_model_id is in the descendants array using agtype operators
                             RETURN model_descendants @> ag_catalog.agtype_build_list(twin_model_id);
