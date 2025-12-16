@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using AgeDigitalTwins.Events.Core.Services;
 using CloudNative.CloudEvents;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;

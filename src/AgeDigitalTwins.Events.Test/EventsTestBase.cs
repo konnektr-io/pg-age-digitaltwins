@@ -1,3 +1,5 @@
+using AgeDigitalTwins.Events.Abstractions;
+using AgeDigitalTwins.Events.Core.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Npgsql;

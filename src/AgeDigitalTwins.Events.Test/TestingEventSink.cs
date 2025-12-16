@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using AgeDigitalTwins.Events.Abstractions;
 using CloudNative.CloudEvents;
 using Microsoft.Extensions.Logging;
 
