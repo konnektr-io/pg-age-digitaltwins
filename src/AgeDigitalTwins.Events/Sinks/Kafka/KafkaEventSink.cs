@@ -1,3 +1,4 @@
+using AgeDigitalTwins.Events.Abstractions;
 using Azure.Core;
 using CloudNative.CloudEvents;
 using CloudNative.CloudEvents.Kafka;
@@ -6,8 +7,6 @@ using Confluent.Kafka;
 
 namespace AgeDigitalTwins.Events.Sinks.Kafka;
 
-using AgeDigitalTwins.Events.Abstractions;
-using AgeDigitalTwins.Events.Core.Events;
 
 
 public class KafkaEventSink : IEventSink, IDisposable

@@ -1,6 +1,8 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using AgeDigitalTwins.Events.Abstractions;
+using AgeDigitalTwins.Events.Core.Events;
 using Azure.Core;
 using Kusto.Data;
 using Kusto.Data.Common;
@@ -8,11 +10,6 @@ using Kusto.Data.Ingestion;
 using Kusto.Ingest;
 
 namespace AgeDigitalTwins.Events.Sinks.Kusto;
-
-using AgeDigitalTwins.Events.Abstractions;
-using AgeDigitalTwins.Events.Core.Events;
-
-
 
 public class KustoEventSink : IEventSink, IDisposable
 {

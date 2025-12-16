@@ -1,10 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using Npgsql;
 using AgeDigitalTwins.Events.Abstractions;
 using AgeDigitalTwins.Events.Core.Events;
-
-
+using Npgsql;
 
 namespace AgeDigitalTwins.Events.Core.Services;
 

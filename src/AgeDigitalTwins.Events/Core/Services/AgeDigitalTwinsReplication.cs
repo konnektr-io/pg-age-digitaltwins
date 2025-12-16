@@ -13,51 +13,41 @@ using AgeDigitalTwins.Events.Core.Events;
 
 namespace AgeDigitalTwins.Events.Core.Services;
 
-public class AgeDigitalTwinsReplication : IAsyncDisposable
+public class AgeDigitalTwinsReplication(
+    string connectionString,
+    string publication,
+    string replicationSlot,
+    IEventQueue eventQueue,
+    ILogger<AgeDigitalTwinsReplication> logger,
+    int maxBatchSize = 50
+    ) : IAsyncDisposable
 {
     private static readonly ActivitySource ActivitySource = new("AgeDigitalTwins.Events", "1.0.0");
-
-    public AgeDigitalTwinsReplication(
-        string connectionString,
-        string publication,
-        string replicationSlot,
-        IEventQueue eventQueue,
-        ILogger<AgeDigitalTwinsReplication> logger,
-        int maxBatchSize = 50
-    )
-    {
-        _connectionString = connectionString;
-        _publication = publication;
-        _replicationSlot = replicationSlot;
-        _eventQueue = eventQueue;
-        _logger = logger;
-        _maxBatchSize = maxBatchSize > 0 ? maxBatchSize : 50; // Ensure positive value with fallback
-    }
 
     /// <summary>
     /// The connection string to the PostgreSQL database. This is used to connect to the database.
     /// </summary>
-    private readonly string _connectionString;
+    private readonly string _connectionString = connectionString;
 
     /// <summary>
     /// The publication name. This is used to identify the publication in PostgreSQL.
     /// Defaults to "age_pub".
     /// </summary>
-    private readonly string _publication;
+    private readonly string _publication = publication;
 
     /// <summary>
     /// The replication slot name. This is used to identify the replication slot in PostgreSQL.
     /// Defaults to "age_slot".
     /// </summary>
-    private readonly string _replicationSlot;
-    private readonly ILogger<AgeDigitalTwinsReplication> _logger;
+    private readonly string _replicationSlot = replicationSlot;
+    private readonly ILogger<AgeDigitalTwinsReplication> _logger = logger;
     private LogicalReplicationConnection? _conn;
-    private readonly IEventQueue _eventQueue;
+    private readonly IEventQueue _eventQueue = eventQueue;
 
     /// <summary>
     /// Maximum number of event data objects to batch together before processing.
     /// </summary>
-    private readonly int _maxBatchSize;
+    private readonly int _maxBatchSize = maxBatchSize > 0 ? maxBatchSize : 50;
 
     /// <summary>
     /// Indicates whether the replication connection is currently healthy.

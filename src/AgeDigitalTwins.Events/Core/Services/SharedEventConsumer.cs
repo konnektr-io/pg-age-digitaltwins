@@ -1,9 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using CloudNative.CloudEvents;
 using AgeDigitalTwins.Events.Abstractions;
 using AgeDigitalTwins.Events.Core.Events;
-
+using CloudNative.CloudEvents;
 
 namespace AgeDigitalTwins.Events.Core.Services;
 

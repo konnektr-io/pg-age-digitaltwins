@@ -7,14 +7,9 @@ namespace AgeDigitalTwins.Events.Core.Services;
 /// <summary>
 /// Health check that monitors the status of all registered event sinks (Kafka, MQTT, Kusto, etc.).
 /// </summary>
-public class EventSinksHealthCheck : IHealthCheck
+public class EventSinksHealthCheck(IEnumerable<IEventSink> eventSinks) : IHealthCheck
 {
-    private readonly IEnumerable<IEventSink> _eventSinks;
-
-    public EventSinksHealthCheck(IEnumerable<IEventSink> eventSinks)
-    {
-        _eventSinks = eventSinks;
-    }
+    private readonly IEnumerable<IEventSink> _eventSinks = eventSinks;
 
     public Task<HealthCheckResult> CheckHealthAsync(
         HealthCheckContext context,

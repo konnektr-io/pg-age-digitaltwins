@@ -1,14 +1,10 @@
+using AgeDigitalTwins.Events.Abstractions;
 using CloudNative.CloudEvents;
 using CloudNative.CloudEvents.Mqtt;
 using CloudNative.CloudEvents.SystemTextJson;
 using MQTTnet;
-using MQTTnet.Formatter;
 
 namespace AgeDigitalTwins.Events.Sinks.Mqtt;
-
-using AgeDigitalTwins.Events.Abstractions;
-using AgeDigitalTwins.Events.Core.Events;
-
 
 public class MqttEventSink : IEventSink, IDisposable
 {

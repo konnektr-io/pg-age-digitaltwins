@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
-
 using AgeDigitalTwins.Events.Core.Events;
+
 namespace AgeDigitalTwins.Events.Abstractions;
 
 

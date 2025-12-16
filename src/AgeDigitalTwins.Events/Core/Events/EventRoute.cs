@@ -1,3 +1,5 @@
+using AgeDigitalTwins.Events.Abstractions;
+
 namespace AgeDigitalTwins.Events.Core.Events;
 
 public class EventRoute

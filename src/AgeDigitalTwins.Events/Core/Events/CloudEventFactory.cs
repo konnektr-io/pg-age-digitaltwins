@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using AgeDigitalTwins.Events.Abstractions;
 using CloudNative.CloudEvents;
 using Json.More;
 using Json.Patch;

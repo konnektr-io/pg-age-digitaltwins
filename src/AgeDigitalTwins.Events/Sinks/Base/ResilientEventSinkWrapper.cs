@@ -2,11 +2,7 @@ using CloudNative.CloudEvents;
 using AgeDigitalTwins.Events.Abstractions;
 using AgeDigitalTwins.Events.Core.Services;
 
-
 namespace AgeDigitalTwins.Events.Sinks.Base;
-
-using System.Text.Json;
-using Npgsql;
 
 /// <summary>
 /// Wraps an event sink with retry logic and exponential backoff for resilient event delivery.
