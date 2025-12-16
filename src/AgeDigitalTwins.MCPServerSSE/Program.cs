@@ -183,4 +183,6 @@ else
     app.MapMcp();
 }
 
+app.MapDefaultEndpoints();
+
 app.Run();
