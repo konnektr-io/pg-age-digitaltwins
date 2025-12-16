@@ -19,6 +19,26 @@ var builder = WebApplication.CreateBuilder(args);
 // Add service defaults & Aspire client integrations.
 builder.AddServiceDefaults();
 
+// Add CORS configuration
+builder.Services.AddCors(options =>
+{
+    var corsSection = builder.Configuration.GetSection("Cors");
+    var allowedOrigins = corsSection.GetSection("AllowedOrigins").Get<string[]>() ?? new[] { "*" };
+    var allowedMethods = corsSection.GetSection("AllowedMethods").Get<string[]>() ?? new[] { "GET", "POST", "PUT", "DELETE", "OPTIONS" };
+    var allowedHeaders = corsSection.GetSection("AllowedHeaders").Get<string[]>() ?? new[] { "*" };
+    options.AddPolicy("ConfiguredCors", policy =>
+    {
+        policy.WithOrigins(allowedOrigins)
+              .WithMethods(allowedMethods)
+              .WithHeaders(allowedHeaders)
+              .AllowCredentials();
+        if (allowedOrigins.Contains("*"))
+        {
+            policy.SetIsOriginAllowed(_ => true);
+        }
+    });
+});
+
 // Read config for enabling Jobs (import jobs, resumption, and blob storage)
 var jobsEnabled = builder.Configuration.GetValue("Parameters:JobsEnabled", true);
 
@@ -257,6 +277,10 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 });
 
 var app = builder.Build();
+
+
+// Use CORS before authentication and endpoints
+app.UseCors("ConfiguredCors");
 
 if (app.Environment.IsDevelopment() || app.Configuration["OpenApi:Enabled"] == "true")
 {

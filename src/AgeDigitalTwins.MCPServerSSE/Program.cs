@@ -1,3 +1,4 @@
+
 using AgeDigitalTwins;
 using AgeDigitalTwins.ServiceDefaults.Authorization;
 using AgeDigitalTwins.ServiceDefaults.Authorization.Models;
@@ -12,9 +13,31 @@ using Microsoft.AspNetCore.Authorization;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Configuration
+builder.AddServiceDefaults();
+
+// Auth Configuration
 builder.Services.Configure<OAuthMetadataOptions>(builder.Configuration.GetSection("MCP"));
 builder.Services.Configure<AuthorizationOptions>(builder.Configuration.GetSection("Authorization"));
+
+// Add CORS configuration
+builder.Services.AddCors(options =>
+{
+    var corsSection = builder.Configuration.GetSection("Cors");
+    var allowedOrigins = corsSection.GetSection("AllowedOrigins").Get<string[]>() ?? new[] { "*" };
+    var allowedMethods = corsSection.GetSection("AllowedMethods").Get<string[]>() ?? new[] { "GET", "POST", "PUT", "DELETE", "OPTIONS" };
+    var allowedHeaders = corsSection.GetSection("AllowedHeaders").Get<string[]>() ?? new[] { "*" };
+    options.AddPolicy("ConfiguredCors", policy =>
+    {
+        policy.WithOrigins(allowedOrigins)
+              .WithMethods(allowedMethods)
+              .WithHeaders(allowedHeaders)
+              .AllowCredentials();
+        if (allowedOrigins.Contains("*"))
+        {
+            policy.SetIsOriginAllowed(_ => true);
+        }
+    });
+});
 
 // Add Npgsql multihost data source with custom settings.
 builder.AddNpgsqlMultihostDataSource(
@@ -145,9 +168,14 @@ if (enableAuthentication)
     }
 }
 
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddMcpServer().WithPromptsFromAssembly().WithToolsFromAssembly().WithHttpTransport();
 
 var app = builder.Build();
+
+
+// Use CORS before authentication and endpoints
+app.UseCors("ConfiguredCors");
 
 // OAuth metadata endpoints (must be before authentication middleware)
 app.MapOAuthMetadataEndpoints();
