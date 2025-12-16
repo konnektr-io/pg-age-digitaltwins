@@ -75,11 +75,13 @@ public static class GraphInitialization
                     END IF;
 
                     -- If model_id is an array, check if twin_model_id is in it
-                    IF ag_catalog.agtype_array_length(model_id) IS NOT NULL THEN
+                    BEGIN
                         IF model_id @> ag_catalog.agtype_build_list(twin_model_id) THEN
                             RETURN true;
                         END IF;
-                    END IF;
+                    EXCEPTION WHEN others THEN
+                        -- model_id is not an array, ignore
+                    END;
 
                     -- Exact requested, no inheritance traversal
                     IF exact THEN
