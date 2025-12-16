@@ -44,35 +44,73 @@ builder.AddNpgsqlMultihostDataSource(
     "agedb",
     configureSettings: settings =>
     {
+        settings.ConnectionString ??=
+            builder.Configuration.GetConnectionString("agedb")
+            ?? builder.Configuration["Parameters:AgeConnectionString"]
+            ?? throw new InvalidOperationException("Connection string is required.");
+
         // Setting the search path allows to avoid setting this on every connection
         NpgsqlConnectionStringBuilder connectionStringBuilder =
             new(settings.ConnectionString)
             {
                 SearchPath = "ag_catalog, \"$user\", public",
-                ConnectionIdleLifetime = 60,
-                ConnectionLifetime = 300,
+                ConnectionIdleLifetime = builder.Configuration.GetValue(
+                    "Parameters:ConnectionIdleLifetime",
+                    60
+                ), // seconds
+                ConnectionLifetime = builder.Configuration.GetValue(
+                    "Parameters:ConnectionLifetime",
+                    300
+                ), // seconds
+                MaxPoolSize = builder.Configuration.GetValue("Parameters:MaxPoolSize", 100),
+                MinPoolSize = builder.Configuration.GetValue("Parameters:MinPoolSize", 0),
+                Timeout = builder.Configuration.GetValue("Parameters:ConnectionTimeout", 15), // seconds
+                CommandTimeout = builder.Configuration.GetValue("Parameters:CommandTimeout", 30), // seconds
             };
         settings.ConnectionString = connectionStringBuilder.ConnectionString;
     },
     configureDataSourceBuilder: dataSourceBuilder =>
     {
-        dataSourceBuilder.UseAge(true);
+        // UseAge(true) for CNPG images, UseAge() for Apache AGE images
+        // Default to CNPG (true) for backward compatibility
+        var useCnpgAge = builder.Configuration.GetValue("Parameters:UseCnpgAge", true);
+        if (useCnpgAge)
+        {
+            dataSourceBuilder.UseAge(true);
+        }
+        else
+        {
+            dataSourceBuilder.UseAge();
+        }
     }
 );
 
 // Add AgeDigitalTwinsClient
 builder.Services.AddSingleton(sp =>
 {
-    NpgsqlMultiHostDataSource dataSource = sp.GetRequiredKeyedService<NpgsqlMultiHostDataSource>(
-        "agedb"
+    var logger = sp.GetRequiredService<ILogger<Program>>();
+    NpgsqlMultiHostDataSource dataSource = sp.GetRequiredService<NpgsqlMultiHostDataSource>();
+    string graphName = builder.Configuration["Parameters:AgeGraphName"] ?? "digitaltwins";
+    logger.LogInformation("Using graph: {GraphName}", graphName);
+    int modelCacheExpiration = builder.Configuration.GetValue(
+        "Parameters:ModelCacheExpirationSeconds",
+        10
     );
-    string graphName =
-        builder.Configuration.GetSection("Parameters")["AgeGraphName"]
-        ?? builder.Configuration["Parameters:AgeGraphName"]
-        ?? builder.Configuration["AgeGraphName"]
-        ?? "digitaltwins";
-    Console.WriteLine($"Using graph: {graphName}");
-    return new AgeDigitalTwinsClient(dataSource, graphName);
+    int defaultBatchSize = builder.Configuration.GetValue("Parameters:DefaultBatchSize", 50);
+    int defaultCheckpointInterval = builder.Configuration.GetValue(
+        "Parameters:DefaultCheckpointInterval",
+        50
+    );
+    var options = new AgeDigitalTwinsClientOptions
+    {
+        GraphName = graphName,
+        ModelCacheExpiration = TimeSpan.FromSeconds(modelCacheExpiration),
+        DefaultBatchSize = defaultBatchSize,
+        DefaultCheckpointInterval = defaultCheckpointInterval,
+    };
+    var client = new AgeDigitalTwinsClient(dataSource, options);
+
+    return client;
 });
 
 // Add authentication only if the environment variable is set
