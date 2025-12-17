@@ -1,8 +1,12 @@
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 using AgeDigitalTwins.Events.Abstractions;
 using CloudNative.CloudEvents;
 using CloudNative.CloudEvents.Mqtt;
 using CloudNative.CloudEvents.SystemTextJson;
 using MQTTnet;
+using Azure.Core;
 
 namespace AgeDigitalTwins.Events.Sinks.Mqtt;
 
@@ -14,24 +18,55 @@ public class MqttEventSink : IEventSink, IDisposable
     private readonly CloudEventFormatter _formatter = new JsonEventFormatter();
     private bool _isHealthy = true;
 
-    public MqttEventSink(MqttSinkOptions options, ILogger logger)
+    private readonly MqttSinkOptions _options;
+    private readonly TokenCredential? _credential;
+
+    public MqttEventSink(MqttSinkOptions options, TokenCredential? credential, ILogger logger)
     {
         Name = options.Name;
         _logger = logger;
         _topic = options.Topic;
-
-        var mqttOptions = new MqttClientOptionsBuilder()
-            .WithProtocolVersion(options.GetProtocolVersion())
-            .WithClientId(options.ClientId)
-            .WithTcpServer(options.Broker, options.Port)
-            .WithCredentials(options.Username, options.Password)
-            .WithCleanSession()
-            .Build();
+        _options = options;
+        _credential = credential;
 
         var factory = new MqttClientFactory();
         _mqttClient = factory.CreateMqttClient();
 
-        _mqttClient.ConnectAsync(mqttOptions).Wait();
+        ConnectAsync().Wait();
+    }
+
+    private async Task ConnectAsync()
+    {
+        string? password = _options.Password;
+        string? username = _options.Username;
+
+        if (string.Equals(_options.AuthenticationType, "OAuth", StringComparison.OrdinalIgnoreCase) && _credential != null)
+        {
+            try 
+            {
+                 var context = new TokenRequestContext(string.IsNullOrEmpty(_options.Scope) ? [] : [_options.Scope]);
+                 var token = await _credential.GetTokenAsync(context, default);
+                 password = token.Token;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to retrieve OAuth token for MQTT sink '{SinkName}'", Name);
+                throw;
+            }
+        }
+
+        var mqttOptions = new MqttClientOptionsBuilder()
+            .WithProtocolVersion(_options.GetProtocolVersion())
+            .WithClientId(_options.ClientId)
+            .WithTcpServer(_options.Broker, _options.Port)
+            .WithCredentials(username, password)
+            .WithCleanSession()
+            .Build();
+
+        if (!_mqttClient.IsConnected)
+        {
+             await _mqttClient.ConnectAsync(mqttOptions);
+        }
     }
 
     public string Name { get; }
@@ -50,7 +85,8 @@ public class MqttEventSink : IEventSink, IDisposable
         {
             try
             {
-                await _mqttClient.ReconnectAsync(cancellationToken: cancellationToken);
+                // Re-connect logic needs to fetch fresh token if OAuth
+                await ConnectAsync();
                 _isHealthy = true;
             }
             catch (Exception e)

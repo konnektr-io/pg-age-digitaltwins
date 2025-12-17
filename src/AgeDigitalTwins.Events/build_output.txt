@@ -1,0 +1,19 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  AgeDigitalTwins -> C:\Users\NRaes\dev\konnektr-io\pg-age-digitaltwins\src\AgeDigitalTwins\bin\Debug\net10.0\AgeDigitalTwins.dll
+  AgeDigitalTwins.ServiceDefaults -> C:\Users\NRaes\dev\konnektr-io\pg-age-digitaltwins\src\AgeDigitalTwins.ServiceDefaults\bin\Debug\net10.0\AgeDigitalTwins.ServiceDefaults.dll
+C:\Users\NRaes\dev\konnektr-io\pg-age-digitaltwins\src\AgeDigitalTwins.Events\Sinks\Webhook\WebhookSinkOptions.cs(10,19): warning CS0108: 'WebhookSinkOptions.AuthenticationType' hides inherited member 'SinkOptions.AuthenticationType'. Use the new keyword if hiding was intended. [C:\Users\NRaes\dev\konnektr-io\pg-age-digitaltwins\src\AgeDigitalTwins.Events\AgeDigitalTwins.Events.csproj]
+C:\Users\NRaes\dev\konnektr-io\pg-age-digitaltwins\src\AgeDigitalTwins.Events\Sinks\Mqtt\MqttEventSink.cs(24,12): warning CS8618: Non-nullable field '_mqttClient' must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring the field as nullable. [C:\Users\NRaes\dev\konnektr-io\pg-age-digitaltwins\src\AgeDigitalTwins.Events\AgeDigitalTwins.Events.csproj]
+C:\Users\NRaes\dev\konnektr-io\pg-age-digitaltwins\src\AgeDigitalTwins.Events\Sinks\Mqtt\MqttEventSink.cs(71,13): error CS0191: A readonly field cannot be assigned to (except in a constructor or init-only setter of the type in which the field is defined or a variable initializer) [C:\Users\NRaes\dev\konnektr-io\pg-age-digitaltwins\src\AgeDigitalTwins.Events\AgeDigitalTwins.Events.csproj]
+C:\Users\NRaes\dev\konnektr-io\pg-age-digitaltwins\src\AgeDigitalTwins.Events\Sinks\Mqtt\MqttEventSink.cs(74,14): warning CS8602: Dereference of a possibly null reference. [C:\Users\NRaes\dev\konnektr-io\pg-age-digitaltwins\src\AgeDigitalTwins.Events\AgeDigitalTwins.Events.csproj]
+
+Build FAILED.
+
+C:\Users\NRaes\dev\konnektr-io\pg-age-digitaltwins\src\AgeDigitalTwins.Events\Sinks\Webhook\WebhookSinkOptions.cs(10,19): warning CS0108: 'WebhookSinkOptions.AuthenticationType' hides inherited member 'SinkOptions.AuthenticationType'. Use the new keyword if hiding was intended. [C:\Users\NRaes\dev\konnektr-io\pg-age-digitaltwins\src\AgeDigitalTwins.Events\AgeDigitalTwins.Events.csproj]
+C:\Users\NRaes\dev\konnektr-io\pg-age-digitaltwins\src\AgeDigitalTwins.Events\Sinks\Mqtt\MqttEventSink.cs(24,12): warning CS8618: Non-nullable field '_mqttClient' must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring the field as nullable. [C:\Users\NRaes\dev\konnektr-io\pg-age-digitaltwins\src\AgeDigitalTwins.Events\AgeDigitalTwins.Events.csproj]
+C:\Users\NRaes\dev\konnektr-io\pg-age-digitaltwins\src\AgeDigitalTwins.Events\Sinks\Mqtt\MqttEventSink.cs(74,14): warning CS8602: Dereference of a possibly null reference. [C:\Users\NRaes\dev\konnektr-io\pg-age-digitaltwins\src\AgeDigitalTwins.Events\AgeDigitalTwins.Events.csproj]
+C:\Users\NRaes\dev\konnektr-io\pg-age-digitaltwins\src\AgeDigitalTwins.Events\Sinks\Mqtt\MqttEventSink.cs(71,13): error CS0191: A readonly field cannot be assigned to (except in a constructor or init-only setter of the type in which the field is defined or a variable initializer) [C:\Users\NRaes\dev\konnektr-io\pg-age-digitaltwins\src\AgeDigitalTwins.Events\AgeDigitalTwins.Events.csproj]
+    3 Warning(s)
+    1 Error(s)
+
+Time Elapsed 00:00:01.23

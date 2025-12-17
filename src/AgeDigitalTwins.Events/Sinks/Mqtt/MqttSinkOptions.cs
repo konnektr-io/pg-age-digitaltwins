@@ -11,6 +11,12 @@ public class MqttSinkOptions : SinkOptions
     public required string ClientId { get; set; }
     public required string Username { get; set; }
     public required string Password { get; set; }
+    
+    // OAuth
+    public string? TokenEndpoint { get; set; }
+    public string? TenantId { get; set; }
+    public string? ClientSecret { get; set; }
+    
     public string ProtocolVersion { get; set; } = "5.0.0";
 
     public MqttProtocolVersion GetProtocolVersion()

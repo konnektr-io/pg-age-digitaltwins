@@ -36,7 +36,11 @@ public class EventSinkFactory(
             {
                 try
                 {
-                    var sink = new KafkaEventSink(kafkaSink, CredentialFactory.CreateCredential(kafkaSink.TenantId, kafkaSink.ClientId, kafkaSink.ClientSecret), logger);
+                    var sink = new KafkaEventSink(
+                        kafkaSink, 
+                        CredentialFactory.CreateCredential(kafkaSink.TenantId, kafkaSink.ClientId, kafkaSink.ClientSecret, kafkaSink.TokenEndpoint), 
+                        logger
+                    );
                     // Wrap with resilient wrapper for retry logic
                     sinks.Add(new ResilientEventSinkWrapper(sink, wrapperLogger, _dlqService));
                 }
@@ -58,8 +62,8 @@ public class EventSinkFactory(
             {
                 try
                 {
-                    var sink = new MqttEventSink(mqttSink, logger);
-                    // Wrap with resilient wrapper for retry logic
+                    var credential = CredentialFactory.CreateCredential(mqttSink.TenantId, mqttSink.ClientId, mqttSink.ClientSecret, mqttSink.TokenEndpoint);
+                    var sink = new MqttEventSink(mqttSink, credential, logger);
                     sinks.Add(new ResilientEventSinkWrapper(sink, wrapperLogger, _dlqService));
                 }
                 catch (ArgumentException ex)
@@ -73,7 +77,6 @@ public class EventSinkFactory(
         }
 
 
-
         var webhookSinks = _configuration.GetSection("EventSinks:Webhook").Get<List<WebhookSinkOptions>>();
         if (webhookSinks != null && webhookSinks.Count > 0)
         {
@@ -82,8 +85,9 @@ public class EventSinkFactory(
             {
                 try
                 {
-                    var sink = new WebhookEventSink(webhookSink, logger);
-                    // Wrap with resilient wrapper for retry logic
+                    // Webhook doesn't have TenantId in options, pass null
+                    var credential = CredentialFactory.CreateCredential(null, webhookSink.ClientId, webhookSink.ClientSecret, webhookSink.TokenEndpoint);
+                    var sink = new WebhookEventSink(webhookSink, credential, logger);
                     sinks.Add(new ResilientEventSinkWrapper(sink, wrapperLogger, _dlqService));
                 }
                 catch (ArgumentException ex)

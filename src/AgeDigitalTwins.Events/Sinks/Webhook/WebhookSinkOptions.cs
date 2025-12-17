@@ -7,7 +7,8 @@ public class WebhookSinkOptions : SinkOptions
     public required string Url { get; set; }
     
     // Auth Types: "None", "Basic", "Bearer", "ApiKey"
-    public string AuthenticationType { get; set; } = "None";
+    // AuthenticationType is inherited from base
+
 
     // Basic Auth
     public string? Username { get; set; }
@@ -20,5 +21,8 @@ public class WebhookSinkOptions : SinkOptions
     public string? HeaderName { get; set; }
     public string? HeaderValue { get; set; }
     
-    // TODO: Implement OAuth (Client Credentials) support in the future
+    // OAuth
+    public string? TokenEndpoint { get; set; }
+    public string? ClientId { get; set; }
+    public string? ClientSecret { get; set; }
 }

@@ -1,3 +1,4 @@
+using System;
 using AgeDigitalTwins.Events.Abstractions;
 using Azure.Core;
 using CloudNative.CloudEvents;
@@ -34,13 +35,17 @@ public class KafkaEventSink : IEventSink, IDisposable
         string bootstrapServers = options.BrokerList.EndsWith(":9093")
             ? options.BrokerList
             : options.BrokerList + ":9093";
-        SaslMechanism saslMechanism = Enum.TryParse<SaslMechanism>(
-            options.SaslMechanism,
-            true,
-            out var mechanism
-        )
-            ? mechanism
-            : SaslMechanism.Plain;
+        
+        SaslMechanism saslMechanism;
+        if (string.Equals(options.AuthenticationType, "OAuth", StringComparison.OrdinalIgnoreCase))
+        {
+             saslMechanism = SaslMechanism.OAuthBearer;
+        }
+        else 
+        {
+            Enum.TryParse(options.SaslMechanism, true, out saslMechanism);
+        }
+
 
         ProducerConfig config =
             new()
@@ -102,21 +107,25 @@ public class KafkaEventSink : IEventSink, IDisposable
                 )
                 .Build();
         }
-        // OAuth currently only supported for Azure Event Hubs
-        else if (
-            saslMechanism == SaslMechanism.OAuthBearer
-            && bootstrapServers.Contains("servicebus")
-        )
+        else if (saslMechanism == SaslMechanism.OAuthBearer)
         {
-            logger.LogDebug(
-                "Using OAUTHBEARER (Azure) authentication for Kafka sink '{SinkName}'",
-                Name
-            );
-            // This is passed to the TokenRefreshHandler
-            // and used to get the token from Azure AD
-            // We pass in the scope for the Event Hubs namespace
-            config.SaslOauthbearerConfig =
-                $"https://{options.BrokerList.Replace(":9093", "")}/.default";
+            logger.LogDebug("Using OAUTHBEARER authentication for Kafka sink '{SinkName}'", Name);
+            
+            // For Azure Event Hubs, we need to set the config string to the token endpoint/scope structure it expects
+            // For generic Kafka (e.g. Redpanda, Strimzi), this might not be strictly required or might be different.
+            // However, usually the TokenRefreshHandler handles the token acquisition.
+            // If it looks like Azure (contains servicebus), we try to set the default scope if not explicitly provided.
+            
+            if (options.BrokerList.Contains("servicebus.windows.net", StringComparison.OrdinalIgnoreCase))
+            {
+                 var scope = options.Scope ?? $"https://{options.BrokerList.Replace(":9093", "")}/.default";
+                 config.SaslOauthbearerConfig = scope; 
+            }
+            else if (!string.IsNullOrEmpty(options.Scope))
+            {
+                 config.SaslOauthbearerConfig = options.Scope;
+            }
+
             _producer = new ProducerBuilder<string?, byte[]>(config)
                 .SetOAuthBearerTokenRefreshHandler(TokenRefreshHandler)
                 .SetErrorHandler(
@@ -131,14 +140,9 @@ public class KafkaEventSink : IEventSink, IDisposable
                 .SetLogHandler(
                     (_, logMessage) =>
                     {
-                        // Only log warnings and errors to reduce noise
                         if (logMessage.Level <= SyslogLevel.Warning)
                         {
-                            logger.LogWarning(
-                                "Kafka log [{Level}]: {Message}",
-                                logMessage.Level,
-                                logMessage.Message
-                            );
+                            logger.LogWarning("Kafka log [{Level}]: {Message}", logMessage.Level, logMessage.Message);
                         }
                     }
                 )
