@@ -274,8 +274,6 @@ public class KustoEventSink : IEventSink, IDisposable
                     Name,
                     ex.Message
                 );
-                // Optionally, you can rethrow the exception or handle it as needed.
-                // For example, you might want to log it and continue processing other events.
             }
         }
     }
