@@ -20,24 +20,32 @@ var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
 
 // Add CORS configuration
-builder.Services.AddCors(options =>
+var corsSection = builder.Configuration.GetSection("Cors");
+var useCors = corsSection.Exists() && corsSection.GetValue<bool>("Enabled", false);
+if (useCors)
 {
-    var corsSection = builder.Configuration.GetSection("Cors");
-    var allowedOrigins = corsSection.GetSection("AllowedOrigins").Get<string[]>() ?? new[] { "*" };
+    var allowedOrigins = corsSection.GetSection("AllowedOrigins").Get<string[]>();
+    if (allowedOrigins == null || allowedOrigins.Length == 0)
+    {
+        throw new InvalidOperationException("CORS is enabled but no AllowedOrigins are specified in configuration.");
+    }
+    if (allowedOrigins.Contains("*"))
+    {
+        throw new InvalidOperationException("Wildcard origins ('*') are not supported when credentials are allowed. Please specify explicit origins in configuration.");
+    }
     var allowedMethods = corsSection.GetSection("AllowedMethods").Get<string[]>() ?? new[] { "GET", "POST", "PUT", "DELETE", "OPTIONS" };
     var allowedHeaders = corsSection.GetSection("AllowedHeaders").Get<string[]>() ?? new[] { "*" };
-    options.AddPolicy("ConfiguredCors", policy =>
+    builder.Services.AddCors(options =>
     {
-        policy.WithOrigins(allowedOrigins)
-              .WithMethods(allowedMethods)
-              .WithHeaders(allowedHeaders)
-              .AllowCredentials();
-        if (allowedOrigins.Contains("*"))
+        options.AddPolicy("ConfiguredCors", policy =>
         {
-            policy.SetIsOriginAllowed(_ => true);
-        }
+            policy.WithOrigins(allowedOrigins)
+                  .WithMethods(allowedMethods)
+                  .WithHeaders(allowedHeaders)
+                  .AllowCredentials();
+        });
     });
-});
+}
 
 // Read config for enabling Jobs (import jobs, resumption, and blob storage)
 var jobsEnabled = builder.Configuration.GetValue("Parameters:JobsEnabled", true);
@@ -280,7 +288,10 @@ var app = builder.Build();
 
 
 // Use CORS before authentication and endpoints
-app.UseCors("ConfiguredCors");
+if (useCors)
+{
+    app.UseCors("ConfiguredCors");
+}
 
 if (app.Environment.IsDevelopment() || app.Configuration["OpenApi:Enabled"] == "true")
 {
