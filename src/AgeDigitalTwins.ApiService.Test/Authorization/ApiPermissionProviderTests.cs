@@ -1,8 +1,8 @@
 using System.Net;
 using System.Security.Claims;
 using System.Text.Json;
-using AgeDigitalTwins.ApiService.Authorization;
-using AgeDigitalTwins.ApiService.Authorization.Models;
+using AgeDigitalTwins.ServiceDefaults.Authorization;
+using AgeDigitalTwins.ServiceDefaults.Authorization.Models;
 using AgeDigitalTwins.ApiService.Configuration;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
@@ -10,6 +10,7 @@ using Microsoft.Extensions.Options;
 using Moq;
 using Moq.Protected;
 using Xunit;
+using AgeDigitalTwins.ServiceDefaults.Configuration;
 
 namespace AgeDigitalTwins.ApiService.Test.Authorization;
 
@@ -40,6 +41,10 @@ public class ApiPermissionProviderTests
                 ResourceName = "digitaltwins",
                 CacheExpirationMinutes = 5,
                 TimeoutSeconds = 10,
+                TokenEndpoint = "https://test.api.com/oauth/token",
+                Audience = "https://test.api.com/api",
+                ClientId = "dummy-client-id",
+                ClientSecret = "dummy-client-secret"
             },
         };
     }
@@ -129,6 +134,21 @@ public class ApiPermissionProviderTests
 
         var permissionStrings = new[] { "digitaltwins/read", "models/write" };
 
+        // Mock token endpoint response
+        var tokenResponse = new HttpResponseMessage
+        {
+            StatusCode = HttpStatusCode.OK,
+            Content = new StringContent("{\"access_token\":\"dummy-token\",\"expires_in\":3600}")
+        };
+
+        // Mock permissions API response
+        var permissionsResponse = new HttpResponseMessage
+        {
+            StatusCode = HttpStatusCode.OK,
+            Content = new StringContent("{\"permissions\":" + JsonSerializer.Serialize(permissionStrings) + "}"),
+        };
+
+        int callCount = 0;
         _httpHandlerMock
             .Protected()
             .Setup<Task<HttpResponseMessage>>(
@@ -136,13 +156,16 @@ public class ApiPermissionProviderTests
                 ItExpr.IsAny<HttpRequestMessage>(),
                 ItExpr.IsAny<CancellationToken>()
             )
-            .ReturnsAsync(
-                new HttpResponseMessage
+            .ReturnsAsync((HttpRequestMessage req, CancellationToken ct) =>
+            {
+                // First call is token endpoint, second is permissions API
+                if (callCount == 0)
                 {
-                    StatusCode = HttpStatusCode.OK,
-                    Content = new StringContent(JsonSerializer.Serialize(permissionStrings)),
+                    callCount++;
+                    return tokenResponse;
                 }
-            );
+                return permissionsResponse;
+            });
 
         object? cacheValue = null;
         _cacheMock.Setup(c => c.TryGetValue(It.IsAny<object>(), out cacheValue)).Returns(false);

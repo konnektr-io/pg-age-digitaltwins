@@ -2,11 +2,11 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using AgeDigitalTwins;
 using AgeDigitalTwins.ApiService;
-using AgeDigitalTwins.ApiService.Authorization;
 using AgeDigitalTwins.ApiService.Configuration;
 using AgeDigitalTwins.ApiService.Extensions;
 using AgeDigitalTwins.ApiService.Middleware;
 using AgeDigitalTwins.ApiService.Services;
+using AgeDigitalTwins.ServiceDefaults.Authorization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.IdentityModel.Tokens;
@@ -18,6 +18,34 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add service defaults & Aspire client integrations.
 builder.AddServiceDefaults();
+
+// Add CORS configuration
+var corsSection = builder.Configuration.GetSection("Cors");
+var useCors = corsSection.Exists() && corsSection.GetValue<bool>("Enabled", false);
+if (useCors)
+{
+    var allowedOrigins = corsSection.GetSection("AllowedOrigins").Get<string[]>();
+    if (allowedOrigins == null || allowedOrigins.Length == 0)
+    {
+        throw new InvalidOperationException("CORS is enabled but no AllowedOrigins are specified in configuration.");
+    }
+    if (allowedOrigins.Contains("*"))
+    {
+        throw new InvalidOperationException("Wildcard origins ('*') are not supported when credentials are allowed. Please specify explicit origins in configuration.");
+    }
+    var allowedMethods = corsSection.GetSection("AllowedMethods").Get<string[]>() ?? new[] { "GET", "POST", "PUT", "DELETE", "OPTIONS" };
+    var allowedHeaders = corsSection.GetSection("AllowedHeaders").Get<string[]>() ?? new[] { "*" };
+    builder.Services.AddCors(options =>
+    {
+        options.AddPolicy("ConfiguredCors", policy =>
+        {
+            policy.WithOrigins(allowedOrigins)
+                  .WithMethods(allowedMethods)
+                  .WithHeaders(allowedHeaders)
+                  .AllowCredentials();
+        });
+    });
+}
 
 // Read config for enabling Jobs (import jobs, resumption, and blob storage)
 var jobsEnabled = builder.Configuration.GetValue("Parameters:JobsEnabled", true);
@@ -141,14 +169,14 @@ if (enableAuthentication)
     if (enableAuthorization)
     {
         // Configure authorization options
-        builder.Services.Configure<AgeDigitalTwins.ApiService.Configuration.AuthorizationOptions>(
+        builder.Services.Configure<AgeDigitalTwins.ServiceDefaults.Configuration.AuthorizationOptions>(
             builder.Configuration.GetSection("Authorization")
         );
 
         // Register permission providers
         var authorizationConfig = builder
             .Configuration.GetSection("Authorization")
-            .Get<AgeDigitalTwins.ApiService.Configuration.AuthorizationOptions>();
+            .Get<AgeDigitalTwins.ServiceDefaults.Configuration.AuthorizationOptions>();
 
         // Always register the claims provider
         builder.Services.AddScoped<ClaimsPermissionProvider>();
@@ -188,13 +216,10 @@ if (enableAuthentication)
             return new CompositePermissionProvider(providers, logger);
         });
 
-        // Add permission service (uses the registered provider)
-        builder.Services.AddScoped<IPermissionService, PermissionService>();
-        
         // Add permission-based authorization policies with actual requirements
         builder.Services.AddAuthorization(options => options.AddPermissionPolicies());
 
-        // Register authorization handler
+        // Register authorization handler (inject provider directly)
         builder.Services.AddSingleton<IAuthorizationHandler, PermissionAuthorizationHandler>();
     }
     else
@@ -260,6 +285,13 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 });
 
 var app = builder.Build();
+
+
+// Use CORS before authentication and endpoints
+if (useCors)
+{
+    app.UseCors("ConfiguredCors");
+}
 
 if (app.Environment.IsDevelopment() || app.Configuration["OpenApi:Enabled"] == "true")
 {

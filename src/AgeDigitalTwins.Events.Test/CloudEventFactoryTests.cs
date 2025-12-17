@@ -1,5 +1,7 @@
 ﻿using System.Data.Common;
 using System.Text.Json.Nodes;
+using AgeDigitalTwins.Events.Abstractions;
+using AgeDigitalTwins.Events.Core.Events;
 
 namespace AgeDigitalTwins.Events.Test;
 

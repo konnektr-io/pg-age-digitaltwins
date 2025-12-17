@@ -19,7 +19,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgeDigitalTwins.Events", "A
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgeDigitalTwins.Events.Test", "AgeDigitalTwins.Events.Test\AgeDigitalTwins.Events.Test.csproj", "{096D0FED-02C5-41CB-B579-2CC7996841C5}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgeDigitalTwins.MCPServerSSE", "AgeDigitalTwins.MCPServerSSE\AgeDigitalTwins.MCPServerSSE.csproj", "{A2A18737-2BA8-4C55-B7DE-1F88469CD253}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AgeDigitalTwins.MCPServerHttp", "AgeDigitalTwins.MCPServerHttp\AgeDigitalTwins.MCPServerHttp.csproj", "{A2A18737-2BA8-4C55-B7DE-1F88469CD253}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

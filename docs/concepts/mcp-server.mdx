@@ -1,0 +1,121 @@
+# AgeDigitalTwins MCP Server
+
+The AgeDigitalTwins MCP Server allows LLMs to interact with a semantic graph memory based on Azure Digital Twins (DTDL) and Apache AGE (PostgreSQL). This enables building "self-healing" AI memory systems that enforce data schema and support hybrid vector search.
+
+## Authentication & Authorization
+
+The MCP Server uses OAuth 2.1 with JWT Bearer tokens for authentication and policy-based authorization for access control.
+
+### Requirements
+
+To access the MCP server, clients must provide:
+
+1. **OAuth Scope**: `mcp:tools` - Required by the MCP OAuth 2.1 specification (RFC 9728)
+2. **Permission**: `mcp/*` - Application-level permission to access MCP tools
+
+### How It Works
+
+```
+Request with JWT Token
+  ↓
+1. JWT Authentication - Validates token from Auth0
+  ↓
+2. OAuth Scope Check - Verifies "mcp:tools" scope (MCP-specific)
+  ↓
+3. Permission Check - Verifies "mcp/*" permission (policy-based)
+  ↓
+4. Tool Execution
+```
+
+For detailed information about the authorization architecture, see [Authorization Architecture](/docs/advanced-topics/authorization-architecture).
+
+### Configuration
+
+```json
+{
+  "Authentication": {
+    "Enabled": true,
+    "Authority": "https://auth.konnektr.io",
+    "Audience": "https://graph.konnektr.io",
+    "Issuer": "https://auth.konnektr.io/"
+  },
+  "Authorization": {
+    "Enabled": true,
+    "Provider": "Claims",
+    "PermissionsClaimName": "permissions",
+    "RequiredScopes": ["mcp:tools"],
+    "ScopesSupported": ["mcp:tools", "mcp:resources"]
+  }
+}
+```
+
+### OAuth Discovery
+
+The server implements RFC 9728 (Protected Resource Metadata) at `/.well-known/oauth-protected-resource` for OAuth client discovery.
+
+## Features
+
+### 1. Model Management
+The server provides tools to understand the semantic data model:
+- `GetModels`: Returns a lightweight summary of available models (ID and Display Name). Use this to explore the domain.
+- `GetModel`: Returns the **fully flattened** DTDL definition of a specific model. This includes all inherited properties, relationships, and components from base models, giving the LLM a complete view of the schema without needing to traverse the inheritance hierarchy manually.
+- `SearchModels`: Performs a hybrid search (semantic vector + lexical keyword) to find relevant models.
+- `CreateModels`: Allows creating new DTDL models.
+- `UpdateModelEmbedding`: Updates the vector embedding for a model to enable semantic search.
+
+### 2. Cypher Query Generation
+The server is designed to help LLMs generate optimized Cypher queries for Apache AGE.
+- **Nodes**: Digital Twins always have the `:Twin` label. Models have the `:Model` label.
+- **Inheritance**: To query twins of a specific model *and* its sub-types, use the optimized pattern:
+  ```cypher
+  MATCH (m1:Model {id: 'dtmi:example:TargetModel;1'})<-[:_extends*0..]-(m2:Model)
+  WITH collect(m2.id) AS model_ids
+  MATCH (t:Twin)
+  WHERE t.`$metadata`.`$model` IN model_ids
+  RETURN t
+  ```
+- **Validation**: The system enforces DTDL schema validation on all writes (`CreateOrReplaceDigitalTwin`, `UpdateDigitalTwin`), ensuring data integrity.
+
+### 3. Vector / Hybrid Search
+The system supports semantic search using `pgvector`.
+- **Definition**: Vector properties are defined in DTDL as `Array<Double>` with a semantic description (e.g., "embedding").
+- **Search Tool**: Use the `HybridMemorySearch` tool to perform similarity searches combined with metadata filtering.
+- **Manual Query**: 
+  ```cypher
+  MATCH (t:Twin)
+  WHERE t.`$metadata`.`$model` = 'dtmi:example:MyModel;1'
+  RETURN t
+  ORDER BY l2_distance(t.embedding, [0.1, 0.2, ...]::vector) ASC
+  LIMIT 5
+  ```
+
+### 4. Graph Exploration
+- `ExploreGraphNeighborhood`: Quickly retrieve the subgraph surrounding a specific twin to understand context.
+
+## Usage Guide for Agents
+
+### Prerequisites
+
+Before using the MCP server, ensure you have:
+- Valid OAuth 2.1 JWT token from Auth0
+- `mcp:tools` scope in your token
+- `mcp/*` permission in your token claims
+
+### Workflow
+
+1. **Understand the Domain**: Call `GetModels` to see what types of entities exist.
+2. **Inspect Schema**: Call `GetModel(modelId)` to understand the properties and relationships of a specific type.
+3. **Search**: 
+   - Use `HybridMemorySearch` if you have a vector or need semantic similarity.
+   - Use `ExploreGraphNeighborhood` to walk the graph.
+   - For complex queries, generate Cypher using the `GenerateQueryPrompt` guidance.
+
+### Error Handling
+
+The server returns standard OAuth 2.1 error responses:
+
+- **401 Unauthorized**: Missing or invalid JWT token
+- **403 Forbidden (insufficient_scope)**: Missing required OAuth scope
+- **403 Forbidden**: Missing required permission
+
+All responses include the `/.well-known/oauth-protected-resource` URL for client configuration discovery.

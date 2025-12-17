@@ -1,3 +1,12 @@
+using AgeDigitalTwins.Events.Abstractions;
+using AgeDigitalTwins.Events.Sinks.Kafka;
+using AgeDigitalTwins.Events.Sinks.Mqtt;
+using AgeDigitalTwins.Events.Sinks.Webhook;
+using AgeDigitalTwins.Events.Sinks.Kusto;
+using AgeDigitalTwins.Events.Sinks.Base;
+using AgeDigitalTwins.Events.Core.Events;
+using AgeDigitalTwins.Events.Core.Services;
+using AgeDigitalTwins.Events.Core.Auth;
 using Azure.Identity;
 
 namespace AgeDigitalTwins.Events;
@@ -27,7 +36,11 @@ public class EventSinkFactory(
             {
                 try
                 {
-                    var sink = new KafkaEventSink(kafkaSink, new DefaultAzureCredential(), logger);
+                    var sink = new KafkaEventSink(
+                        kafkaSink, 
+                        CredentialFactory.CreateCredential(kafkaSink.TenantId, kafkaSink.ClientId, kafkaSink.ClientSecret, kafkaSink.TokenEndpoint), 
+                        logger
+                    );
                     // Wrap with resilient wrapper for retry logic
                     sinks.Add(new ResilientEventSinkWrapper(sink, wrapperLogger, _dlqService));
                 }
@@ -49,8 +62,8 @@ public class EventSinkFactory(
             {
                 try
                 {
-                    var sink = new MqttEventSink(mqttSink, logger);
-                    // Wrap with resilient wrapper for retry logic
+                    var credential = CredentialFactory.CreateCredential(mqttSink.TenantId, mqttSink.ClientId, mqttSink.ClientSecret, mqttSink.TokenEndpoint);
+                    var sink = new MqttEventSink(mqttSink, credential, logger);
                     sinks.Add(new ResilientEventSinkWrapper(sink, wrapperLogger, _dlqService));
                 }
                 catch (ArgumentException ex)
@@ -58,6 +71,30 @@ public class EventSinkFactory(
                     logger.LogError(
                         ex,
                         "Failed to create MQTT event sink. Check the configuration for errors."
+                    );
+                }
+            }
+        }
+
+
+        var webhookSinks = _configuration.GetSection("EventSinks:Webhook").Get<List<WebhookSinkOptions>>();
+        if (webhookSinks != null && webhookSinks.Count > 0)
+        {
+            var logger = _loggerFactory.CreateLogger<WebhookEventSink>();
+            foreach (var webhookSink in webhookSinks)
+            {
+                try
+                {
+                    // Webhook doesn't have TenantId in options, pass null
+                    var credential = CredentialFactory.CreateCredential(null, webhookSink.ClientId, webhookSink.ClientSecret, webhookSink.TokenEndpoint);
+                    var sink = new WebhookEventSink(webhookSink, credential, logger);
+                    sinks.Add(new ResilientEventSinkWrapper(sink, wrapperLogger, _dlqService));
+                }
+                catch (ArgumentException ex)
+                {
+                    logger.LogError(
+                        ex,
+                        "Failed to create Webhook event sink. Check the configuration for errors."
                     );
                 }
             }
@@ -73,7 +110,7 @@ public class EventSinkFactory(
             {
                 try
                 {
-                    var sink = new KustoEventSink(kustoSink, new DefaultAzureCredential(), logger);
+                    var sink = new KustoEventSink(kustoSink, CredentialFactory.CreateCredential(kustoSink.TenantId, kustoSink.ClientId, kustoSink.ClientSecret), logger);
                     // Wrap with resilient wrapper for retry logic
                     sinks.Add(new ResilientEventSinkWrapper(sink, wrapperLogger, _dlqService));
                 }

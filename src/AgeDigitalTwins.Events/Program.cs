@@ -1,5 +1,9 @@
 using AgeDigitalTwins.Events;
 using Npgsql;
+using AgeDigitalTwins.Events.Abstractions;
+using AgeDigitalTwins.Events.Core.Services;
+using AgeDigitalTwins.Events.Core.Events;
+
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -64,7 +68,7 @@ builder.Services.AddSingleton(sp =>
 builder.Services.AddSingleton(sp =>
 {
     ILoggerFactory loggerFactory = sp.GetRequiredService<ILoggerFactory>();
-    var dlqService = sp.GetRequiredService<AgeDigitalTwins.Events.DLQService>();
+    var dlqService = sp.GetRequiredService<DLQService>();
     return new EventSinkFactory(builder.Configuration, loggerFactory, dlqService);
 });
 
@@ -185,7 +189,7 @@ app.Lifetime.ApplicationStarted.Register(async () =>
         );
 
         // Initialize DLQ schema/table
-        var dlqService = app.Services.GetRequiredService<AgeDigitalTwins.Events.DLQService>();
+        var dlqService = app.Services.GetRequiredService<DLQService>();
         await dlqService.InitializeSchemaAsync(cts.Token);
         logger.LogInformation("All event processing services started successfully");
 
