@@ -1,6 +1,3 @@
-using System;
-using System.Threading;
-using System.Threading.Tasks;
 using System.Net.Http.Headers;
 using System.Text;
 using CloudNative.CloudEvents;
@@ -34,6 +31,8 @@ public class WebhookEventSink : IEventSink, IDisposable
 
     private void ConfigureClient()
     {
+        if (_options.AuthenticationType == null)
+            return;
         if (_options.AuthenticationType.Equals("Basic", StringComparison.OrdinalIgnoreCase))
         {
             if (!string.IsNullOrEmpty(_options.Username) && !string.IsNullOrEmpty(_options.Password))
@@ -63,64 +62,85 @@ public class WebhookEventSink : IEventSink, IDisposable
 
     public async Task SendEventsAsync(IEnumerable<CloudEvent> cloudEvents, CancellationToken cancellationToken = default)
     {
-        // For OAuth, we ensure we have a valid token before sending batch
-        if (_options.AuthenticationType.Equals("OAuth", StringComparison.OrdinalIgnoreCase) && _credential != null)
+        bool useOAuth = string.Equals(_options.AuthenticationType, "OAuth", StringComparison.OrdinalIgnoreCase) && _credential != null;
+        string? oauthToken = null;
+        if (useOAuth && _credential != null)
         {
-             try 
-             {
-                  // We should ideally cache this token or rely on GetTokenAsync's internal caching.
-                  // GenericClientCredential implements caching, and Azure specific credentials do too.
-                  // But setting the header on singleton _httpClient is risky if concurrent calls? 
-                  // Wait, modifying DefaultRequestHeaders is not thread safe if there are concurrent batches.
-                  // However, ResilientEventSinkWrapper calls SendEventsAsync sequentially (unless configured otherwise? It uses a lock/queue? No, usually singleton usage).
-                  // But HttpClient is designed for concurrent use EXCEPT for mutation of properties like DefaultRequestHeaders.
-                  // It is safer to create a HttpRequestMessage per request and set headers on the message.
-                  
-                  // Refactor: We need to pull the token.
-             }
-             catch(Exception ex)
-             {
-                 _logger.LogError(ex, "Failed to retrieve OAuth token for Webhook sink '{SinkName}'", Name);
-                 throw; 
-             }
+            try
+            {
+                // Use default scope if none provided (for generic OAuth, often not required, but Azure requires it)
+                string[] scopes = Array.Empty<string>();
+                if (!string.IsNullOrEmpty(_options.Scope))
+                {
+                    scopes = new[] { _options.Scope };
+                }
+                var tokenRequestContext = new Azure.Core.TokenRequestContext(scopes);
+                var accessToken = await _credential.GetTokenAsync(tokenRequestContext, cancellationToken);
+                oauthToken = accessToken.Token;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to retrieve OAuth token for Webhook sink '{SinkName}'", Name);
+                throw;
+            }
         }
-
 
         foreach (var cloudEvent in cloudEvents)
         {
             try
             {
                 // Serialize event to JSON
-
                 var bytes = _formatter.EncodeStructuredModeMessage(cloudEvent, out var contentType);
                 var content = new ByteArrayContent(bytes.ToArray());
                 content.Headers.ContentType = MediaTypeHeaderValue.Parse(contentType.ToString());
 
-
-                var response = await _httpClient.PostAsync(_options.Url, content, cancellationToken);
-
-                if (!response.IsSuccessStatusCode)
+                if (useOAuth && oauthToken != null)
                 {
-                    _isHealthy = false;
-                    var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
-                    _logger.LogError("Webhook sink '{SinkName}' failed to send event {EventId}. Status: {StatusCode}, Response: {Response}", 
-                        Name, cloudEvent.Id, response.StatusCode, responseBody);
+                    using var request = new HttpRequestMessage(HttpMethod.Post, _options.Url)
+                    {
+                        Content = content
+                    };
+                    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", oauthToken);
+
+                    var response = await _httpClient.SendAsync(request, cancellationToken);
+
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        _isHealthy = false;
+                        var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+                        _logger.LogError("Webhook sink '{SinkName}' failed to send event {EventId}. Status: {StatusCode}, Response: {Response}",
+                            Name, cloudEvent.Id, response.StatusCode, responseBody);
+                    }
+                    else
+                    {
+                        _isHealthy = true;
+                        _logger.LogDebug("Webhook sink '{SinkName}' successfully sent event {EventId}", Name, cloudEvent.Id);
+                    }
                 }
                 else
                 {
-                    _isHealthy = true;
-                    _logger.LogDebug("Webhook sink '{SinkName}' successfully sent event {EventId}", Name, cloudEvent.Id);
+                    // All other auth types use the preconfigured HttpClient
+                    var response = await _httpClient.PostAsync(_options.Url, content, cancellationToken);
+
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        _isHealthy = false;
+                        var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+                        _logger.LogError("Webhook sink '{SinkName}' failed to send event {EventId}. Status: {StatusCode}, Response: {Response}",
+                            Name, cloudEvent.Id, response.StatusCode, responseBody);
+                    }
+                    else
+                    {
+                        _isHealthy = true;
+                        _logger.LogDebug("Webhook sink '{SinkName}' successfully sent event {EventId}", Name, cloudEvent.Id);
+                    }
                 }
             }
             catch (Exception ex)
             {
                 _isHealthy = false;
                 _logger.LogError(ex, "Error sending event {EventId} to webhook sink '{SinkName}'", cloudEvent.Id, Name);
-                // We don't rethrow here so we can try to process other events in the batch, 
-                // but usually the caller (Wrapper) might want to know if *any* failed. 
-                // However, the interface contract is void Task. The errors are logged.
-                // If we want retry, we should probably throw. The ResilientEventSinkWrapper catches exceptions.
-                throw; 
+                throw;
             }
         }
     }

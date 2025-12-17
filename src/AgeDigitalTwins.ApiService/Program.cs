@@ -21,7 +21,8 @@ builder.AddServiceDefaults();
 
 // Add CORS configuration
 var corsSection = builder.Configuration.GetSection("Cors");
-if (corsSection.Exists() && corsSection.GetSection("AllowedOrigins").Exists())
+var useCors = corsSection.Exists() && corsSection.GetValue<bool>("Enabled", false);
+if (useCors)
 {
     var allowedOrigins = corsSection.GetSection("AllowedOrigins").Get<string[]>();
     if (allowedOrigins == null || allowedOrigins.Length == 0)
@@ -287,7 +288,10 @@ var app = builder.Build();
 
 
 // Use CORS before authentication and endpoints
-app.UseCors("ConfiguredCors");
+if (useCors)
+{
+    app.UseCors("ConfiguredCors");
+}
 
 if (app.Environment.IsDevelopment() || app.Configuration["OpenApi:Enabled"] == "true")
 {
