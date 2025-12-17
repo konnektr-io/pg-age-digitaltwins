@@ -1,3 +1,4 @@
+
 using System.Text.Json;
 using Azure;
 using Azure.Core;
@@ -283,5 +284,38 @@ public class AzureDigitalTwinsSdkIntegrationTests : IAsyncLifetime
         }
         Assert.True(pageCount > 1, "Expected multiple pages of results but found only one page.");
         Assert.Equal(3, twinCount);
+    }
+
+    [Fact]
+    public async Task CreateAndGetDigitalTwin_WithPercentEncodedId_WorksCorrectly()
+    {
+        // Arrange
+        string twinId = "10%B2H6_H2";
+        BasicDigitalTwin basicDigitalTwin =
+            new()
+            {
+                Id = twinId,
+                Metadata = new DigitalTwinMetadata { ModelId = "dtmi:com:adt:dtsample:tempsensor;1" },
+                Contents = new Dictionary<string, object> { { "temperature", 42 } },
+            };
+
+        Assert.NotNull(_digitalTwinsClient);
+        await _digitalTwinsClient.CreateModelsAsync(
+            new List<string> { SampleData.DtdlTemperatureSensor }
+        );
+
+        // Act: Create the twin
+        BasicDigitalTwin newTwin = await _digitalTwinsClient.CreateOrReplaceDigitalTwinAsync(
+            basicDigitalTwin.Id,
+            basicDigitalTwin
+        );
+        Assert.Equal(newTwin.Id, basicDigitalTwin.Id);
+
+        // Act: Get the twin
+        BasicDigitalTwin fetchedTwin = await _digitalTwinsClient.GetDigitalTwinAsync<BasicDigitalTwin>(twinId);
+        Assert.NotNull(fetchedTwin);
+        Assert.Equal(twinId, fetchedTwin.Id);
+        Assert.True(fetchedTwin.Contents.ContainsKey("temperature"));
+        Assert.Equal(42, ((JsonElement)fetchedTwin.Contents["temperature"]).GetInt32());
     }
 }
