@@ -99,8 +99,11 @@ public partial class AgeDigitalTwinsClient
     )
     {
         string cypher =
-            $"MATCH (t:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}}) RETURN t";
-        await using var command = connection.CreateCypherCommand(_graphName, cypher);
+            $"MATCH (t:Twin {{`$dtId`: $twinId}}) RETURN t";
+        await using var command = connection.CreateCypherCommand(_graphName, cypher, new Dictionary<string, object?>()
+        {
+            { "twinId", digitalTwinId }
+        });
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
         if (await reader.ReadAsync(cancellationToken))
@@ -1159,7 +1162,7 @@ SET t = twin";
     /// Explores the graph neighborhood of a specific twin.
     /// </summary>
     public virtual async Task<string> ExploreGraphNeighborhoodAsync(
-        string twinId,
+        string digitalTwinId,
         int hops,
         CancellationToken cancellationToken = default
     )
@@ -1175,11 +1178,14 @@ SET t = twin";
          );
 
         string cypher = $@"
-            MATCH (t:Twin {{`$dtId`: '{twinId.Replace("'", "\\'")}'}})-[r]-(n:Twin) 
+            MATCH (t:Twin {{`$dtId`: $twinId}})-[r]-(n:Twin) 
             RETURN t, r, n 
             LIMIT 50";
 
-        await using var command = connection.CreateCypherCommand(_graphName, cypher);
+        await using var command = connection.CreateCypherCommand(_graphName, cypher, new Dictionary<string, object?>()
+        {
+            { "twinId", digitalTwinId }
+        });
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         
         var results = new List<object>();
