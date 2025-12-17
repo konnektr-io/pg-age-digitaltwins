@@ -1,11 +1,11 @@
 using System.Security.Claims;
 using AgeDigitalTwins.ServiceDefaults.Authorization;
 using AgeDigitalTwins.ServiceDefaults.Authorization.Models;
-using AgeDigitalTwins.MCPServerSSE.Configuration;
+using AgeDigitalTwins.MCPServerHttp.Configuration;
 using Microsoft.Extensions.Options;
 using AgeDigitalTwins.ServiceDefaults.Configuration;
 
-namespace AgeDigitalTwins.MCPServerSSE.Middleware;
+namespace AgeDigitalTwins.MCPServerHttp.Middleware;
 
 /// <summary>
 /// Middleware for enforcing MCP OAuth scope requirements (RFC 9728).

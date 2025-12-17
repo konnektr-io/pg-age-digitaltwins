@@ -33,7 +33,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ./src
-          file: ./src/AgeDigitalTwins.MCPServerSSE/Dockerfile
+          file: ./src/AgeDigitalTwins.MCPServerHttp/Dockerfile
           push: true
           load: true
           tags: ghcr.io/${{ github.repository }}/agedigitaltwins-mcp:${{github.event.release.tag_name && env.VERSION}}

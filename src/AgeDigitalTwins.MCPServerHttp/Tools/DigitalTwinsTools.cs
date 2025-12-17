@@ -2,7 +2,7 @@ using System.Text.Json;
 using Json.Patch;
 using AgeDigitalTwins.Exceptions;
 
-namespace AgeDigitalTwins.MCPServerSSE.Tools;
+namespace AgeDigitalTwins.MCPServerHttp.Tools;
 
 [McpServerToolType]
 public static class DigitalTwinsTools

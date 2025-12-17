@@ -2,9 +2,9 @@
 using AgeDigitalTwins;
 using AgeDigitalTwins.ServiceDefaults.Authorization;
 using AgeDigitalTwins.ServiceDefaults.Authorization.Models;
-using AgeDigitalTwins.MCPServerSSE.Configuration;
-using AgeDigitalTwins.MCPServerSSE.Endpoints;
-using AgeDigitalTwins.MCPServerSSE.Middleware;
+using AgeDigitalTwins.MCPServerHttp.Configuration;
+using AgeDigitalTwins.MCPServerHttp.Endpoints;
+using AgeDigitalTwins.MCPServerHttp.Middleware;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Npgsql;

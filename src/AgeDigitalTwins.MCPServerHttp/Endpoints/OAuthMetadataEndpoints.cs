@@ -1,8 +1,8 @@
-using AgeDigitalTwins.MCPServerSSE.Configuration;
+using AgeDigitalTwins.MCPServerHttp.Configuration;
 using AgeDigitalTwins.ServiceDefaults.Configuration;
 using Microsoft.Extensions.Options;
 
-namespace AgeDigitalTwins.MCPServerSSE.Endpoints;
+namespace AgeDigitalTwins.MCPServerHttp.Endpoints;
 
 /// <summary>
 /// Provides OAuth 2.1 metadata endpoints for MCP server compliance.

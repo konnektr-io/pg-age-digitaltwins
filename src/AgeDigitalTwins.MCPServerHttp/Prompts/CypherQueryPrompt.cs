@@ -1,4 +1,4 @@
-namespace AgeDigitalTwins.MCPServerSSE.Prompts;
+namespace AgeDigitalTwins.MCPServerHttp.Prompts;
 
 [McpServerPromptType]
 public static class CypherQueryPrompt

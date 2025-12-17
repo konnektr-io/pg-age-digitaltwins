@@ -5,18 +5,18 @@ ARG TARGETARCH
 
 # Copy project file and restore as distinct layers
 WORKDIR /source
-COPY --link AgeDigitalTwins.MCPServerSSE/*.csproj ./AgeDigitalTwins.MCPServerSSE/.
+COPY --link AgeDigitalTwins.MCPServerHttp/*.csproj ./AgeDigitalTwins.MCPServerHttp/.
 COPY --link AgeDigitalTwins/*.csproj ./AgeDigitalTwins/.
 COPY --link AgeDigitalTwins.ServiceDefaults/*.csproj ./AgeDigitalTwins.ServiceDefaults/.
-WORKDIR /source/AgeDigitalTwins.MCPServerSSE
+WORKDIR /source/AgeDigitalTwins.MCPServerHttp
 RUN dotnet restore -a $TARGETARCH
 
 # Copy source code and publish app
 WORKDIR /source
-COPY --link AgeDigitalTwins.MCPServerSSE/. ./AgeDigitalTwins.MCPServerSSE
+COPY --link AgeDigitalTwins.MCPServerHttp/. ./AgeDigitalTwins.MCPServerHttp
 COPY --link AgeDigitalTwins/. ./AgeDigitalTwins
 COPY --link AgeDigitalTwins.ServiceDefaults/. ./AgeDigitalTwins.ServiceDefaults
-WORKDIR /source/AgeDigitalTwins.MCPServerSSE
+WORKDIR /source/AgeDigitalTwins.MCPServerHttp
 RUN dotnet publish --no-restore -a $TARGETARCH -o /app
 
 # Enable globalization and time zones:
@@ -27,4 +27,4 @@ EXPOSE 8080
 WORKDIR /app
 COPY --link --from=build /app .
 USER $APP_UID
-ENTRYPOINT ["./AgeDigitalTwins.MCPServerSSE"]
+ENTRYPOINT ["./AgeDigitalTwins.MCPServerHttp"]

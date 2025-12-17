@@ -1,4 +1,4 @@
-namespace AgeDigitalTwins.MCPServerSSE.Configuration;
+namespace AgeDigitalTwins.MCPServerHttp.Configuration;
 
 /// <summary>
 /// Configuration options for OAuth 2.1 Protected Resource Metadata (RFC 9728).
