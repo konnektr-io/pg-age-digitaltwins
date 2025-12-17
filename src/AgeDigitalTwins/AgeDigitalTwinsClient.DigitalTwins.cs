@@ -34,8 +34,11 @@ public partial class AgeDigitalTwinsClient
     )
     {
         string cypher =
-            $"MATCH (t:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}}) RETURN t";
-        await using var command = connection.CreateCypherCommand(_graphName, cypher);
+            $"MATCH (t:Twin {{`$dtId`: $twinId}}) RETURN t";
+        await using var command = connection.CreateCypherCommand(_graphName, cypher, new Dictionary<string, object?>()
+        {
+            { "twinId", digitalTwinId }
+        });
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         return await reader.ReadAsync(cancellationToken);
     }
