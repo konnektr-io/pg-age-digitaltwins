@@ -78,6 +78,14 @@ Route events to MQTT brokers for lightweight messaging and IoT scenarios. Uses s
 - Lightweight pub/sub messaging
 - Edge computing scenarios
 - Mobile and connected device applications
+- Edge computing scenarios
+
+### Webhooks
+Push events to HTTP endpoints via POST requests. Supports Basic Auth, Bearer Token, and API Key headers. Ideal for:
+- Serverless functions (Azure Functions, AWS Lambda)
+- Logic Apps / Power Automate
+- Custom integrations with legacy systems
+- Notification systems (Slack, Teams via incoming webhooks)
 
 ## Event Routing Configuration
 
@@ -127,7 +135,39 @@ eventRoutes:
 
 ## Configuration
 
-Configure event routing in your application settings. Here's the structure based on your example:
+AgeDigitalTwins supports flexible configuration for both hosted (Konnektr Cloud) and self-hosted environments.
+
+### Hosted (Konnektr Cloud)
+
+In the Konnektr Portal, you can configure event sinks via the UI:
+1. Navigate to your Digital Twin instance.
+2. Go to **Settings** > **Event Routing**.
+3. Click **Add Sink** and choose the sink type (Kafka, Kusto, MQTT, Webhook).
+4. Fill in the required details (connection strings, URLs, credentials).
+
+*(Screenshots to be added)*
+
+### Self-Hosted (Kubernetes / Docker)
+
+For self-hosted instances, configure event routing via `appsettings.json` or environment variables.
+
+#### Webhook Configuration
+
+```yaml
+webhook:
+  - name: MyWebhookSink
+    url: https://api.mysystem.com/events
+    authenticationType: Basic  # None, Basic, Bearer, ApiKey
+    username: my-user
+    password: my-password
+    # OR for Bearer:
+    # token: "ey..."
+    # OR for ApiKey:
+    # headerName: "X-API-Key"
+    # headerValue: "secret-key"
+```
+
+#### Other Sinks (Kafka, Kusto, MQTT)
 
 ```yaml
 events:
