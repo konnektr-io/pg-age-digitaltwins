@@ -1,7 +1,7 @@
 using System.Text.Json;
+using AgeDigitalTwins.ApiService.Helpers;
 using AgeDigitalTwins.ServiceDefaults.Authorization;
 using AgeDigitalTwins.ServiceDefaults.Authorization.Models;
-using AgeDigitalTwins.ApiService.Helpers;
 using Json.Patch;
 using Microsoft.AspNetCore.Mvc;
 
