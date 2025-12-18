@@ -1,6 +1,7 @@
 using System.Text.Json;
-using Json.Patch;
 using AgeDigitalTwins.Exceptions;
+using AgeDigitalTwins.Models;
+using Json.Patch;
 
 namespace AgeDigitalTwins.MCPServerHttp.Tools;
 
@@ -11,7 +12,7 @@ public static class DigitalTwinsTools
     public static async Task<string> CreateOrReplaceDigitalTwin(
         AgeDigitalTwinsClient client,
         [Description("The ID of the digital twin")] string twinId,
-        [Description("The digital twin JSON")] JsonDocument digitalTwin,
+        [Description("The digital twin object")] BasicDigitalTwin digitalTwin,
         CancellationToken cancellationToken = default
     )
     {
@@ -20,7 +21,7 @@ public static class DigitalTwinsTools
             digitalTwin,
             cancellationToken: cancellationToken
         );
-        return result?.ToString() ?? "Digital twin creation or replacement failed.";
+        return JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true });
     }
 
     [McpServerTool, Description("Updates a digital twin.")]
@@ -59,21 +60,32 @@ public static class DigitalTwinsTools
         CancellationToken cancellationToken = default
     )
     {
-        var twin = await client.GetDigitalTwinAsync<JsonElement>(twinId, cancellationToken: cancellationToken);
-        return twin.ToString();
+        var twin = await client.GetDigitalTwinAsync<BasicDigitalTwin>(
+            twinId,
+            cancellationToken: cancellationToken
+        );
+        return JsonSerializer.Serialize(twin, new JsonSerializerOptions { WriteIndented = true });
     }
 
-    [McpServerTool, Description("Fetches the DTDL Model definition. returns the full flattened model definition including inherited properties.")]
+    [
+        McpServerTool,
+        Description(
+            "Fetches the DTDL Model definition. returns the full flattened model definition including inherited properties."
+        )
+    ]
     public static async Task<string> GetModel(
         AgeDigitalTwinsClient client,
         [Description("The ID of the model (DTMI)")] string modelId,
         CancellationToken cancellationToken = default
     )
     {
-        try 
+        try
         {
             var model = await client.GetModelExpandedAsync(modelId, cancellationToken);
-            return JsonSerializer.Serialize(model, new JsonSerializerOptions { WriteIndented = true });
+            return JsonSerializer.Serialize(
+                model,
+                new JsonSerializerOptions { WriteIndented = true }
+            );
         }
         catch (Exception ex)
         {
@@ -81,7 +93,10 @@ public static class DigitalTwinsTools
         }
     }
 
-    [McpServerTool, Description("Fetches a list of all DTDL models (Summary only). Use GetModel for details.")]
+    [
+        McpServerTool,
+        Description("Fetches a list of all DTDL models (Summary only). Use GetModel for details.")
+    ]
     public static async Task<string> GetModels(
         AgeDigitalTwinsClient client,
         CancellationToken cancellationToken = default
@@ -98,11 +113,18 @@ public static class DigitalTwinsTools
         {
             if (model is not null)
             {
-                models.Add(new { id = model.Id, displayName = model.LanguageDisplayNames.GetValueOrDefault("en") ?? model.LanguageDisplayNames.Values.FirstOrDefault() });
+                models.Add(
+                    new
+                    {
+                        id = model.Id,
+                        displayName = model.LanguageDisplayNames.GetValueOrDefault("en")
+                            ?? model.LanguageDisplayNames.Values.FirstOrDefault(),
+                    }
+                );
             }
         }
-        return models.Count != 0 
-            ? JsonSerializer.Serialize(models, new JsonSerializerOptions { WriteIndented = true }) 
+        return models.Count != 0
+            ? JsonSerializer.Serialize(models, new JsonSerializerOptions { WriteIndented = true })
             : "No models found.";
     }
 
@@ -116,14 +138,19 @@ public static class DigitalTwinsTools
     {
         var relationships = new List<string>();
         await foreach (
-            var relationship in client.GetRelationshipsAsync<JsonElement>(
+            var relationship in client.GetRelationshipsAsync<BasicRelationship>(
                 twinId,
                 relationshipName,
                 cancellationToken: cancellationToken
             )
         )
         {
-            relationships.Add(relationship.ToString());
+            relationships.Add(
+                JsonSerializer.Serialize(
+                    relationship,
+                    new JsonSerializerOptions { WriteIndented = true }
+                )
+            );
         }
         return relationships.Count != 0
             ? relationships
@@ -138,13 +165,15 @@ public static class DigitalTwinsTools
         CancellationToken cancellationToken = default
     )
     {
-        var relationship = await client.GetRelationshipAsync<JsonElement>(
+        var relationship = await client.GetRelationshipAsync<BasicRelationship>(
             twinId,
             relationshipId,
             cancellationToken: cancellationToken
         );
-        return relationship.ToString()
-            ?? $"Relationship with ID '{relationshipId}' for twin ID '{twinId}' not found.";
+        return JsonSerializer.Serialize(
+            relationship,
+            new JsonSerializerOptions { WriteIndented = true }
+        );
     }
 
     [McpServerTool, Description("Creates or replaces a relationship.")]
@@ -152,7 +181,7 @@ public static class DigitalTwinsTools
         AgeDigitalTwinsClient client,
         [Description("The ID of the digital twin")] string twinId,
         [Description("The ID of the relationship")] string relationshipId,
-        [Description("The relationship JSON")] JsonDocument relationship,
+        [Description("The relationship object")] BasicRelationship relationship,
         CancellationToken cancellationToken = default
     )
     {
@@ -162,7 +191,7 @@ public static class DigitalTwinsTools
             relationship,
             cancellationToken: cancellationToken
         );
-        return result?.ToString() ?? "Relationship creation or replacement failed.";
+        return JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true });
     }
 
     [McpServerTool, Description("Updates a relationship.")]
@@ -192,7 +221,11 @@ public static class DigitalTwinsTools
     {
         try
         {
-            await client.DeleteRelationshipAsync(twinId, relationshipId, cancellationToken: cancellationToken);
+            await client.DeleteRelationshipAsync(
+                twinId,
+                relationshipId,
+                cancellationToken: cancellationToken
+            );
             return $"Relationship with ID '{relationshipId}' for twin ID '{twinId}' deleted successfully.";
         }
         catch (ArgumentNullException ex)
@@ -212,6 +245,7 @@ public static class DigitalTwinsTools
             return $"Failed to delete relationship: {ex.Message}. An unexpected error occurred.";
         }
     }
+
     [McpServerTool, Description("Explores the graph neighborhood of a specific twin.")]
     public static async Task<string> ExploreGraphNeighborhood(
         AgeDigitalTwinsClient client,
@@ -220,9 +254,9 @@ public static class DigitalTwinsTools
         CancellationToken cancellationToken = default
     )
     {
-        try 
+        try
         {
-             return await client.ExploreGraphNeighborhoodAsync(twinId, hops, cancellationToken);
+            return await client.ExploreGraphNeighborhoodAsync(twinId, hops, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -230,7 +264,10 @@ public static class DigitalTwinsTools
         }
     }
 
-    [McpServerTool, Description("Performs a hybrid search using vector similarity and metadata filtering.")]
+    [
+        McpServerTool,
+        Description("Performs a hybrid search using vector similarity and metadata filtering.")
+    ]
     public static async Task<string> HybridMemorySearch(
         AgeDigitalTwinsClient client,
         [Description("The vector embedding to search for")] double[] vector,
@@ -242,11 +279,17 @@ public static class DigitalTwinsTools
     {
         try
         {
-            return await client.HybridSearchAsync(vector, embeddingProperty, modelFilter, limit, cancellationToken);
+            return await client.HybridSearchAsync(
+                vector,
+                embeddingProperty,
+                modelFilter,
+                limit,
+                cancellationToken
+            );
         }
         catch (Exception ex)
         {
-             return $"Failed to perform hybrid search: {ex.Message}";
+            return $"Failed to perform hybrid search: {ex.Message}";
         }
     }
 
@@ -264,22 +307,30 @@ public static class DigitalTwinsTools
         }
         catch (ModelAlreadyExistsException ex)
         {
-             return $"Failed to create models: {ex.Message}";
+            return $"Failed to create models: {ex.Message}";
         }
         catch (DTDLParserParsingException ex)
         {
-             return $"Failed to parse DTDL: {ex.Message}. Please correct the model definition.";
+            return $"Failed to parse DTDL: {ex.Message}. Please correct the model definition.";
         }
         catch (Exception ex)
         {
-             return $"An error occurred while creating models: {ex.Message}";
+            return $"An error occurred while creating models: {ex.Message}";
         }
     }
 
-    [McpServerTool, Description("Searches for models using semantic vector search and/or keyword matching. Use GetModel to retrieve the model details.")]
+    [
+        McpServerTool,
+        Description(
+            "Searches for models using semantic vector search and/or keyword matching. Use GetModel to retrieve the model details."
+        )
+    ]
     public static async Task<string> SearchModels(
         AgeDigitalTwinsClient client,
-        [Description("The textual query for keyword matching (searches display name, description, ID)")] string? query = null,
+        [Description(
+            "The textual query for keyword matching (searches display name, description, ID)"
+        )]
+            string? query = null,
         [Description("The vector embedding for semantic search")] double[]? vector = null,
         [Description("Max results to return")] int limit = 10,
         CancellationToken cancellationToken = default
@@ -289,12 +340,18 @@ public static class DigitalTwinsTools
         {
             var results = await client.SearchModelsAsync(query, vector, limit, cancellationToken);
             // Return simplified results to save context
-            var simplifiedResults = results.Select(m => new { 
-                id = m.Id, 
-                displayName = m.LanguageDisplayNames.GetValueOrDefault("en") ?? m.LanguageDisplayNames.Values.FirstOrDefault(),
-                description = m.LanguageDescriptions.GetValueOrDefault("en") ?? m.LanguageDescriptions.Values.FirstOrDefault()
+            var simplifiedResults = results.Select(m => new
+            {
+                id = m.Id,
+                displayName = m.LanguageDisplayNames.GetValueOrDefault("en")
+                    ?? m.LanguageDisplayNames.Values.FirstOrDefault(),
+                description = m.LanguageDescriptions.GetValueOrDefault("en")
+                    ?? m.LanguageDescriptions.Values.FirstOrDefault(),
             });
-            return JsonSerializer.Serialize(simplifiedResults, new JsonSerializerOptions { WriteIndented = true });
+            return JsonSerializer.Serialize(
+                simplifiedResults,
+                new JsonSerializerOptions { WriteIndented = true }
+            );
         }
         catch (Exception ex)
         {

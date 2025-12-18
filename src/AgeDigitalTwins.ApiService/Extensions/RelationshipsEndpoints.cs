@@ -1,7 +1,8 @@
 using System.Text.Json;
-using AgeDigitalTwins.ServiceDefaults.Authorization;
 using AgeDigitalTwins.ApiService.Helpers;
 using AgeDigitalTwins.ApiService.Models;
+using AgeDigitalTwins.Models;
+using AgeDigitalTwins.ServiceDefaults.Authorization;
 using AgeDigitalTwins.ServiceDefaults.Authorization.Models;
 using Json.Patch;
 using Microsoft.AspNetCore.Mvc;
@@ -33,12 +34,12 @@ public static class RelationshipsEndpoints
                     );
 
                     var page = await client
-                        .GetIncomingRelationshipsAsync<JsonDocument>(id, cancellationToken)
+                        .GetIncomingRelationshipsAsync<BasicRelationship>(id, cancellationToken)
                         .AsPages(continuationToken, maxItemsPerPage, cancellationToken)
                         .FirstAsync(cancellationToken);
 
                     return Results.Json(
-                        new PageWithNextLink<JsonDocument?>(page, httpContext.Request)
+                        new PageWithNextLink<BasicRelationship?>(page, httpContext.Request)
                     );
                 }
             )
@@ -65,7 +66,7 @@ public static class RelationshipsEndpoints
                     );
 
                     var page = await client
-                        .GetRelationshipsAsync<JsonDocument>(
+                        .GetRelationshipsAsync<BasicRelationship>(
                             id,
                             relationshipName,
                             cancellationToken
@@ -74,7 +75,7 @@ public static class RelationshipsEndpoints
                         .FirstAsync(cancellationToken);
 
                     return Results.Json(
-                        new PageWithNextLink<JsonDocument?>(page, httpContext.Request)
+                        new PageWithNextLink<BasicRelationship?>(page, httpContext.Request)
                     );
                 }
             )
@@ -94,7 +95,7 @@ public static class RelationshipsEndpoints
                     CancellationToken cancellationToken
                 ) =>
                 {
-                    return client.GetRelationshipAsync<JsonDocument>(
+                    return client.GetRelationshipAsync<BasicRelationship>(
                         id,
                         relationshipId,
                         cancellationToken
@@ -104,7 +105,8 @@ public static class RelationshipsEndpoints
             .RequirePermission(ResourceType.Relationships, PermissionAction.Read)
             .RequireRateLimiting("LightOperations")
             .WithName("GetRelationship")
-            .WithSummary("Retrieves a specific relationship by its ID.");
+            .WithSummary("Retrieves a specific relationship by its ID.")
+            .Produces<BasicRelationship>();
 
         // PUT Relationship - Heavy create/replace operation
         relationshipsGroup
@@ -113,7 +115,7 @@ public static class RelationshipsEndpoints
                 (
                     string id,
                     string relationshipId,
-                    JsonDocument relationship,
+                    BasicRelationship relationship,
                     HttpContext httpContext,
                     [FromServices] AgeDigitalTwinsClient client,
                     CancellationToken cancellationToken
@@ -132,7 +134,8 @@ public static class RelationshipsEndpoints
             .RequirePermission(ResourceType.Relationships, PermissionAction.Write)
             .RequireRateLimiting("HeavyOperations")
             .WithName("CreateOrReplaceRelationship")
-            .WithSummary("Creates or replaces a relationship for a digital twin.");
+            .WithSummary("Creates or replaces a relationship for a digital twin.")
+            .Produces<BasicRelationship>();
 
         // PATCH Relationship - Heavy update operation
         relationshipsGroup
