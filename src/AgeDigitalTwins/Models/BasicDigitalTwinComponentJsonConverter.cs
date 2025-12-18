@@ -68,7 +68,9 @@ internal class BasicDigitalTwinComponentJsonConverter : JsonConverter<BasicDigit
                             );
                         if (propertyMetadata != null)
                         {
-                            component.Metadata![p.Name] = propertyMetadata;
+                            // Initialize Metadata dictionary if it's null
+                            component.Metadata ??= new Dictionary<string, DigitalTwinPropertyMetadata>();
+                            component.Metadata[p.Name] = propertyMetadata;
                         }
                     }
                 }

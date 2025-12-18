@@ -19,8 +19,9 @@ public class DigitalTwinMetadata
 
     /// <summary>
     /// Model-defined writable properties' metadata.
+    /// For each property in the Contents of the digital twin that was defined in the model,
+    /// this dictionary contains the metadata about that property.
     /// </summary>
-    [JsonPropertyName("$metadata")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Dictionary<string, DigitalTwinPropertyMetadata>? PropertyMetadata { get; set; }
 }

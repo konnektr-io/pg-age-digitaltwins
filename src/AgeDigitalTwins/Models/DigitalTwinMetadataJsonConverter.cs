@@ -55,7 +55,9 @@ internal class DigitalTwinMetadataJsonConverter : JsonConverter<DigitalTwinMetad
                 );
                 if (propertyMetadata != null)
                 {
-                    metadata.PropertyMetadata![propertyName] = propertyMetadata;
+                    // Initialize PropertyMetadata dictionary if it's null
+                    metadata.PropertyMetadata ??= new Dictionary<string, DigitalTwinPropertyMetadata>();
+                    metadata.PropertyMetadata[propertyName] = propertyMetadata;
                 }
             }
             else if (propertyName != DigitalTwinsJsonPropertyNames.MetadataLastUpdateTime)
