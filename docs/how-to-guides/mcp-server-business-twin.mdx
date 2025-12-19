@@ -1,0 +1,127 @@
+---
+title: Build a Business Twin with MCP
+icon: GraduationCap
+---
+
+# How to Build a Self-Updating "Business Twin" with Konnektr and MCP
+
+This guide demonstrates how to turn Konnektr into a live, validated "Memory" for your AI agents.
+
+Using the **Model Context Protocol (MCP)**, you can connect AI agents (like Claude or Gemini) directly to your Konnektr Graph. This turns your database from a passive storage bucket into an active participant in your business workflows.
+
+In this example, we will model a **Smart Equipment System**, tracking **Employees** and their assigned **High-Value Assets**.
+
+## Prerequisites
+
+* **Konnektr Graph Standard Instance**: The MCP server is available on "Standard" and higher tiers.
+* **API Credentials**: You'll need a Client ID and Secret from the [Konnektr Control Plane](https://ktrlplane.konnektr.io).
+* **An MCP Client**: Claude Desktop, Gemini, or any MCP-compliant application.
+
+---
+
+## Part 1: Connecting to the Hosted MCP Server
+
+Every Konnektr Graph resource has its own dedicated MCP endpoint.
+
+### 1. Identify Your Endpoint
+Your MCP server is hosted at:
+`https://{resource-id}.mcp.graph.konnektr.io`
+
+### 2. Configure Your Client
+The Hosted MCP Server uses OAuth 2.1 authentication—the same credentials you use for the Konnektr API.
+
+Add this to your `claude_desktop_config.json` (or equivalent client config):
+
+```json
+{
+  "mcpServers": {
+    "konnektr": {
+      "url": "https://your-resource-id.mcp.graph.konnektr.io",
+      "transport": {
+        "type": "sse"
+      },
+      "auth": {
+        "type": "oauth2",
+        "token_url": "https://auth.konnektr.io/oauth/token",
+        "client_id": "YOUR_CLIENT_ID",
+        "client_secret": "YOUR_CLIENT_SECRET",
+        "audience": "https://graph.konnektr.io",
+        "scope": "mcp:tools"
+      }
+    }
+  }
+}
+```
+
+> [!TIP]
+> **Try the Demo:** You can test the platform using our public demo instance at `demo.mcp.graph.konnektr.io` which requires no authentication.
+
+---
+
+## Part 2: Prompt Engineering for Twins
+
+The true power of Konnektr + MCP is that you don't need to write the code; you just need to guide the AI. By providing the right context, the LLM will design the schemas and populate the graph for you.
+
+### Task 1: Generate the "Constitution" (DTDL Models)
+
+Instead of manually writing JSON, ask the AI to design it. This ensures the data model is tailored to your specific needs.
+
+**User Prompt:**
+> "I want to track our internal equipment. We have Employees (name, department) and Smart Assets (description, status, embedding). 
+> 
+> Assets can be 'active', 'maintenance', or 'retired'. An employee can have up to 5 assigned assets. 
+> 
+> Please generate the DTDL models and upload them using `create_models`."
+
+**AI Action:**
+The AI will generate valid DTDL (Digital Twins Definition Language) and call the MCP tool. It knows that Konnektr enforces these schemas strictly—if it tries to add a property not in the model, the system will reject it.
+
+### Task 2: Populate the Graph Semantically
+
+**User Prompt:**
+> "Register a new asset: a 'NVIDIA DGX Station A100' for the AI Research team. It's active. 
+> Assign it to Dr. Sarah Conner in the R&D department. 
+> 
+> First, check if the models exist, then create the twins and the relationship. Use meaningful IDs like 'asset-dgx-01' and 'emp-sarah-c'."
+
+**AI Action:**
+1. Calls `get_models` to verify the schema.
+2. Calls `create_or_replace_digital_twin` twice.
+3. Calls `create_or_replace_relationship` to link them.
+
+---
+
+## Part 3: Advanced Graph Queries
+
+The LLM can also perform complex analysis by writing Cypher queries. However, it needs to know the "rules of the graph" first to generate optimized queries.
+
+### The Query Workflow
+
+1. **Understand the Schema:** The LLM should first understand the structure of the graph by calling `get_model`.
+2. **Get the Query Rules:** The LLM should call `get_prompt(name: "GenerateQueryPrompt")`. This provides the rules for optimized Cypher on the AgeDigitalTwins platform (e.g., using `:Twin` labels and handling DTDL inheritance).
+3. **Execute:** The LLM then writes and runs the query using `query_digital_twins`.
+
+**User Prompt:**
+> "Who in the R&D department is holding high-performance computing assets? Search for assets mentioning 'DGX' or 'Computing'."
+
+**AI Action (Tool Call):**
+```json
+{
+  "tool": "query_digital_twins",
+  "arguments": {
+    "query": "MATCH (emp:Twin)-[:assignedAsset]->(asset:Twin) WHERE emp.department = 'R&D' AND (asset.description CONTAINS 'DGX' OR asset.description CONTAINS 'Computing') RETURN emp.name, asset.description"
+  }
+}
+```
+
+---
+
+## Summary
+
+By connecting your AI directly to Konnektr via MCP, you create a **Self-Updating Knowledge Graph**. 
+
+* **Validated:** The AI follows the DTDL "Constitution".
+* **Semantic:** Vector embeddings allow for hybrid search.
+* **Persistent:** Identities are stable across conversations.
+
+This is the foundation for a truly autonomous "Digital Twin of Organization".

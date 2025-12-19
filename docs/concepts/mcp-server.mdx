@@ -95,6 +95,17 @@ The system supports semantic search using `pgvector`.
 ### 4. Graph Exploration
 - `ExploreGraphNeighborhood`: Quickly retrieve the subgraph surrounding a specific twin to understand context.
 
+## Hosted MCP Server
+
+Konnektr Graph provides a fully managed, hosted MCP server for every "Standard" tier instance.
+
+- **URL Format**: `https://{resource-id}.mcp.graph.konnektr.io`
+- **Authentication**: Uses the same OAuth 2.1 credentials and JWT tokens as the Konnektr API.
+- **Transport**: Supports both `http` and `sse` (Server-Sent Events) for real-time streaming.
+- **Demo Instance**: A public demo is available at `demo.mcp.graph.konnektr.io` for testing without authentication.
+
+For a step-by-step tutorial on building AI-driven memory systems, see the [How to Build a Business Twin with MCP](/docs/how-to-guides/mcp-server-business-twin) guide.
+
 ## Usage Guide for Agents
 
 ### Prerequisites

@@ -377,4 +377,31 @@ public static class DigitalTwinsTools
             return $"Failed to update embedding: {ex.Message}";
         }
     }
+
+    [McpServerTool, Description("Executes a Cypher query on the digital twins graph.")]
+    public static async Task<string> QueryDigitalTwins(
+        AgeDigitalTwinsClient client,
+        [Description("The Cypher query to execute")] string query,
+        CancellationToken cancellationToken = default
+    )
+    {
+        try
+        {
+            var results = new List<string>();
+            await foreach (var result in client.QueryAsync<string>(query, cancellationToken))
+            {
+                if (result != null)
+                {
+                    results.Add(result);
+                }
+            }
+            return results.Count != 0
+                ? $"[{string.Join(",", results)}]"
+                : "No results found.";
+        }
+        catch (Exception ex)
+        {
+            return $"Query failed: {ex.Message}";
+        }
+    }
 }
