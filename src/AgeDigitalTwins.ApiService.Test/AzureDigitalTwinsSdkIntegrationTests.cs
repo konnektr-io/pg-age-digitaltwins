@@ -318,4 +318,61 @@ public class AzureDigitalTwinsSdkIntegrationTests : IAsyncLifetime
         Assert.True(fetchedTwin.Contents.ContainsKey("temperature"));
         Assert.Equal(42, ((JsonElement)fetchedTwin.Contents["temperature"]).GetInt32());
     }
+    
+    [Fact]
+    public async Task CreateAndGetDigitalTwin_VerifiesEtagAndLastUpdateTime()
+    {
+        // Arrange
+        Assert.NotNull(_digitalTwinsClient);
+        await _digitalTwinsClient.CreateModelsAsync(
+            new List<string> { SampleData.DtdlTemperatureSensor }
+        );
+
+        string twinId = "testTwinEtag";
+        BasicDigitalTwin basicDigitalTwin =
+            new()
+            {
+                Id = twinId,
+                Metadata = new DigitalTwinMetadata
+                {
+                    ModelId = "dtmi:com:adt:dtsample:tempsensor;1",
+                },
+                Contents = new Dictionary<string, object> { { "temperature", 42 } },
+            };
+
+        // Act 1: Create
+        BasicDigitalTwin createdTwin = await _digitalTwinsClient.CreateOrReplaceDigitalTwinAsync(
+            twinId,
+            basicDigitalTwin
+        );
+
+        // Assert 1: The returned twin should have a LastUpdateTime and an Etag
+        Assert.NotNull(createdTwin.ETag);
+        Assert.NotNull(createdTwin.LastUpdatedOn);
+
+        // Act 2: Get the same twin with BasicDigitalTwin as a return type
+        BasicDigitalTwin fetchedBasicTwin =
+            await _digitalTwinsClient.GetDigitalTwinAsync<BasicDigitalTwin>(twinId);
+
+        // Assert 2: LastUpdateTime and Etag should be the same
+        Assert.Equal(createdTwin.ETag, fetchedBasicTwin.ETag);
+        Assert.Equal(createdTwin.LastUpdatedOn, fetchedBasicTwin.LastUpdatedOn);
+
+        // Act 3: Get the same twin with JsonDocument as a return type
+        Response<JsonDocument> response = await _digitalTwinsClient.GetDigitalTwinAsync<JsonDocument>(
+            twinId
+        );
+        JsonElement root = response.Value.RootElement;
+
+        // Assert 3: The $etag should be the same
+        Assert.True(root.TryGetProperty("$etag", out JsonElement etagProp));
+        Assert.Equal(createdTwin.ETag.ToString().Replace("\"", ""), etagProp.GetString());
+
+        // Assert 4: The $lastUpdateTime should be in $metadata.$lastUpdateTime and should have the same value
+        Assert.True(root.TryGetProperty("$metadata", out JsonElement metadataProp));
+        Assert.True(metadataProp.TryGetProperty("$lastUpdateTime", out JsonElement lastUpdateProp));
+
+        DateTimeOffset actualLastUpdate = DateTimeOffset.Parse(lastUpdateProp.GetString()!);
+        Assert.Equal(createdTwin.LastUpdatedOn.Value, actualLastUpdate);
+    }
 }
