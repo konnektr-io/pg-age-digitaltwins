@@ -8,6 +8,23 @@ public static class RequestHelper
     private const int DefaultMaxItemsPerPage = 2000;
 
     /// <summary>
+    /// Parses the max-items-per-page value from HTTP headers.
+    /// </summary>
+    /// <param name="httpContext">The HTTP context containing headers.</param>
+    /// <returns>The max items per page value, or the default if not specified.</returns>
+    public static int? ParseMaxItemsPerPage(HttpContext httpContext)
+    {
+        if (httpContext.Request.Headers.TryGetValue("max-items-per-page", out var maxItemsHeader))
+        {
+            if (int.TryParse(maxItemsHeader, out var maxItems))
+            {
+                return maxItems;
+            }
+        }
+        return DefaultMaxItemsPerPage;
+    }
+
+    /// <summary>
     /// Parses pagination parameters from HTTP headers and query string.
     /// </summary>
     /// <param name="httpContext">The HTTP context containing headers and query parameters.</param>
@@ -16,14 +33,7 @@ public static class RequestHelper
         HttpContext httpContext
     )
     {
-        int? maxItemsPerPage = DefaultMaxItemsPerPage;
-        if (httpContext.Request.Headers.TryGetValue("max-items-per-page", out var maxItemsHeader))
-        {
-            if (int.TryParse(maxItemsHeader, out var maxItems))
-            {
-                maxItemsPerPage = maxItems;
-            }
-        }
+        int? maxItemsPerPage = ParseMaxItemsPerPage(httpContext);
 
         string? continuationToken = null;
         if (
@@ -50,14 +60,7 @@ public static class RequestHelper
         JsonElement requestBody
     )
     {
-        int? maxItemsPerPage = DefaultMaxItemsPerPage;
-        if (httpContext.Request.Headers.TryGetValue("max-items-per-page", out var maxItemsHeader))
-        {
-            if (int.TryParse(maxItemsHeader, out var maxItems))
-            {
-                maxItemsPerPage = maxItems;
-            }
-        }
+        int? maxItemsPerPage = ParseMaxItemsPerPage(httpContext);
 
         string? continuationToken = null;
         if (

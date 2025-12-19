@@ -17,7 +17,7 @@ public class OAuthMetadataOptions
 
     /// <summary>
     /// Gets or sets the resource server URL (this MCP server's URL).
-    /// Example: "https://your-mcp-server.com"
+    /// Example: "https://{resource-id}.mcp.graph.konnektr.io"
     /// </summary>
     public string ResourceServerUrl { get; set; } = "";
 }

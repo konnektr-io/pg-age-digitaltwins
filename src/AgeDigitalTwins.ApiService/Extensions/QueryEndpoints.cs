@@ -1,5 +1,7 @@
 using System.Text.Json;
 using AgeDigitalTwins.ApiService.Helpers;
+using AgeDigitalTwins.ApiService.Models;
+using AgeDigitalTwins.Models;
 using AgeDigitalTwins.ServiceDefaults.Authorization;
 using AgeDigitalTwins.ServiceDefaults.Authorization.Models;
 using Microsoft.AspNetCore.Authorization;
@@ -21,24 +23,15 @@ public static class QueryEndpoints
                 [Authorize]
                 async (
                     HttpContext httpContext,
-                    JsonElement requestBody,
+                    QueryRequest request,
                     [FromServices] AgeDigitalTwinsClient client,
                     CancellationToken cancellationToken
                 ) =>
                 {
-                    var (maxItemsPerPage, continuationToken) =
-                        RequestHelper.ParsePaginationFromBody(httpContext, requestBody);
-
-                    string? query = null;
                     if (
-                        requestBody.TryGetProperty("query", out JsonElement queryElement)
-                        && queryElement.ValueKind == JsonValueKind.String
+                        string.IsNullOrEmpty(request.ContinuationToken)
+                        && string.IsNullOrEmpty(request.Query)
                     )
-                    {
-                        query = queryElement.GetString();
-                    }
-
-                    if (string.IsNullOrEmpty(continuationToken) && string.IsNullOrEmpty(query))
                     {
                         return Results.BadRequest(
                             new
@@ -50,8 +43,12 @@ public static class QueryEndpoints
 
                     var page = await client
                         // Query can be empty in case of a continuation token, as the cypher query is also embedded in the continuation token
-                        .QueryAsync<JsonDocument>(query ?? string.Empty, cancellationToken)
-                        .AsPages(continuationToken, maxItemsPerPage, cancellationToken)
+                        .QueryAsync<JsonDocument>(request.Query ?? string.Empty, cancellationToken)
+                        .AsPages(
+                            request.ContinuationToken,
+                            RequestHelper.ParseMaxItemsPerPage(httpContext),
+                            cancellationToken
+                        )
                         .FirstAsync(cancellationToken);
 
                     // Set X-Query-Charge header
@@ -71,7 +68,8 @@ public static class QueryEndpoints
             .WithMetadata(new Middleware.WeightedQueryPolicyAttribute())
             .WithName("Query")
             .WithTags("Query")
-            .WithSummary("Executes a query against the digital twins graph with pagination.");
+            .WithSummary("Executes a query against the digital twins graph with pagination.")
+            .Produces<Page<JsonDocument?>>();
 
         return app;
     }
