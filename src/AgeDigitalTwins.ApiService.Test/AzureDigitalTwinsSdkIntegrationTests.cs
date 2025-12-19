@@ -366,7 +366,7 @@ public class AzureDigitalTwinsSdkIntegrationTests : IAsyncLifetime
 
         // Assert 3: The $etag should be the same
         Assert.True(root.TryGetProperty("$etag", out JsonElement etagProp));
-        Assert.Equal(createdTwin.ETag.ToString().Replace("\"", ""), etagProp.GetString());
+        Assert.Equal(createdTwin.ETag.ToString(), etagProp.GetString());
 
         // Assert 4: The $lastUpdateTime should be in $metadata.$lastUpdateTime and should have the same value
         Assert.True(root.TryGetProperty("$metadata", out JsonElement metadataProp));
