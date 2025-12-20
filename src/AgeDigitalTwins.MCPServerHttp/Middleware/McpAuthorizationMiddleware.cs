@@ -1,9 +1,9 @@
 using System.Security.Claims;
+using AgeDigitalTwins.MCPServerHttp.Configuration;
 using AgeDigitalTwins.ServiceDefaults.Authorization;
 using AgeDigitalTwins.ServiceDefaults.Authorization.Models;
-using AgeDigitalTwins.MCPServerHttp.Configuration;
-using Microsoft.Extensions.Options;
 using AgeDigitalTwins.ServiceDefaults.Configuration;
+using Microsoft.Extensions.Options;
 
 namespace AgeDigitalTwins.MCPServerHttp.Middleware;
 
@@ -21,7 +21,8 @@ public class McpAuthorizationMiddleware
     public McpAuthorizationMiddleware(
         RequestDelegate next,
         IOptions<AuthorizationOptions> options,
-        ILogger<McpAuthorizationMiddleware> logger)
+        ILogger<McpAuthorizationMiddleware> logger
+    )
     {
         _next = next;
         _options = options.Value;
@@ -32,6 +33,17 @@ public class McpAuthorizationMiddleware
     {
         // Skip for metadata endpoints
         if (context.Request.Path.StartsWithSegments("/.well-known"))
+        {
+            await _next(context);
+            return;
+        }
+
+        // Skip for health check endpoints (Kubernetes probes)
+        if (
+            context.Request.Path.StartsWithSegments("/health")
+            || context.Request.Path.StartsWithSegments("/alive")
+            || context.Request.Path.StartsWithSegments("/ready")
+        )
         {
             await _next(context);
             return;
@@ -54,14 +66,17 @@ public class McpAuthorizationMiddleware
         // Check required OAuth scopes (MCP-specific requirement from RFC 9728)
         // Note: Permission checking is handled by the policy-based authorization system,
         // not in this middleware. This middleware only validates OAuth scopes.
-        var scopes = context.User
-            .FindAll("scope")
+        var scopes = context
+            .User.FindAll("scope")
             .SelectMany(c => c.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        var hasRequiredScope = _options.RequiredScopes.Length == 0 || _options.RequiredScopes.Any(required =>
-            scopes.Contains(required, StringComparer.OrdinalIgnoreCase));
+        var hasRequiredScope =
+            _options.RequiredScopes.Length == 0
+            || _options.RequiredScopes.Any(required =>
+                scopes.Contains(required, StringComparer.OrdinalIgnoreCase)
+            );
 
         if (!hasRequiredScope)
         {
@@ -73,12 +88,14 @@ public class McpAuthorizationMiddleware
             );
 
             context.Response.StatusCode = StatusCodes.Status403Forbidden;
-            await context.Response.WriteAsJsonAsync(new
-            {
-                error = "insufficient_scope",
-                error_description = $"Required scopes: {string.Join(", ", _options.RequiredScopes)}",
-                scope = string.Join(" ", _options.RequiredScopes)
-            });
+            await context.Response.WriteAsJsonAsync(
+                new
+                {
+                    error = "insufficient_scope",
+                    error_description = $"Required scopes: {string.Join(", ", _options.RequiredScopes)}",
+                    scope = string.Join(" ", _options.RequiredScopes),
+                }
+            );
             return;
         }
 
@@ -94,19 +111,23 @@ public class McpAuthorizationMiddleware
     private async Task SendUnauthorizedResponseAsync(HttpContext context)
     {
         context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-        
-        // Build the resource metadata URL
-        var resourceMetadataUrl = $"{context.Request.Scheme}://{context.Request.Host}/.well-known/oauth-protected-resource";
-        
-        context.Response.Headers.Append("WWW-Authenticate",
-            $"Bearer realm=\"mcp\", resource_metadata=\"{resourceMetadataUrl}\"");
 
-        await context.Response.WriteAsJsonAsync(new
-        {
-            error = "unauthorized",
-            error_description = "Authentication required. Please provide a valid Bearer token.",
-            resource_metadata = resourceMetadataUrl
-        });
+        // Build the resource metadata URL
+        var resourceMetadataUrl =
+            $"{context.Request.Scheme}://{context.Request.Host}/.well-known/oauth-protected-resource";
+
+        context.Response.Headers.Append(
+            "WWW-Authenticate",
+            $"Bearer realm=\"mcp\", resource_metadata=\"{resourceMetadataUrl}\""
+        );
+
+        await context.Response.WriteAsJsonAsync(
+            new
+            {
+                error = "unauthorized",
+                error_description = "Authentication required. Please provide a valid Bearer token.",
+                resource_metadata = resourceMetadataUrl,
+            }
+        );
     }
 }
-
