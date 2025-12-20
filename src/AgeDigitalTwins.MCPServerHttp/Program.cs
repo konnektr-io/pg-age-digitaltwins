@@ -1,15 +1,14 @@
-
 using AgeDigitalTwins;
-using AgeDigitalTwins.ServiceDefaults.Authorization;
-using AgeDigitalTwins.ServiceDefaults.Authorization.Models;
 using AgeDigitalTwins.MCPServerHttp.Configuration;
 using AgeDigitalTwins.MCPServerHttp.Endpoints;
 using AgeDigitalTwins.MCPServerHttp.Middleware;
+using AgeDigitalTwins.ServiceDefaults.Authorization;
+using AgeDigitalTwins.ServiceDefaults.Authorization.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.IdentityModel.Tokens;
 using Npgsql;
 using Npgsql.Age;
-using Microsoft.AspNetCore.Authorization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -27,23 +26,33 @@ if (useCors)
     var allowedOrigins = corsSection.GetSection("AllowedOrigins").Get<string[]>();
     if (allowedOrigins == null || allowedOrigins.Length == 0)
     {
-        throw new InvalidOperationException("CORS is enabled but no AllowedOrigins are specified in configuration.");
+        throw new InvalidOperationException(
+            "CORS is enabled but no AllowedOrigins are specified in configuration."
+        );
     }
     if (allowedOrigins.Contains("*"))
     {
-        throw new InvalidOperationException("Wildcard origins ('*') are not supported when credentials are allowed. Please specify explicit origins in configuration.");
+        throw new InvalidOperationException(
+            "Wildcard origins ('*') are not supported when credentials are allowed. Please specify explicit origins in configuration."
+        );
     }
-    var allowedMethods = corsSection.GetSection("AllowedMethods").Get<string[]>() ?? new[] { "GET", "POST", "PUT", "DELETE", "OPTIONS" };
+    var allowedMethods =
+        corsSection.GetSection("AllowedMethods").Get<string[]>()
+        ?? new[] { "GET", "POST", "PUT", "DELETE", "OPTIONS" };
     var allowedHeaders = corsSection.GetSection("AllowedHeaders").Get<string[]>() ?? new[] { "*" };
     builder.Services.AddCors(options =>
     {
-        options.AddPolicy("ConfiguredCors", policy =>
-        {
-            policy.WithOrigins(allowedOrigins)
-                  .WithMethods(allowedMethods)
-                  .WithHeaders(allowedHeaders)
-                  .AllowCredentials();
-        });
+        options.AddPolicy(
+            "ConfiguredCors",
+            policy =>
+            {
+                policy
+                    .WithOrigins(allowedOrigins)
+                    .WithMethods(allowedMethods)
+                    .WithHeaders(allowedHeaders)
+                    .AllowCredentials();
+            }
+        );
     });
 }
 
@@ -151,7 +160,6 @@ if (enableAuthentication)
 
     if (enableAuthorization)
     {
-        
         // Configure authorization options
         builder.Services.Configure<AgeDigitalTwins.ServiceDefaults.Configuration.AuthorizationOptions>(
             builder.Configuration.GetSection("Authorization")
@@ -166,7 +174,9 @@ if (enableAuthentication)
         builder.Services.AddScoped<ClaimsPermissionProvider>();
 
         // Conditionally register the API provider and its dependencies
-        if (authorizationConfig?.Provider?.Equals("Api", StringComparison.OrdinalIgnoreCase) == true)
+        if (
+            authorizationConfig?.Provider?.Equals("Api", StringComparison.OrdinalIgnoreCase) == true
+        )
         {
             builder.Services.AddMemoryCache();
             builder.Services.AddHttpClient(
@@ -177,7 +187,9 @@ if (enableAuthentication)
                     {
                         client.BaseAddress = new Uri(authorizationConfig.ApiProvider.BaseUrl);
                     }
-                    client.Timeout = TimeSpan.FromSeconds(authorizationConfig.ApiProvider?.TimeoutSeconds ?? 10);
+                    client.Timeout = TimeSpan.FromSeconds(
+                        authorizationConfig.ApiProvider?.TimeoutSeconds ?? 10
+                    );
                 }
             );
             builder.Services.AddScoped<ApiPermissionProvider>();
@@ -189,10 +201,13 @@ if (enableAuthentication)
             var logger = sp.GetRequiredService<ILogger<CompositePermissionProvider>>();
             var providers = new List<IPermissionProvider>
             {
-                sp.GetRequiredService<ClaimsPermissionProvider>()
+                sp.GetRequiredService<ClaimsPermissionProvider>(),
             };
 
-            if (authorizationConfig?.Provider?.Equals("Api", StringComparison.OrdinalIgnoreCase) == true)
+            if (
+                authorizationConfig?.Provider?.Equals("Api", StringComparison.OrdinalIgnoreCase)
+                == true
+            )
             {
                 providers.Add(sp.GetRequiredService<ApiPermissionProvider>());
             }
@@ -215,10 +230,13 @@ if (enableAuthentication)
 }
 
 builder.Services.AddHttpContextAccessor();
-builder.Services.AddMcpServer().WithPromptsFromAssembly().WithToolsFromAssembly().WithHttpTransport();
+builder
+    .Services.AddMcpServer()
+    .WithPromptsFromAssembly()
+    .WithToolsFromAssembly()
+    .WithHttpTransport();
 
 var app = builder.Build();
-
 
 // Use CORS before authentication and endpoints
 if (useCors)
@@ -226,18 +244,21 @@ if (useCors)
     app.UseCors("ConfiguredCors");
 }
 
+// Health Checks and Default Endpoints
+app.MapDefaultEndpoints();
+
 // OAuth metadata endpoints (must be before authentication middleware)
 app.MapOAuthMetadataEndpoints();
 
 if (enableAuthentication)
 {
     app.UseAuthentication();
-    
+
     if (enableAuthorization)
     {
         app.UseMiddleware<McpAuthorizationMiddleware>();
     }
-    
+
     app.UseAuthorization();
 }
 
@@ -259,7 +280,5 @@ else
 {
     app.MapMcp();
 }
-
-app.MapDefaultEndpoints();
 
 app.Run();
