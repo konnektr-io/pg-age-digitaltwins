@@ -131,14 +131,15 @@ public static class Extensions
 
         // All health checks must pass for app to be
         // considered ready to accept traffic after starting
-        healthChecks.MapHealthChecks("/health");
+        // Allow anonymous access for Kubernetes probes
+        healthChecks.MapHealthChecks("/health").AllowAnonymous();
 
         // Only health checks tagged with the "live" tag
         // must pass for app to be considered alive
-        healthChecks.MapHealthChecks(
-            "/alive",
-            new() { Predicate = static r => r.Tags.Contains("live") }
-        );
+        // Allow anonymous access for Kubernetes probes
+        healthChecks
+            .MapHealthChecks("/alive", new() { Predicate = static r => r.Tags.Contains("live") })
+            .AllowAnonymous();
 
         return app;
     }
