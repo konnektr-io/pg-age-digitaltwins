@@ -17,4 +17,3 @@ public enum SinkEventType
     TwinLifecycle,
     RelationshipLifecycle,
 }
-
