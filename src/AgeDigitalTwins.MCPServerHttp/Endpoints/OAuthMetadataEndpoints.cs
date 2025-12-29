@@ -28,20 +28,14 @@ public static class OAuthMetadataEndpoints
                     var mcp = mcpOptions.Value;
                     var authz = authzOptions.Value;
 
-                    // Get the authority from Authentication configuration
+                    // Get the resource and authority from Authentication configuration
+                    var resource = configuration["Authentication:Audience"];
                     var authority = configuration["Authentication:Issuer"];
-
-                    // Build the resource server URL if not configured
-                    var resourceServerUrl = mcp.ResourceServerUrl;
-                    if (string.IsNullOrEmpty(resourceServerUrl))
-                    {
-                        resourceServerUrl = $"https://{context.Request.Host}";
-                    }
 
                     return Results.Json(
                         new
                         {
-                            resource = resourceServerUrl,
+                            resource,
                             authorization_servers = new[] { authority },
                             scopes_supported = authz.ScopesSupported,
                             bearer_methods_supported = new[] { "header" },
