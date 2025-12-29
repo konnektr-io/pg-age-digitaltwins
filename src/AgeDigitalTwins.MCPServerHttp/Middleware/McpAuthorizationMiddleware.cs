@@ -114,7 +114,7 @@ public class McpAuthorizationMiddleware
 
         // Build the resource metadata URL
         var resourceMetadataUrl =
-            $"{context.Request.Scheme}://{context.Request.Host}/.well-known/oauth-protected-resource";
+            $"https://{context.Request.Host}/.well-known/oauth-protected-resource";
 
         context.Response.Headers.Append(
             "WWW-Authenticate",
