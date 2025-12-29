@@ -35,7 +35,7 @@ public static class OAuthMetadataEndpoints
                     var resourceServerUrl = mcp.ResourceServerUrl;
                     if (string.IsNullOrEmpty(resourceServerUrl))
                     {
-                        resourceServerUrl = $"{context.Request.Scheme}://{context.Request.Host}";
+                        resourceServerUrl = $"https://{context.Request.Host}";
                     }
 
                     return Results.Json(
