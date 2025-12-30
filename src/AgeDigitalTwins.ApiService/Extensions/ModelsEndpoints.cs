@@ -1,8 +1,8 @@
 using System.Text.Json;
-using AgeDigitalTwins.ServiceDefaults.Authorization;
 using AgeDigitalTwins.ApiService.Helpers;
 using AgeDigitalTwins.ApiService.Models;
 using AgeDigitalTwins.Models;
+using AgeDigitalTwins.ServiceDefaults.Authorization;
 using AgeDigitalTwins.ServiceDefaults.Authorization.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -119,6 +119,30 @@ public static class ModelsEndpoints
             .RequireRateLimiting("AdminOperations")
             .WithName("DeleteModel")
             .WithSummary("Deletes a specific model by its ID.");
+
+        modelsGroup
+            .MapPost(
+                "/search",
+                [Authorize]
+                async (
+                    [FromBody] ModelSearchRequest request,
+                    [FromServices] AgeDigitalTwinsClient client,
+                    CancellationToken cancellationToken
+                ) =>
+                {
+                    var results = await client.SearchModelsAsync(
+                        request.Query,
+                        request.Vector,
+                        request.Limit ?? 10,
+                        cancellationToken
+                    );
+                    return Results.Json(results);
+                }
+            )
+            .RequirePermission(ResourceType.Models, PermissionAction.Read)
+            .RequireRateLimiting("AdminOperations")
+            .WithName("SearchModels")
+            .WithSummary("Searches models using lexical and/or vector similarity.");
 
         return app;
     }

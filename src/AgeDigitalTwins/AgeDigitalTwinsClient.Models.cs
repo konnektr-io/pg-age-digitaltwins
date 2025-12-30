@@ -581,6 +581,7 @@ RETURN COUNT(m) AS deletedCount";
 
         return modelId;
     }
+
     /// <summary>
     /// Retrieves a model with its schema flattened (including inherited properties, relationships, and components).
     /// </summary>
@@ -597,11 +598,12 @@ RETURN COUNT(m) AS deletedCount";
             ConvertToAsyncEnumerable(new[] { modelId }),
             cancellationToken: cancellationToken
         );
-        
-        var targetInterface = parsedModel.Values
-            .OfType<DTInterfaceInfo>()
-            .FirstOrDefault(i => i.Id == dtmi)
-            ?? throw new ModelNotFoundException($"Model {modelId} not found or is not an interface.");
+
+        var targetInterface =
+            parsedModel.Values.OfType<DTInterfaceInfo>().FirstOrDefault(i => i.Id == dtmi)
+            ?? throw new ModelNotFoundException(
+                $"Model {modelId} not found or is not an interface."
+            );
 
         var properties = new Dictionary<string, object>();
         var relationships = new Dictionary<string, object>();
@@ -625,7 +627,7 @@ RETURN COUNT(m) AS deletedCount";
                         name = prop.Name,
                         schema = prop.Schema.Id.AbsoluteUri,
                         description = prop.Description.Values.FirstOrDefault() ?? "",
-                        writable = prop.Writable
+                        writable = prop.Writable,
                     };
                 }
                 else if (content is DTRelationshipInfo rel)
@@ -638,7 +640,7 @@ RETURN COUNT(m) AS deletedCount";
                         properties = rel.Properties.ToDictionary(
                             p => p.Name,
                             p => new { schema = p.Schema.Id.AbsoluteUri }
-                        )
+                        ),
                     };
                 }
                 else if (content is DTComponentInfo comp)
@@ -647,7 +649,7 @@ RETURN COUNT(m) AS deletedCount";
                     {
                         name = comp.Name,
                         schema = comp.Schema.Id.AbsoluteUri,
-                        description = comp.Description.Values.FirstOrDefault() ?? ""
+                        description = comp.Description.Values.FirstOrDefault() ?? "",
                     };
                 }
             }
@@ -662,10 +664,9 @@ RETURN COUNT(m) AS deletedCount";
             ["description"] = targetInterface.Description.Values.FirstOrDefault() ?? "",
             ["properties"] = properties,
             ["relationships"] = relationships,
-            ["components"] = components
+            ["components"] = components,
         };
     }
-
 
     /// <summary>
     /// Updates the embedding for a specific model asynchronously.
@@ -680,12 +681,13 @@ RETURN COUNT(m) AS deletedCount";
     )
     {
         string vectorString = JsonSerializer.Serialize(embedding);
-        string cypher = $@"MATCH (m:Model {{id: '{modelId}'}}) SET m.embedding = {vectorString}::vector";
-        
+        string cypher =
+            $@"MATCH (m:Model {{id: '{modelId}'}}) SET m.embedding = {vectorString}::vector";
+
         await using var connection = await _dataSource.OpenConnectionAsync(
-             TargetSessionAttributes.ReadWrite,
-             cancellationToken
-         );
+            TargetSessionAttributes.ReadWrite,
+            cancellationToken
+        );
         await using var command = connection.CreateCypherCommand(_graphName, cypher);
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
@@ -707,26 +709,29 @@ RETURN COUNT(m) AS deletedCount";
     {
         if (string.IsNullOrWhiteSpace(query) && vector == null)
         {
-             // If no criteria, regular list with limit
-             var models = new List<DigitalTwinsModelData>();
-             await foreach(var m in GetModelsAsync(cancellationToken: cancellationToken))
-             {
-                 if (models.Count >= limit) break;
-                 if (m != null) models.Add(m);
-             }
-             return models;
+            // If no criteria, regular list with limit
+            var models = new List<DigitalTwinsModelData>();
+            await foreach (var m in GetModelsAsync(cancellationToken: cancellationToken))
+            {
+                if (models.Count >= limit)
+                    break;
+                if (m != null)
+                    models.Add(m);
+            }
+            return models;
         }
 
         string cypher;
         if (vector != null)
         {
-             string vectorString = JsonSerializer.Serialize(vector);
-             string whereClause = !string.IsNullOrWhiteSpace(query)
-                 ? $" WHERE (toLower(toString(m.displayName)) CONTAINS toLower('{query.Replace("'", "\\'")}') OR toLower(toString(m.description)) CONTAINS toLower('{query.Replace("'", "\\'")}') OR toLower(m.id) CONTAINS toLower('{query.Replace("'", "\\'")}' )) "
-                 : "";
-                 
-             // Hybrid: Vector + Filter
-             cypher = $@"
+            string vectorString = JsonSerializer.Serialize(vector);
+            string whereClause = !string.IsNullOrWhiteSpace(query)
+                ? $" WHERE (toLower(toString(m.displayName)) CONTAINS toLower('{query.Replace("'", "\\'")}') OR toLower(toString(m.description)) CONTAINS toLower('{query.Replace("'", "\\'")}') OR toLower(m.id) CONTAINS toLower('{query.Replace("'", "\\'")}' )) "
+                : "";
+
+            // Hybrid: Vector + Filter
+            cypher =
+                $@"
                 MATCH (m:Model)
                 {whereClause}
                 RETURN m
@@ -735,12 +740,13 @@ RETURN COUNT(m) AS deletedCount";
         }
         else
         {
-             // Lexical only
-             // Using CONTAINS (case-insensitive simulation via toLower)
-             // Note: m.displayName and m.description are maps, so toString(m.displayName) might result in valid JSON string which contains the value. 
-             // Ideally we should look into specific language values, but generic string check is a good approximation for 'CONTAINS'.
-             string q = query!.Replace("'", "\\'");
-             cypher = $@"
+            // Lexical only
+            // Using CONTAINS (case-insensitive simulation via toLower)
+            // Note: m.displayName and m.description are maps, so toString(m.displayName) might result in valid JSON string which contains the value.
+            // Ideally we should look into specific language values, but generic string check is a good approximation for 'CONTAINS'.
+            string q = query!.Replace("'", "\\'");
+            cypher =
+                $@"
                 MATCH (m:Model)
                 WHERE toLower(toString(m.displayName)) CONTAINS toLower('{q}') 
                    OR toLower(toString(m.description)) CONTAINS toLower('{q}')
@@ -750,25 +756,26 @@ RETURN COUNT(m) AS deletedCount";
         }
 
         await using var connection = await _dataSource.OpenConnectionAsync(
-             TargetSessionAttributes.PreferStandby,
-             cancellationToken
-         );
+            TargetSessionAttributes.PreferStandby,
+            cancellationToken
+        );
 
         await using var command = connection.CreateCypherCommand(_graphName, cypher);
-        
+
         var results = new List<DigitalTwinsModelData>();
-        try {
+        try
+        {
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
             {
-                 var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
-                 var vertex = (Vertex)agResult;
-                 results.Add(new DigitalTwinsModelData(vertex.Properties));
+                var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
+                var vertex = (Vertex)agResult;
+                results.Add(new DigitalTwinsModelData(vertex.Properties));
             }
         }
         catch (Exception)
         {
-            // Fallback or rethrow? 
+            // Fallback or rethrow?
             // If vector search fails (e.g., extensions not installed), we might bubble it up.
             throw;
         }
