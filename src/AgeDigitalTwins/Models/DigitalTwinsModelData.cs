@@ -57,6 +57,36 @@ namespace AgeDigitalTwins.Models
         [JsonPropertyName("embedding")]
         public double[]? Embedding { get; set; }
 
+        /// <summary>
+        /// Properties defined in the model and inherited from base models.
+        /// </summary>
+        [JsonPropertyName("properties")]
+        public JsonElement? Properties { get; set; }
+
+        /// <summary>
+        /// Relationships defined in the model and inherited from base models.
+        /// </summary>
+        [JsonPropertyName("relationships")]
+        public JsonElement? Relationships { get; set; }
+
+        /// <summary>
+        /// Components defined in the model and inherited from base models.
+        /// </summary>
+        [JsonPropertyName("components")]
+        public JsonElement? Components { get; set; }
+
+        /// <summary>
+        /// Telemetries defined in the model and inherited from base models.
+        /// </summary>
+        [JsonPropertyName("telemetries")]
+        public JsonElement? Telemetries { get; set; }
+
+        /// <summary>
+        /// Commands defined in the model and inherited from base models.
+        /// </summary>
+        [JsonPropertyName("commands")]
+        public JsonElement? Commands { get; set; }
+
         [JsonConstructor]
         public DigitalTwinsModelData(
             string id,
@@ -163,9 +193,11 @@ namespace AgeDigitalTwins.Models
                 modelData.TryGetValue("embedding", out var embeddingValue)
                 && embeddingValue is List<object> embeddingList
                     ? [.. embeddingList.Select(x => Convert.ToDouble(x))]
-                    :_ = modelData.TryGetValue("embedding", out var embeddingVectorValue) && embeddingVectorValue is double[] embeddingVector
-                        ? embeddingVector
-                        : null;
+                    : _ =
+                        modelData.TryGetValue("embedding", out var embeddingVectorValue)
+                        && embeddingVectorValue is double[] embeddingVector
+                            ? embeddingVector
+                            : null;
         }
 
         public DigitalTwinsModelData(string dtdlModel)

@@ -85,6 +85,7 @@ MATCH (m:Model {{id: dependency}})
     /// <exception cref="ModelNotFoundException">Thrown when the model with the specified ID is not found.</exception>
     public virtual async Task<DigitalTwinsModelData> GetModelAsync(
         string modelId,
+        GetModelOptions? options = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -94,6 +95,13 @@ MATCH (m:Model {{id: dependency}})
         try
         {
             string cypher = $@"MATCH (m:Model {{id: '{modelId}'}}) RETURN m";
+            // TODO: implement IncludeBaseModelContents option
+            // Fetch all base models (similar to dependencies for in listmodels)
+            // Then get the contents of this model AND the base models
+            // Then group all the properties, relationships, components, telemetries, commands together
+            // And store them in the resulting DigitalTwinsModelData object
+
+
             await using var connection = await _dataSource.OpenConnectionAsync(
                 TargetSessionAttributes.PreferStandby,
                 cancellationToken
@@ -482,7 +490,7 @@ RETURN COUNT(m) AS deletedCount";
         if (_modelCacheExpiration == TimeSpan.Zero)
         {
             // If cache expiration is set to zero, do not use the cache
-            return await GetModelAsync(modelId, cancellationToken);
+            return await GetModelAsync(modelId, cancellationToken: cancellationToken);
         }
         return await _modelCache.GetOrCreateAsync(
             modelId,
@@ -495,7 +503,7 @@ RETURN COUNT(m) AS deletedCount";
                     }
                 );
 
-                return await GetModelAsync(modelId, cancellationToken);
+                return await GetModelAsync(modelId, cancellationToken: cancellationToken);
             }
         );
     }
