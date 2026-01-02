@@ -557,10 +557,6 @@ RETURN COUNT(m) AS deletedCount";
                 var agResult = await reader.GetFieldValueAsync<Agtype?>(0).ConfigureAwait(false);
                 rowsAffected = (int)agResult;
             }
-            if (rowsAffected <= 0)
-            {
-                throw new ModelNotFoundException($"No models found");
-            }
         }
         catch (Exception ex)
         {
