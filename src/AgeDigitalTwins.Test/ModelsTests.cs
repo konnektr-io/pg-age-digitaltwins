@@ -517,4 +517,39 @@ public class ModelsTests : TestBase
         Assert.Equal(JsonValueKind.Array, descendants.ValueKind);
         Assert.Equal(2, descendants.GetArrayLength());
     }
+
+    [Fact]
+    public async Task GetModelAsync_IncludesAllBaseProperties_WhenIncludeBaseModelContentsTrue()
+    {
+        // Arrange: Clean up and create base and derived models
+        await Client.DeleteAllModelsAsync();
+        string[] models = { SampleData.DtdlCelestialBody, SampleData.DtdlPlanet };
+        await Client.CreateModelsAsync(models);
+
+        // Act: Get the derived model with base contents included
+        var result = await Client.GetModelAsync(
+            "dtmi:com:contoso:Planet;1",
+            new() { IncludeBaseModelContents = true }
+        );
+
+        // Assert: All properties from both base and derived should be present
+        Assert.NotNull(result.Properties);
+        var props = result.Properties;
+        var propNames = props.Select(p => p.GetProperty("name").GetString()).ToList();
+        // CelestialBody: name, mass, temperature; Planet: hasLife
+        Assert.Contains("name", propNames);
+        Assert.Contains("mass", propNames);
+        Assert.Contains("temperature", propNames);
+        Assert.Contains("hasLife", propNames);
+        // Should not contain duplicates
+        Assert.Equal(4, propNames.Distinct().Count());
+
+        // Check relationships
+        Assert.NotNull(result.Relationships);
+        var relNames = result.Relationships.Select(r => r.GetProperty("name").GetString()).ToList();
+        // CelestialBody: orbits; Planet: satellites
+        Assert.Contains("orbits", relNames);
+        Assert.Contains("satellites", relNames);
+        Assert.Equal(2, relNames.Distinct().Count());
+    }
 }
