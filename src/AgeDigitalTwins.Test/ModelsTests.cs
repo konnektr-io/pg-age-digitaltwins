@@ -523,7 +523,12 @@ public class ModelsTests : TestBase
     {
         // Arrange: Clean up and create base and derived models
         await Client.DeleteAllModelsAsync();
-        string[] models = { SampleData.DtdlCelestialBody, SampleData.DtdlPlanet };
+        string[] models =
+        {
+            SampleData.DtdlCelestialBody,
+            SampleData.DtdlPlanet,
+            SampleData.DtdlCrater,
+        };
         await Client.CreateModelsAsync(models);
 
         // Act: Get the derived model with base contents included

@@ -314,22 +314,8 @@ public static class DeleteJob
         CancellationToken cancellationToken
     )
     {
-        try
-        {
-            // Use the existing DeleteAllModelsAsync method which handles dependencies correctly
-            await client.DeleteAllModelsAsync(cancellationToken);
-
-            // We can't easily get the exact count of deleted models from the existing method,
-            // so we'll set a reasonable number or query for it
-            result.ModelsDeleted = 1; // At least one was deleted or it would have thrown
-            checkpoint.ModelsDeleted = result.ModelsDeleted;
-        }
-        catch (ModelNotFoundException)
-        {
-            // No models to delete, this is fine
-            result.ModelsDeleted = 0;
-            checkpoint.ModelsDeleted = 0;
-        }
+        result.ModelsDeleted = await client.DeleteAllModelsAsync(cancellationToken);
+        checkpoint.ModelsDeleted = result.ModelsDeleted;
     }
 
     private static async Task<int> DeleteRelationshipsBatchAsync(

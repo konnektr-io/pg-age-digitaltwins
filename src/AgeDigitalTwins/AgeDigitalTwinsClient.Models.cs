@@ -534,7 +534,9 @@ RETURN COUNT(m) AS deletedCount";
     /// </summary>
     /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
     /// <returns>A task that represents the asynchronous operation.</returns>
-    public virtual async Task DeleteAllModelsAsync(CancellationToken cancellationToken = default)
+    public virtual async Task<int> DeleteAllModelsAsync(
+        CancellationToken cancellationToken = default
+    )
     {
         using var activity = ActivitySource.StartActivity(
             "DeleteAllModelsAsync",
@@ -557,6 +559,7 @@ RETURN COUNT(m) AS deletedCount";
                 var agResult = await reader.GetFieldValueAsync<Agtype?>(0).ConfigureAwait(false);
                 rowsAffected = (int)agResult;
             }
+            return rowsAffected;
         }
         catch (Exception ex)
         {
