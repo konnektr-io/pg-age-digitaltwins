@@ -102,6 +102,37 @@ public static class ModelsEndpoints
             .WithSummary("Deletes all models in the digital twins graph.");
 
         modelsGroup
+            .MapGet(
+                "/{id}",
+                [Authorize]
+                async (
+                    string id,
+                    HttpContext httpContext,
+                    [FromServices] AgeDigitalTwinsClient client,
+                    CancellationToken cancellationToken
+                ) =>
+                {
+                    var query = httpContext.Request.Query;
+                    bool includeBaseModelContents =
+                        query.ContainsKey("includeBaseModelContents")
+                        && bool.TryParse(query["includeBaseModelContents"], out var include)
+                        && include;
+
+                    var options = new GetModelOptions
+                    {
+                        IncludeBaseModelContents = includeBaseModelContents,
+                    };
+
+                    var model = await client.GetModelAsync(id, options, cancellationToken);
+                    return Results.Json(model);
+                }
+            )
+            .RequirePermission(ResourceType.Models, PermissionAction.Read)
+            .RequireRateLimiting("AdminOperations")
+            .WithName("GetModel")
+            .WithSummary("Retrieves a specific model by its ID.");
+
+        modelsGroup
             .MapDelete(
                 "/{id}",
                 [Authorize]
