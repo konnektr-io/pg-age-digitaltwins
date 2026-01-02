@@ -85,6 +85,7 @@ MATCH (m:Model {{id: dependency}})
     /// <exception cref="ModelNotFoundException">Thrown when the model with the specified ID is not found.</exception>
     public virtual async Task<DigitalTwinsModelData> GetModelAsync(
         string modelId,
+        GetModelOptions? options = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -93,24 +94,130 @@ MATCH (m:Model {{id: dependency}})
 
         try
         {
-            string cypher = $@"MATCH (m:Model {{id: '{modelId}'}}) RETURN m";
+            // Fetch the main model first
+            string mainCypher = $@"MATCH (m:Model {{id: '{modelId}'}}) RETURN m";
             await using var connection = await _dataSource.OpenConnectionAsync(
                 TargetSessionAttributes.PreferStandby,
                 cancellationToken
             );
-            await using var command = connection.CreateCypherCommand(_graphName, cypher);
+            await using var command = connection.CreateCypherCommand(_graphName, mainCypher);
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-
+            DigitalTwinsModelData? mainModel = null;
             if (await reader.ReadAsync(cancellationToken))
             {
                 var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
                 var vertex = (Vertex)agResult;
-                return new DigitalTwinsModelData(vertex.Properties);
+                mainModel = new DigitalTwinsModelData(vertex.Properties);
             }
             else
             {
                 throw new ModelNotFoundException($"Model with ID {modelId} not found");
             }
+            reader.Close();
+
+            if (mainModel == null)
+            {
+                throw new ModelNotFoundException($"Model with ID {modelId} not found");
+            }
+
+            if (options?.IncludeBaseModelContents == true)
+            {
+                // Fetch all base models in a single query
+                if (mainModel.Bases != null && mainModel.Bases.Length > 0)
+                {
+                    string basesList = $"['{string.Join("','", mainModel.Bases)}']";
+                    string cypher = $@"MATCH (m:Model) WHERE m.id IN {basesList} RETURN m";
+                    await using var baseCommand = connection.CreateCypherCommand(
+                        _graphName,
+                        cypher
+                    );
+                    await using var baseReader = await baseCommand.ExecuteReaderAsync(
+                        cancellationToken
+                    );
+                    var baseModels = new List<DigitalTwinsModelData>();
+                    while (await baseReader.ReadAsync(cancellationToken))
+                    {
+                        var agResult = await baseReader.GetFieldValueAsync<Agtype?>(0);
+                        var vertex = (Vertex)agResult;
+                        baseModels.Add(new DigitalTwinsModelData(vertex.Properties));
+                    }
+                    baseReader.Close();
+
+                    // Helper to extract contents by type from DtdlModel
+                    List<JsonElement> ExtractContentsByType(
+                        DigitalTwinsModelData model,
+                        string typeName
+                    )
+                    {
+                        var result = new List<JsonElement>();
+                        if (model.DtdlModelJson.HasValue)
+                        {
+                            var dtdl = model.DtdlModelJson.Value;
+                            JsonElement contents;
+                            if (dtdl.TryGetProperty("contents", out contents))
+                            {
+                                if (contents.ValueKind == JsonValueKind.Object)
+                                {
+                                    // Single content as object
+                                    if (ContentHasType(contents, typeName))
+                                        result.Add(contents);
+                                }
+                                else if (contents.ValueKind == JsonValueKind.Array)
+                                {
+                                    foreach (var item in contents.EnumerateArray())
+                                    {
+                                        if (ContentHasType(item, typeName))
+                                            result.Add(item);
+                                    }
+                                }
+                            }
+                        }
+                        return result;
+                    }
+
+                    // Helper to check if a content has a type (handles string or array)
+                    bool ContentHasType(JsonElement content, string typeName)
+                    {
+                        if (content.TryGetProperty("@type", out var typeProp))
+                        {
+                            if (typeProp.ValueKind == JsonValueKind.String)
+                                return typeProp.GetString() == typeName;
+                            if (typeProp.ValueKind == JsonValueKind.Array)
+                                return typeProp
+                                    .EnumerateArray()
+                                    .Any(e => e.GetString() == typeName);
+                        }
+                        return false;
+                    }
+
+                    // Helper to merge all contents of a given type from all models
+                    List<JsonElement>? MergeContents(
+                        IEnumerable<DigitalTwinsModelData> models,
+                        string typeName
+                    )
+                    {
+                        var allContents = new List<JsonElement>();
+                        foreach (var m in models)
+                        {
+                            allContents.AddRange(ExtractContentsByType(m, typeName));
+                        }
+                        if (allContents.Count == 0)
+                            return null;
+                        return allContents;
+                    }
+
+                    var allModels = new List<DigitalTwinsModelData> { mainModel };
+                    allModels.AddRange(baseModels);
+
+                    mainModel.Properties = MergeContents(allModels, "Property");
+                    mainModel.Relationships = MergeContents(allModels, "Relationship");
+                    mainModel.Components = MergeContents(allModels, "Component");
+                    mainModel.Telemetries = MergeContents(allModels, "Telemetry");
+                    mainModel.Commands = MergeContents(allModels, "Command");
+                }
+            }
+
+            return mainModel;
         }
         catch (Exception ex)
         {
@@ -427,7 +534,9 @@ RETURN COUNT(m) AS deletedCount";
     /// </summary>
     /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
     /// <returns>A task that represents the asynchronous operation.</returns>
-    public virtual async Task DeleteAllModelsAsync(CancellationToken cancellationToken = default)
+    public virtual async Task<int> DeleteAllModelsAsync(
+        CancellationToken cancellationToken = default
+    )
     {
         using var activity = ActivitySource.StartActivity(
             "DeleteAllModelsAsync",
@@ -450,10 +559,7 @@ RETURN COUNT(m) AS deletedCount";
                 var agResult = await reader.GetFieldValueAsync<Agtype?>(0).ConfigureAwait(false);
                 rowsAffected = (int)agResult;
             }
-            if (rowsAffected <= 0)
-            {
-                throw new ModelNotFoundException($"No models found");
-            }
+            return rowsAffected;
         }
         catch (Exception ex)
         {
@@ -482,7 +588,7 @@ RETURN COUNT(m) AS deletedCount";
         if (_modelCacheExpiration == TimeSpan.Zero)
         {
             // If cache expiration is set to zero, do not use the cache
-            return await GetModelAsync(modelId, cancellationToken);
+            return await GetModelAsync(modelId, cancellationToken: cancellationToken);
         }
         return await _modelCache.GetOrCreateAsync(
             modelId,
@@ -495,7 +601,7 @@ RETURN COUNT(m) AS deletedCount";
                     }
                 );
 
-                return await GetModelAsync(modelId, cancellationToken);
+                return await GetModelAsync(modelId, cancellationToken: cancellationToken);
             }
         );
     }

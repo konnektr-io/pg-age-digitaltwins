@@ -49,13 +49,51 @@ namespace AgeDigitalTwins.Models
         /// Precomputed at model creation time to optimize inheritance queries.
         /// </summary>
         [JsonPropertyName("descendants")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string[]? Descendants { get; set; }
 
         [JsonPropertyName("decommissioned")]
         public bool IsDecommissioned { get; }
 
         [JsonPropertyName("embedding")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public double[]? Embedding { get; set; }
+
+        /// <summary>
+        /// Properties defined in the model and inherited from base models.
+        /// Only populated
+        /// </summary>
+        [JsonPropertyName("properties")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<JsonElement>? Properties { get; set; }
+
+        /// <summary>
+        /// Relationships defined in the model and inherited from base models.
+        /// </summary>
+        [JsonPropertyName("relationships")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<JsonElement>? Relationships { get; set; }
+
+        /// <summary>
+        /// Components defined in the model and inherited from base models.
+        /// </summary>
+        [JsonPropertyName("components")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<JsonElement>? Components { get; set; }
+
+        /// <summary>
+        /// Telemetries defined in the model and inherited from base models.
+        /// </summary>
+        [JsonPropertyName("telemetries")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<JsonElement>? Telemetries { get; set; }
+
+        /// <summary>
+        /// Commands defined in the model and inherited from base models.
+        /// </summary>
+        [JsonPropertyName("commands")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<JsonElement>? Commands { get; set; }
 
         [JsonConstructor]
         public DigitalTwinsModelData(
@@ -163,9 +201,11 @@ namespace AgeDigitalTwins.Models
                 modelData.TryGetValue("embedding", out var embeddingValue)
                 && embeddingValue is List<object> embeddingList
                     ? [.. embeddingList.Select(x => Convert.ToDouble(x))]
-                    :_ = modelData.TryGetValue("embedding", out var embeddingVectorValue) && embeddingVectorValue is double[] embeddingVector
-                        ? embeddingVector
-                        : null;
+                    : _ =
+                        modelData.TryGetValue("embedding", out var embeddingVectorValue)
+                        && embeddingVectorValue is double[] embeddingVector
+                            ? embeddingVector
+                            : null;
         }
 
         public DigitalTwinsModelData(string dtdlModel)
