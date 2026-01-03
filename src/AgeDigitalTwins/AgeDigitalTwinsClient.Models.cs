@@ -460,29 +460,31 @@ RETURN m";
                         _graphName,
                         fetchCypher
                     );
-                    await using var reader = await fetchCommand.ExecuteReaderAsync(
-                        cancellationToken
-                    );
 
                     HashSet<string> existingDescendants = new HashSet<string>();
-                    if (await reader.ReadAsync(cancellationToken))
+                    await using (
+                        var reader = await fetchCommand.ExecuteReaderAsync(cancellationToken)
+                    )
                     {
-                        var descendantsAgtype = await reader.GetFieldValueAsync<Agtype?>(
-                            0,
-                            cancellationToken
-                        );
-                        if (descendantsAgtype != null)
+                        if (await reader.ReadAsync(cancellationToken))
                         {
-                            var descendantsList = descendantsAgtype.Value.GetList();
-                            foreach (var desc in descendantsList)
+                            var descendantsAgtype = await reader.GetFieldValueAsync<Agtype?>(
+                                0,
+                                cancellationToken
+                            );
+                            if (descendantsAgtype != null)
                             {
-                                if (desc is string descStr)
+                                var descendantsList = descendantsAgtype.Value.GetList();
+                                foreach (var desc in descendantsList)
                                 {
-                                    existingDescendants.Add(descStr);
+                                    if (desc is string descStr)
+                                    {
+                                        existingDescendants.Add(descStr);
+                                    }
                                 }
                             }
                         }
-                    }
+                    } // Reader is disposed here, closing it before the update command
 
                     // Merge with new descendants
                     existingDescendants.UnionWith(newDescendants);
