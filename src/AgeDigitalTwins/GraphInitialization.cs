@@ -109,7 +109,7 @@ public static class GraphInitialization
                     -- Check inheritance via bases array
                     EXECUTE format('SELECT m FROM ag_catalog.cypher('{graphName}', $$
                         MATCH (m:Model)
-                        WHERE model_id IN m.bases
+                        WHERE %s IN m.bases
                         RETURN collect(m.id)
                     $$) AS (m agtype)', model_id)
                     INTO models_array;
