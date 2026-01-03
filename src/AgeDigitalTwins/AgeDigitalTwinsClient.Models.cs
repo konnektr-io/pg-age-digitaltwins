@@ -11,6 +11,7 @@ using AgeDigitalTwins.Models;
 using DTDLParser;
 using DTDLParser.Models;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
 using Npgsql;
 using Npgsql.Age;
 using Npgsql.Age.Types;
