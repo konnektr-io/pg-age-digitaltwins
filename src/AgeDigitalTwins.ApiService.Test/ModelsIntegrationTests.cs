@@ -181,4 +181,43 @@ public class ModelsIntegrationTests : IAsyncLifetime
             );
         }
     }
+
+    [Fact]
+    public async Task GetModel_WithIncludeBaseModelContents_ReturnsPropertiesFieldWithContent()
+    {
+        string[] sModels = [SampleData.DtdlRoom];
+        List<JsonElement> jModels = sModels
+            .Select(m => JsonDocument.Parse(m))
+            .Select(j => j.RootElement)
+            .ToList();
+        var createResponse = await _httpClient!.PostAsync(
+            "/models",
+            new StringContent(JsonSerializer.Serialize(jModels), Encoding.UTF8, "application/json")
+        );
+        createResponse.EnsureSuccessStatusCode();
+
+        // Act: Call the API with includeBaseModelContents=true
+        var getResponse = await _httpClient!.GetAsync(
+            "/models/dtmi:com:adt:dtsample:room;1?includeBaseModelContents=true"
+        );
+        getResponse.EnsureSuccessStatusCode();
+        string getResponseContent = await getResponse.Content.ReadAsStringAsync();
+        JsonDocument getResponseJson = JsonDocument.Parse(getResponseContent);
+        var root = getResponseJson.RootElement;
+
+        // Assert: properties field exists and contains expected property names
+        Assert.True(
+            root.TryGetProperty("properties", out var properties),
+            "properties field missing"
+        );
+        Assert.Equal(JsonValueKind.Array, properties.ValueKind);
+        var propNames = properties
+            .EnumerateArray()
+            .Select(p => p.GetProperty("name").GetString())
+            .ToList();
+        Assert.Contains("name", propNames);
+        Assert.Contains("temperature", propNames);
+        // Should not contain duplicates
+        Assert.Equal(propNames.Distinct().Count(), propNames.Count);
+    }
 }
