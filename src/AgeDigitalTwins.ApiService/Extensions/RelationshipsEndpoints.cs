@@ -122,6 +122,14 @@ public static class RelationshipsEndpoints
                 ) =>
                 {
                     string? etag = RequestHelper.ParseETag(httpContext, "If-None-Match");
+                    if (string.IsNullOrEmpty(relationship.SourceId))
+                    {
+                        relationship.SourceId = id;
+                    }
+                    if (string.IsNullOrEmpty(relationship.Id))
+                    {
+                        relationship.Id = relationshipId;
+                    }
                     return client.CreateOrReplaceRelationshipAsync(
                         id,
                         relationshipId,

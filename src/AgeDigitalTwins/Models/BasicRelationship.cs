@@ -20,7 +20,7 @@ public class BasicRelationship
     /// This field is present on every relationship.
     /// </summary>
     [JsonPropertyName("$relationshipId")]
-    public string Id { get; set; } = string.Empty;
+    public string? Id { get; set; } = string.Empty;
 
     /// <summary>
     /// The unique Id of the target digital twin.
@@ -34,7 +34,7 @@ public class BasicRelationship
     /// This field is present on every relationship.
     /// </summary>
     [JsonPropertyName("$sourceId")]
-    public string SourceId { get; set; } = string.Empty;
+    public string? SourceId { get; set; } = string.Empty;
 
     /// <summary>
     /// The name of the relationship, which defines the type of link (e.g. Contains).
