@@ -452,8 +452,7 @@ RETURN m";
                     // Fetch current descendants from the database
                     string fetchCypher =
                         $@"
-                        MATCH (m:Model)
-                        WHERE m.id = '{baseModelId}'
+                        MATCH (m:Model {{id: '{baseModelId}'}})
                         RETURN m.descendants";
 
                     await using var fetchCommand = connection.CreateCypherCommand(
@@ -496,8 +495,7 @@ RETURN m";
                     );
                     string updateCypher =
                         $@"
-                        MATCH (m:Model)
-                        WHERE m.id = '{baseModelId}'
+                        MATCH (m:Model {{id: '{baseModelId}'}})
                         SET m.descendants = '{mergedDescendantsJson.Replace("'", "\\'")}'::cstring::agtype
                         RETURN m";
 
