@@ -122,7 +122,70 @@ MATCH (m:Model {{id: dependency}})
 
             if (options?.IncludeBaseModelContents == true)
             {
-                // Fetch all base models in a single query
+                // Helper to extract contents by type from DtdlModel
+                List<JsonElement> ExtractContentsByType(
+                    DigitalTwinsModelData model,
+                    string typeName
+                )
+                {
+                    var result = new List<JsonElement>();
+                    if (model.DtdlModelJson.HasValue)
+                    {
+                        var dtdl = model.DtdlModelJson.Value;
+                        JsonElement contents;
+                        if (dtdl.TryGetProperty("contents", out contents))
+                        {
+                            if (contents.ValueKind == JsonValueKind.Object)
+                            {
+                                // Single content as object
+                                if (ContentHasType(contents, typeName))
+                                    result.Add(contents);
+                            }
+                            else if (contents.ValueKind == JsonValueKind.Array)
+                            {
+                                foreach (var item in contents.EnumerateArray())
+                                {
+                                    if (ContentHasType(item, typeName))
+                                        result.Add(item);
+                                }
+                            }
+                        }
+                    }
+                    return result;
+                }
+
+                // Helper to check if a content has a type (handles string or array)
+                bool ContentHasType(JsonElement content, string typeName)
+                {
+                    if (content.TryGetProperty("@type", out var typeProp))
+                    {
+                        if (typeProp.ValueKind == JsonValueKind.String)
+                            return typeProp.GetString() == typeName;
+                        if (typeProp.ValueKind == JsonValueKind.Array)
+                            return typeProp.EnumerateArray().Any(e => e.GetString() == typeName);
+                    }
+                    return false;
+                }
+
+                // Helper to merge all contents of a given type from all models
+                List<JsonElement>? MergeContents(
+                    IEnumerable<DigitalTwinsModelData> models,
+                    string typeName
+                )
+                {
+                    var allContents = new List<JsonElement>();
+                    foreach (var m in models)
+                    {
+                        allContents.AddRange(ExtractContentsByType(m, typeName));
+                    }
+                    if (allContents.Count == 0)
+                        return null;
+                    return allContents;
+                }
+
+                var allModels = new List<DigitalTwinsModelData> { mainModel };
+
+                // If there are bases, fetch and add them
                 if (mainModel.Bases != null && mainModel.Bases.Length > 0)
                 {
                     string basesList = $"['{string.Join("','", mainModel.Bases)}']";
@@ -142,79 +205,14 @@ MATCH (m:Model {{id: dependency}})
                         baseModels.Add(new DigitalTwinsModelData(vertex.Properties));
                     }
                     baseReader.Close();
-
-                    // Helper to extract contents by type from DtdlModel
-                    List<JsonElement> ExtractContentsByType(
-                        DigitalTwinsModelData model,
-                        string typeName
-                    )
-                    {
-                        var result = new List<JsonElement>();
-                        if (model.DtdlModelJson.HasValue)
-                        {
-                            var dtdl = model.DtdlModelJson.Value;
-                            JsonElement contents;
-                            if (dtdl.TryGetProperty("contents", out contents))
-                            {
-                                if (contents.ValueKind == JsonValueKind.Object)
-                                {
-                                    // Single content as object
-                                    if (ContentHasType(contents, typeName))
-                                        result.Add(contents);
-                                }
-                                else if (contents.ValueKind == JsonValueKind.Array)
-                                {
-                                    foreach (var item in contents.EnumerateArray())
-                                    {
-                                        if (ContentHasType(item, typeName))
-                                            result.Add(item);
-                                    }
-                                }
-                            }
-                        }
-                        return result;
-                    }
-
-                    // Helper to check if a content has a type (handles string or array)
-                    bool ContentHasType(JsonElement content, string typeName)
-                    {
-                        if (content.TryGetProperty("@type", out var typeProp))
-                        {
-                            if (typeProp.ValueKind == JsonValueKind.String)
-                                return typeProp.GetString() == typeName;
-                            if (typeProp.ValueKind == JsonValueKind.Array)
-                                return typeProp
-                                    .EnumerateArray()
-                                    .Any(e => e.GetString() == typeName);
-                        }
-                        return false;
-                    }
-
-                    // Helper to merge all contents of a given type from all models
-                    List<JsonElement>? MergeContents(
-                        IEnumerable<DigitalTwinsModelData> models,
-                        string typeName
-                    )
-                    {
-                        var allContents = new List<JsonElement>();
-                        foreach (var m in models)
-                        {
-                            allContents.AddRange(ExtractContentsByType(m, typeName));
-                        }
-                        if (allContents.Count == 0)
-                            return null;
-                        return allContents;
-                    }
-
-                    var allModels = new List<DigitalTwinsModelData> { mainModel };
                     allModels.AddRange(baseModels);
-
-                    mainModel.Properties = MergeContents(allModels, "Property");
-                    mainModel.Relationships = MergeContents(allModels, "Relationship");
-                    mainModel.Components = MergeContents(allModels, "Component");
-                    mainModel.Telemetries = MergeContents(allModels, "Telemetry");
-                    mainModel.Commands = MergeContents(allModels, "Command");
                 }
+
+                mainModel.Properties = MergeContents(allModels, "Property");
+                mainModel.Relationships = MergeContents(allModels, "Relationship");
+                mainModel.Components = MergeContents(allModels, "Component");
+                mainModel.Telemetries = MergeContents(allModels, "Telemetry");
+                mainModel.Commands = MergeContents(allModels, "Command");
             }
 
             return mainModel;

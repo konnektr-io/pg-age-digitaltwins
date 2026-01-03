@@ -556,5 +556,25 @@ public class ModelsTests : TestBase
         Assert.Contains("orbits", relNames);
         Assert.Contains("satellites", relNames);
         Assert.Equal(2, relNames.Distinct().Count());
+
+        // Act: Check that base model alone also works
+        var result2 = await Client.GetModelAsync(
+            "dtmi:com:contoso:CelestialBody;1",
+            new() { IncludeBaseModelContents = true }
+        );
+        // Assert: All properties should be present
+        Assert.NotNull(result2.Properties);
+        var props2 = result2.Properties;
+        var propNames2 = props2.Select(p => p.GetProperty("name").GetString()).ToList();
+        Assert.Contains("name", propNames2);
+        Assert.Contains("mass", propNames2);
+        Assert.Contains("temperature", propNames2);
+        Assert.Equal(3, propNames2.Distinct().Count());
+        // Assert: Check relationships
+        Assert.NotNull(result2.Relationships);
+        var relNames2 = result2
+            .Relationships.Select(r => r.GetProperty("name").GetString())
+            .ToList();
+        Assert.Contains("orbits", relNames2);
     }
 }
