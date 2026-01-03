@@ -313,6 +313,7 @@ MATCH (m:Model {{id: dependency}})
                     modelData.Descendants = Array.Empty<string>();
                 }
             }
+
             // This is needed as after unwinding, it gets converted to agtype again
             string modelsString =
                 $"['{string.Join("','", modelDatas.Select(m => JsonSerializer.Serialize(m, serializerOptions).Replace("'", "\\'")))}']";
