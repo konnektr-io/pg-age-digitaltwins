@@ -301,7 +301,7 @@ MATCH (m:Model {{id: dependency}})
                 })
                 .ToList(); // Materialize to ensure descendantsMap is fully populated
 
-            // Now assign descendants to each model
+            // Now assign descendants to each model in the current batch
             foreach (var modelData in modelDatas)
             {
                 if (descendantsMap.TryGetValue(modelData.Id, out var descendants))
@@ -313,6 +313,16 @@ MATCH (m:Model {{id: dependency}})
                     modelData.Descendants = Array.Empty<string>();
                 }
             }
+
+            // Identify base models that need descendants updates but aren't in current batch
+            var currentModelIds = new HashSet<string>(modelDatas.Select(m => m.Id));
+            var baseModelsToUpdate = descendantsMap
+                .Keys.Where(baseModelId => !currentModelIds.Contains(baseModelId))
+                .ToDictionary(
+                    baseModelId => baseModelId,
+                    baseModelId => descendantsMap[baseModelId]
+                );
+
             // This is needed as after unwinding, it gets converted to agtype again
             string modelsString =
                 $"['{string.Join("','", modelDatas.Select(m => JsonSerializer.Serialize(m, serializerOptions).Replace("'", "\\'")))}']";
@@ -432,6 +442,69 @@ RETURN m";
                     connection
                 );
                 await setReplicationCommand.ExecuteNonQueryAsync(cancellationToken);
+            }
+
+            // Update descendants for existing base models that aren't in the current batch
+            if (baseModelsToUpdate.Count > 0)
+            {
+                foreach (var (baseModelId, newDescendants) in baseModelsToUpdate)
+                {
+                    // Fetch current descendants from the database
+                    string fetchCypher =
+                        $@"
+                        MATCH (m:Model {{id: '{baseModelId}'}})
+                        RETURN m.descendants";
+
+                    await using var fetchCommand = connection.CreateCypherCommand(
+                        _graphName,
+                        fetchCypher
+                    );
+
+                    HashSet<string> existingDescendants = new HashSet<string>();
+                    await using (
+                        var reader = await fetchCommand.ExecuteReaderAsync(cancellationToken)
+                    )
+                    {
+                        if (await reader.ReadAsync(cancellationToken))
+                        {
+                            var descendantsAgtype = await reader.GetFieldValueAsync<Agtype?>(
+                                0,
+                                cancellationToken
+                            );
+                            if (descendantsAgtype != null)
+                            {
+                                var descendantsList = descendantsAgtype.Value.GetList();
+                                foreach (var desc in descendantsList)
+                                {
+                                    if (desc is string descStr)
+                                    {
+                                        existingDescendants.Add(descStr);
+                                    }
+                                }
+                            }
+                        }
+                    } // Reader is disposed here, closing it before the update command
+
+                    // Merge with new descendants
+                    existingDescendants.UnionWith(newDescendants);
+
+                    // Update the model with merged descendants
+                    var mergedDescendantsJson = JsonSerializer.Serialize(
+                        existingDescendants.ToArray(),
+                        serializerOptions
+                    );
+                    string updateCypher =
+                        $@"
+                        MATCH (m:Model {{id: '{baseModelId}'}})
+                        SET m.descendants = '{mergedDescendantsJson.Replace("'", "\\'")}'::cstring::agtype
+                        RETURN m";
+
+                    await using var updateCommand = connection.CreateCypherCommand(
+                        _graphName,
+                        updateCypher
+                    );
+                    await updateCommand.ExecuteNonQueryAsync(cancellationToken);
+                }
             }
 
             return result;
