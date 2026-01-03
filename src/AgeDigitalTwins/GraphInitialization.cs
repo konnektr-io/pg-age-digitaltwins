@@ -112,10 +112,10 @@ public static class GraphInitialization
                         WHERE %s IN m.bases
                         RETURN collect(m.id)
                     $$) AS (m agtype)', model_id)
-                    INTO models_array;
+                    INTO model_descendants;
                     
                     -- Check if twin's model ID is in the collected models array
-                    RETURN models_array @> ag_catalog.agtype_build_list(twin_model_id);
+                    RETURN model_descendants @> ag_catalog.agtype_build_list(twin_model_id);
                 END;
                 $function$"
             ),
