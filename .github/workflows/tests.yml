@@ -13,7 +13,6 @@ on:
           - AgeDigitalTwins.Test
           - AgeDigitalTwins.ApiService.Test
           - AgeDigitalTwins.Events.Test
-          - AgeDigitalTwins.MCPServerSSE.Test
       filter:
         description: "Additional dotnet test filter"
         type: string
