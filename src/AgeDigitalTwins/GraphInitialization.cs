@@ -105,9 +105,9 @@ public static class GraphInitialization
                     END;
 
                     -- Fallback: legacy inheritance traversal for backward compatibility
-                    -- (models created before descendants field was added)
+                    -- (models without descendants field)
                     -- Check inheritance via bases array
-                    EXECUTE format('SELECT m FROM ag_catalog.cypher('{graphName}', $$
+                    EXECUTE format('SELECT m FROM ag_catalog.cypher(''{graphName}'', $$
                         MATCH (m:Model)
                         WHERE %s IN m.bases
                         RETURN collect(m.id)
