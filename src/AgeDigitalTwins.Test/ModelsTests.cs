@@ -519,6 +519,65 @@ public class ModelsTests : TestBase
     }
 
     [Fact]
+    public async Task CreateModels_DescendantsUpdatedInBaseModel_WhenDerivedModelsCreatedLater()
+    {
+        // Clean up existing models
+        string[] modelIds =
+        [
+            "dtmi:com:contoso:HabitablePlanet;1",
+            "dtmi:com:contoso:Planet;1",
+            "dtmi:com:contoso:CelestialBody;1",
+            "dtmi:com:contoso:Crater;1",
+        ];
+        foreach (var modelId in modelIds)
+        {
+            try
+            {
+                await Client.DeleteModelAsync(modelId);
+            }
+            catch (ModelNotFoundException)
+            {
+                // Ignore if model doesn't exist
+            }
+        }
+
+        // First batch: Create base model only
+        await Client.CreateModelsAsync([SampleData.DtdlCelestialBody]);
+
+        // Verify base model has no descendants initially
+        var celestialBodyBefore = await Client.GetModelAsync("dtmi:com:contoso:CelestialBody;1");
+        Assert.NotNull(celestialBodyBefore.Descendants);
+        Assert.Empty(celestialBodyBefore.Descendants!);
+
+        // Second batch: Create Planet (extends CelestialBody) and Crater
+        await Client.CreateModelsAsync([SampleData.DtdlCrater, SampleData.DtdlPlanet]);
+
+        // Verify base model now has Planet as descendant
+        var celestialBodyAfterPlanet = await Client.GetModelAsync(
+            "dtmi:com:contoso:CelestialBody;1"
+        );
+        Assert.NotNull(celestialBodyAfterPlanet.Descendants);
+        Assert.Single(celestialBodyAfterPlanet.Descendants!);
+        Assert.Contains("dtmi:com:contoso:Planet;1", celestialBodyAfterPlanet.Descendants);
+
+        // Third batch: Create HabitablePlanet (extends Planet, which extends CelestialBody)
+        await Client.CreateModelsAsync([SampleData.DtdlHabitablePlanet]);
+
+        // Verify base model now has both Planet and HabitablePlanet as descendants
+        var celestialBodyFinal = await Client.GetModelAsync("dtmi:com:contoso:CelestialBody;1");
+        Assert.NotNull(celestialBodyFinal.Descendants);
+        Assert.Equal(2, celestialBodyFinal.Descendants!.Length);
+        Assert.Contains("dtmi:com:contoso:Planet;1", celestialBodyFinal.Descendants);
+        Assert.Contains("dtmi:com:contoso:HabitablePlanet;1", celestialBodyFinal.Descendants);
+
+        // Verify Planet also has HabitablePlanet as descendant
+        var planetFinal = await Client.GetModelAsync("dtmi:com:contoso:Planet;1");
+        Assert.NotNull(planetFinal.Descendants);
+        Assert.Single(planetFinal.Descendants!);
+        Assert.Contains("dtmi:com:contoso:HabitablePlanet;1", planetFinal.Descendants);
+    }
+
+    [Fact]
     public async Task GetModelAsync_IncludesAllBaseProperties_WhenIncludeBaseModelContentsTrue()
     {
         // Arrange: Clean up and create base and derived models
