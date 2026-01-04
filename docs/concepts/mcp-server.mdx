@@ -27,6 +27,10 @@ The MCP server uses **OAuth 2.1 with Dynamic Client Registration**, as described
 
 This is a secure, user-friendly approach that **does not require you to manually manage `client_id` or `client_secret`**. When your MCP client connects for the first time, it will be guided through a one-time browser-based authorization flow to grant access.
 
+## Connecting with `npx mcp-remote`
+
+For MCP clients that do not natively support remote HTTP endpoints or the OAuth 2.1 flow (e.g., some versions of Claude Desktop), you can use the `mcp-remote` tool to create a secure local proxy.
+
 ### Client Configuration Example (Claude Desktop)
 
 Here is an example of how to configure a compatible MCP client, such as Claude Desktop:
@@ -35,13 +39,8 @@ Here is an example of how to configure a compatible MCP client, such as Claude D
 {
   "mcpServers": {
     "konnektr": {
-      "url": "https://mcp.graph.konnektr.io/mcp?resource_id=your-resource-id",
-      "transport": {
-        "type": "http_stream"
-      },
-      "auth": {
-        "type": "oauth2"
-      }
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://mcp.graph.konnektr.io/mcp?resource_id=your-resource-id"]
     }
   }
 }
@@ -53,37 +52,18 @@ The client only needs to know the URL and that the authentication type is `oauth
 To add the Konnektr Graph MCP server to your Claude CLI, use the following command:
 
 ```bash
-claude mcp add konnektr-graph --transport http https://mcp.graph.konnektr.io/mcp?resource_id=your-resource-id
+claude mcp add konnektr --transport http https://mcp.graph.konnektr.io/mcp?resource_id=your-resource-id
 ```
 
-This command sets up the connection named `konnektr-graph` using HTTP transport to the specified MCP endpoint.
+This command sets up the connection named `konnektr` using HTTP transport to the specified MCP endpoint.
 
-## Connecting with `npx mcp-remote`
 
-For MCP clients that do not natively support remote HTTP endpoints or the OAuth 2.1 flow (e.g., some versions of Claude Desktop), you can use the `mcp-remote` tool to create a secure local proxy.
+### Gemini CLI Configuration
+For Gemini CLI, you can add the MCP server with a similar command:
 
-### How it Works
-`mcp-remote` connects to the remote Konnektr MCP server, handles the OAuth authentication flow in your terminal, and then exposes a local WebSocket server that your client can connect to without needing to handle authentication itself.
-
-### Steps
-1. **Run `mcp-remote`**:
-   Open your terminal and run the following command, replacing `{your-resource-id}` with your instance ID:
-   ```bash
-   npx mcp-remote --url https://mcp.graph.konnektr.io/mcp?resource_id={your-resource-id}
-   ```
-
-2. **Authenticate**:
-   The tool will open a browser window for you to log in and authorize the connection.
-
-3. **Connect Your Client**:
-   Once authenticated, `mcp-remote` will print a local WebSocket URL, like `ws://localhost:3999`. Configure your MCP client to connect to this local address. No authentication settings are needed in the client itself.
-
-## Demo Instance
-For testing and evaluation, a public demo instance is available. It does not require authentication.
-
-- **Demo URL**: `https://mcp.graph.konnektr.io/mcp?resource_id=demo`
-- **With `mcp-remote`**: `npx mcp-remote --url https://mcp.graph.konnektr.io/mcp?resource_id=demo`
-
+```bash
+gemini mcp add konnektr --transport http https://mcp.graph.konnektr.io/mcp?resource_id=your-resource-id
+```
 
 ## Available Tools
 
