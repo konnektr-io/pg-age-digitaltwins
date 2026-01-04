@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
+using AgeDigitalTwins.Exceptions;
 using AgeDigitalTwins.Models;
 using Npgsql.Age;
 using Npgsql.Age.Types;
@@ -64,6 +65,20 @@ public partial class AgeDigitalTwinsClient
                     string nextContinuationQuery = cypher;
                     var limitMatch = LimitRegex().Match(cypher);
                     var skipMatch = SkipRegex().Match(cypher);
+                    // Enforce read-only queries by blocking forbidden keywords
+                    string[] forbiddenKeywords = { "CREATE", "DELETE", "SET", "MERGE", "REMOVE" };
+                    foreach (var keyword in forbiddenKeywords)
+                    {
+                        if (
+                            !string.IsNullOrEmpty(query)
+                            && query.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0
+                        )
+                        {
+                            throw new InvalidAdtQueryException(
+                                $"Query contains forbidden keyword: {keyword}. Only read-only queries are allowed."
+                            );
+                        }
+                    }
 
                     if (skipMatch.Success)
                     {
