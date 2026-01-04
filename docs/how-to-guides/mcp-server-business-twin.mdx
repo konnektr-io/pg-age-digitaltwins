@@ -13,48 +13,44 @@ In this example, we will model a **Smart Equipment System**, tracking **Employee
 
 ## Prerequisites
 
-* **Konnektr Graph Standard Instance**: The MCP server is available on "Standard" and higher tiers.
-* **API Credentials**: You'll need a Client ID and Secret from the [Konnektr Control Plane](https://ktrlplane.konnektr.io).
-* **An MCP Client**: Claude Desktop, Gemini, or any MCP-compliant application.
+*   A **Konnektr Graph** instance. The MCP server is available on "Standard" and higher tiers.
+*   An **MCP Client** (e.g., Claude CLI, Claude Desktop, Gemini) that supports OAuth 2.1 or the `npx` command-line tool.
 
 ---
 
 ## Part 1: Connecting to the Hosted MCP Server
 
-Every Konnektr Graph resource has its own dedicated MCP endpoint.
+Your Konnektr Graph instance is accessible via the shared, secure MCP endpoint.
 
 ### 1. Identify Your Endpoint
-Your MCP server is hosted at:
-`https://{resource-id}.mcp.graph.konnektr.io`
+The MCP server is hosted at:
+`https://mcp.graph.konnektr.io/mcp?resource_id={your-resource-id}`
+
+You must replace `{your-resource-id}` with the actual ID of your Konnektr Graph instance.
 
 ### 2. Configure Your Client
-The Hosted MCP Server uses OAuth 2.1 authentication—the same credentials you use for the Konnektr API.
+The MCP Server uses **OAuth 2.1 with Dynamic Client Registration**. You don't need to provide a `client_id` or `client_secret`. Your client will guide you through a one-time browser login to authorize access.
 
-Add this to your `claude_desktop_config.json` (or equivalent client config):
+**For Claude CLI:**
+
+```bash
+claude mcp add konnektr-graph --transport http https://mcp.graph.konnektr.io/mcp?resource_id=your-resource-id
+```
+
+**For Claude Desktop (and similar clients):**
+
+Edit your `claude_desktop_config.json` (or equivalent) with this simplified configuration:
 
 ```json
 {
   "mcpServers": {
     "konnektr": {
-      "url": "https://your-resource-id.mcp.graph.konnektr.io",
-      "transport": {
-        "type": "sse"
-      },
-      "auth": {
-        "type": "oauth2",
-        "token_url": "https://auth.konnektr.io/oauth/token",
-        "client_id": "YOUR_CLIENT_ID",
-        "client_secret": "YOUR_CLIENT_SECRET",
-        "audience": "https://graph.konnektr.io",
-        "scope": "mcp:tools"
-      }
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://mcp.graph.konnektr.io/mcp?resource_id=your-resource-id"]
     }
   }
 }
 ```
-
-> [!TIP]
-> **Try the Demo:** You can test the platform using our public demo instance at `demo.mcp.graph.konnektr.io` which requires no authentication.
 
 ---
 
@@ -97,9 +93,8 @@ The LLM can also perform complex analysis by writing Cypher queries. However, it
 
 ### The Query Workflow
 
-1. **Understand the Schema:** The LLM should first understand the structure of the graph by calling `get_model`.
-2. **Get the Query Rules:** The LLM should call `get_prompt(name: "GenerateQueryPrompt")`. This provides the rules for optimized Cypher on the AgeDigitalTwins platform (e.g., using `:Twin` labels and handling DTDL inheritance).
-3. **Execute:** The LLM then writes and runs the query using `query_digital_twins`.
+1. **Understand the Schema:** The LLM should first understand the structure of the graph by calling `list_models`.
+3. **Execute:** The LLM then writes and runs the query using `query_digital_twins` (the documentation for the tool includes the query rules).
 
 **User Prompt:**
 > "Who in the R&D department is holding high-performance computing assets? Search for assets mentioning 'DGX' or 'Computing'."

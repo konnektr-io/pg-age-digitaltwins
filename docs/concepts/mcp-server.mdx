@@ -1,0 +1,119 @@
+---
+title: Model Context Protocol (MCP) Server
+icon: Cpu
+---
+
+# Connecting to the Model Context Protocol (MCP) Server
+
+The Model Context Protocol (MCP) provides a standardized way for AI models and agents to interact with external tools and services. Konnektr Graph includes a built-in MCP server that exposes the Digital Twin capabilities as a set of tools that an AI agent can use.
+
+This allows an AI to directly query, create, update, and manage your digital twin graph in a structured and validated way.
+
+## Endpoint and Connection
+
+The shared MCP server is a single endpoint for all Konnektr Graph instances. You specify which graph instance you want to connect to by using the `resource_id` query parameter.
+
+**Endpoint URL:**
+```
+https://mcp.graph.konnektr.io/mcp?resource_id={your-resource-id}
+```
+
+- **`{your-resource-id}`**: The unique identifier for your Konnektr Graph instance.
+- **Transport**: The server supports `http_stream` (also known as Server-Sent Events or SSE).
+
+## Authentication
+
+The MCP server uses **OAuth 2.1 with Dynamic Client Registration**, as described in the [official MCP documentation](https://modelcontextprotocol.io/docs/tutorials/security/authorization).
+
+This is a secure, user-friendly approach that **does not require you to manually manage `client_id` or `client_secret`**. When your MCP client connects for the first time, it will be guided through a one-time browser-based authorization flow to grant access.
+
+### Client Configuration Example (Claude Desktop)
+
+Here is an example of how to configure a compatible MCP client, such as Claude Desktop:
+
+```json
+{
+  "mcpServers": {
+    "konnektr": {
+      "url": "https://mcp.graph.konnektr.io/mcp?resource_id=your-resource-id",
+      "transport": {
+        "type": "http_stream"
+      },
+      "auth": {
+        "type": "oauth2"
+      }
+    }
+  }
+}
+```
+The client only needs to know the URL and that the authentication type is `oauth2`. The rest is handled automatically.
+
+### Claude CLI Configuration
+
+To add the Konnektr Graph MCP server to your Claude CLI, use the following command:
+
+```bash
+claude mcp add konnektr-graph --transport http https://mcp.graph.konnektr.io/mcp?resource_id=your-resource-id
+```
+
+This command sets up the connection named `konnektr-graph` using HTTP transport to the specified MCP endpoint.
+
+## Connecting with `npx mcp-remote`
+
+For MCP clients that do not natively support remote HTTP endpoints or the OAuth 2.1 flow (e.g., some versions of Claude Desktop), you can use the `mcp-remote` tool to create a secure local proxy.
+
+### How it Works
+`mcp-remote` connects to the remote Konnektr MCP server, handles the OAuth authentication flow in your terminal, and then exposes a local WebSocket server that your client can connect to without needing to handle authentication itself.
+
+### Steps
+1. **Run `mcp-remote`**:
+   Open your terminal and run the following command, replacing `{your-resource-id}` with your instance ID:
+   ```bash
+   npx mcp-remote --url https://mcp.graph.konnektr.io/mcp?resource_id={your-resource-id}
+   ```
+
+2. **Authenticate**:
+   The tool will open a browser window for you to log in and authorize the connection.
+
+3. **Connect Your Client**:
+   Once authenticated, `mcp-remote` will print a local WebSocket URL, like `ws://localhost:3999`. Configure your MCP client to connect to this local address. No authentication settings are needed in the client itself.
+
+## Demo Instance
+For testing and evaluation, a public demo instance is available. It does not require authentication.
+
+- **Demo URL**: `https://mcp.graph.konnektr.io/mcp?resource_id=demo`
+- **With `mcp-remote`**: `npx mcp-remote --url https://mcp.graph.konnektr.io/mcp?resource_id=demo`
+
+
+## Available Tools
+
+When an AI agent connects to the MCP server, it gains access to a suite of tools to interact with the digital twin graph.
+
+### Model Management
+- **`create_model`**: Creates a new DTDL model.
+- **`delete_model`**: Deletes a DTDL model.
+- **`get_model`**: Retrieves the full definition of a single DTDL model.
+- **`list_models`**: Lists all DTDL models in the graph.
+- **`search_models`**: Searches for DTDL models.
+
+### Digital Twin Management
+- **`create_or_replace_digital_twin`**: Creates or replaces a digital twin.
+- **`delete_digital_twin`**: Deletes a digital twin.
+- **`get_digital_twin`**: Retrieves a digital twin by its ID.
+- **`update_digital_twin`**: Updates a twin's properties using a JSON Patch.
+- **`search_digital_twins`**: Performs a semantic search for twins.
+
+### Relationship Management
+- **`create_or_replace_relationship`**: Creates or replaces a relationship between two twins.
+- **`delete_relationship`**: Deletes a relationship.
+- **`get_relationship`**: Retrieves a specific relationship.
+- **`list_relationships`**: Lists all outgoing relationships from a twin.
+- **`update_relationship`**: Updates a relationship's properties using a JSON Patch.
+
+### Querying
+- **`query_digital_twins`**: Executes a Cypher query against the graph.
+
+## See Also
+- [How-to Guide: Build a Business Twin with MCP](/how-to-guides/mcp-server-business-twin)
+- [Digital Twins Definition Language (DTDL)](/concepts/dtdl)
+- [Querying the Graph](/concepts/querying)
