@@ -8,7 +8,6 @@
         "validation",
         "event-routing",
         "telemetry",
-        "components",
-        "mcp-server"
+        "components"
     ]
 }
