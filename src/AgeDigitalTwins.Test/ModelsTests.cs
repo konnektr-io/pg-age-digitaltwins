@@ -1058,11 +1058,7 @@ public class ModelsTests : TestBase
     public async Task ReplaceModel_AddComponent_CreatesHasComponentRelationship()
     {
         // Arrange: Create base models
-        string[] modelIds =
-        [
-            "dtmi:com:contoso:CelestialBody;1",
-            "dtmi:com:contoso:Crater;1",
-        ];
+        string[] modelIds = ["dtmi:com:contoso:CelestialBody;1", "dtmi:com:contoso:Crater;1"];
         foreach (var modelId in modelIds)
         {
             try
