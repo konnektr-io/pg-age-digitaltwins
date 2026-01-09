@@ -986,6 +986,12 @@ DELETE r";
 
             return result;
         }
+        catch (ModelNotFoundException)
+        {
+            // If the model doesn't exist, create it instead
+            return await CreateModelsAsync(new[] { dtdlModel }, cancellationToken)
+                .ContinueWith(t => t.Result.First(), cancellationToken);
+        }
         catch (ParsingException ex)
         {
             throw new DTDLParserParsingException(ex);
