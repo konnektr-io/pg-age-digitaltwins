@@ -890,7 +890,98 @@ RETURN m";
                 throw new ModelNotFoundException($"Model with ID {modelId} not found after update");
             }
 
-            // 8. Invalidate the cache for this model
+            // 8. Parse the old model to get component information
+            var oldParsedModel = await _modelParser.ParseAsync(
+                ConvertToAsyncEnumerable(new[] { existingModel.DtdlModel! }),
+                cancellationToken: cancellationToken
+            );
+            var oldInterfaceInfo = (DTInterfaceInfo)oldParsedModel[new Dtmi(modelId)];
+
+            // Get old and new component schemas
+            var oldComponents =
+                oldInterfaceInfo
+                    .Components?.Values.Where(c => c.Schema?.Id != null)
+                    .Select(c => c.Schema.Id.AbsoluteUri)
+                    .ToHashSet() ?? new HashSet<string>();
+
+            var newComponents =
+                newInterfaceInfo
+                    .Components?.Values.Where(c => c.Schema?.Id != null)
+                    .Select(c => c.Schema.Id.AbsoluteUri)
+                    .ToHashSet() ?? new HashSet<string>();
+
+            // Components to add and remove
+            var componentsToAdd = newComponents.Except(oldComponents).ToList();
+            var componentsToRemove = oldComponents.Except(newComponents).ToList();
+
+            // 9. Update component relationships
+            foreach (var componentSchemaId in componentsToAdd)
+            {
+                string hasComponentCypher =
+                    $@"MATCH (m:Model {{id: '{modelId.Replace("'", "\\'")}'}})
+MATCH (m2:Model {{id: '{componentSchemaId.Replace("'", "\\'")}'}})
+CREATE (m)-[:_hasComponent]->(m2)";
+                await using var hasComponentCommand = connection.CreateCypherCommand(
+                    _graphName,
+                    hasComponentCypher
+                );
+                await hasComponentCommand.ExecuteNonQueryAsync(cancellationToken);
+            }
+
+            foreach (var componentSchemaId in componentsToRemove)
+            {
+                string removeComponentCypher =
+                    $@"MATCH (m:Model {{id: '{modelId.Replace("'", "\\'")}'}})
+                      -[r:_hasComponent]->
+                      (m2:Model {{id: '{componentSchemaId.Replace("'", "\\'")}'}})
+DELETE r";
+                await using var removeComponentCommand = connection.CreateCypherCommand(
+                    _graphName,
+                    removeComponentCypher
+                );
+                await removeComponentCommand.ExecuteNonQueryAsync(cancellationToken);
+            }
+
+            // 10. Handle relationship edge labels
+            // Collect all relationship names from the new model
+            var relationshipNames = new HashSet<string>();
+            foreach (var entityInfoKv in newParsedModel)
+            {
+                if (entityInfoKv.Value is DTRelationshipInfo relationshipInfo)
+                {
+                    relationshipNames.Add(relationshipInfo.Name);
+                }
+            }
+
+            // Create edge labels for new relationships and set replica identity
+            foreach (var relationshipName in relationshipNames)
+            {
+                // Check if label already exists
+                await using var labelExistsCommand = new NpgsqlCommand(
+                    $@"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = '{_graphName}' AND table_name = '{relationshipName}');",
+                    connection
+                );
+                if ((bool?)await labelExistsCommand.ExecuteScalarAsync(cancellationToken) == true)
+                {
+                    continue;
+                }
+
+                // Create new label
+                await using var createElabelCommand = new NpgsqlCommand(
+                    $@"SELECT create_elabel('{_graphName}', '{relationshipName}');",
+                    connection
+                );
+                await createElabelCommand.ExecuteNonQueryAsync(cancellationToken);
+
+                // Set the replication identity to FULL for the new label
+                await using var setReplicationCommand = new NpgsqlCommand(
+                    $@"ALTER TABLE {_graphName}.""{relationshipName}"" REPLICA IDENTITY FULL",
+                    connection
+                );
+                await setReplicationCommand.ExecuteNonQueryAsync(cancellationToken);
+            }
+
+            // 11. Invalidate the cache for this model
             _modelCache.Remove(modelId);
 
             return result;

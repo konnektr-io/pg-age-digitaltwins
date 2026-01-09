@@ -1,6 +1,7 @@
 using System.Text.Json;
 using AgeDigitalTwins.Exceptions;
 using DTDLParser;
+using Npgsql.Age;
 
 namespace AgeDigitalTwins.Test;
 
@@ -1051,5 +1052,216 @@ public class ModelsTests : TestBase
             .Select(c => c.GetProperty("name").GetString())
             .ToList();
         Assert.Contains("age", propertyNames);
+    }
+
+    [Fact]
+    public async Task ReplaceModel_AddComponent_CreatesHasComponentRelationship()
+    {
+        // Arrange: Create base models
+        string[] modelIds =
+        [
+            "dtmi:com:contoso:CelestialBody;1",
+            "dtmi:com:contoso:Crater;1",
+        ];
+        foreach (var modelId in modelIds)
+        {
+            try
+            {
+                await Client.DeleteModelAsync(modelId);
+            }
+            catch (ModelNotFoundException)
+            {
+                // Ignore if model doesn't exist
+            }
+        }
+
+        await Client.CreateModelsAsync([SampleData.DtdlCelestialBody, SampleData.DtdlCrater]);
+
+        // Create CelestialBody without components
+        string celestialBodyNoComponent =
+            @"{
+            ""@context"": ""dtmi:dtdl:context;3"",
+            ""@id"": ""dtmi:com:contoso:CelestialBody;1"",
+            ""@type"": ""Interface"",
+            ""displayName"": ""Celestial body"",
+            ""contents"": [
+                {
+                    ""@type"": ""Property"",
+                    ""name"": ""name"",
+                    ""schema"": ""string""
+                },
+                {
+                    ""@type"": ""Property"",
+                    ""name"": ""mass"",
+                    ""schema"": ""double""
+                },
+                {
+                    ""@type"": ""Property"",
+                    ""name"": ""temperature"",
+                    ""schema"": ""double""
+                },
+                {
+                    ""@type"": ""Relationship"",
+                    ""name"": ""orbits"",
+                    ""target"": ""dtmi:com:contoso:CelestialBody;1""
+                }
+            ]
+        }";
+
+        // First replace to version without component
+        await Client.ReplaceModelAsync(
+            "dtmi:com:contoso:CelestialBody;1",
+            celestialBodyNoComponent
+        );
+
+        // Now add a component
+        string celestialBodyWithComponent =
+            @"{
+            ""@context"": ""dtmi:dtdl:context;3"",
+            ""@id"": ""dtmi:com:contoso:CelestialBody;1"",
+            ""@type"": ""Interface"",
+            ""displayName"": ""Celestial body"",
+            ""contents"": [
+                {
+                    ""@type"": ""Property"",
+                    ""name"": ""name"",
+                    ""schema"": ""string""
+                },
+                {
+                    ""@type"": ""Property"",
+                    ""name"": ""mass"",
+                    ""schema"": ""double""
+                },
+                {
+                    ""@type"": ""Property"",
+                    ""name"": ""temperature"",
+                    ""schema"": ""double""
+                },
+                {
+                    ""@type"": ""Component"",
+                    ""name"": ""mainCrater"",
+                    ""schema"": ""dtmi:com:contoso:Crater;1""
+                },
+                {
+                    ""@type"": ""Relationship"",
+                    ""name"": ""orbits"",
+                    ""target"": ""dtmi:com:contoso:CelestialBody;1""
+                }
+            ]
+        }";
+
+        // Act
+        var result = await Client.ReplaceModelAsync(
+            "dtmi:com:contoso:CelestialBody;1",
+            celestialBodyWithComponent
+        );
+
+        // Assert: Verify the component is in the model
+        Assert.NotNull(result);
+        var modelJson = JsonDocument.Parse(result.DtdlModel!);
+        var contents = modelJson.RootElement.GetProperty("contents");
+        var components = contents
+            .EnumerateArray()
+            .Where(c => c.TryGetProperty("@type", out var type) && type.GetString() == "Component")
+            .ToList();
+        Assert.Single(components);
+        Assert.Equal("mainCrater", components[0].GetProperty("name").GetString());
+
+        // Verify the _hasComponent relationship was created in the graph
+        var graphName = Client.GetGraphName();
+        var dataSource = Client.GetDataSource();
+        await using var connection = await dataSource.OpenConnectionAsync();
+        string cypher =
+            $@"
+            MATCH (m:Model {{id: 'dtmi:com:contoso:CelestialBody;1'}})
+                  -[:_hasComponent]->
+                  (m2:Model {{id: 'dtmi:com:contoso:Crater;1'}})
+            RETURN COUNT(*) as count";
+        await using var command = connection.CreateCypherCommand(graphName, cypher);
+        await using var reader = await command.ExecuteReaderAsync();
+        Assert.True(await reader.ReadAsync());
+        var agResult = await reader.GetFieldValueAsync<Npgsql.Age.Types.Agtype>(0);
+        int count = (int)agResult;
+        Assert.Equal(1, count);
+    }
+
+    [Fact]
+    public async Task ReplaceModel_RemoveComponent_DeletesHasComponentRelationship()
+    {
+        // Arrange: Create models with component
+        string[] modelIds =
+        [
+            "dtmi:com:contoso:Planet;1",
+            "dtmi:com:contoso:CelestialBody;1",
+            "dtmi:com:contoso:Crater;1",
+        ];
+        foreach (var modelId in modelIds)
+        {
+            try
+            {
+                await Client.DeleteModelAsync(modelId);
+            }
+            catch (ModelNotFoundException)
+            {
+                // Ignore if model doesn't exist
+            }
+        }
+
+        await Client.CreateModelsAsync(
+            [SampleData.DtdlCelestialBody, SampleData.DtdlCrater, SampleData.DtdlPlanet]
+        );
+
+        // Planet originally has a deepestCrater component
+        // Now replace it without the component
+        string planetNoComponent =
+            @"{
+            ""@context"": ""dtmi:dtdl:context;3"",
+            ""@id"": ""dtmi:com:contoso:Planet;1"",
+            ""@type"": ""Interface"",
+            ""displayName"": ""Planet"",
+            ""extends"": ""dtmi:com:contoso:CelestialBody;1"",
+            ""contents"": [
+                {
+                    ""@type"": ""Relationship"",
+                    ""name"": ""satellites"",
+                    ""target"": ""dtmi:com:contoso:Moon;1""
+                },
+                {
+                    ""@type"": ""Property"",
+                    ""name"": ""hasLife"",
+                    ""schema"": ""boolean""
+                }
+            ]
+        }";
+
+        // Act
+        var result = await Client.ReplaceModelAsync("dtmi:com:contoso:Planet;1", planetNoComponent);
+
+        // Assert: Verify the component is removed from the model
+        Assert.NotNull(result);
+        var modelJson = JsonDocument.Parse(result.DtdlModel!);
+        var contents = modelJson.RootElement.GetProperty("contents");
+        var components = contents
+            .EnumerateArray()
+            .Where(c => c.TryGetProperty("@type", out var type) && type.GetString() == "Component")
+            .ToList();
+        Assert.Empty(components);
+
+        // Verify the _hasComponent relationship was removed from the graph
+        var graphName = Client.GetGraphName();
+        var dataSource = Client.GetDataSource();
+        await using var connection = await dataSource.OpenConnectionAsync();
+        string cypher =
+            $@"
+            MATCH (m:Model {{id: 'dtmi:com:contoso:Planet;1'}})
+                  -[:_hasComponent]->
+                  (m2:Model {{id: 'dtmi:com:contoso:Crater;1'}})
+            RETURN COUNT(*) as count";
+        await using var command = connection.CreateCypherCommand(graphName, cypher);
+        await using var reader = await command.ExecuteReaderAsync();
+        Assert.True(await reader.ReadAsync());
+        var agResult = await reader.GetFieldValueAsync<Npgsql.Age.Types.Agtype>(0);
+        int count = (int)agResult;
+        Assert.Equal(0, count);
     }
 }
