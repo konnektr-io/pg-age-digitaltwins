@@ -696,7 +696,8 @@ public class ModelsTests : TestBase
         await Client.CreateModelsAsync([SampleData.DtdlRoom]);
 
         // Create an updated version with an additional property
-        string updatedModel = @"{
+        string updatedModel =
+            @"{
             ""@id"": ""dtmi:com:adt:dtsample:room;1"",
             ""@type"": ""Interface"",
             ""@context"": [
@@ -763,10 +764,16 @@ public class ModelsTests : TestBase
         // Verify the new property is present
         var modelJson = JsonDocument.Parse(result.DtdlModel!);
         var contents = modelJson.RootElement.GetProperty("contents");
-        var propertyNames = contents.EnumerateArray()
-            .Where(c => c.TryGetProperty("@type", out var type) && 
-                       (type.ValueKind == JsonValueKind.String && type.GetString() == "Property" ||
-                        type.ValueKind == JsonValueKind.Array && type.EnumerateArray().Any(t => t.GetString() == "Property")))
+        var propertyNames = contents
+            .EnumerateArray()
+            .Where(c =>
+                c.TryGetProperty("@type", out var type)
+                && (
+                    type.ValueKind == JsonValueKind.String && type.GetString() == "Property"
+                    || type.ValueKind == JsonValueKind.Array
+                        && type.EnumerateArray().Any(t => t.GetString() == "Property")
+                )
+            )
             .Select(c => c.GetProperty("name").GetString())
             .ToList();
         Assert.Contains("capacity", propertyNames);
@@ -791,7 +798,8 @@ public class ModelsTests : TestBase
         await Client.CreateModelsAsync([SampleData.DtdlRoom]);
 
         // Try to replace with a different model ID
-        string differentIdModel = @"{
+        string differentIdModel =
+            @"{
             ""@id"": ""dtmi:com:adt:dtsample:different;1"",
             ""@type"": ""Interface"",
             ""@context"": ""dtmi:dtdl:context;3"",
@@ -832,10 +840,13 @@ public class ModelsTests : TestBase
             }
         }
 
-        await Client.CreateModelsAsync([SampleData.DtdlCelestialBody, SampleData.DtdlCrater, SampleData.DtdlPlanet]);
+        await Client.CreateModelsAsync(
+            [SampleData.DtdlCelestialBody, SampleData.DtdlCrater, SampleData.DtdlPlanet]
+        );
 
         // Try to replace Planet with a version that doesn't extend CelestialBody
-        string planetNoExtends = @"{
+        string planetNoExtends =
+            @"{
             ""@context"": ""dtmi:dtdl:context;3"",
             ""@id"": ""dtmi:com:contoso:Planet;1"",
             ""@type"": ""Interface"",
@@ -880,15 +891,18 @@ public class ModelsTests : TestBase
             }
         }
 
-        await Client.CreateModelsAsync([
-            SampleData.DtdlCelestialBody,
-            SampleData.DtdlCrater,
-            SampleData.DtdlPlanet,
-            SampleData.DtdlHabitablePlanet
-        ]);
+        await Client.CreateModelsAsync(
+            [
+                SampleData.DtdlCelestialBody,
+                SampleData.DtdlCrater,
+                SampleData.DtdlPlanet,
+                SampleData.DtdlHabitablePlanet,
+            ]
+        );
 
         // Try to add a property 'hasLife' to CelestialBody - which already exists in Planet (a descendant)
-        string celestialBodyWithConflict = @"{
+        string celestialBodyWithConflict =
+            @"{
             ""@context"": ""dtmi:dtdl:context;3"",
             ""@id"": ""dtmi:com:contoso:CelestialBody;1"",
             ""@type"": ""Interface"",
@@ -925,7 +939,10 @@ public class ModelsTests : TestBase
         // Act & Assert
         var ex = await Assert.ThrowsAsync<ModelUpdateValidationException>(async () =>
         {
-            await Client.ReplaceModelAsync("dtmi:com:contoso:CelestialBody;1", celestialBodyWithConflict);
+            await Client.ReplaceModelAsync(
+                "dtmi:com:contoso:CelestialBody;1",
+                celestialBodyWithConflict
+            );
         });
         Assert.Contains("conflicts with descendant models", ex.Message);
     }
@@ -934,7 +951,8 @@ public class ModelsTests : TestBase
     public async Task ReplaceModel_NonExistentModel_ThrowsModelNotFoundException()
     {
         // Act & Assert
-        string model = @"{
+        string model =
+            @"{
             ""@id"": ""dtmi:com:nonexistent:model;1"",
             ""@type"": ""Interface"",
             ""@context"": ""dtmi:dtdl:context;3"",
@@ -970,10 +988,13 @@ public class ModelsTests : TestBase
             }
         }
 
-        await Client.CreateModelsAsync([SampleData.DtdlCelestialBody, SampleData.DtdlCrater, SampleData.DtdlPlanet]);
+        await Client.CreateModelsAsync(
+            [SampleData.DtdlCelestialBody, SampleData.DtdlCrater, SampleData.DtdlPlanet]
+        );
 
         // Add a new property 'age' to CelestialBody (no conflict with descendants)
-        string celestialBodyUpdated = @"{
+        string celestialBodyUpdated =
+            @"{
             ""@context"": ""dtmi:dtdl:context;3"",
             ""@id"": ""dtmi:com:contoso:CelestialBody;1"",
             ""@type"": ""Interface"",
@@ -1008,7 +1029,10 @@ public class ModelsTests : TestBase
         }";
 
         // Act
-        var result = await Client.ReplaceModelAsync("dtmi:com:contoso:CelestialBody;1", celestialBodyUpdated);
+        var result = await Client.ReplaceModelAsync(
+            "dtmi:com:contoso:CelestialBody;1",
+            celestialBodyUpdated
+        );
 
         // Assert
         Assert.NotNull(result);
@@ -1021,7 +1045,8 @@ public class ModelsTests : TestBase
         // Verify the new property is present
         var modelJson = JsonDocument.Parse(result.DtdlModel!);
         var contents = modelJson.RootElement.GetProperty("contents");
-        var propertyNames = contents.EnumerateArray()
+        var propertyNames = contents
+            .EnumerateArray()
             .Where(c => c.TryGetProperty("@type", out var type) && type.GetString() == "Property")
             .Select(c => c.GetProperty("name").GetString())
             .ToList();

@@ -171,12 +171,22 @@ public static class ModelsEndpoints
 
                         if (op != "replace")
                         {
-                            return Results.BadRequest(new { error = $"Only 'replace' operations are supported. Got: '{op}'" });
+                            return Results.BadRequest(
+                                new
+                                {
+                                    error = $"Only 'replace' operations are supported. Got: '{op}'",
+                                }
+                            );
                         }
 
                         if (path != "/decommissioned")
                         {
-                            return Results.BadRequest(new { error = $"Only the '/decommissioned' path can be patched. Got: '{path}'" });
+                            return Results.BadRequest(
+                                new
+                                {
+                                    error = $"Only the '/decommissioned' path can be patched. Got: '{path}'",
+                                }
+                            );
                         }
 
                         var value = operation.GetProperty("value").GetBoolean();
@@ -202,14 +212,20 @@ public static class ModelsEndpoints
                     CancellationToken cancellationToken
                 ) =>
                 {
-                    var result = await client.ReplaceModelAsync(id, model.GetRawText(), cancellationToken);
+                    var result = await client.ReplaceModelAsync(
+                        id,
+                        model.GetRawText(),
+                        cancellationToken
+                    );
                     return Results.Json(result);
                 }
             )
             .RequirePermission(ResourceType.Models, PermissionAction.Write)
             .RequireRateLimiting("AdminOperations")
             .WithName("ReplaceModel")
-            .WithSummary("Replaces a model definition (extended feature, validates against descendants).");
+            .WithSummary(
+                "Replaces a model definition (extended feature, validates against descendants)."
+            );
 
         modelsGroup
             .MapPost(
