@@ -755,7 +755,10 @@ public class ModelsTests : TestBase
         }";
 
         // Act
-        var result = await Client.ReplaceModelAsync("dtmi:com:adt:dtsample:room;1", updatedModel);
+        var result = await Client.CreateOrReplaceModelAsync(
+            "dtmi:com:adt:dtsample:room;1",
+            updatedModel
+        );
 
         // Assert
         Assert.NotNull(result);
@@ -811,7 +814,10 @@ public class ModelsTests : TestBase
         // Act & Assert
         var ex = await Assert.ThrowsAsync<ModelUpdateValidationException>(async () =>
         {
-            await Client.ReplaceModelAsync("dtmi:com:adt:dtsample:room;1", differentIdModel);
+            await Client.CreateOrReplaceModelAsync(
+                "dtmi:com:adt:dtsample:room;1",
+                differentIdModel
+            );
         });
         Assert.Contains("Model ID cannot be changed", ex.Message);
 
@@ -864,7 +870,7 @@ public class ModelsTests : TestBase
         // Act & Assert
         var ex = await Assert.ThrowsAsync<ModelExtendsChangedException>(async () =>
         {
-            await Client.ReplaceModelAsync("dtmi:com:contoso:Planet;1", planetNoExtends);
+            await Client.CreateOrReplaceModelAsync("dtmi:com:contoso:Planet;1", planetNoExtends);
         });
         Assert.Contains("Changing what a model extends is not supported", ex.Message);
     }
@@ -940,7 +946,7 @@ public class ModelsTests : TestBase
         // Act & Assert
         var ex = await Assert.ThrowsAsync<ModelUpdateValidationException>(async () =>
         {
-            await Client.ReplaceModelAsync(
+            await Client.CreateOrReplaceModelAsync(
                 "dtmi:com:contoso:CelestialBody;1",
                 celestialBodyWithConflict
             );
@@ -963,7 +969,7 @@ public class ModelsTests : TestBase
 
         await Assert.ThrowsAsync<ModelNotFoundException>(async () =>
         {
-            await Client.ReplaceModelAsync("dtmi:com:nonexistent:model;1", model);
+            await Client.CreateOrReplaceModelAsync("dtmi:com:nonexistent:model;1", model);
         });
     }
 
@@ -1030,7 +1036,7 @@ public class ModelsTests : TestBase
         }";
 
         // Act
-        var result = await Client.ReplaceModelAsync(
+        var result = await Client.CreateOrReplaceModelAsync(
             "dtmi:com:contoso:CelestialBody;1",
             celestialBodyUpdated
         );
@@ -1105,7 +1111,7 @@ public class ModelsTests : TestBase
         }";
 
         // First replace to version without component
-        await Client.ReplaceModelAsync(
+        await Client.CreateOrReplaceModelAsync(
             "dtmi:com:contoso:CelestialBody;1",
             celestialBodyNoComponent
         );
@@ -1147,7 +1153,7 @@ public class ModelsTests : TestBase
         }";
 
         // Act
-        var result = await Client.ReplaceModelAsync(
+        var result = await Client.CreateOrReplaceModelAsync(
             "dtmi:com:contoso:CelestialBody;1",
             celestialBodyWithComponent
         );
@@ -1231,7 +1237,10 @@ public class ModelsTests : TestBase
         }";
 
         // Act
-        var result = await Client.ReplaceModelAsync("dtmi:com:contoso:Planet;1", planetNoComponent);
+        var result = await Client.CreateOrReplaceModelAsync(
+            "dtmi:com:contoso:Planet;1",
+            planetNoComponent
+        );
 
         // Assert: Verify the component is removed from the model
         Assert.NotNull(result);

@@ -729,7 +729,7 @@ RETURN COUNT(m) AS updatedCount";
     }
 
     /// <summary>
-    /// Replaces an existing model with a new definition asynchronously (PUT operation).
+    /// Creates or replaces an existing model with a new definition asynchronously (PUT operation).
     /// This is an extended feature not available in ADT that allows updating model contents.
     /// </summary>
     /// <remarks>
@@ -741,7 +741,7 @@ RETURN COUNT(m) AS updatedCount";
     /// Restrictions:
     /// <list type="bullet">
     /// <item><description>The model ID cannot be changed.</description></item>
-    /// <item><description>The extends clause cannot be changed (would be too complex to manage).</description></item>
+    /// <item><description>The extends clause cannot be changed.</description></item>
     /// <item><description>New properties/relationships must not conflict with descendant models.</description></item>
     /// </list>
     /// </para>
@@ -754,7 +754,7 @@ RETURN COUNT(m) AS updatedCount";
     /// <exception cref="ModelExtendsChangedException">Thrown when trying to change what the model extends.</exception>
     /// <exception cref="ModelUpdateValidationException">Thrown when the update causes validation errors with descendant models.</exception>
     /// <exception cref="DTDLParserParsingException">Thrown when there is an error parsing the DTDL model.</exception>
-    public virtual async Task<DigitalTwinsModelData> ReplaceModelAsync(
+    public virtual async Task<DigitalTwinsModelData> CreateOrReplaceModelAsync(
         string modelId,
         string dtdlModel,
         CancellationToken cancellationToken = default

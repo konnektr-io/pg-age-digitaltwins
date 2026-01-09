@@ -199,7 +199,7 @@ public static class ModelsEndpoints
             .RequirePermission(ResourceType.Models, PermissionAction.Write)
             .RequireRateLimiting("AdminOperations")
             .WithName("UpdateModel")
-            .WithSummary("Updates a model's decommissioned status (ADT-compatible PATCH).");
+            .WithSummary("Updates a model's decommissioned status.");
 
         modelsGroup
             .MapPut(
@@ -212,7 +212,7 @@ public static class ModelsEndpoints
                     CancellationToken cancellationToken
                 ) =>
                 {
-                    var result = await client.ReplaceModelAsync(
+                    var result = await client.CreateOrReplaceModelAsync(
                         id,
                         model.GetRawText(),
                         cancellationToken
@@ -222,10 +222,8 @@ public static class ModelsEndpoints
             )
             .RequirePermission(ResourceType.Models, PermissionAction.Write)
             .RequireRateLimiting("AdminOperations")
-            .WithName("ReplaceModel")
-            .WithSummary(
-                "Replaces a model definition (extended feature, validates against descendants)."
-            );
+            .WithName("CreateOrReplaceModel")
+            .WithSummary("Creates or replaces a model definition.");
 
         modelsGroup
             .MapPost(
