@@ -636,4 +636,395 @@ public class ModelsTests : TestBase
             .ToList();
         Assert.Contains("orbits", relNames2);
     }
+
+    [Fact]
+    public async Task UpdateModel_Decommission_SetsDecommissionedFlag()
+    {
+        // Arrange
+        try
+        {
+            await Client.DeleteModelAsync("dtmi:com:adt:dtsample:room;1");
+        }
+        catch (ModelNotFoundException)
+        {
+            // Ignore if model doesn't exist
+        }
+
+        await Client.CreateModelsAsync([SampleData.DtdlRoom]);
+
+        // Act: Decommission the model
+        await Client.UpdateModelAsync("dtmi:com:adt:dtsample:room;1", decommissioned: true);
+
+        // Assert
+        var model = await Client.GetModelAsync("dtmi:com:adt:dtsample:room;1");
+        Assert.True(model.IsDecommissioned);
+
+        // Act: Recommission the model
+        await Client.UpdateModelAsync("dtmi:com:adt:dtsample:room;1", decommissioned: false);
+
+        // Assert
+        model = await Client.GetModelAsync("dtmi:com:adt:dtsample:room;1");
+        Assert.False(model.IsDecommissioned);
+
+        // Cleanup
+        await Client.DeleteModelAsync("dtmi:com:adt:dtsample:room;1");
+    }
+
+    [Fact]
+    public async Task UpdateModel_NonExistentModel_ThrowsModelNotFoundException()
+    {
+        // Act & Assert
+        await Assert.ThrowsAsync<ModelNotFoundException>(async () =>
+        {
+            await Client.UpdateModelAsync("dtmi:com:nonexistent:model;1", decommissioned: true);
+        });
+    }
+
+    [Fact]
+    public async Task ReplaceModel_AddProperty_SucceedsWhenNoConflict()
+    {
+        // Arrange: Clean up and create a model without descendants
+        try
+        {
+            await Client.DeleteModelAsync("dtmi:com:adt:dtsample:room;1");
+        }
+        catch (ModelNotFoundException)
+        {
+            // Ignore if model doesn't exist
+        }
+
+        await Client.CreateModelsAsync([SampleData.DtdlRoom]);
+
+        // Create an updated version with an additional property
+        string updatedModel = @"{
+            ""@id"": ""dtmi:com:adt:dtsample:room;1"",
+            ""@type"": ""Interface"",
+            ""@context"": [
+                ""dtmi:dtdl:context;3"",
+                ""dtmi:dtdl:extension:quantitativeTypes;1""
+            ],
+            ""displayName"": ""Room"",
+            ""contents"": [
+                {
+                    ""@type"": ""Property"",
+                    ""name"": ""name"",
+                    ""schema"": ""string""
+                },
+                {
+                    ""@type"": ""Property"",
+                    ""name"": ""description"",
+                    ""schema"": ""string""
+                },
+                {
+                    ""@type"": ""Property"",
+                    ""name"": ""temperature"",
+                    ""schema"": ""double""
+                },
+                {
+                    ""@type"": [""Property"", ""Humidity""],
+                    ""name"": ""humidity"",
+                    ""schema"": ""double"",
+                    ""unit"": ""gramPerCubicMetre""
+                },
+                {
+                    ""@type"": ""Property"",
+                    ""name"": ""dimensions"",
+                    ""schema"": {
+                        ""@type"": ""Object"",
+                        ""fields"": [
+                            { ""name"": ""length"", ""schema"": ""double"" },
+                            { ""name"": ""width"", ""schema"": ""double"" },
+                            { ""name"": ""height"", ""schema"": ""double"" }
+                        ]
+                    }
+                },
+                {
+                    ""@type"": ""Property"",
+                    ""name"": ""capacity"",
+                    ""schema"": ""integer""
+                },
+                {
+                    ""@type"": ""Relationship"",
+                    ""@id"": ""dtmi:com:adt:dtsample:room:rel_has_sensors;1"",
+                    ""name"": ""rel_has_sensors"",
+                    ""displayName"": ""Room has sensors""
+                }
+            ]
+        }";
+
+        // Act
+        var result = await Client.ReplaceModelAsync("dtmi:com:adt:dtsample:room;1", updatedModel);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal("dtmi:com:adt:dtsample:room;1", result.Id);
+        Assert.NotNull(result.DtdlModel);
+
+        // Verify the new property is present
+        var modelJson = JsonDocument.Parse(result.DtdlModel!);
+        var contents = modelJson.RootElement.GetProperty("contents");
+        var propertyNames = contents.EnumerateArray()
+            .Where(c => c.TryGetProperty("@type", out var type) && 
+                       (type.ValueKind == JsonValueKind.String && type.GetString() == "Property" ||
+                        type.ValueKind == JsonValueKind.Array && type.EnumerateArray().Any(t => t.GetString() == "Property")))
+            .Select(c => c.GetProperty("name").GetString())
+            .ToList();
+        Assert.Contains("capacity", propertyNames);
+
+        // Cleanup
+        await Client.DeleteModelAsync("dtmi:com:adt:dtsample:room;1");
+    }
+
+    [Fact]
+    public async Task ReplaceModel_ChangeModelId_ThrowsModelUpdateValidationException()
+    {
+        // Arrange
+        try
+        {
+            await Client.DeleteModelAsync("dtmi:com:adt:dtsample:room;1");
+        }
+        catch (ModelNotFoundException)
+        {
+            // Ignore if model doesn't exist
+        }
+
+        await Client.CreateModelsAsync([SampleData.DtdlRoom]);
+
+        // Try to replace with a different model ID
+        string differentIdModel = @"{
+            ""@id"": ""dtmi:com:adt:dtsample:different;1"",
+            ""@type"": ""Interface"",
+            ""@context"": ""dtmi:dtdl:context;3"",
+            ""displayName"": ""Different"",
+            ""contents"": []
+        }";
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<ModelUpdateValidationException>(async () =>
+        {
+            await Client.ReplaceModelAsync("dtmi:com:adt:dtsample:room;1", differentIdModel);
+        });
+        Assert.Contains("Model ID cannot be changed", ex.Message);
+
+        // Cleanup
+        await Client.DeleteModelAsync("dtmi:com:adt:dtsample:room;1");
+    }
+
+    [Fact]
+    public async Task ReplaceModel_ChangeExtends_ThrowsModelExtendsChangedException()
+    {
+        // Arrange: Create base models and a derived model
+        string[] modelIds =
+        [
+            "dtmi:com:contoso:Planet;1",
+            "dtmi:com:contoso:CelestialBody;1",
+            "dtmi:com:contoso:Crater;1",
+        ];
+        foreach (var modelId in modelIds)
+        {
+            try
+            {
+                await Client.DeleteModelAsync(modelId);
+            }
+            catch (ModelNotFoundException)
+            {
+                // Ignore if model doesn't exist
+            }
+        }
+
+        await Client.CreateModelsAsync([SampleData.DtdlCelestialBody, SampleData.DtdlCrater, SampleData.DtdlPlanet]);
+
+        // Try to replace Planet with a version that doesn't extend CelestialBody
+        string planetNoExtends = @"{
+            ""@context"": ""dtmi:dtdl:context;3"",
+            ""@id"": ""dtmi:com:contoso:Planet;1"",
+            ""@type"": ""Interface"",
+            ""displayName"": ""Planet"",
+            ""contents"": [
+                {
+                    ""@type"": ""Property"",
+                    ""name"": ""hasLife"",
+                    ""schema"": ""boolean""
+                }
+            ]
+        }";
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<ModelExtendsChangedException>(async () =>
+        {
+            await Client.ReplaceModelAsync("dtmi:com:contoso:Planet;1", planetNoExtends);
+        });
+        Assert.Contains("Changing what a model extends is not supported", ex.Message);
+    }
+
+    [Fact]
+    public async Task ReplaceModel_AddPropertyConflictingWithDescendant_ThrowsModelUpdateValidationException()
+    {
+        // Arrange: Create a hierarchy where we'll add a conflicting property to the base
+        string[] modelIds =
+        [
+            "dtmi:com:contoso:HabitablePlanet;1",
+            "dtmi:com:contoso:Planet;1",
+            "dtmi:com:contoso:CelestialBody;1",
+            "dtmi:com:contoso:Crater;1",
+        ];
+        foreach (var modelId in modelIds)
+        {
+            try
+            {
+                await Client.DeleteModelAsync(modelId);
+            }
+            catch (ModelNotFoundException)
+            {
+                // Ignore if model doesn't exist
+            }
+        }
+
+        await Client.CreateModelsAsync([
+            SampleData.DtdlCelestialBody,
+            SampleData.DtdlCrater,
+            SampleData.DtdlPlanet,
+            SampleData.DtdlHabitablePlanet
+        ]);
+
+        // Try to add a property 'hasLife' to CelestialBody - which already exists in Planet (a descendant)
+        string celestialBodyWithConflict = @"{
+            ""@context"": ""dtmi:dtdl:context;3"",
+            ""@id"": ""dtmi:com:contoso:CelestialBody;1"",
+            ""@type"": ""Interface"",
+            ""displayName"": ""Celestial body"",
+            ""contents"": [
+                {
+                    ""@type"": ""Property"",
+                    ""name"": ""name"",
+                    ""schema"": ""string""
+                },
+                {
+                    ""@type"": ""Property"",
+                    ""name"": ""mass"",
+                    ""schema"": ""double""
+                },
+                {
+                    ""@type"": ""Property"",
+                    ""name"": ""temperature"",
+                    ""schema"": ""double""
+                },
+                {
+                    ""@type"": ""Property"",
+                    ""name"": ""hasLife"",
+                    ""schema"": ""boolean""
+                },
+                {
+                    ""@type"": ""Relationship"",
+                    ""name"": ""orbits"",
+                    ""target"": ""dtmi:com:contoso:CelestialBody;1""
+                }
+            ]
+        }";
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<ModelUpdateValidationException>(async () =>
+        {
+            await Client.ReplaceModelAsync("dtmi:com:contoso:CelestialBody;1", celestialBodyWithConflict);
+        });
+        Assert.Contains("conflicts with descendant models", ex.Message);
+    }
+
+    [Fact]
+    public async Task ReplaceModel_NonExistentModel_ThrowsModelNotFoundException()
+    {
+        // Act & Assert
+        string model = @"{
+            ""@id"": ""dtmi:com:nonexistent:model;1"",
+            ""@type"": ""Interface"",
+            ""@context"": ""dtmi:dtdl:context;3"",
+            ""displayName"": ""Nonexistent"",
+            ""contents"": []
+        }";
+
+        await Assert.ThrowsAsync<ModelNotFoundException>(async () =>
+        {
+            await Client.ReplaceModelAsync("dtmi:com:nonexistent:model;1", model);
+        });
+    }
+
+    [Fact]
+    public async Task ReplaceModel_AddPropertyToBaseModel_SucceedsWhenNoConflict()
+    {
+        // Arrange: Create base and derived models
+        string[] modelIds =
+        [
+            "dtmi:com:contoso:Planet;1",
+            "dtmi:com:contoso:CelestialBody;1",
+            "dtmi:com:contoso:Crater;1",
+        ];
+        foreach (var modelId in modelIds)
+        {
+            try
+            {
+                await Client.DeleteModelAsync(modelId);
+            }
+            catch (ModelNotFoundException)
+            {
+                // Ignore if model doesn't exist
+            }
+        }
+
+        await Client.CreateModelsAsync([SampleData.DtdlCelestialBody, SampleData.DtdlCrater, SampleData.DtdlPlanet]);
+
+        // Add a new property 'age' to CelestialBody (no conflict with descendants)
+        string celestialBodyUpdated = @"{
+            ""@context"": ""dtmi:dtdl:context;3"",
+            ""@id"": ""dtmi:com:contoso:CelestialBody;1"",
+            ""@type"": ""Interface"",
+            ""displayName"": ""Celestial body"",
+            ""contents"": [
+                {
+                    ""@type"": ""Property"",
+                    ""name"": ""name"",
+                    ""schema"": ""string""
+                },
+                {
+                    ""@type"": ""Property"",
+                    ""name"": ""mass"",
+                    ""schema"": ""double""
+                },
+                {
+                    ""@type"": ""Property"",
+                    ""name"": ""temperature"",
+                    ""schema"": ""double""
+                },
+                {
+                    ""@type"": ""Property"",
+                    ""name"": ""age"",
+                    ""schema"": ""double""
+                },
+                {
+                    ""@type"": ""Relationship"",
+                    ""name"": ""orbits"",
+                    ""target"": ""dtmi:com:contoso:CelestialBody;1""
+                }
+            ]
+        }";
+
+        // Act
+        var result = await Client.ReplaceModelAsync("dtmi:com:contoso:CelestialBody;1", celestialBodyUpdated);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal("dtmi:com:contoso:CelestialBody;1", result.Id);
+
+        // Verify descendants are preserved
+        Assert.NotNull(result.Descendants);
+        Assert.Contains("dtmi:com:contoso:Planet;1", result.Descendants);
+
+        // Verify the new property is present
+        var modelJson = JsonDocument.Parse(result.DtdlModel!);
+        var contents = modelJson.RootElement.GetProperty("contents");
+        var propertyNames = contents.EnumerateArray()
+            .Where(c => c.TryGetProperty("@type", out var type) && type.GetString() == "Property")
+            .Select(c => c.GetProperty("name").GetString())
+            .ToList();
+        Assert.Contains("age", propertyNames);
+    }
 }

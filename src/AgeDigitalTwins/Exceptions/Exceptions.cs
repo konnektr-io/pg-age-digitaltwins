@@ -121,3 +121,27 @@ public class DatabaseConnectivityException : Exception
     public DatabaseConnectivityException(string message, Exception innerException)
         : base(message, innerException) { }
 }
+
+public class ModelExtendsChangedException : AgeDigitalTwinsException
+{
+    public ModelExtendsChangedException()
+        : base("Changing what a model extends is not supported.")
+    {
+        StatusCode = HttpStatusCode.BadRequest;
+    }
+
+    public ModelExtendsChangedException(string message)
+        : base(message)
+    {
+        StatusCode = HttpStatusCode.BadRequest;
+    }
+}
+
+public class ModelUpdateValidationException : AgeDigitalTwinsException
+{
+    public ModelUpdateValidationException(string message)
+        : base(message)
+    {
+        StatusCode = HttpStatusCode.BadRequest;
+    }
+}

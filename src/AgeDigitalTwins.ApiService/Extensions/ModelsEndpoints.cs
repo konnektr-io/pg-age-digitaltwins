@@ -152,6 +152,66 @@ public static class ModelsEndpoints
             .WithSummary("Deletes a specific model by its ID.");
 
         modelsGroup
+            .MapPatch(
+                "/{id}",
+                [Authorize]
+                async (
+                    string id,
+                    [FromBody] JsonElement[] patchOperations,
+                    [FromServices] AgeDigitalTwinsClient client,
+                    CancellationToken cancellationToken
+                ) =>
+                {
+                    // Parse the JSON Patch operations
+                    // ADT only supports replacing the 'decommissioned' property
+                    foreach (var operation in patchOperations)
+                    {
+                        var op = operation.GetProperty("op").GetString();
+                        var path = operation.GetProperty("path").GetString();
+
+                        if (op != "replace")
+                        {
+                            return Results.BadRequest(new { error = $"Only 'replace' operations are supported. Got: '{op}'" });
+                        }
+
+                        if (path != "/decommissioned")
+                        {
+                            return Results.BadRequest(new { error = $"Only the '/decommissioned' path can be patched. Got: '{path}'" });
+                        }
+
+                        var value = operation.GetProperty("value").GetBoolean();
+                        await client.UpdateModelAsync(id, value, cancellationToken);
+                    }
+
+                    return Results.NoContent();
+                }
+            )
+            .RequirePermission(ResourceType.Models, PermissionAction.Write)
+            .RequireRateLimiting("AdminOperations")
+            .WithName("UpdateModel")
+            .WithSummary("Updates a model's decommissioned status (ADT-compatible PATCH).");
+
+        modelsGroup
+            .MapPut(
+                "/{id}",
+                [Authorize]
+                async (
+                    string id,
+                    [FromBody] JsonElement model,
+                    [FromServices] AgeDigitalTwinsClient client,
+                    CancellationToken cancellationToken
+                ) =>
+                {
+                    var result = await client.ReplaceModelAsync(id, model.GetRawText(), cancellationToken);
+                    return Results.Json(result);
+                }
+            )
+            .RequirePermission(ResourceType.Models, PermissionAction.Write)
+            .RequireRateLimiting("AdminOperations")
+            .WithName("ReplaceModel")
+            .WithSummary("Replaces a model definition (extended feature, validates against descendants).");
+
+        modelsGroup
             .MapPost(
                 "/search",
                 [Authorize]

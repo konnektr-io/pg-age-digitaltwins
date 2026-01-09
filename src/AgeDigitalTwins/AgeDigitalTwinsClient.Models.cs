@@ -652,6 +652,278 @@ RETURN COUNT(m) AS deletedCount";
         }
     }
 
+    /// <summary>
+    /// Updates a model's decommissioned status asynchronously (PATCH operation).
+    /// This follows the ADT specification where only the decommissioned property can be patched.
+    /// </summary>
+    /// <param name="modelId">The ID of the model to update.</param>
+    /// <param name="decommissioned">Whether to decommission (true) or recommission (false) the model.</param>
+    /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    /// <exception cref="ModelNotFoundException">Thrown when the model with the specified ID is not found.</exception>
+    /// <exception cref="ModelReferencesNotDeletedException">Thrown when trying to decommission a model that has non-decommissioned references.</exception>
+    public virtual async Task UpdateModelAsync(
+        string modelId,
+        bool decommissioned,
+        CancellationToken cancellationToken = default
+    )
+    {
+        using var activity = ActivitySource.StartActivity("UpdateModelAsync", ActivityKind.Client);
+        activity?.SetTag("modelId", modelId);
+        activity?.SetTag("decommissioned", decommissioned);
+
+        try
+        {
+            // First check if the model exists
+            var existingModel = await GetModelAsync(modelId, cancellationToken: cancellationToken);
+            if (existingModel == null)
+            {
+                throw new ModelNotFoundException($"Model with ID {modelId} not found");
+            }
+
+            // Update the decommissioned status
+            string cypher =
+                $@"MATCH (m:Model {{id: '{modelId.Replace("'", "\\'")}'}})
+SET m.decommissioned = {decommissioned.ToString().ToLower()}
+RETURN COUNT(m) AS updatedCount";
+
+            await using var connection = await _dataSource.OpenConnectionAsync(
+                TargetSessionAttributes.ReadWrite,
+                cancellationToken
+            );
+            await using var command = connection.CreateCypherCommand(_graphName, cypher);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+            int rowsAffected = 0;
+            if (await reader.ReadAsync(cancellationToken))
+            {
+                var agResult = await reader.GetFieldValueAsync<Agtype?>(0).ConfigureAwait(false);
+                rowsAffected = (int)agResult;
+            }
+
+            if (rowsAffected <= 0)
+            {
+                throw new ModelNotFoundException($"Model with ID {modelId} not found");
+            }
+
+            // Invalidate the cache for this model
+            _modelCache.Remove(modelId);
+        }
+        catch (Exception ex) when (ex is not ModelNotFoundException)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            activity?.AddEvent(
+                new ActivityEvent(
+                    "Exception",
+                    default,
+                    new ActivityTagsCollection
+                    {
+                        { "exception.type", ex.GetType().FullName },
+                        { "exception.message", ex.Message },
+                        { "exception.stacktrace", ex.StackTrace },
+                    }
+                )
+            );
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Replaces an existing model with a new definition asynchronously (PUT operation).
+    /// This is an extended feature not available in ADT that allows updating model contents.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This method validates the updated model against all descendant models to ensure
+    /// the change doesn't break inheritance or cause naming conflicts.
+    /// </para>
+    /// <para>
+    /// Restrictions:
+    /// <list type="bullet">
+    /// <item><description>The model ID cannot be changed.</description></item>
+    /// <item><description>The extends clause cannot be changed (would be too complex to manage).</description></item>
+    /// <item><description>New properties/relationships must not conflict with descendant models.</description></item>
+    /// </list>
+    /// </para>
+    /// </remarks>
+    /// <param name="modelId">The ID of the model to replace.</param>
+    /// <param name="dtdlModel">The new DTDL model definition as JSON string.</param>
+    /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
+    /// <returns>The updated <see cref="DigitalTwinsModelData"/>.</returns>
+    /// <exception cref="ModelNotFoundException">Thrown when the model with the specified ID is not found.</exception>
+    /// <exception cref="ModelExtendsChangedException">Thrown when trying to change what the model extends.</exception>
+    /// <exception cref="ModelUpdateValidationException">Thrown when the update causes validation errors with descendant models.</exception>
+    /// <exception cref="DTDLParserParsingException">Thrown when there is an error parsing the DTDL model.</exception>
+    public virtual async Task<DigitalTwinsModelData> ReplaceModelAsync(
+        string modelId,
+        string dtdlModel,
+        CancellationToken cancellationToken = default
+    )
+    {
+        using var activity = ActivitySource.StartActivity("ReplaceModelAsync", ActivityKind.Client);
+        activity?.SetTag("modelId", modelId);
+
+        try
+        {
+            // 1. Get the existing model to verify it exists and get its extends/descendants info
+            var existingModel = await GetModelAsync(modelId, cancellationToken: cancellationToken);
+            if (existingModel == null)
+            {
+                throw new ModelNotFoundException($"Model with ID {modelId} not found");
+            }
+
+            // 2. Parse the new model to extract its ID and extends
+            var newModelData = new DigitalTwinsModelData(dtdlModel);
+
+            // 3. Verify the model ID hasn't changed
+            if (newModelData.Id != modelId)
+            {
+                throw new ModelUpdateValidationException(
+                    $"Model ID cannot be changed. Expected '{modelId}', but got '{newModelData.Id}'"
+                );
+            }
+
+            // 4. Get all models to compare extends
+            // Parse the new model through the DTDL parser to get the extends info
+            var newParsedModel = await _modelParser.ParseAsync(
+                ConvertToAsyncEnumerable(new[] { dtdlModel }),
+                cancellationToken: cancellationToken
+            );
+            var newInterfaceInfo = (DTInterfaceInfo)newParsedModel[new Dtmi(modelId)];
+            var newBases = newInterfaceInfo.Extends.Select(e => e.Id.AbsoluteUri).ToHashSet();
+            var existingBases = existingModel.Bases?.ToHashSet() ?? new HashSet<string>();
+
+            // 5. Check if extends has changed
+            if (!newBases.SetEquals(existingBases))
+            {
+                throw new ModelExtendsChangedException(
+                    $"Changing what a model extends is not supported. "
+                        + $"Existing bases: [{string.Join(", ", existingBases)}], "
+                        + $"New bases: [{string.Join(", ", newBases)}]"
+                );
+            }
+
+            // 6. Get descendant models and validate the update against them
+            var descendants = existingModel.Descendants ?? Array.Empty<string>();
+            if (descendants.Length > 0)
+            {
+                // Fetch all descendant models in a single query
+                string descendantIds = string.Join(",", descendants.Select(d => $"'{d}'"));
+                string descendantsCypher =
+                    $"MATCH (m:Model) WHERE m.id IN [{descendantIds}] RETURN m";
+
+                await using var descendantsConnection = await _dataSource.OpenConnectionAsync(
+                    TargetSessionAttributes.PreferStandby,
+                    cancellationToken
+                );
+                await using var descendantsCommand = descendantsConnection.CreateCypherCommand(
+                    _graphName,
+                    descendantsCypher
+                );
+                await using var descendantsReader = await descendantsCommand.ExecuteReaderAsync(
+                    cancellationToken
+                );
+
+                var descendantModels = new List<string>();
+                while (await descendantsReader.ReadAsync(cancellationToken))
+                {
+                    var agResult = await descendantsReader.GetFieldValueAsync<Agtype?>(0);
+                    var vertex = (Vertex)agResult;
+                    var modelData = new DigitalTwinsModelData(vertex.Properties);
+                    if (modelData?.DtdlModel != null)
+                    {
+                        descendantModels.Add(modelData.DtdlModel);
+                    }
+                }
+
+                // Parse the new model together with descendants to validate
+                // The DTDL parser will automatically resolve and fetch base models via DtmiResolverAsync
+                // This will catch conflicts like duplicate property names
+                var allModelsToValidate = new List<string> { dtdlModel };
+                allModelsToValidate.AddRange(descendantModels);
+
+                try
+                {
+                    await _modelParser.ParseAsync(
+                        ConvertToAsyncEnumerable(allModelsToValidate),
+                        cancellationToken: cancellationToken
+                    );
+                }
+                catch (ParsingException ex)
+                {
+                    throw new ModelUpdateValidationException(
+                        $"Model update validation failed. The updated model conflicts with descendant models: {ex.Message}"
+                    );
+                }
+            }
+
+            // 7. Update the model in the database
+            // Recompute bases (should be same, but let's be consistent)
+            newModelData.Bases = existingBases.ToArray();
+            newModelData.Descendants = existingModel.Descendants;
+
+            string modelJson = JsonSerializer
+                .Serialize(newModelData, serializerOptions)
+                .Replace("'", "\\'");
+            string cypher =
+                $@"MATCH (m:Model {{id: '{modelId.Replace("'", "\\'")}'}})
+SET m = '{modelJson}'::cstring::agtype
+RETURN m";
+
+            await using var connection = await _dataSource.OpenConnectionAsync(
+                TargetSessionAttributes.ReadWrite,
+                cancellationToken
+            );
+            await using var command = connection.CreateCypherCommand(_graphName, cypher);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+            DigitalTwinsModelData? result = null;
+            if (await reader.ReadAsync(cancellationToken))
+            {
+                var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
+                var vertex = (Vertex)agResult;
+                result = new DigitalTwinsModelData(vertex.Properties);
+            }
+
+            if (result == null)
+            {
+                throw new ModelNotFoundException($"Model with ID {modelId} not found after update");
+            }
+
+            // 8. Invalidate the cache for this model
+            _modelCache.Remove(modelId);
+
+            return result;
+        }
+        catch (ParsingException ex)
+        {
+            throw new DTDLParserParsingException(ex);
+        }
+        catch (Exception ex)
+            when (ex
+                    is not ModelNotFoundException
+                        and not ModelExtendsChangedException
+                        and not ModelUpdateValidationException
+                        and not DTDLParserParsingException
+            )
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            activity?.AddEvent(
+                new ActivityEvent(
+                    "Exception",
+                    default,
+                    new ActivityTagsCollection
+                    {
+                        { "exception.type", ex.GetType().FullName },
+                        { "exception.message", ex.Message },
+                        { "exception.stacktrace", ex.StackTrace },
+                    }
+                )
+            );
+            throw;
+        }
+    }
+
     private async Task<DigitalTwinsModelData?> GetModelWithCacheAsync(
         string modelId,
         CancellationToken cancellationToken = default
