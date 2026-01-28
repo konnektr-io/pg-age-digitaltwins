@@ -36,7 +36,7 @@ public class ExceptionHandler : Microsoft.AspNetCore.Diagnostics.IExceptionHandl
             new ProblemDetails
             {
                 Title = "An error occurred",
-                Detail = $"{exception.Message}",
+                Detail = $"{exception.Message}\n{exception.StackTrace}",
                 Type = exception.GetType().Name,
                 Status = httpContext.Response.StatusCode,
             },
