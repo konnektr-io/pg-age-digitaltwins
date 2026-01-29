@@ -78,7 +78,7 @@ public partial class AgeDigitalTwinsClient
                     {
                         if (
                             !string.IsNullOrEmpty(query)
-                            && query.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0
+                            && query.Contains(keyword, StringComparison.OrdinalIgnoreCase)
                         )
                         {
                             throw new InvalidAdtQueryException(
