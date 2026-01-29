@@ -66,7 +66,14 @@ public partial class AgeDigitalTwinsClient
                     var limitMatch = LimitRegex().Match(cypher);
                     var skipMatch = SkipRegex().Match(cypher);
                     // Enforce read-only queries by blocking forbidden keywords
-                    string[] forbiddenKeywords = { "CREATE", "DELETE", "SET", "MERGE", "REMOVE" };
+                    string[] forbiddenKeywords =
+                    {
+                        "CREATE ",
+                        "DELETE ",
+                        "SET ",
+                        "MERGE ",
+                        "REMOVE ",
+                    };
                     foreach (var keyword in forbiddenKeywords)
                     {
                         if (
