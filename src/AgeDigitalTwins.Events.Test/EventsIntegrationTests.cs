@@ -61,12 +61,12 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         // Assert - Wait for the specific event
         var receivedEvent = await TestSink.WaitForEventAsync(
             uniqueTwinId,
-            "Konnektr.DigitalTwins.Twin.Create",
+            "Konnektr.Graph.Twin.Create",
             TimeSpan.FromSeconds(30)
         );
 
         Assert.NotNull(receivedEvent);
-        Assert.Equal("Konnektr.DigitalTwins.Twin.Create", receivedEvent.Type);
+        Assert.Equal("Konnektr.Graph.Twin.Create", receivedEvent.Type);
         Assert.Equal(uniqueTwinId, receivedEvent.Subject);
         Assert.Equal("application/json", receivedEvent.DataContentType);
 
@@ -109,12 +109,12 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         // Assert - Wait for the update event
         var receivedEvent = await TestSink.WaitForEventAsync(
             uniqueTwinId,
-            "Konnektr.DigitalTwins.Twin.Update",
+            "Konnektr.Graph.Twin.Update",
             TimeSpan.FromSeconds(10)
         );
 
         Assert.NotNull(receivedEvent);
-        Assert.Equal("Konnektr.DigitalTwins.Twin.Update", receivedEvent.Type);
+        Assert.Equal("Konnektr.Graph.Twin.Update", receivedEvent.Type);
         Assert.Equal(uniqueTwinId, receivedEvent.Subject);
         Assert.Equal("application/json", receivedEvent.DataContentType);
 
@@ -155,12 +155,12 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         // Assert - Wait for the delete event
         var receivedEvent = await TestSink.WaitForEventAsync(
             uniqueTwinId,
-            "Konnektr.DigitalTwins.Twin.Delete",
+            "Konnektr.Graph.Twin.Delete",
             TimeSpan.FromSeconds(10)
         );
 
         Assert.NotNull(receivedEvent);
-        Assert.Equal("Konnektr.DigitalTwins.Twin.Delete", receivedEvent.Type);
+        Assert.Equal("Konnektr.Graph.Twin.Delete", receivedEvent.Type);
         Assert.Equal(uniqueTwinId, receivedEvent.Subject);
         Assert.Equal("application/json", receivedEvent.DataContentType);
 
@@ -241,12 +241,12 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         var expectedSubject = $"{sourceTwinId}/relationships/{relationshipId}";
         var receivedEvent = await TestSink.WaitForEventAsync(
             expectedSubject,
-            "Konnektr.DigitalTwins.Relationship.Create",
+            "Konnektr.Graph.Relationship.Create",
             TimeSpan.FromSeconds(10)
         );
 
         Assert.NotNull(receivedEvent);
-        Assert.Equal("Konnektr.DigitalTwins.Relationship.Create", receivedEvent.Type);
+        Assert.Equal("Konnektr.Graph.Relationship.Create", receivedEvent.Type);
         Assert.Equal(expectedSubject, receivedEvent.Subject);
         Assert.Equal("application/json", receivedEvent.DataContentType);
 
@@ -341,14 +341,14 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
 
         // Check for Twin Lifecycle event
         var lifecycleEvent = allEvents.FirstOrDefault(e =>
-            e.Subject == uniqueTwinId && e.Type == "Konnektr.DigitalTwins.Twin.Lifecycle"
+            e.Subject == uniqueTwinId && e.Type == "Konnektr.Graph.Twin.Lifecycle"
         );
         Assert.NotNull(lifecycleEvent);
         Assert.Equal("application/json", lifecycleEvent.DataContentType);
 
         // Check for Property Event (for the diameter property)
         var propertyEvent = allEvents.FirstOrDefault(e =>
-            e.Subject == uniqueTwinId && e.Type == "Konnektr.DigitalTwins.Property.Event"
+            e.Subject == uniqueTwinId && e.Type == "Konnektr.Graph.Property.Event"
         );
         Assert.NotNull(propertyEvent);
         Assert.Equal("application/json", propertyEvent.DataContentType);
@@ -416,9 +416,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
 
         // Check for Property Event - specifically look for the update event (value: 200)
         var propertyEvents = allEvents
-            .Where(e =>
-                e.Subject == uniqueTwinId && e.Type == "Konnektr.DigitalTwins.Property.Event"
-            )
+            .Where(e => e.Subject == uniqueTwinId && e.Type == "Konnektr.Graph.Property.Event")
             .ToList();
         Assert.True(propertyEvents.Count > 0, "Should have at least one property event");
 
@@ -542,7 +540,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
 
         // Check for Relationship Lifecycle event
         var relationshipLifecycleEvent = allEvents.FirstOrDefault(e =>
-            e.Subject == expectedSubject && e.Type == "Konnektr.DigitalTwins.Relationship.Lifecycle"
+            e.Subject == expectedSubject && e.Type == "Konnektr.Graph.Relationship.Lifecycle"
         );
         Assert.NotNull(relationshipLifecycleEvent);
         Assert.Equal("application/json", relationshipLifecycleEvent.DataContentType);
@@ -654,7 +652,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
 
         // Verify Twin Lifecycle events (one for each twin created)
         var twinLifecycleEvents = allEvents
-            .Where(e => e.Type == "Konnektr.DigitalTwins.Twin.Lifecycle")
+            .Where(e => e.Type == "Konnektr.Graph.Twin.Lifecycle")
             .ToList();
         var expectedTwinIds = new[]
         {
@@ -709,7 +707,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
 
         // Verify Property events (one for each property of each twin)
         var propertyEvents = allEvents
-            .Where(e => e.Type == "Konnektr.DigitalTwins.Property.Event")
+            .Where(e => e.Type == "Konnektr.Graph.Property.Event")
             .ToList();
         Assert.True(
             propertyEvents.Count >= 8,
@@ -746,7 +744,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
 
         // Verify Relationship Lifecycle events
         var relationshipLifecycleEvents = allEvents
-            .Where(e => e.Type == "Konnektr.DigitalTwins.Relationship.Lifecycle")
+            .Where(e => e.Type == "Konnektr.Graph.Relationship.Lifecycle")
             .ToList();
         Assert.True(
             relationshipLifecycleEvents.Count >= 3,
@@ -958,34 +956,34 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
 
         // Event Notification Events
         var twinCreateEvents = allEvents
-            .Where(e => e.Type == "Konnektr.DigitalTwins.Twin.Create")
+            .Where(e => e.Type == "Konnektr.Graph.Twin.Create")
             .ToList();
         var twinUpdateEvents = allEvents
-            .Where(e => e.Type == "Konnektr.DigitalTwins.Twin.Update")
+            .Where(e => e.Type == "Konnektr.Graph.Twin.Update")
             .ToList();
         var relationshipCreateEvents = allEvents
-            .Where(e => e.Type == "Konnektr.DigitalTwins.Relationship.Create")
+            .Where(e => e.Type == "Konnektr.Graph.Relationship.Create")
             .ToList();
         var relationshipUpdateEvents = allEvents
-            .Where(e => e.Type == "Konnektr.DigitalTwins.Relationship.Update")
+            .Where(e => e.Type == "Konnektr.Graph.Relationship.Update")
             .ToList();
 
         // Data History Events
         var twinLifecycleEvents = allEvents
-            .Where(e => e.Type == "Konnektr.DigitalTwins.Twin.Lifecycle")
+            .Where(e => e.Type == "Konnektr.Graph.Twin.Lifecycle")
             .ToList();
         var twinPropertyEvents = allEvents
             .Where(e =>
-                e.Type == "Konnektr.DigitalTwins.Property.Event"
+                e.Type == "Konnektr.Graph.Property.Event"
                 && e.Subject?.Contains("/relationships/") == false
             )
             .ToList();
         var relationshipLifecycleEvents = allEvents
-            .Where(e => e.Type == "Konnektr.DigitalTwins.Relationship.Lifecycle")
+            .Where(e => e.Type == "Konnektr.Graph.Relationship.Lifecycle")
             .ToList();
         var relationshipPropertyEvents = allEvents
             .Where(e =>
-                e.Type == "Konnektr.DigitalTwins.Property.Event"
+                e.Type == "Konnektr.Graph.Property.Event"
                 && e.Subject?.Contains("/relationships/") == true
             )
             .ToList();

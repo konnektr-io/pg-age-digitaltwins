@@ -33,12 +33,18 @@ jobs:
           - age_image: release_PG17_1.6.0
             type: apache
             pg_version: 17
+          - age_image: release_PG18_1.7.0
+            type: apache
+            pg_version: 18
           - age_image: 16-1.6.0-standard-trixie
             type: cnpg
             pg_version: 16
           - age_image: 17-1.6.0-standard-trixie
             type: cnpg
             pg_version: 17
+          - age_image: 18-1.7.0-standard-trixie
+            type: cnpg
+            pg_version: 18
     steps:
       - name: Checkout
         uses: actions/checkout@v4
