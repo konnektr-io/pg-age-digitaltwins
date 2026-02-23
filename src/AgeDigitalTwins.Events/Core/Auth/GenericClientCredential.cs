@@ -1,6 +1,6 @@
+using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
-using System.Net.Http;
 using Azure.Core;
 using Azure.Identity;
 
@@ -15,11 +15,16 @@ public class GenericClientCredential : TokenCredential
     private readonly string _clientId;
     private readonly string _clientSecret;
     private readonly HttpClient _httpClient;
-    
+
     private AccessToken? _cachedToken;
     private readonly SemaphoreSlim _lock = new(1, 1);
 
-    public GenericClientCredential(string tokenEndpoint, string clientId, string clientSecret, HttpClient? httpClient = null)
+    public GenericClientCredential(
+        string tokenEndpoint,
+        string clientId,
+        string clientSecret,
+        HttpClient? httpClient = null
+    )
     {
         _tokenEndpoint = tokenEndpoint ?? throw new ArgumentNullException(nameof(tokenEndpoint));
         _clientId = clientId ?? throw new ArgumentNullException(nameof(clientId));
@@ -27,15 +32,24 @@ public class GenericClientCredential : TokenCredential
         _httpClient = httpClient ?? new HttpClient();
     }
 
-    public override AccessToken GetToken(TokenRequestContext context, CancellationToken cancellationToken)
+    public override AccessToken GetToken(
+        TokenRequestContext context,
+        CancellationToken cancellationToken
+    )
     {
         return GetTokenAsync(context, cancellationToken).GetAwaiter().GetResult();
     }
 
-    public override async ValueTask<AccessToken> GetTokenAsync(TokenRequestContext context, CancellationToken cancellationToken)
+    public override async ValueTask<AccessToken> GetTokenAsync(
+        TokenRequestContext context,
+        CancellationToken cancellationToken
+    )
     {
         // Check cache
-        if (_cachedToken.HasValue && _cachedToken.Value.ExpiresOn > DateTimeOffset.UtcNow.AddMinutes(1))
+        if (
+            _cachedToken.HasValue
+            && _cachedToken.Value.ExpiresOn > DateTimeOffset.UtcNow.AddMinutes(1)
+        )
         {
             return _cachedToken.Value;
         }
@@ -44,7 +58,10 @@ public class GenericClientCredential : TokenCredential
         try
         {
             // Double-check cache
-            if (_cachedToken.HasValue && _cachedToken.Value.ExpiresOn > DateTimeOffset.UtcNow.AddMinutes(1))
+            if (
+                _cachedToken.HasValue
+                && _cachedToken.Value.ExpiresOn > DateTimeOffset.UtcNow.AddMinutes(1)
+            )
             {
                 return _cachedToken.Value;
             }
@@ -54,15 +71,15 @@ public class GenericClientCredential : TokenCredential
             {
                 new("grant_type", "client_credentials"),
                 new("client_id", _clientId),
-                new("client_secret", _clientSecret)
+                new("client_secret", _clientSecret),
             };
 
             if (context.Scopes != null && context.Scopes.Length > 0)
             {
-                 // Join scopes with space
-                 keyValues.Add(new("scope", string.Join(" ", context.Scopes)));
+                // Join scopes with space
+                keyValues.Add(new("scope", string.Join(" ", context.Scopes)));
             }
-            
+
             request.Content = new FormUrlEncodedContent(keyValues);
 
             var response = await _httpClient.SendAsync(request, cancellationToken);
@@ -75,19 +92,26 @@ public class GenericClientCredential : TokenCredential
             if (root.TryGetProperty("access_token", out var accessTokenProp))
             {
                 var accessToken = accessTokenProp.GetString()!;
-                var expiresIn = root.TryGetProperty("expires_in", out var expiresInProp) ? expiresInProp.GetInt32() : 3600;
-                
+                var expiresIn = root.TryGetProperty("expires_in", out var expiresInProp)
+                    ? expiresInProp.GetInt32()
+                    : 3600;
+
                 var expiresOn = DateTimeOffset.UtcNow.AddSeconds(expiresIn);
-                
+
                 _cachedToken = new AccessToken(accessToken, expiresOn);
                 return _cachedToken.Value;
             }
-            
-            throw new AuthenticationFailedException("Token endpoint did not return an access_token.");
+
+            throw new AuthenticationFailedException(
+                "Token endpoint did not return an access_token."
+            );
         }
         catch (Exception ex)
         {
-             throw new AuthenticationFailedException($"Failed to retrieve token from {_tokenEndpoint}: {ex.Message}", ex);
+            throw new AuthenticationFailedException(
+                $"Failed to retrieve token from {_tokenEndpoint}: {ex.Message}",
+                ex
+            );
         }
         finally
         {

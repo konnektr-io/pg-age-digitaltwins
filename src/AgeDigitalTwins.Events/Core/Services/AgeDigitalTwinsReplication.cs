@@ -3,13 +3,12 @@ using System.Net.Sockets;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using AgeDigitalTwins.Events.Abstractions;
+using AgeDigitalTwins.Events.Core.Events;
 using Npgsql;
 using Npgsql.Replication;
 using Npgsql.Replication.PgOutput;
 using Npgsql.Replication.PgOutput.Messages;
-using AgeDigitalTwins.Events.Abstractions;
-using AgeDigitalTwins.Events.Core.Events;
-
 
 namespace AgeDigitalTwins.Events.Core.Services;
 
@@ -19,8 +18,9 @@ public class AgeDigitalTwinsReplication(
     string replicationSlot,
     IEventQueue eventQueue,
     ILogger<AgeDigitalTwinsReplication> logger,
-    int maxBatchSize = 50
-    ) : IAsyncDisposable
+    int maxBatchSize = 50,
+    int walReceiverTimeoutSeconds = 30
+) : IAsyncDisposable
 {
     private static readonly ActivitySource ActivitySource = new("AgeDigitalTwins.Events", "1.0.0");
 
@@ -48,6 +48,21 @@ public class AgeDigitalTwinsReplication(
     /// Maximum number of event data objects to batch together before processing.
     /// </summary>
     private readonly int _maxBatchSize = maxBatchSize > 0 ? maxBatchSize : 50;
+
+    /// <summary>
+    /// How long to wait without receiving any replication message (including server keepalives)
+    /// before declaring the connection dead and closing it. This allows CloudNativePG to detect
+    /// that the WAL receiver has disconnected and promote a standby within a known time window.
+    /// </summary>
+    private readonly TimeSpan _walReceiverTimeout = TimeSpan.FromSeconds(
+        walReceiverTimeoutSeconds > 0 ? walReceiverTimeoutSeconds : 30
+    );
+
+    /// <summary>
+    /// The UTC timestamp (as ticks) of the last successfully received replication message
+    /// (data or keepalive). Written via Interlocked so the watchdog task sees the latest value.
+    /// </summary>
+    private long _lastReplicationMessageAtTicks = DateTime.MinValue.Ticks;
 
     /// <summary>
     /// Indicates whether the replication connection is currently healthy.
@@ -86,37 +101,46 @@ public class AgeDigitalTwinsReplication(
                     {
                         IsHealthy = false; // Mark as unhealthy on connection failure
 
+                        // Always dispose the connection before retrying so the WAL receiver slot
+                        // is released and CloudNativePG can proceed with primary promotion.
+                        if (_conn != null)
+                        {
+                            try
+                            {
+                                await _conn.DisposeAsync();
+                            }
+                            catch (Exception disposeEx)
+                            {
+                                _logger.LogDebug(
+                                    disposeEx,
+                                    "Error disposing connection during retry"
+                                );
+                            }
+                            finally
+                            {
+                                _conn = null;
+                            }
+                        }
+
+                        // Watchdog fired (OperationCanceledException from the internal linked CTS,
+                        // not from the application shutdown token): treat as a connection reset.
+                        if (
+                            ex is OperationCanceledException oce
+                            && oce.CancellationToken != cancellationToken
+                        )
+                        {
+                            _logger.LogWarning(
+                                "Replication watchdog triggered: connection closed after silence timeout. Retrying..."
+                            );
+                        }
                         // Check for connection-related errors that are common under high load
-                        if (IsConnectionError(ex))
+                        else if (IsConnectionError(ex))
                         {
                             _logger.LogWarning(
                                 ex,
                                 "Connection error detected during replication: {Message}. This is common under high load. Retrying with backoff...",
                                 ex.Message
                             );
-
-                            // Dispose the current connection before retrying
-                            if (_conn != null)
-                            {
-                                try
-                                {
-                                    await _conn.DisposeAsync();
-                                }
-                                catch (Exception disposeEx)
-                                {
-                                    _logger.LogDebug(
-                                        disposeEx,
-                                        "Error disposing connection during retry"
-                                    );
-                                }
-                                finally
-                                {
-                                    _conn = null;
-                                }
-                            }
-
-                            // Use exponential backoff for connection errors
-                            await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
                         }
                         // Check if this is a replication slot invalidation error
                         else if (
@@ -169,16 +193,27 @@ public class AgeDigitalTwinsReplication(
 
     private async Task StartReplicationAsync(CancellationToken cancellationToken = default)
     {
-        // Create connection with enhanced timeout settings for high load scenarios
+        // Create connection with tuned keepalive settings so a dead primary is detected quickly.
+        // TcpKeepAliveTime: start probing after N seconds of inactivity on the TCP socket.
+        // TcpKeepAliveInterval: re-probe every N seconds until a response is received or the
+        //   OS gives up (after which the socket is closed and an exception is thrown).
+        // Together these ensure the OS declares the connection dead well within CNPG's
+        // WAL-receiver drain timeout during a primary failover.
         var connectionStringBuilder = new NpgsqlConnectionStringBuilder(_connectionString)
         {
-            Timeout = 0, // Disable command timeout for replication (replication is long-running)
-            KeepAlive = 30, // TCP keepalive interval in seconds - this IS supported
-            TcpKeepAlive = true, // Enable TCP keepalive - this IS supported
+            Timeout = 30, // Limit connection-establishment time to 30 s
+            TcpKeepAlive = true, // Enable OS-level TCP keepalive
+            TcpKeepAliveTime = 10, // First probe after 10 s of inactivity
+            TcpKeepAliveInterval = 5, // Subsequent probes every 5 s
         };
 
         _conn = new LogicalReplicationConnection(connectionStringBuilder.ToString());
         await _conn.Open(cancellationToken);
+
+        // Send a StandbyStatusUpdate to the server every 10 s regardless of traffic.
+        // This causes Npgsql to write to the TCP socket proactively; a failed write is
+        // detected immediately, long before TCP keepalive probes would time out.
+        _conn.WalReceiverStatusInterval = TimeSpan.FromSeconds(10);
 
         PgOutputReplicationSlot slot = new(_replicationSlot);
 
@@ -196,288 +231,344 @@ public class AgeDigitalTwinsReplication(
 
         // Mark as healthy now that replication has started successfully
         IsHealthy = true;
+        Interlocked.Exchange(ref _lastReplicationMessageAtTicks, DateTime.UtcNow.Ticks);
 
         EventData? currentEvent = null;
         Activity? transactionActivity = null;
 
-        await foreach (PgOutputReplicationMessage message in messages)
-        {
-            try
+        // Watchdog: cancel the replication stream if no message (including server-initiated
+        // keepalives) is received within _walReceiverTimeout. This guarantees that after a
+        // primary crash the WAL receiver connection is closed within a known time bound,
+        // allowing CloudNativePG to promote a standby without waiting for OS-level TCP
+        // keepalive probes to time out.
+        using var watchdogCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var watchdogTask = Task.Run(
+            async () =>
             {
-                _logger.LogDebug(
-                    "Received message type: {ReplicationMessageType}",
-                    message.GetType().Name
-                );
+                while (!watchdogCts.Token.IsCancellationRequested)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(5), watchdogCts.Token)
+                        .ConfigureAwait(false);
 
-                if (message is BeginMessage beginMessage)
-                {
-                    transactionActivity = ActivitySource.StartActivity(
-                        "Transaction",
-                        ActivityKind.Consumer
-                    );
-                    transactionActivity?.SetTag("transaction.xid", beginMessage.TransactionXid);
-                    continue;
-                }
-                else if (message is InsertMessage insertMessage)
-                {
-                    if (insertMessage.Relation.Namespace == "ag_catalog")
+                    var silence =
+                        DateTime.UtcNow
+                        - new DateTime(Interlocked.Read(ref _lastReplicationMessageAtTicks));
+                    if (silence > _walReceiverTimeout)
                     {
-                        // Skip messages from ag_catalog relations
+                        _logger.LogWarning(
+                            "No replication message received for {Elapsed:N0} s (timeout: {Timeout:N0} s). "
+                                + "Closing connection to allow CloudNativePG failover.",
+                            silence.TotalSeconds,
+                            _walReceiverTimeout.TotalSeconds
+                        );
+                        IsHealthy = false;
+                        await watchdogCts.CancelAsync();
+                        return;
+                    }
+                }
+            },
+            watchdogCts.Token
+        );
+
+        try
+        {
+            await foreach (
+                PgOutputReplicationMessage message in messages.WithCancellation(watchdogCts.Token)
+            )
+            {
+                try
+                {
+                    // Reset watchdog timer on every message (data or server-initiated keepalive).
+                    Interlocked.Exchange(ref _lastReplicationMessageAtTicks, DateTime.UtcNow.Ticks);
+
+                    _logger.LogDebug(
+                        "Received message type: {ReplicationMessageType}",
+                        message.GetType().Name
+                    );
+
+                    if (message is BeginMessage beginMessage)
+                    {
+                        transactionActivity = ActivitySource.StartActivity(
+                            "Transaction",
+                            ActivityKind.Consumer
+                        );
+                        transactionActivity?.SetTag("transaction.xid", beginMessage.TransactionXid);
                         continue;
                     }
-
-                    var (id, newValue) = await ConvertRowToJsonAsync(insertMessage.NewRow);
-
-                    if (id == null)
+                    else if (message is InsertMessage insertMessage)
                     {
-                        _logger.LogInformation(
-                            "Skipping insert message without a valid id - Id: {NewEntityId}, Value: {NewValue}",
+                        if (insertMessage.Relation.Namespace == "ag_catalog")
+                        {
+                            // Skip messages from ag_catalog relations
+                            continue;
+                        }
+
+                        var (id, newValue) = await ConvertRowToJsonAsync(insertMessage.NewRow);
+
+                        if (id == null)
+                        {
+                            _logger.LogInformation(
+                                "Skipping insert message without a valid id - Id: {NewEntityId}, Value: {NewValue}",
+                                id,
+                                newValue
+                            );
+                            continue;
+                        }
+
+                        _logger.LogDebug(
+                            "Insert message - Id: {NewEntityId}, Value: {NewValue}",
                             id,
                             newValue
                         );
-                        continue;
-                    }
 
-                    _logger.LogDebug(
-                        "Insert message - Id: {NewEntityId}, Value: {NewValue}",
-                        id,
-                        newValue
-                    );
-
-                    if (
-                        currentEvent != null
-                        && (
-                            currentEvent.Id != id
-                            || currentEvent.TableName != insertMessage.Relation.RelationName
+                        if (
+                            currentEvent != null
+                            && (
+                                currentEvent.Id != id
+                                || currentEvent.TableName != insertMessage.Relation.RelationName
+                            )
                         )
-                    )
+                        {
+                            _logger.LogDebug(
+                                "Entity transition detected in insert, enqueueing current event for {CurrentEntityId} and starting new event for {NewEntityId}",
+                                currentEvent.Id,
+                                id
+                            );
+                            // Enqueue the current event and start a new one
+                            EnqueueCurrentEventIfValid(currentEvent);
+                        }
+
+                        // Start a new event for the insert
+                        currentEvent = new EventData(
+                            id: id,
+                            graphName: insertMessage.Relation.Namespace,
+                            tableName: insertMessage.Relation.RelationName,
+                            timestamp: insertMessage.ServerClock
+                        )
+                        {
+                            OldValue = [],
+                            NewValue = newValue,
+                        };
+
+                        if (
+                            newValue?.ContainsKey("$dtId") == true
+                            || currentEvent.TableName == "Twin"
+                        )
+                        {
+                            currentEvent.EventType = EventType.TwinCreate;
+                        }
+                        else if (newValue?.ContainsKey("$relationshipId") == true)
+                        {
+                            currentEvent.EventType = EventType.RelationshipCreate;
+                        }
+                    }
+                    else if (message is FullUpdateMessage updateMessage)
                     {
+                        if (updateMessage.Relation.Namespace == "ag_catalog")
+                        {
+                            // Skip messages from ag_catalog relations
+                            continue;
+                        }
+
+                        var (oldId, oldValue) = await ConvertRowToJsonAsync(updateMessage.OldRow);
+                        var (newId, newValue) = await ConvertRowToJsonAsync(updateMessage.NewRow);
+
+                        if (oldId == null || newId == null || !string.Equals(oldId, newId))
+                        {
+                            _logger.LogInformation(
+                                "Skipping update message without valid IDs - Old ID: {OldEntityId}, New ID: {NewEntityId}, Old Value: {OldValue}, New Value: {NewValue}",
+                                oldId,
+                                newId,
+                                oldValue,
+                                newValue
+                            );
+                            continue;
+                        }
+
                         _logger.LogDebug(
-                            "Entity transition detected in insert, enqueueing current event for {CurrentEntityId} and starting new event for {NewEntityId}",
-                            currentEvent.Id,
-                            id
-                        );
-                        // Enqueue the current event and start a new one
-                        EnqueueCurrentEventIfValid(currentEvent);
-                    }
-
-                    // Start a new event for the insert
-                    currentEvent = new EventData(
-                        id: id,
-                        graphName: insertMessage.Relation.Namespace,
-                        tableName: insertMessage.Relation.RelationName,
-                        timestamp: insertMessage.ServerClock
-                    )
-                    {
-                        OldValue = [],
-                        NewValue = newValue,
-                    };
-
-                    if (newValue?.ContainsKey("$dtId") == true || currentEvent.TableName == "Twin")
-                    {
-                        currentEvent.EventType = EventType.TwinCreate;
-                    }
-                    else if (newValue?.ContainsKey("$relationshipId") == true)
-                    {
-                        currentEvent.EventType = EventType.RelationshipCreate;
-                    }
-                }
-                else if (message is FullUpdateMessage updateMessage)
-                {
-                    if (updateMessage.Relation.Namespace == "ag_catalog")
-                    {
-                        // Skip messages from ag_catalog relations
-                        continue;
-                    }
-
-                    var (oldId, oldValue) = await ConvertRowToJsonAsync(updateMessage.OldRow);
-                    var (newId, newValue) = await ConvertRowToJsonAsync(updateMessage.NewRow);
-
-                    if (oldId == null || newId == null || !string.Equals(oldId, newId))
-                    {
-                        _logger.LogInformation(
-                            "Skipping update message without valid IDs - Old ID: {OldEntityId}, New ID: {NewEntityId}, Old Value: {OldValue}, New Value: {NewValue}",
+                            "Update message - OldId: {OldEntityId}, OldValue: {OldValue}, NewId: {NewEntityId}, NewValue: {NewValue}",
                             oldId,
                             newId,
                             oldValue,
                             newValue
                         );
-                        continue;
-                    }
 
-                    _logger.LogDebug(
-                        "Update message - OldId: {OldEntityId}, OldValue: {OldValue}, NewId: {NewEntityId}, NewValue: {NewValue}",
-                        oldId,
-                        newId,
-                        oldValue,
-                        newValue
-                    );
-
-                    // Check if we're starting a new entity operation (and enqueue current event if needed)
-                    if (
-                        currentEvent != null
-                        && (
-                            currentEvent.Id != newId
-                            || currentEvent.TableName != updateMessage.Relation.RelationName
-                        )
-                    )
-                    {
-                        _logger.LogDebug(
-                            "Entity transition detected in update, enqueueing current event for {CurrentEntityId} and starting new event for {NewEntityId}",
-                            currentEvent.Id,
-                            newId
-                        );
-                        // Enqueue the current event and start a new one
-                        EnqueueCurrentEventIfValid(currentEvent);
-                        currentEvent = null;
-                    }
-
-                    // If currentEvent is null, we need to create a new one
-                    currentEvent ??= new EventData(
-                        id: newId,
-                        graphName: updateMessage.Relation.Namespace,
-                        tableName: updateMessage.Relation.RelationName,
-                        timestamp: updateMessage.ServerClock
-                    );
-
-                    currentEvent.OldValue ??= oldValue;
-                    currentEvent.NewValue = newValue;
-
-                    if (currentEvent.EventType == null && currentEvent.OldValue != null)
-                    {
+                        // Check if we're starting a new entity operation (and enqueue current event if needed)
                         if (
-                            newValue?.ContainsKey("$dtId") == true
-                            || currentEvent.OldValue.ContainsKey("$dtId")
-                            || currentEvent.TableName == "Twin"
+                            currentEvent != null
+                            && (
+                                currentEvent.Id != newId
+                                || currentEvent.TableName != updateMessage.Relation.RelationName
+                            )
                         )
                         {
-                            currentEvent.EventType = EventType.TwinUpdate;
+                            _logger.LogDebug(
+                                "Entity transition detected in update, enqueueing current event for {CurrentEntityId} and starting new event for {NewEntityId}",
+                                currentEvent.Id,
+                                newId
+                            );
+                            // Enqueue the current event and start a new one
+                            EnqueueCurrentEventIfValid(currentEvent);
+                            currentEvent = null;
                         }
-                        else if (
-                            newValue?.ContainsKey("$relationshipId") == true
-                            || currentEvent.OldValue.ContainsKey("$relationshipId")
-                        )
+
+                        // If currentEvent is null, we need to create a new one
+                        currentEvent ??= new EventData(
+                            id: newId,
+                            graphName: updateMessage.Relation.Namespace,
+                            tableName: updateMessage.Relation.RelationName,
+                            timestamp: updateMessage.ServerClock
+                        );
+
+                        currentEvent.OldValue ??= oldValue;
+                        currentEvent.NewValue = newValue;
+
+                        if (currentEvent.EventType == null && currentEvent.OldValue != null)
                         {
-                            currentEvent.EventType = EventType.RelationshipUpdate;
+                            if (
+                                newValue?.ContainsKey("$dtId") == true
+                                || currentEvent.OldValue.ContainsKey("$dtId")
+                                || currentEvent.TableName == "Twin"
+                            )
+                            {
+                                currentEvent.EventType = EventType.TwinUpdate;
+                            }
+                            else if (
+                                newValue?.ContainsKey("$relationshipId") == true
+                                || currentEvent.OldValue.ContainsKey("$relationshipId")
+                            )
+                            {
+                                currentEvent.EventType = EventType.RelationshipUpdate;
+                            }
                         }
                     }
-                }
-                else if (message is FullDeleteMessage deleteMessage)
-                {
-                    if (deleteMessage.Relation.Namespace == "ag_catalog")
+                    else if (message is FullDeleteMessage deleteMessage)
                     {
-                        // Skip messages from ag_catalog relations
-                        continue;
-                    }
+                        if (deleteMessage.Relation.Namespace == "ag_catalog")
+                        {
+                            // Skip messages from ag_catalog relations
+                            continue;
+                        }
 
-                    var (oldId, oldValue) = await ConvertRowToJsonAsync(deleteMessage.OldRow);
-                    if (oldId == null)
-                    {
-                        _logger.LogInformation(
-                            "Skipping delete message without valid ID - Old ID: {OldEntityId}, Old Value: {OldValue}",
-                            oldId,
-                            oldValue
-                        );
-                        continue;
-                    }
+                        var (oldId, oldValue) = await ConvertRowToJsonAsync(deleteMessage.OldRow);
+                        if (oldId == null)
+                        {
+                            _logger.LogInformation(
+                                "Skipping delete message without valid ID - Old ID: {OldEntityId}, Old Value: {OldValue}",
+                                oldId,
+                                oldValue
+                            );
+                            continue;
+                        }
 
-                    // Check if we're starting a new entity operation (and enqueue current event if needed)
-                    if (
-                        currentEvent != null
-                        && (
-                            currentEvent.Id != oldId
-                            || currentEvent.TableName != deleteMessage.Relation.RelationName
-                        )
-                    )
-                    {
-                        _logger.LogDebug(
-                            "Entity transition detected in delete, enqueueing current event for {CurrentEntityId} and starting new event for {OldEntityId}",
-                            currentEvent.Id,
-                            oldId
-                        );
-                        // Enqueue the current event and start a new one
-                        EnqueueCurrentEventIfValid(currentEvent);
-                        currentEvent = null;
-                    }
-
-                    // If currentEvent is null, we need to create a new one
-                    currentEvent ??= new EventData(
-                        id: oldId,
-                        graphName: deleteMessage.Relation.Namespace,
-                        tableName: deleteMessage.Relation.RelationName,
-                        timestamp: deleteMessage.ServerClock
-                    );
-
-                    currentEvent.OldValue ??= oldValue;
-
-                    if (currentEvent.EventType == null && currentEvent.OldValue != null)
-                    {
+                        // Check if we're starting a new entity operation (and enqueue current event if needed)
                         if (
-                            currentEvent.OldValue.ContainsKey("$dtId")
-                            || currentEvent.TableName == "Twin"
+                            currentEvent != null
+                            && (
+                                currentEvent.Id != oldId
+                                || currentEvent.TableName != deleteMessage.Relation.RelationName
+                            )
                         )
                         {
-                            currentEvent.EventType = EventType.TwinDelete;
+                            _logger.LogDebug(
+                                "Entity transition detected in delete, enqueueing current event for {CurrentEntityId} and starting new event for {OldEntityId}",
+                                currentEvent.Id,
+                                oldId
+                            );
+                            // Enqueue the current event and start a new one
+                            EnqueueCurrentEventIfValid(currentEvent);
+                            currentEvent = null;
                         }
-                        else if (currentEvent.OldValue.ContainsKey("$relationshipId"))
-                        {
-                            currentEvent.EventType = EventType.RelationshipDelete;
-                        }
-                    }
-                }
-                else if (message is CommitMessage commitMessage)
-                {
-                    if (currentEvent != null)
-                    {
-                        _logger.LogDebug(
-                            "Transaction commited, enqueueing current event for {CurrentEntityId}",
-                            currentEvent.Id
+
+                        // If currentEvent is null, we need to create a new one
+                        currentEvent ??= new EventData(
+                            id: oldId,
+                            graphName: deleteMessage.Relation.Namespace,
+                            tableName: deleteMessage.Relation.RelationName,
+                            timestamp: deleteMessage.ServerClock
                         );
 
-                        // Enqueue the final event in this transaction
-                        EnqueueCurrentEventIfValid(currentEvent);
-                        currentEvent = null;
+                        currentEvent.OldValue ??= oldValue;
+
+                        if (currentEvent.EventType == null && currentEvent.OldValue != null)
+                        {
+                            if (
+                                currentEvent.OldValue.ContainsKey("$dtId")
+                                || currentEvent.TableName == "Twin"
+                            )
+                            {
+                                currentEvent.EventType = EventType.TwinDelete;
+                            }
+                            else if (currentEvent.OldValue.ContainsKey("$relationshipId"))
+                            {
+                                currentEvent.EventType = EventType.RelationshipDelete;
+                            }
+                        }
                     }
+                    else if (message is CommitMessage commitMessage)
+                    {
+                        if (currentEvent != null)
+                        {
+                            _logger.LogDebug(
+                                "Transaction commited, enqueueing current event for {CurrentEntityId}",
+                                currentEvent.Id
+                            );
+
+                            // Enqueue the final event in this transaction
+                            EnqueueCurrentEventIfValid(currentEvent);
+                            currentEvent = null;
+                        }
+
+                        transactionActivity?.Stop();
+                        transactionActivity?.Dispose();
+                        transactionActivity = null;
+                    }
+                    else
+                    {
+                        // In case replica identity is not correctly set, or when messages from user defined tables are received
+                        _logger.LogDebug(
+                            "Skipping message type: {MessageType}",
+                            message.GetType().Name
+                        );
+                    }
+
+                    // Always call SetReplicationStatus() or assign LastAppliedLsn and LastFlushedLsn individually
+                    // so that Npgsql can inform the server which WAL files can be removed/recycled.
+                    _conn.SetReplicationStatus(message.WalEnd);
+                }
+                catch (Exception ex)
+                {
+                    transactionActivity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                    transactionActivity?.AddEvent(
+                        new ActivityEvent(
+                            "Exception",
+                            default,
+                            new ActivityTagsCollection
+                            {
+                                { "exception.type", ex.GetType().FullName },
+                                { "exception.message", ex.Message },
+                                { "exception.stacktrace", ex.StackTrace },
+                            }
+                        )
+                    );
 
                     transactionActivity?.Stop();
                     transactionActivity?.Dispose();
                     transactionActivity = null;
-                }
-                else
-                {
-                    // In case replica identity is not correctly set, or when messages from user defined tables are received
-                    _logger.LogDebug(
-                        "Skipping message type: {MessageType}",
-                        message.GetType().Name
-                    );
-                }
 
-                // Always call SetReplicationStatus() or assign LastAppliedLsn and LastFlushedLsn individually
-                // so that Npgsql can inform the server which WAL files can be removed/recycled.
-                _conn.SetReplicationStatus(message.WalEnd);
+                    _logger.LogError(ex, "Error processing message: {Message}", ex.Message);
+                }
             }
-            catch (Exception ex)
+        } // end foreach
+        finally
+        {
+            // Stop the watchdog regardless of how the loop exited.
+            await watchdogCts.CancelAsync();
+            try
             {
-                transactionActivity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-                transactionActivity?.AddEvent(
-                    new ActivityEvent(
-                        "Exception",
-                        default,
-                        new ActivityTagsCollection
-                        {
-                            { "exception.type", ex.GetType().FullName },
-                            { "exception.message", ex.Message },
-                            { "exception.stacktrace", ex.StackTrace },
-                        }
-                    )
-                );
-
-                transactionActivity?.Stop();
-                transactionActivity?.Dispose();
-                transactionActivity = null;
-
-                _logger.LogError(ex, "Error processing message: {Message}", ex.Message);
+                await watchdogTask.ConfigureAwait(false);
             }
+            catch (OperationCanceledException) { }
         }
     }
 
