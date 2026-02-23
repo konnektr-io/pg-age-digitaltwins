@@ -146,8 +146,25 @@ public class ApiPermissionProvider : IPermissionProvider
         {
             var api = _options.ApiProvider;
             var resourceName = api?.ResourceName ?? "digitaltwins";
-            var endpoint =
-                $"{api?.CheckEndpoint ?? "/api/v1/permissions/check"}?scopeType=resource&scopeId={resourceName}&userId={Uri.EscapeDataString(userId ?? "")}";
+
+            // Build the endpoint URL
+            string endpoint;
+            var checkEndpoint = api?.CheckEndpoint ?? "/api/v1/permissions/check";
+
+            // Check if the endpoint contains placeholders
+            if (checkEndpoint.Contains("{userId}") || checkEndpoint.Contains("{resourceName}"))
+            {
+                // Replace placeholders with actual values
+                endpoint = checkEndpoint
+                    .Replace("{userId}", Uri.EscapeDataString(userId ?? ""))
+                    .Replace("{resourceName}", Uri.EscapeDataString(resourceName));
+            }
+            else
+            {
+                // Default behavior: append query parameters for backward compatibility
+                endpoint =
+                    $"{checkEndpoint}?scopeType=resource&scopeId={resourceName}&userId={Uri.EscapeDataString(userId ?? "")}";
+            }
 
             _logger.LogDebug(
                 "Fetching permissions for user {UserId} from API: {Endpoint}",
