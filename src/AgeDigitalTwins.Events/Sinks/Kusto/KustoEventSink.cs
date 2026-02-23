@@ -284,4 +284,3 @@ public class KustoEventSink : IEventSink, IDisposable
         GC.SuppressFinalize(this);
     }
 }
-
