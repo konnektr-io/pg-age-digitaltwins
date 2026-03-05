@@ -279,4 +279,39 @@ public class ImportJobExecutionTests : ImportJobTestBase
 
         Output.WriteLine("✓ Deleted job - retrieval result: null (success)");
     }
+
+    [Fact]
+    public async Task ImportGraphAsync_WithModelHierarchy_ShouldImportAllDependentModels()
+    {
+        // Arrange - create a base model and several children that extend it.
+        // This exercises the full dependency-resolution path and batched DB inserts.
+        const int childCount = 20;
+        var jobId = GenerateJobId("import");
+        var data = TestDataFactory.ImportData.CreateModelHierarchyNdJson(childCount);
+
+        try
+        {
+            // Act
+            var result = await ExecuteImportJobAsync(jobId, data);
+
+            // Assert
+            AssertJobBasicProperties(result, jobId, "import");
+            JobAssertions.AssertJobStatus(result, JobStatus.Succeeded);
+            AssertImportResults(
+                result,
+                expectedModels: childCount + 1, // base + children
+                expectedTwins: 0,
+                expectedRelationships: 0
+            );
+            JobAssertions.AssertNoErrors(result);
+
+            Output.WriteLine(
+                $"Successfully imported {result.ModelsCreated} models with inheritance hierarchy"
+            );
+        }
+        finally
+        {
+            await CleanupImportJobAsync(jobId);
+        }
+    }
 }
