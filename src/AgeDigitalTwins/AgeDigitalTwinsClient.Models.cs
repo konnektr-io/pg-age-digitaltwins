@@ -263,7 +263,7 @@ MATCH (m:Model {{id: dependency}})
             // Dictionary to track descendants: key = base model ID, value = list of models that extend it
             var descendantsMap = new Dictionary<string, HashSet<string>>();
 
-            IEnumerable<DigitalTwinsModelData> modelDatas = dtdlModels
+            List<DigitalTwinsModelData> modelDatas = dtdlModels
                 .Select(dtdlModel =>
                 {
                     // Prepare the bases array to store all bases (dtmis that the interface extends from)
@@ -323,38 +323,35 @@ MATCH (m:Model {{id: dependency}})
                     baseModelId => descendantsMap[baseModelId]
                 );
 
-            // This is needed as after unwinding, it gets converted to agtype again
-            string modelsString =
-                $"['{string.Join("','", modelDatas.Select(m => JsonSerializer.Serialize(m, serializerOptions).Replace("'", "\\'")))}']";
-
-            // It is not possible to update or overwrite an existing model
-            // Trying so will raise a unique constraint violation
-            string cypher =
-                $@"UNWIND {modelsString} as model
-WITH model::cstring::agtype as modelAgtype
-CREATE (m:Model {{id: modelAgtype.id}})
-SET m = modelAgtype
-RETURN m";
-
             await using var connection = await _dataSource.OpenConnectionAsync(
                 TargetSessionAttributes.ReadWrite,
                 cancellationToken
             );
-            await using var command = connection.CreateCypherCommand(_graphName, cypher);
 
-            List<DigitalTwinsModelData> result = [];
-            await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
+            // Insert models in batches to avoid building a single enormous Cypher query string.
+            // The DTDL parser above still receives all models at once for dependency resolution.
+            const int insertBatchSize = 500;
+            for (int batchStart = 0; batchStart < modelDatas.Count; batchStart += insertBatchSize)
             {
-                int k = 0;
-                while (await reader.ReadAsync(cancellationToken))
-                {
-                    var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
-                    var vertex = (Vertex)agResult;
-                    result.Add(new DigitalTwinsModelData(vertex.Properties));
-                    k++;
-                }
+                var batch = modelDatas.GetRange(
+                    batchStart,
+                    Math.Min(insertBatchSize, modelDatas.Count - batchStart)
+                );
 
-                reader.Close();
+                // This is needed as after unwinding, it gets converted to agtype again
+                string modelsString =
+                    $"['{string.Join("','", batch.Select(m => JsonSerializer.Serialize(m, serializerOptions).Replace("'", "\\'")))}']";
+
+                // It is not possible to update or overwrite an existing model
+                // Trying so will raise a unique constraint violation
+                string cypher =
+                    $@"UNWIND {modelsString} as model
+WITH model::cstring::agtype as modelAgtype
+CREATE (m:Model {{id: modelAgtype.id}})
+SET m = modelAgtype";
+
+                await using var command = connection.CreateCypherCommand(_graphName, cypher);
+                await command.ExecuteNonQueryAsync(cancellationToken);
             }
 
             List<string> relationshipNames = [];
@@ -507,7 +504,7 @@ RETURN m";
                 }
             }
 
-            return result;
+            return modelDatas;
         }
         catch (PostgresException ex) when (ex.ConstraintName == "model_id_idx")
         {

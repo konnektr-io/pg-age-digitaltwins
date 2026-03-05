@@ -493,6 +493,7 @@ public static class StreamingImportJob
         // Process remaining sections in streaming fashion
         CurrentSection currentSection = checkpoint.CurrentSection;
         List<string> allModels = new(checkpoint.PendingModels); // Restore pending models from checkpoint
+        checkpoint.PendingModels = allModels; // Share the same reference to avoid O(n²) allocations during collection
 
         // Batch processing for twins and relationships
         List<string> twinsBatch = new();
@@ -627,7 +628,6 @@ public static class StreamingImportJob
                     case CurrentSection.Models:
                         // Collect all models to process at once due to potential dependencies
                         allModels.Add(line);
-                        checkpoint.PendingModels = new List<string>(allModels);
                         break;
 
                     case CurrentSection.Twins:

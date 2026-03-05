@@ -200,5 +200,43 @@ public static class TestDataFactory
                 {"$sourceId":"twin0","$relationshipId":"relationship","$targetId":"twin1","$relationshipName":"has","relationshipProperty1":"propertyValue1","relationshipProperty2":10}
                 """;
         }
+
+        /// <summary>
+        /// Creates ND-JSON data with a hierarchy of models for testing imports with inter-model dependencies.
+        /// Generates a base model and <paramref name="childCount"/> child models that extend it.
+        /// Uses a unique namespace per call to avoid conflicts between test runs.
+        /// </summary>
+        public static string CreateModelHierarchyNdJson(int childCount = 20)
+        {
+            // Unique namespace per call so repeated test runs don't hit duplicate model errors
+            var ns = Guid.NewGuid().ToString("N");
+            var baseId = $"dtmi:example:h{ns}:Base;1";
+
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("{\"Section\": \"Header\"}");
+            sb.AppendLine(
+                "{\"fileVersion\": \"1.0.0\", \"author\": \"test\", \"organization\": \"test\"}"
+            );
+            sb.AppendLine("{\"Section\": \"Models\"}");
+
+            // Base model
+            sb.AppendLine(
+                $"{{\"@id\":\"{baseId}\",\"@type\":\"Interface\",\"@context\":\"dtmi:dtdl:context;2\","
+                    + "\"contents\":[{\"@type\":\"Property\",\"name\":\"baseProperty\",\"schema\":\"string\"}]}"
+            );
+
+            // Child models that extend the base
+            for (int i = 1; i <= childCount; i++)
+            {
+                var childId = $"dtmi:example:h{ns}:Child{i};1";
+                sb.AppendLine(
+                    $"{{\"@id\":\"{childId}\",\"@type\":\"Interface\",\"@context\":\"dtmi:dtdl:context;2\","
+                        + $"\"extends\":\"{baseId}\","
+                        + "\"contents\":[{\"@type\":\"Property\",\"name\":\"childProperty\",\"schema\":\"integer\"}]}"
+                );
+            }
+
+            return sb.ToString().TrimEnd();
+        }
     }
 }
