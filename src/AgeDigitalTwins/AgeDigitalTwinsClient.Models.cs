@@ -255,7 +255,7 @@ MATCH (m:Model {{id: dependency}})
 
         try
         {
-            var objectModel = await _modelParser.ParseAsync(
+            IReadOnlyDictionary<Dtmi, DTEntityInfo>? objectModel = await _modelParser.ParseAsync(
                 ConvertToAsyncEnumerable(dtdlModels),
                 cancellationToken: cancellationToken
             );
@@ -323,6 +323,47 @@ MATCH (m:Model {{id: dependency}})
                     baseModelId => descendantsMap[baseModelId]
                 );
 
+            // Pre-extract edge info and relationship names from the parsed object model
+            // so we can release it before the memory-intensive DB operations
+            var extendsEdges = new List<(string sourceId, string targetId)>();
+            var componentEdges = new List<(string sourceId, string targetId)>();
+            var relationshipNames = new HashSet<string>();
+
+            foreach (var entityInfoKv in objectModel)
+            {
+                if (entityInfoKv.Value is DTInterfaceInfo iface)
+                {
+                    if (iface.Extends != null && iface.Extends.Count > 0)
+                    {
+                        foreach (var extend in iface.Extends)
+                        {
+                            extendsEdges.Add((iface.Id.AbsoluteUri, extend.Id.AbsoluteUri));
+                        }
+                    }
+
+                    if (iface.Components != null && iface.Components.Count > 0)
+                    {
+                        foreach (var component in iface.Components.Values)
+                        {
+                            if (component.Schema != null && component.Schema.Id != null)
+                            {
+                                componentEdges.Add(
+                                    (iface.Id.AbsoluteUri, component.Schema.Id.AbsoluteUri)
+                                );
+                            }
+                        }
+                    }
+                }
+
+                if (entityInfoKv.Value is DTRelationshipInfo dTRelationshipInfo)
+                {
+                    relationshipNames.Add(dTRelationshipInfo.Name);
+                }
+            }
+
+            // Release the large parsed object model to free memory before DB operations
+            objectModel = null;
+
             await using var connection = await _dataSource.OpenConnectionAsync(
                 TargetSessionAttributes.ReadWrite,
                 cancellationToken
@@ -354,62 +395,33 @@ SET m = modelAgtype";
                 await command.ExecuteNonQueryAsync(cancellationToken);
             }
 
-            List<string> relationshipNames = [];
-
-            foreach (var entityInfoKv in objectModel)
+            // Create extends edges using pre-extracted data
+            foreach (var (sourceId, targetId) in extendsEdges)
             {
-                if (entityInfoKv.Value is DTInterfaceInfo dTInterfaceInfo)
-                {
-                    // Add edges for dependencies based on the 'extends' field
-                    if (dTInterfaceInfo.Extends != null && dTInterfaceInfo.Extends.Count > 0)
-                    {
-                        // Get extends and create relationships
-                        foreach (var extend in dTInterfaceInfo.Extends)
-                        {
-                            string extendsCypher =
-                                $@"MATCH (m:Model), (m2:Model)
-                                WHERE m.id = '{dTInterfaceInfo
-                                .Id.AbsoluteUri}' AND m2.id = '{extend.Id.AbsoluteUri}'
+                string extendsCypher =
+                    $@"MATCH (m:Model), (m2:Model)
+                                WHERE m.id = '{sourceId}' AND m2.id = '{targetId}'
                                 CREATE (m)-[:_extends]->(m2)";
-                            await using var extendsCommand = connection.CreateCypherCommand(
-                                _graphName,
-                                extendsCypher
-                            );
-                            // TODO: run these as batch commands
-                            await extendsCommand.ExecuteNonQueryAsync(cancellationToken);
-                        }
-                    }
+                await using var extendsCommand = connection.CreateCypherCommand(
+                    _graphName,
+                    extendsCypher
+                );
+                // TODO: run these as batch commands
+                await extendsCommand.ExecuteNonQueryAsync(cancellationToken);
+            }
 
-                    // Add edges for dependencies based on the 'schema' field of components
-                    if (dTInterfaceInfo.Components != null && dTInterfaceInfo.Components.Count > 0)
-                    {
-                        foreach (var component in dTInterfaceInfo.Components.Values)
-                        {
-                            if (component.Schema != null && component.Schema.Id != null)
-                            {
-                                string hasComponentCypher =
-                                    $@"MATCH (m:Model), (m2:Model)
-                                    WHERE m.id = '{dTInterfaceInfo
-                                    .Id.AbsoluteUri}' AND m2.id = '{component.Schema.Id.AbsoluteUri}'
+            // Create component edges using pre-extracted data
+            foreach (var (sourceId, targetId) in componentEdges)
+            {
+                string hasComponentCypher =
+                    $@"MATCH (m:Model), (m2:Model)
+                                    WHERE m.id = '{sourceId}' AND m2.id = '{targetId}'
                                     CREATE (m)-[:_hasComponent]->(m2)";
-
-                                await using var hasComponentCommand =
-                                    connection.CreateCypherCommand(_graphName, hasComponentCypher);
-                                await hasComponentCommand.ExecuteNonQueryAsync(cancellationToken);
-                            }
-                        }
-                    }
-                }
-
-                // Collect all relationship names so we can prepare the edge labels with replication full
-                if (entityInfoKv.Value is DTRelationshipInfo dTRelationshipInfo)
-                {
-                    if (relationshipNames.Contains(dTRelationshipInfo.Name))
-                    {
-                        continue;
-                    }
-                    relationshipNames.Add(dTRelationshipInfo.Name);
-                }
+                await using var hasComponentCommand = connection.CreateCypherCommand(
+                    _graphName,
+                    hasComponentCypher
+                );
+                await hasComponentCommand.ExecuteNonQueryAsync(cancellationToken);
             }
 
             // Run create elabels and then set replication on the new table for each relationship name to ensure replication full
