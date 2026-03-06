@@ -279,7 +279,12 @@ public class ModelsIntegrationTests : IAsyncLifetime
             "/models",
             new StringContent(JsonSerializer.Serialize(jModels), Encoding.UTF8, "application/json")
         );
-        createResponse.EnsureSuccessStatusCode();
+        // 200 OK = created, 409 Conflict = already exists (from a parallel test class) - both are acceptable
+        Assert.True(
+            createResponse.IsSuccessStatusCode
+                || createResponse.StatusCode == HttpStatusCode.Conflict,
+            $"Unexpected status code when creating models: {createResponse.StatusCode}"
+        );
 
         // Act - paginate through all pages, 1 item per page
         var allModelIds = new List<string>();

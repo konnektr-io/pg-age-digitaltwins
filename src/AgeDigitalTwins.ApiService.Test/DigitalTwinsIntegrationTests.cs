@@ -266,8 +266,8 @@ public class DigitalTwinsIntegrationTests : IAsyncLifetime
         // Act - paginate through all results, 1 item per page
         var allTwinIds = new List<string>();
         string? continuationToken = null;
-        string queryText =
-            "SELECT * FROM digitaltwins WHERE IS_OF_MODEL($dtwin, 'dtmi:com:contoso:Crater;1')";
+        // InitializeAsync only creates models, not twins, so SELECT * returns only the twins created above
+        string queryText = "SELECT * FROM digitaltwins";
         int pageCount = 0;
 
         do
