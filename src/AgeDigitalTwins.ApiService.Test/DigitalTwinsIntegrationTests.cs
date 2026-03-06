@@ -194,4 +194,123 @@ public class DigitalTwinsIntegrationTests : IAsyncLifetime
         }
         Assert.True(found);
     }
+
+    [Fact]
+    public async Task Query_Pagination_FirstPageHasContinuationToken()
+    {
+        // Arrange - create 3 craters with distinct IDs
+        for (int i = 1; i <= 3; i++)
+        {
+            string twinBody = $$$"""
+                {
+                    "$dtId": "paginationCrater{{{i}}}",
+                    "$metadata": { "$model": "dtmi:com:contoso:Crater;1" },
+                    "diameter": {{{i * 10}}}
+                }
+                """;
+            var twinResponse = await _httpClient!.PutAsync(
+                $"/digitaltwins/paginationCrater{i}",
+                new StringContent(twinBody, Encoding.UTF8, "application/json")
+            );
+            twinResponse.EnsureSuccessStatusCode();
+        }
+
+        // Act - query with 1 item per page
+        var queryBody = new JsonObject { ["query"] = "SELECT * FROM digitaltwins" };
+        var request = new HttpRequestMessage(HttpMethod.Post, "/query");
+        request.Headers.Add("max-items-per-page", "1");
+        request.Content = new StringContent(
+            queryBody.ToJsonString(),
+            Encoding.UTF8,
+            "application/json"
+        );
+        var queryResponse = await _httpClient!.SendAsync(request);
+        queryResponse.EnsureSuccessStatusCode();
+
+        string content = await queryResponse.Content.ReadAsStringAsync();
+        JsonDocument json = JsonDocument.Parse(content);
+        var results = json.RootElement.GetProperty("value").EnumerateArray().ToList();
+
+        // Assert - first page has 1 result and a continuationToken
+        Assert.Single(results);
+        Assert.True(
+            json.RootElement.TryGetProperty("continuationToken", out var ctEl),
+            "Expected continuationToken in paginated query response but it was missing."
+        );
+        Assert.False(
+            string.IsNullOrEmpty(ctEl.GetString()),
+            "continuationToken should not be empty."
+        );
+    }
+
+    [Fact]
+    public async Task Query_Pagination_AllTwinsReturnedAcrossPages()
+    {
+        // Arrange - create 3 craters with distinct IDs
+        for (int i = 1; i <= 3; i++)
+        {
+            string twinBody = $$$"""
+                {
+                    "$dtId": "paginationAllCrater{{{i}}}",
+                    "$metadata": { "$model": "dtmi:com:contoso:Crater;1" },
+                    "diameter": {{{i * 10}}}
+                }
+                """;
+            var twinResponse = await _httpClient!.PutAsync(
+                $"/digitaltwins/paginationAllCrater{i}",
+                new StringContent(twinBody, Encoding.UTF8, "application/json")
+            );
+            twinResponse.EnsureSuccessStatusCode();
+        }
+
+        // Act - paginate through all results, 1 item per page
+        var allTwinIds = new List<string>();
+        string? continuationToken = null;
+        string queryText =
+            "SELECT * FROM digitaltwins WHERE IS_OF_MODEL($dtwin, 'dtmi:com:contoso:Crater;1')";
+        int pageCount = 0;
+
+        do
+        {
+            var queryBody = new JsonObject { ["query"] = queryText };
+            if (continuationToken != null)
+            {
+                queryBody["continuationToken"] = continuationToken;
+            }
+
+            var request = new HttpRequestMessage(HttpMethod.Post, "/query");
+            request.Headers.Add("max-items-per-page", "1");
+            request.Content = new StringContent(
+                queryBody.ToJsonString(),
+                Encoding.UTF8,
+                "application/json"
+            );
+            var response = await _httpClient!.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+
+            string pageContent = await response.Content.ReadAsStringAsync();
+            JsonDocument pageJson = JsonDocument.Parse(pageContent);
+
+            allTwinIds.AddRange(
+                pageJson
+                    .RootElement.GetProperty("value")
+                    .EnumerateArray()
+                    .Select(r => r.GetProperty("$dtId").GetString()!)
+            );
+            pageCount++;
+
+            continuationToken = pageJson.RootElement.TryGetProperty(
+                "continuationToken",
+                out var ctEl
+            )
+                ? ctEl.GetString()
+                : null;
+        } while (continuationToken != null);
+
+        // Assert - all 3 craters are returned across multiple pages
+        Assert.True(pageCount > 1, $"Expected multiple pages but got only {pageCount}.");
+        Assert.Contains("paginationAllCrater1", allTwinIds);
+        Assert.Contains("paginationAllCrater2", allTwinIds);
+        Assert.Contains("paginationAllCrater3", allTwinIds);
+    }
 }
