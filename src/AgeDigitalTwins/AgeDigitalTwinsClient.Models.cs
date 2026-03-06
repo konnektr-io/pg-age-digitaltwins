@@ -255,10 +255,10 @@ MATCH (m:Model {{id: dependency}})
 
         try
         {
-            IReadOnlyDictionary<Dtmi, DTEntityInfo>? objectModel = await _modelParser.ParseAsync(
+            IReadOnlyDictionary<Dtmi, DTEntityInfo> objectModel = await _modelParser.ParseAsync(
                 ConvertToAsyncEnumerable(dtdlModels),
                 cancellationToken: cancellationToken
-            );
+            ) ?? throw new DTDLParserParsingException("The DTDL parser returned a null object model.");
 
             // Dictionary to track descendants: key = base model ID, value = list of models that extend it
             var descendantsMap = new Dictionary<string, HashSet<string>>();
