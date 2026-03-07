@@ -1,4 +1,3 @@
-
 using System.Text.Json;
 using Azure;
 using Azure.Core;
@@ -295,7 +294,10 @@ public class AzureDigitalTwinsSdkIntegrationTests : IAsyncLifetime
             new()
             {
                 Id = twinId,
-                Metadata = new DigitalTwinMetadata { ModelId = "dtmi:com:adt:dtsample:tempsensor;1" },
+                Metadata = new DigitalTwinMetadata
+                {
+                    ModelId = "dtmi:com:adt:dtsample:tempsensor;1",
+                },
                 Contents = new Dictionary<string, object> { { "temperature", 42 } },
             };
 
@@ -312,13 +314,14 @@ public class AzureDigitalTwinsSdkIntegrationTests : IAsyncLifetime
         Assert.Equal(newTwin.Id, basicDigitalTwin.Id);
 
         // Act: Get the twin
-        BasicDigitalTwin fetchedTwin = await _digitalTwinsClient.GetDigitalTwinAsync<BasicDigitalTwin>(twinId);
+        BasicDigitalTwin fetchedTwin =
+            await _digitalTwinsClient.GetDigitalTwinAsync<BasicDigitalTwin>(twinId);
         Assert.NotNull(fetchedTwin);
         Assert.Equal(twinId, fetchedTwin.Id);
         Assert.True(fetchedTwin.Contents.ContainsKey("temperature"));
         Assert.Equal(42, ((JsonElement)fetchedTwin.Contents["temperature"]).GetInt32());
     }
-    
+
     [Fact]
     public async Task CreateAndGetDigitalTwin_VerifiesEtagAndLastUpdateTime()
     {
@@ -359,9 +362,8 @@ public class AzureDigitalTwinsSdkIntegrationTests : IAsyncLifetime
         Assert.Equal(createdTwin.LastUpdatedOn, fetchedBasicTwin.LastUpdatedOn);
 
         // Act 3: Get the same twin with JsonDocument as a return type
-        Response<JsonDocument> response = await _digitalTwinsClient.GetDigitalTwinAsync<JsonDocument>(
-            twinId
-        );
+        Response<JsonDocument> response =
+            await _digitalTwinsClient.GetDigitalTwinAsync<JsonDocument>(twinId);
         JsonElement root = response.Value.RootElement;
 
         // Assert 3: The $etag should be the same
