@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.Extensions.Primitives;
 
@@ -93,5 +94,18 @@ public static class RequestHelper
             return etagValues[0];
         }
         return null;
+    }
+
+    /// <summary>
+    /// Extracts the user ID from the authenticated user's claims.
+    /// Returns the value of the <see cref="ClaimTypes.NameIdentifier"/> claim, falling back to the
+    /// "sub" claim. Returns <c>null</c> if the user is not authenticated or no suitable claim is found.
+    /// </summary>
+    /// <param name="httpContext">The HTTP context containing the authenticated user.</param>
+    /// <returns>The user ID, or <c>null</c> if not available.</returns>
+    public static string? ParseUserId(HttpContext httpContext)
+    {
+        return httpContext.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value
+            ?? httpContext.User?.FindFirst("sub")?.Value;
     }
 }

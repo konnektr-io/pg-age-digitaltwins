@@ -24,6 +24,8 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
 
     private readonly ModelParser _modelParser;
 
+    private readonly bool _trackLastUpdatedBy;
+
     private readonly JsonSerializerOptions serializerOptions =
         new() { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
@@ -62,6 +64,7 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
         DefaultBatchSize = options.DefaultBatchSize;
         DefaultCheckpointInterval = options.DefaultCheckpointInterval;
         DefaultHeartbeatInterval = options.DefaultHeartbeatInterval;
+        _trackLastUpdatedBy = options.TrackLastUpdatedBy;
         _modelParser = new(
             new ParsingOptions()
             {
@@ -172,4 +175,12 @@ public class AgeDigitalTwinsClientOptions
     /// Gets or sets the default heartbeat interval for import operations.
     /// </summary>
     public TimeSpan DefaultHeartbeatInterval { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Gets or sets a value indicating whether to track the user ID of the last user who updated
+    /// a property in the property metadata. When enabled and a user ID is provided to write
+    /// operations, it will be stored as <c>lastUpdatedBy</c> in each updated property's metadata.
+    /// Defaults to <c>false</c>.
+    /// </summary>
+    public bool TrackLastUpdatedBy { get; set; } = false;
 }
