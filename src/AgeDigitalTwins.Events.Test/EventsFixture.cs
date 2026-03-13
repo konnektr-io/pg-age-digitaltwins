@@ -16,6 +16,13 @@ namespace AgeDigitalTwins.Events.Test;
 public class EventsFixture : IAsyncDisposable
 {
     public AgeDigitalTwinsClient Client { get; }
+
+    /// <summary>
+    /// A secondary client with <see cref="AgeDigitalTwinsClientOptions.TrackLastUpdatedBy"/> enabled,
+    /// sharing the same graph as <see cref="Client"/>.
+    /// </summary>
+    public AgeDigitalTwinsClient ClientWithTrackLastUpdatedBy { get; }
+
     public TestingEventSink TestSink { get; }
     public AgeDigitalTwinsReplication Replication { get; }
     public TelemetryListener TelemetryListener { get; }
@@ -66,6 +73,17 @@ public class EventsFixture : IAsyncDisposable
             }
         );
 
+        // Secondary client sharing the same graph but with TrackLastUpdatedBy enabled
+        ClientWithTrackLastUpdatedBy = new AgeDigitalTwinsClient(
+            dataSource,
+            new AgeDigitalTwinsClientOptions()
+            {
+                GraphName = graphName,
+                ModelCacheExpiration = TimeSpan.Zero,
+                TrackLastUpdatedBy = true,
+            }
+        );
+
         // Setup logging
         _loggerFactory = LoggerFactory.Create(builder =>
             builder.AddConsole().SetMinimumLevel(LogLevel.Information)
@@ -101,7 +119,7 @@ public class EventsFixture : IAsyncDisposable
         // Setup SharedEventConsumer
         var consumerLogger = _loggerFactory.CreateLogger<SharedEventConsumer>();
         var sourceUri = new Uri("http://localhost/test");
-        SharedEventConsumer = new SharedEventConsumer(testEventQueue, consumerLogger, sourceUri);
+        SharedEventConsumer = new SharedEventConsumer(testEventQueue, consumerLogger, sourceUri, trackLastUpdatedBy: true);
 
         _cancellationTokenSource = new CancellationTokenSource();
 
@@ -268,6 +286,7 @@ public class EventsFixture : IAsyncDisposable
 
         await Client.DropGraphAsync();
         await Client.DisposeAsync();
+        await ClientWithTrackLastUpdatedBy.DisposeAsync();
         _loggerFactory.Dispose();
         GC.SuppressFinalize(this);
 
