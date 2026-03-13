@@ -128,6 +128,7 @@ builder.Services.AddSingleton(sp =>
         ModelCacheExpiration = TimeSpan.FromSeconds(modelCacheExpiration),
         DefaultBatchSize = defaultBatchSize,
         DefaultCheckpointInterval = defaultCheckpointInterval,
+        TrackLastUpdatedBy = builder.Configuration.GetValue("Parameters:TrackLastUpdatedBy", false),
     };
     var client = new AgeDigitalTwinsClient(dataSource, options);
 
