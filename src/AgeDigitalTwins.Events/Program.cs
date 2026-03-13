@@ -1,9 +1,8 @@
 using AgeDigitalTwins.Events;
-using Npgsql;
 using AgeDigitalTwins.Events.Abstractions;
-using AgeDigitalTwins.Events.Core.Services;
 using AgeDigitalTwins.Events.Core.Events;
-
+using AgeDigitalTwins.Events.Core.Services;
+using Npgsql;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -133,6 +132,15 @@ builder.Services.AddSingleton(sp =>
         ?? builder.Configuration.GetValue<int?>("MaxBatchSize")
         ?? 50;
 
+    // How long to wait without a replication message before declaring the connection dead.
+    // Keep this shorter than CNPG's WAL-receiver drain timeout so the WAL receiver slot is
+    // released in time for a standby to be promoted. Default: 30 s.
+    int walReceiverTimeoutSeconds =
+        builder.Configuration.GetSection("Parameters").GetValue<int?>("WalReceiverTimeoutSeconds")
+        ?? builder.Configuration.GetValue<int?>("Parameters:WalReceiverTimeoutSeconds")
+        ?? builder.Configuration.GetValue<int?>("WalReceiverTimeoutSeconds")
+        ?? 30;
+
     ILogger<AgeDigitalTwinsReplication> subscriptionLogger = sp.GetRequiredService<
         ILogger<AgeDigitalTwinsReplication>
     >();
@@ -146,7 +154,8 @@ builder.Services.AddSingleton(sp =>
         replicationSlot,
         eventQueue,
         subscriptionLogger,
-        maxBatchSize
+        maxBatchSize,
+        walReceiverTimeoutSeconds
     );
 });
 

@@ -86,10 +86,7 @@ public static class PermissionExtensions
                 var permission = new Permission(resource, action);
                 var policyName = $"Permission:{permission}";
 
-                options.AddPolicy(
-                    policyName,
-                    policy => policy.RequireAssertion(_ => true)
-                );
+                options.AddPolicy(policyName, policy => policy.RequireAssertion(_ => true));
             }
         }
     }

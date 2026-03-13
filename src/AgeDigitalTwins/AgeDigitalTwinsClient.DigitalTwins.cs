@@ -575,9 +575,7 @@ RETURN t";
             var patchResult = patch.Apply(patchedTwinNode);
             if (!string.IsNullOrEmpty(patchResult.Error))
             {
-                throw new ValidationFailedException(
-                    $"Failed to apply patch: {patchResult.Error}"
-                );
+                throw new ValidationFailedException($"Failed to apply patch: {patchResult.Error}");
             }
             if (patchResult.Result is null)
             {
@@ -1158,6 +1156,7 @@ SET t = twin";
 
         return new BatchDigitalTwinResult(results);
     }
+
     /// <summary>
     /// Explores the graph neighborhood of a specific twin.
     /// </summary>
@@ -1167,16 +1166,16 @@ SET t = twin";
         CancellationToken cancellationToken = default
     )
     {
-        if (hops < 1) hops = 1;
+        if (hops < 1)
+            hops = 1;
         // Limit to 1 hop for current implementation stability with AGE return types
         // Multi-hop path serialization requires handling Path/EdgeList return types which are complex in Agtype
-        hops = 1; 
+        hops = 1;
 
         await using var connection = await _dataSource.OpenConnectionAsync(
-             TargetSessionAttributes.PreferStandby,
-             cancellationToken
-         );
-
+            TargetSessionAttributes.PreferStandby,
+            cancellationToken
+        );
         string cypher = $@"
             MATCH (t:Twin {{`$dtId`: $twinId}})-[r]-(n:Twin) 
             RETURN t, r, n 
@@ -1187,23 +1186,29 @@ SET t = twin";
             { "twinId", digitalTwinId }
         });
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        
+
         var results = new List<object>();
         while (await reader.ReadAsync(cancellationToken))
         {
-             var agResultT = (Vertex)await reader.GetFieldValueAsync<Agtype?>(0);
-             var agResultR = (Edge)await reader.GetFieldValueAsync<Agtype?>(1);
-             var agResultN = (Vertex)await reader.GetFieldValueAsync<Agtype?>(2);
-             
-             results.Add(new { 
-                 sourceId = agResultT.Properties["$dtId"],
-                 relationship = agResultR.Label,
-                 targetId = agResultN.Properties["$dtId"],
-                 target = agResultN.Properties
-             });
+            var agResultT = (Vertex)await reader.GetFieldValueAsync<Agtype?>(0);
+            var agResultR = (Edge)await reader.GetFieldValueAsync<Agtype?>(1);
+            var agResultN = (Vertex)await reader.GetFieldValueAsync<Agtype?>(2);
+
+            results.Add(
+                new
+                {
+                    sourceId = agResultT.Properties["$dtId"],
+                    relationship = agResultR.Label,
+                    targetId = agResultN.Properties["$dtId"],
+                    target = agResultN.Properties,
+                }
+            );
         }
-        
-        return JsonSerializer.Serialize(results, new JsonSerializerOptions { WriteIndented = true });
+
+        return JsonSerializer.Serialize(
+            results,
+            new JsonSerializerOptions { WriteIndented = true }
+        );
     }
 
     /// <summary>
@@ -1218,17 +1223,18 @@ SET t = twin";
     )
     {
         await using var connection = await _dataSource.OpenConnectionAsync(
-             TargetSessionAttributes.PreferStandby,
-             cancellationToken
-         );
+            TargetSessionAttributes.PreferStandby,
+            cancellationToken
+        );
 
         string vectorString = JsonSerializer.Serialize(vector);
-        string whereClause = !string.IsNullOrEmpty(modelFilter) 
-            ? $" WHERE t.`$metadata`.`$model` = '{modelFilter}' " 
+        string whereClause = !string.IsNullOrEmpty(modelFilter)
+            ? $" WHERE t.`$metadata`.`$model` = '{modelFilter}' "
             : "";
 
         // Ensure we cast the array to vector using ::vector
-        string cypher = $@"
+        string cypher =
+            $@"
             MATCH (t:Twin)
             {whereClause}
             RETURN t
@@ -1236,17 +1242,20 @@ SET t = twin";
             LIMIT {limit}";
 
         await using var command = connection.CreateCypherCommand(_graphName, cypher);
-        try 
+        try
         {
-             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-             var results = new List<object>();
-             while (await reader.ReadAsync(cancellationToken))
-             {
-                 var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
-                 var vertex = (Vertex)agResult;
-                 results.Add(vertex.Properties);
-             }
-             return JsonSerializer.Serialize(results, new JsonSerializerOptions { WriteIndented = true });
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            var results = new List<object>();
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
+                var vertex = (Vertex)agResult;
+                results.Add(vertex.Properties);
+            }
+            return JsonSerializer.Serialize(
+                results,
+                new JsonSerializerOptions { WriteIndented = true }
+            );
         }
         catch (Exception ex)
         {

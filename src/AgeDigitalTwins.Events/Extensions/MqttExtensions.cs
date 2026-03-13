@@ -23,12 +23,7 @@ public static class MqttExtensions
         this MqttApplicationMessage message,
         CloudEventFormatter formatter,
         params CloudEventAttribute[]? extensionAttributes
-    ) =>
-        ToCloudEvent(
-            message,
-            formatter,
-            (IEnumerable<CloudEventAttribute>?)extensionAttributes
-        );
+    ) => ToCloudEvent(message, formatter, (IEnumerable<CloudEventAttribute>?)extensionAttributes);
 
     /// <summary>
     /// Converts this MQTT message into a CloudEvent object.
@@ -96,4 +91,3 @@ public static class MqttExtensions
         };
     }
 }
-

@@ -1,8 +1,8 @@
 using System.Text.Json;
-using AgeDigitalTwins.ServiceDefaults.Authorization;
 using AgeDigitalTwins.ApiService.Helpers;
 using AgeDigitalTwins.ApiService.Models;
 using AgeDigitalTwins.Models;
+using AgeDigitalTwins.ServiceDefaults.Authorization;
 using AgeDigitalTwins.ServiceDefaults.Authorization.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -102,6 +102,37 @@ public static class ModelsEndpoints
             .WithSummary("Deletes all models in the digital twins graph.");
 
         modelsGroup
+            .MapGet(
+                "/{id}",
+                [Authorize]
+                async (
+                    string id,
+                    HttpContext httpContext,
+                    [FromServices] AgeDigitalTwinsClient client,
+                    CancellationToken cancellationToken
+                ) =>
+                {
+                    var query = httpContext.Request.Query;
+                    bool includeBaseModelContents =
+                        query.ContainsKey("includeBaseModelContents")
+                        && bool.TryParse(query["includeBaseModelContents"], out var include)
+                        && include;
+
+                    var options = new GetModelOptions
+                    {
+                        IncludeBaseModelContents = includeBaseModelContents,
+                    };
+
+                    var model = await client.GetModelAsync(id, options, cancellationToken);
+                    return Results.Json(model);
+                }
+            )
+            .RequirePermission(ResourceType.Models, PermissionAction.Read)
+            .RequireRateLimiting("AdminOperations")
+            .WithName("GetModel")
+            .WithSummary("Retrieves a specific model by its ID.");
+
+        modelsGroup
             .MapDelete(
                 "/{id}",
                 [Authorize]
@@ -119,6 +150,30 @@ public static class ModelsEndpoints
             .RequireRateLimiting("AdminOperations")
             .WithName("DeleteModel")
             .WithSummary("Deletes a specific model by its ID.");
+
+        modelsGroup
+            .MapPost(
+                "/search",
+                [Authorize]
+                async (
+                    [FromBody] ModelSearchRequest request,
+                    [FromServices] AgeDigitalTwinsClient client,
+                    CancellationToken cancellationToken
+                ) =>
+                {
+                    var results = await client.SearchModelsAsync(
+                        request.Query,
+                        request.Vector,
+                        request.Limit ?? 10,
+                        cancellationToken
+                    );
+                    return Results.Json(results);
+                }
+            )
+            .RequirePermission(ResourceType.Models, PermissionAction.Read)
+            .RequireRateLimiting("AdminOperations")
+            .WithName("SearchModels")
+            .WithSummary("Searches models using lexical and/or vector similarity.");
 
         return app;
     }

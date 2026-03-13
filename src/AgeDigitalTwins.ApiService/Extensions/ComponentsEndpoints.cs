@@ -1,6 +1,7 @@
 using System.Text.Json;
-using AgeDigitalTwins.ServiceDefaults.Authorization;
 using AgeDigitalTwins.ApiService.Helpers;
+using AgeDigitalTwins.Models;
+using AgeDigitalTwins.ServiceDefaults.Authorization;
 using AgeDigitalTwins.ServiceDefaults.Authorization.Models;
 using Json.Patch;
 using Microsoft.AspNetCore.Mvc;
@@ -26,7 +27,7 @@ public static class ComponentsEndpoints
                     CancellationToken cancellationToken
                 ) =>
                 {
-                    return client.GetComponentAsync<JsonDocument>(
+                    return client.GetComponentAsync<BasicDigitalTwinComponent>(
                         twinId,
                         componentName,
                         cancellationToken
@@ -36,7 +37,8 @@ public static class ComponentsEndpoints
             .RequirePermission(ResourceType.DigitalTwins, PermissionAction.Read)
             .RequireRateLimiting("LightOperations")
             .WithName("GetComponent")
-            .WithSummary("Retrieves a component from a digital twin by its name.");
+            .WithSummary("Retrieves a component from a digital twin by its name.")
+            .Produces<BasicDigitalTwinComponent>();
 
         // PATCH Component - Heavy update operation
         componentsGroup

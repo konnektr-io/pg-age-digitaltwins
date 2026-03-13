@@ -4,11 +4,11 @@
     "description": "Core concepts and fundamental understanding of Konnektr Graph",
     "pages": [
         "dtdl",
+        "mcp-server",
         "querying",
         "validation",
         "event-routing",
         "telemetry",
-        "components",
-        "mcp-server"
+        "components"
     ]
 }

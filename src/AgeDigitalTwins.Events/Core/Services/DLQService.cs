@@ -139,4 +139,3 @@ public class DLQService(NpgsqlDataSource dataSource, ILogger? logger = null)
         _logger?.LogInformation("Persisted event {EventId} to DLQ table.", eventId);
     }
 }
-

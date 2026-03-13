@@ -3,7 +3,6 @@ using AgeDigitalTwins.Events.Core.Events;
 
 namespace AgeDigitalTwins.Events.Abstractions;
 
-
 /// <summary>
 /// Interface for a shared event queue that can be used by multiple event producers
 /// </summary>

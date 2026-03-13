@@ -53,7 +53,7 @@ public class ModelReferencesNotDeletedException : AgeDigitalTwinsException
 public class DTDLParserParsingException : AgeDigitalTwinsException
 {
     public DTDLParserParsingException(DTDLParser.ParsingException exception)
-        : base("The models provided are not valid DTDL.")
+        : base($"The models provided could not be parsed:\n{exception}")
     {
         StatusCode = HttpStatusCode.BadRequest;
     }

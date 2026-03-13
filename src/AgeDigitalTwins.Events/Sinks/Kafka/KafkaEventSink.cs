@@ -8,8 +8,6 @@ using Confluent.Kafka;
 
 namespace AgeDigitalTwins.Events.Sinks.Kafka;
 
-
-
 public class KafkaEventSink : IEventSink, IDisposable
 {
     private readonly ILogger _logger;
@@ -35,17 +33,16 @@ public class KafkaEventSink : IEventSink, IDisposable
         string bootstrapServers = options.BrokerList.EndsWith(":9093")
             ? options.BrokerList
             : options.BrokerList + ":9093";
-        
+
         SaslMechanism saslMechanism;
         if (string.Equals(options.AuthenticationType, "OAuth", StringComparison.OrdinalIgnoreCase))
         {
-             saslMechanism = SaslMechanism.OAuthBearer;
+            saslMechanism = SaslMechanism.OAuthBearer;
         }
-        else 
+        else
         {
             Enum.TryParse(options.SaslMechanism, true, out saslMechanism);
         }
-
 
         ProducerConfig config =
             new()
@@ -71,7 +68,13 @@ public class KafkaEventSink : IEventSink, IDisposable
                 QueueBufferingMaxKbytes = 524288, // 512MB producer buffer
             };
 
-        if (Enum.TryParse<SecurityProtocol>(options.SecurityProtocol, true, out var securityProtocol))
+        if (
+            Enum.TryParse<SecurityProtocol>(
+                options.SecurityProtocol,
+                true,
+                out var securityProtocol
+            )
+        )
         {
             config.SecurityProtocol = securityProtocol;
         }
@@ -110,20 +113,26 @@ public class KafkaEventSink : IEventSink, IDisposable
         else if (saslMechanism == SaslMechanism.OAuthBearer)
         {
             logger.LogDebug("Using OAUTHBEARER authentication for Kafka sink '{SinkName}'", Name);
-            
+
             // For Azure Event Hubs, we need to set the config string to the token endpoint/scope structure it expects
             // For generic Kafka (e.g. Redpanda, Strimzi), this might not be strictly required or might be different.
             // However, usually the TokenRefreshHandler handles the token acquisition.
             // If it looks like Azure (contains servicebus), we try to set the default scope if not explicitly provided.
-            
-            if (options.BrokerList.Contains("servicebus.windows.net", StringComparison.OrdinalIgnoreCase))
+
+            if (
+                options.BrokerList.Contains(
+                    "servicebus.windows.net",
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
             {
-                 var scope = options.Scope ?? $"https://{options.BrokerList.Replace(":9093", "")}/.default";
-                 config.SaslOauthbearerConfig = scope; 
+                var scope =
+                    options.Scope ?? $"https://{options.BrokerList.Replace(":9093", "")}/.default";
+                config.SaslOauthbearerConfig = scope;
             }
             else if (!string.IsNullOrEmpty(options.Scope))
             {
-                 config.SaslOauthbearerConfig = options.Scope;
+                config.SaslOauthbearerConfig = options.Scope;
             }
 
             _producer = new ProducerBuilder<string?, byte[]>(config)
@@ -142,7 +151,11 @@ public class KafkaEventSink : IEventSink, IDisposable
                     {
                         if (logMessage.Level <= SyslogLevel.Warning)
                         {
-                            logger.LogWarning("Kafka log [{Level}]: {Message}", logMessage.Level, logMessage.Message);
+                            logger.LogWarning(
+                                "Kafka log [{Level}]: {Message}",
+                                logMessage.Level,
+                                logMessage.Message
+                            );
                         }
                     }
                 )
@@ -314,4 +327,3 @@ public class KafkaEventSink : IEventSink, IDisposable
         GC.SuppressFinalize(this);
     }
 }
-

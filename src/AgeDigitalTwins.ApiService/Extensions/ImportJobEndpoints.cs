@@ -1,8 +1,8 @@
 using System.ComponentModel.DataAnnotations;
-using AgeDigitalTwins.ServiceDefaults.Authorization;
 using AgeDigitalTwins.ApiService.Models;
 using AgeDigitalTwins.ApiService.Services;
 using AgeDigitalTwins.Models;
+using AgeDigitalTwins.ServiceDefaults.Authorization;
 using AgeDigitalTwins.ServiceDefaults.Authorization.Models;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
@@ -97,7 +97,7 @@ public static class ImportJobEndpoints
     }
 
     private static async Task<
-        Results<Created<ImportJob>, ValidationProblem, ProblemHttpResult, Conflict>
+        Results<Created<ImportJob>, ValidationProblem, ProblemHttpResult>
     > CreateImportJobAsync(
         [Required] string id,
         [FromBody] ImportJobRequest request,
@@ -169,7 +169,11 @@ public static class ImportJobEndpoints
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("already exists"))
         {
-            return TypedResults.Conflict();
+            return TypedResults.Problem(
+                detail: ex.Message,
+                statusCode: StatusCodes.Status409Conflict,
+                title: "Conflict"
+            );
         }
         catch (ArgumentException ex)
         {
@@ -179,11 +183,11 @@ public static class ImportJobEndpoints
                 title: "Validation Failed"
             );
         }
-        catch (Exception)
+        catch (Exception ex)
         {
             // Log error - could inject ILogger if needed, but for now just return the error response
             return TypedResults.Problem(
-                detail: "An unexpected error occurred while creating the import job.",
+                detail: ex.Message,
                 statusCode: StatusCodes.Status500InternalServerError,
                 title: "Internal Server Error"
             );

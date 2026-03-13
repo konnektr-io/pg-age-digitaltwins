@@ -9,7 +9,7 @@ public class KustoSinkOptions : SinkOptions
     public string? PropertyEventsTable { get; set; }
     public string? TwinLifeCycleEventsTable { get; set; }
     public string? RelationshipLifeCycleEventsTable { get; set; }
-    
+
     // Auth
     public string? TenantId { get; set; }
     public string? ClientId { get; set; }

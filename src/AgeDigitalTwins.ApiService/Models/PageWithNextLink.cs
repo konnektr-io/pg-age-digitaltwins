@@ -30,7 +30,9 @@ public class PageWithNextLink<T> : Page<T>
         query["continuationToken"] = page.ContinuationToken.ToString();
         uriBuilder.Query = string.Join(
             "&",
-            request.Query.Select(kvp => $"{kvp.Key}={Uri.EscapeDataString(kvp.Value!)}")
+            query.Select(kvp =>
+                $"{kvp.Key}={Uri.EscapeDataString(string.Join(",", kvp.Value.Where(v => v != null)!))}"
+            )
         );
 
         NextLink = uriBuilder.Uri;

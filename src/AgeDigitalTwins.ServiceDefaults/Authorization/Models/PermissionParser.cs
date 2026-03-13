@@ -41,7 +41,6 @@ public static class PermissionParser
             "delete" => PermissionAction.Delete,
             "action" => PermissionAction.Action,
             "*" => PermissionAction.Wildcard,
-            "tools" => PermissionAction.Wildcard, // Special case: "mcp/tools" means all MCP tool actions
             _ => (PermissionAction)(-1), // Invalid
         };
 
@@ -63,7 +62,6 @@ public static class PermissionParser
             "models" => ResourceType.Models,
             "jobs/imports" => ResourceType.JobsImports,
             "jobs/imports/cancel" => ResourceType.JobsImports, // Cancel is a job action
-            "mcp" => ResourceType.Mcp, // Special case: MCP tools
             _ => (ResourceType)(-1), // Invalid
         };
 

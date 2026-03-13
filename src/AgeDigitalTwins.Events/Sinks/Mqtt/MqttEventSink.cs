@@ -2,11 +2,11 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using AgeDigitalTwins.Events.Abstractions;
+using Azure.Core;
 using CloudNative.CloudEvents;
 using CloudNative.CloudEvents.Mqtt;
 using CloudNative.CloudEvents.SystemTextJson;
 using MQTTnet;
-using Azure.Core;
 
 namespace AgeDigitalTwins.Events.Sinks.Mqtt;
 
@@ -40,17 +40,26 @@ public class MqttEventSink : IEventSink, IDisposable
         string? password = _options.Password;
         string? username = _options.Username;
 
-        if (string.Equals(_options.AuthenticationType, "OAuth", StringComparison.OrdinalIgnoreCase) && _credential != null)
+        if (
+            string.Equals(_options.AuthenticationType, "OAuth", StringComparison.OrdinalIgnoreCase)
+            && _credential != null
+        )
         {
-            try 
+            try
             {
-                 var context = new TokenRequestContext(string.IsNullOrEmpty(_options.Scope) ? [] : [_options.Scope]);
-                 var token = await _credential.GetTokenAsync(context, default);
-                 password = token.Token;
+                var context = new TokenRequestContext(
+                    string.IsNullOrEmpty(_options.Scope) ? [] : [_options.Scope]
+                );
+                var token = await _credential.GetTokenAsync(context, default);
+                password = token.Token;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to retrieve OAuth token for MQTT sink '{SinkName}'", Name);
+                _logger.LogError(
+                    ex,
+                    "Failed to retrieve OAuth token for MQTT sink '{SinkName}'",
+                    Name
+                );
                 throw;
             }
         }
@@ -65,7 +74,7 @@ public class MqttEventSink : IEventSink, IDisposable
 
         if (!_mqttClient.IsConnected)
         {
-             await _mqttClient.ConnectAsync(mqttOptions);
+            await _mqttClient.ConnectAsync(mqttOptions);
         }
     }
 
@@ -132,4 +141,3 @@ public class MqttEventSink : IEventSink, IDisposable
         GC.SuppressFinalize(this);
     }
 }
-

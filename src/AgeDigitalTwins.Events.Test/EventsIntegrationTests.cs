@@ -2,10 +2,12 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using AgeDigitalTwins.Jobs;
-using AgeDigitalTwins.Models;
 using AgeDigitalTwins.Test;
 using Azure.DigitalTwins.Core;
 using Xunit.Abstractions;
+// using AgeDigitalTwins.Models;
+using SdkBasicDigitalTwin = Azure.DigitalTwins.Core.BasicDigitalTwin;
+using SdkBasicRelationship = Azure.DigitalTwins.Core.BasicRelationship;
 
 namespace AgeDigitalTwins.Events.Test;
 
@@ -47,7 +49,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         }
 
         var uniqueTwinId = $"crater_{Guid.NewGuid():N}";
-        var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinCrater);
+        var digitalTwin = JsonSerializer.Deserialize<SdkBasicDigitalTwin>(SampleData.TwinCrater);
         digitalTwin!.Id = uniqueTwinId;
 
         // Clear any existing events
@@ -59,12 +61,12 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         // Assert - Wait for the specific event
         var receivedEvent = await TestSink.WaitForEventAsync(
             uniqueTwinId,
-            "Konnektr.DigitalTwins.Twin.Create",
+            "Konnektr.Graph.Twin.Create",
             TimeSpan.FromSeconds(30)
         );
 
         Assert.NotNull(receivedEvent);
-        Assert.Equal("Konnektr.DigitalTwins.Twin.Create", receivedEvent.Type);
+        Assert.Equal("Konnektr.Graph.Twin.Create", receivedEvent.Type);
         Assert.Equal(uniqueTwinId, receivedEvent.Subject);
         Assert.Equal("application/json", receivedEvent.DataContentType);
 
@@ -91,7 +93,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         }
 
         var uniqueTwinId = $"crater_{Guid.NewGuid():N}";
-        var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinCrater);
+        var digitalTwin = JsonSerializer.Deserialize<SdkBasicDigitalTwin>(SampleData.TwinCrater);
         digitalTwin!.Id = uniqueTwinId;
 
         // Create the twin first
@@ -107,12 +109,12 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         // Assert - Wait for the update event
         var receivedEvent = await TestSink.WaitForEventAsync(
             uniqueTwinId,
-            "Konnektr.DigitalTwins.Twin.Update",
+            "Konnektr.Graph.Twin.Update",
             TimeSpan.FromSeconds(10)
         );
 
         Assert.NotNull(receivedEvent);
-        Assert.Equal("Konnektr.DigitalTwins.Twin.Update", receivedEvent.Type);
+        Assert.Equal("Konnektr.Graph.Twin.Update", receivedEvent.Type);
         Assert.Equal(uniqueTwinId, receivedEvent.Subject);
         Assert.Equal("application/json", receivedEvent.DataContentType);
 
@@ -138,7 +140,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         }
 
         var uniqueTwinId = $"crater_{Guid.NewGuid():N}";
-        var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinCrater);
+        var digitalTwin = JsonSerializer.Deserialize<SdkBasicDigitalTwin>(SampleData.TwinCrater);
         digitalTwin!.Id = uniqueTwinId;
 
         // Create the twin first
@@ -153,12 +155,12 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         // Assert - Wait for the delete event
         var receivedEvent = await TestSink.WaitForEventAsync(
             uniqueTwinId,
-            "Konnektr.DigitalTwins.Twin.Delete",
+            "Konnektr.Graph.Twin.Delete",
             TimeSpan.FromSeconds(10)
         );
 
         Assert.NotNull(receivedEvent);
-        Assert.Equal("Konnektr.DigitalTwins.Twin.Delete", receivedEvent.Type);
+        Assert.Equal("Konnektr.Graph.Twin.Delete", receivedEvent.Type);
         Assert.Equal(uniqueTwinId, receivedEvent.Subject);
         Assert.Equal("application/json", receivedEvent.DataContentType);
 
@@ -211,11 +213,11 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         var relationshipId = $"rel_{Guid.NewGuid():N}";
 
         // Create twins
-        var sourceTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinRoom1);
+        var sourceTwin = JsonSerializer.Deserialize<SdkBasicDigitalTwin>(SampleData.TwinRoom1);
         sourceTwin!.Id = sourceTwinId;
         await Client.CreateOrReplaceDigitalTwinAsync(sourceTwin.Id, sourceTwin);
 
-        var targetTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(
+        var targetTwin = JsonSerializer.Deserialize<SdkBasicDigitalTwin>(
             SampleData.TwinTemperatureSensor1
         );
         targetTwin!.Id = targetTwinId;
@@ -225,7 +227,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         TestSink.ClearEvents();
 
         // Act - Create relationship
-        var relationship = new BasicRelationship
+        var relationship = new SdkBasicRelationship
         {
             Id = relationshipId,
             SourceId = sourceTwinId,
@@ -239,12 +241,12 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         var expectedSubject = $"{sourceTwinId}/relationships/{relationshipId}";
         var receivedEvent = await TestSink.WaitForEventAsync(
             expectedSubject,
-            "Konnektr.DigitalTwins.Relationship.Create",
+            "Konnektr.Graph.Relationship.Create",
             TimeSpan.FromSeconds(10)
         );
 
         Assert.NotNull(receivedEvent);
-        Assert.Equal("Konnektr.DigitalTwins.Relationship.Create", receivedEvent.Type);
+        Assert.Equal("Konnektr.Graph.Relationship.Create", receivedEvent.Type);
         Assert.Equal(expectedSubject, receivedEvent.Subject);
         Assert.Equal("application/json", receivedEvent.DataContentType);
 
@@ -273,10 +275,10 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         var twin1Id = $"crater1_{Guid.NewGuid():N}";
         var twin2Id = $"crater2_{Guid.NewGuid():N}";
 
-        var twin1 = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinCrater);
+        var twin1 = JsonSerializer.Deserialize<SdkBasicDigitalTwin>(SampleData.TwinCrater);
         twin1!.Id = twin1Id;
 
-        var twin2 = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinCrater);
+        var twin2 = JsonSerializer.Deserialize<SdkBasicDigitalTwin>(SampleData.TwinCrater);
         twin2!.Id = twin2Id;
 
         // Clear any existing events
@@ -322,7 +324,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         }
 
         var uniqueTwinId = $"crater_{Guid.NewGuid():N}";
-        var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinCrater);
+        var digitalTwin = JsonSerializer.Deserialize<SdkBasicDigitalTwin>(SampleData.TwinCrater);
         digitalTwin!.Id = uniqueTwinId;
         digitalTwin.Contents["diameter"] = 150.0; // Add a property value
 
@@ -339,14 +341,14 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
 
         // Check for Twin Lifecycle event
         var lifecycleEvent = allEvents.FirstOrDefault(e =>
-            e.Subject == uniqueTwinId && e.Type == "Konnektr.DigitalTwins.Twin.Lifecycle"
+            e.Subject == uniqueTwinId && e.Type == "Konnektr.Graph.Twin.Lifecycle"
         );
         Assert.NotNull(lifecycleEvent);
         Assert.Equal("application/json", lifecycleEvent.DataContentType);
 
         // Check for Property Event (for the diameter property)
         var propertyEvent = allEvents.FirstOrDefault(e =>
-            e.Subject == uniqueTwinId && e.Type == "Konnektr.DigitalTwins.Property.Event"
+            e.Subject == uniqueTwinId && e.Type == "Konnektr.Graph.Property.Event"
         );
         Assert.NotNull(propertyEvent);
         Assert.Equal("application/json", propertyEvent.DataContentType);
@@ -387,7 +389,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         }
 
         var uniqueTwinId = $"crater_{Guid.NewGuid():N}";
-        var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinCrater);
+        var digitalTwin = JsonSerializer.Deserialize<SdkBasicDigitalTwin>(SampleData.TwinCrater);
         digitalTwin!.Id = uniqueTwinId;
         digitalTwin.Contents["diameter"] = 100.0;
 
@@ -414,9 +416,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
 
         // Check for Property Event - specifically look for the update event (value: 200)
         var propertyEvents = allEvents
-            .Where(e =>
-                e.Subject == uniqueTwinId && e.Type == "Konnektr.DigitalTwins.Property.Event"
-            )
+            .Where(e => e.Subject == uniqueTwinId && e.Type == "Konnektr.Graph.Property.Event")
             .ToList();
         Assert.True(propertyEvents.Count > 0, "Should have at least one property event");
 
@@ -502,11 +502,11 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         var relationshipId = $"rel_{Guid.NewGuid():N}";
 
         // Create twins
-        var sourceTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinRoom1);
+        var sourceTwin = JsonSerializer.Deserialize<SdkBasicDigitalTwin>(SampleData.TwinRoom1);
         sourceTwin!.Id = sourceTwinId;
         await Client.CreateOrReplaceDigitalTwinAsync(sourceTwin.Id, sourceTwin);
 
-        var targetTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(
+        var targetTwin = JsonSerializer.Deserialize<SdkBasicDigitalTwin>(
             SampleData.TwinTemperatureSensor1
         );
         targetTwin!.Id = targetTwinId;
@@ -516,7 +516,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         TestSink.ClearEvents();
 
         // Act - Create relationship
-        var relationship = new BasicRelationship
+        var relationship = new SdkBasicRelationship
         {
             Id = relationshipId,
             SourceId = sourceTwinId,
@@ -540,7 +540,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
 
         // Check for Relationship Lifecycle event
         var relationshipLifecycleEvent = allEvents.FirstOrDefault(e =>
-            e.Subject == expectedSubject && e.Type == "Konnektr.DigitalTwins.Relationship.Lifecycle"
+            e.Subject == expectedSubject && e.Type == "Konnektr.Graph.Relationship.Lifecycle"
         );
         Assert.NotNull(relationshipLifecycleEvent);
         Assert.Equal("application/json", relationshipLifecycleEvent.DataContentType);
@@ -652,7 +652,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
 
         // Verify Twin Lifecycle events (one for each twin created)
         var twinLifecycleEvents = allEvents
-            .Where(e => e.Type == "Konnektr.DigitalTwins.Twin.Lifecycle")
+            .Where(e => e.Type == "Konnektr.Graph.Twin.Lifecycle")
             .ToList();
         var expectedTwinIds = new[]
         {
@@ -707,7 +707,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
 
         // Verify Property events (one for each property of each twin)
         var propertyEvents = allEvents
-            .Where(e => e.Type == "Konnektr.DigitalTwins.Property.Event")
+            .Where(e => e.Type == "Konnektr.Graph.Property.Event")
             .ToList();
         Assert.True(
             propertyEvents.Count >= 8,
@@ -744,7 +744,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
 
         // Verify Relationship Lifecycle events
         var relationshipLifecycleEvents = allEvents
-            .Where(e => e.Type == "Konnektr.DigitalTwins.Relationship.Lifecycle")
+            .Where(e => e.Type == "Konnektr.Graph.Relationship.Lifecycle")
             .ToList();
         Assert.True(
             relationshipLifecycleEvents.Count >= 3,
@@ -835,7 +835,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         }
 
         // Step 2: Create some initial twins and relationships using regular API calls
-        var earthTwin = new BasicDigitalTwin
+        var earthTwin = new SdkBasicDigitalTwin
         {
             Id = "earth",
             Metadata = { ModelId = "dtmi:com:contoso:Planet;1" },
@@ -847,14 +847,14 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
             },
         };
 
-        var moonTwin = new BasicDigitalTwin
+        var moonTwin = new SdkBasicDigitalTwin
         {
             Id = "moon",
             Metadata = { ModelId = "dtmi:com:contoso:Moon;1" },
             Contents = { ["name"] = "Moon", ["mass"] = 7.342e10 },
         };
 
-        var marsTwin = new BasicDigitalTwin
+        var marsTwin = new SdkBasicDigitalTwin
         {
             Id = "mars",
             Metadata = { ModelId = "dtmi:com:contoso:Planet;1" },
@@ -871,7 +871,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         await Client.CreateOrReplaceDigitalTwinAsync(marsTwin.Id, marsTwin);
 
         // Create a satellite relationship between Earth and Moon
-        var satelliteRelationship = new BasicRelationship
+        var satelliteRelationship = new SdkBasicRelationship
         {
             Id = "earth_moon_satellite",
             SourceId = "earth",
@@ -956,34 +956,34 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
 
         // Event Notification Events
         var twinCreateEvents = allEvents
-            .Where(e => e.Type == "Konnektr.DigitalTwins.Twin.Create")
+            .Where(e => e.Type == "Konnektr.Graph.Twin.Create")
             .ToList();
         var twinUpdateEvents = allEvents
-            .Where(e => e.Type == "Konnektr.DigitalTwins.Twin.Update")
+            .Where(e => e.Type == "Konnektr.Graph.Twin.Update")
             .ToList();
         var relationshipCreateEvents = allEvents
-            .Where(e => e.Type == "Konnektr.DigitalTwins.Relationship.Create")
+            .Where(e => e.Type == "Konnektr.Graph.Relationship.Create")
             .ToList();
         var relationshipUpdateEvents = allEvents
-            .Where(e => e.Type == "Konnektr.DigitalTwins.Relationship.Update")
+            .Where(e => e.Type == "Konnektr.Graph.Relationship.Update")
             .ToList();
 
         // Data History Events
         var twinLifecycleEvents = allEvents
-            .Where(e => e.Type == "Konnektr.DigitalTwins.Twin.Lifecycle")
+            .Where(e => e.Type == "Konnektr.Graph.Twin.Lifecycle")
             .ToList();
         var twinPropertyEvents = allEvents
             .Where(e =>
-                e.Type == "Konnektr.DigitalTwins.Property.Event"
+                e.Type == "Konnektr.Graph.Property.Event"
                 && e.Subject?.Contains("/relationships/") == false
             )
             .ToList();
         var relationshipLifecycleEvents = allEvents
-            .Where(e => e.Type == "Konnektr.DigitalTwins.Relationship.Lifecycle")
+            .Where(e => e.Type == "Konnektr.Graph.Relationship.Lifecycle")
             .ToList();
         var relationshipPropertyEvents = allEvents
             .Where(e =>
-                e.Type == "Konnektr.DigitalTwins.Property.Event"
+                e.Type == "Konnektr.Graph.Property.Event"
                 && e.Subject?.Contains("/relationships/") == true
             )
             .ToList();
@@ -1109,7 +1109,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         }
 
         var uniqueTwinId = $"temp_sensor_{Guid.NewGuid():N}";
-        var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(
+        var digitalTwin = JsonSerializer.Deserialize<SdkBasicDigitalTwin>(
             SampleData.TwinTemperatureSensor1
         );
         digitalTwin!.Id = uniqueTwinId;
@@ -1195,7 +1195,9 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         }
 
         var uniqueTwinId = $"planet_{Guid.NewGuid():N}";
-        var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinPlanetEarth);
+        var digitalTwin = JsonSerializer.Deserialize<SdkBasicDigitalTwin>(
+            SampleData.TwinPlanetEarth
+        );
         digitalTwin!.Id = uniqueTwinId;
 
         // Ensure the deepestCrater component exists (Planet model has this component)
@@ -1282,7 +1284,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         }
 
         var uniqueTwinId = $"temp_sensor_{Guid.NewGuid():N}";
-        var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(
+        var digitalTwin = JsonSerializer.Deserialize<SdkBasicDigitalTwin>(
             SampleData.TwinTemperatureSensor1
         );
         digitalTwin!.Id = uniqueTwinId;
@@ -1389,7 +1391,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
             var twinId = $"sensor_{i}_{Guid.NewGuid():N}";
             twinIds.Add(twinId);
 
-            var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(
+            var digitalTwin = JsonSerializer.Deserialize<SdkBasicDigitalTwin>(
                 SampleData.TwinTemperatureSensor1
             );
             digitalTwin!.Id = twinId;
@@ -1466,7 +1468,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         }
 
         var uniqueTwinId = $"time_sensor_{Guid.NewGuid():N}";
-        var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(
+        var digitalTwin = JsonSerializer.Deserialize<SdkBasicDigitalTwin>(
             SampleData.TwinTemperatureSensor1
         );
         digitalTwin!.Id = uniqueTwinId;

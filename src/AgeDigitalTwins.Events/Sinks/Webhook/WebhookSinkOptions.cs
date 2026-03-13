@@ -5,7 +5,7 @@ namespace AgeDigitalTwins.Events.Sinks.Webhook;
 public class WebhookSinkOptions : SinkOptions
 {
     public required string Url { get; set; }
-    
+
     // Auth Types: "None", "Basic", "Bearer", "ApiKey"
     // AuthenticationType is inherited from base
 
@@ -20,7 +20,7 @@ public class WebhookSinkOptions : SinkOptions
     // API Key (Header)
     public string? HeaderName { get; set; }
     public string? HeaderValue { get; set; }
-    
+
     // OAuth
     public string? TokenEndpoint { get; set; }
     public string? ClientId { get; set; }

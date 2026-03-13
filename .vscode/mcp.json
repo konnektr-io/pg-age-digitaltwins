@@ -1,0 +1,9 @@
+{
+  "servers": {
+    "konnektr-codebase-8td9": {
+      "url": "https://mcp.graph.konnektr.io/mcp?resource_id=konnektr-codebase-8td9",
+      "type": "http"
+    }
+  },
+  "inputs": []
+}

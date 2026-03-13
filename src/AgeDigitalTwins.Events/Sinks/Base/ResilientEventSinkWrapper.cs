@@ -1,6 +1,6 @@
-using CloudNative.CloudEvents;
 using AgeDigitalTwins.Events.Abstractions;
 using AgeDigitalTwins.Events.Core.Services;
+using CloudNative.CloudEvents;
 
 namespace AgeDigitalTwins.Events.Sinks.Base;
 

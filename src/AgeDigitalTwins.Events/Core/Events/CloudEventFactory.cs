@@ -12,12 +12,12 @@ public static class CloudEventFactory
     public static readonly Dictionary<SinkEventType, string> DefaultEventNotificationTypeMapping =
         new()
         {
-            { SinkEventType.TwinCreate, "Konnektr.DigitalTwins.Twin.Create" },
-            { SinkEventType.TwinUpdate, "Konnektr.DigitalTwins.Twin.Update" },
-            { SinkEventType.TwinDelete, "Konnektr.DigitalTwins.Twin.Delete" },
-            { SinkEventType.RelationshipCreate, "Konnektr.DigitalTwins.Relationship.Create" },
-            { SinkEventType.RelationshipUpdate, "Konnektr.DigitalTwins.Relationship.Update" },
-            { SinkEventType.RelationshipDelete, "Konnektr.DigitalTwins.Relationship.Delete" },
+            { SinkEventType.TwinCreate, "Konnektr.Graph.Twin.Create" },
+            { SinkEventType.TwinUpdate, "Konnektr.Graph.Twin.Update" },
+            { SinkEventType.TwinDelete, "Konnektr.Graph.Twin.Delete" },
+            { SinkEventType.RelationshipCreate, "Konnektr.Graph.Relationship.Create" },
+            { SinkEventType.RelationshipUpdate, "Konnektr.Graph.Relationship.Update" },
+            { SinkEventType.RelationshipDelete, "Konnektr.Graph.Relationship.Delete" },
             { SinkEventType.Telemetry, "Konnektr.IoT.Telemetry" },
         };
 
@@ -25,9 +25,9 @@ public static class CloudEventFactory
     public static readonly Dictionary<SinkEventType, string> DefaultDataHistoryTypeMapping =
         new()
         {
-            { SinkEventType.PropertyEvent, "Konnektr.DigitalTwins.Property.Event" },
-            { SinkEventType.TwinLifecycle, "Konnektr.DigitalTwins.Twin.Lifecycle" },
-            { SinkEventType.RelationshipLifecycle, "Konnektr.DigitalTwins.Relationship.Lifecycle" },
+            { SinkEventType.PropertyEvent, "Konnektr.Graph.Property.Event" },
+            { SinkEventType.TwinLifecycle, "Konnektr.Graph.Twin.Lifecycle" },
+            { SinkEventType.RelationshipLifecycle, "Konnektr.Graph.Relationship.Lifecycle" },
         };
 
     #region EventNotification

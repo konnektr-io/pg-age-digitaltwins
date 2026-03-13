@@ -1,121 +1,99 @@
-# AgeDigitalTwins MCP Server
+---
+title: Model Context Protocol (MCP) Server
+icon: Cpu
+---
 
-The AgeDigitalTwins MCP Server allows LLMs to interact with a semantic graph memory based on Azure Digital Twins (DTDL) and Apache AGE (PostgreSQL). This enables building "self-healing" AI memory systems that enforce data schema and support hybrid vector search.
+# Connecting to the Model Context Protocol (MCP) Server
 
-## Authentication & Authorization
+The Model Context Protocol (MCP) provides a standardized way for AI models and agents to interact with external tools and services. Konnektr Graph includes a built-in MCP server that exposes the Digital Twin capabilities as a set of tools that an AI agent can use.
 
-The MCP Server uses OAuth 2.1 with JWT Bearer tokens for authentication and policy-based authorization for access control.
+This allows an AI to directly query, create, update, and manage your digital twin graph in a structured and validated way.
 
-### Requirements
+## Endpoint and Connection
 
-To access the MCP server, clients must provide:
+The shared MCP server is a single endpoint for all Konnektr Graph instances. You specify which graph instance you want to connect to by using the `resource_id` query parameter.
 
-1. **OAuth Scope**: `mcp:tools` - Required by the MCP OAuth 2.1 specification (RFC 9728)
-2. **Permission**: `mcp/*` - Application-level permission to access MCP tools
-
-### How It Works
-
+**Endpoint URL:**
 ```
-Request with JWT Token
-  ↓
-1. JWT Authentication - Validates token from Auth0
-  ↓
-2. OAuth Scope Check - Verifies "mcp:tools" scope (MCP-specific)
-  ↓
-3. Permission Check - Verifies "mcp/*" permission (policy-based)
-  ↓
-4. Tool Execution
+https://mcp.graph.konnektr.io/mcp?resource_id={your-resource-id}
 ```
 
-For detailed information about the authorization architecture, see [Authorization Architecture](/docs/advanced-topics/authorization-architecture).
+- **`{your-resource-id}`**: The unique identifier for your Konnektr Graph instance.
+- **Transport**: The server supports `http_stream` (also known as Server-Sent Events or SSE).
 
-### Configuration
+## Authentication
+
+The MCP server uses **OAuth 2.1 with Dynamic Client Registration**, as described in the [official MCP documentation](https://modelcontextprotocol.io/docs/tutorials/security/authorization).
+
+This is a secure, user-friendly approach that **does not require you to manually manage `client_id` or `client_secret`**. When your MCP client connects for the first time, it will be guided through a one-time browser-based authorization flow to grant access.
+
+## Connecting with `npx mcp-remote`
+
+For MCP clients that do not natively support remote HTTP endpoints or the OAuth 2.1 flow (e.g., some versions of Claude Desktop), you can use the `mcp-remote` tool to create a secure local proxy.
+
+### Client Configuration Example (Claude Desktop)
+
+Here is an example of how to configure a compatible MCP client, such as Claude Desktop:
 
 ```json
 {
-  "Authentication": {
-    "Enabled": true,
-    "Authority": "https://auth.konnektr.io",
-    "Audience": "https://graph.konnektr.io",
-    "Issuer": "https://auth.konnektr.io/"
-  },
-  "Authorization": {
-    "Enabled": true,
-    "Provider": "Claims",
-    "PermissionsClaimName": "permissions",
-    "RequiredScopes": ["mcp:tools"],
-    "ScopesSupported": ["mcp:tools", "mcp:resources"]
+  "mcpServers": {
+    "konnektr": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://mcp.graph.konnektr.io/mcp?resource_id=your-resource-id"]
+    }
   }
 }
 ```
+The client only needs to know the URL and that the authentication type is `oauth2`. The rest is handled automatically.
 
-### OAuth Discovery
+### Claude CLI Configuration
 
-The server implements RFC 9728 (Protected Resource Metadata) at `/.well-known/oauth-protected-resource` for OAuth client discovery.
+To add the Konnektr Graph MCP server to your Claude CLI, use the following command:
 
-## Features
+```bash
+claude mcp add konnektr --transport http https://mcp.graph.konnektr.io/mcp?resource_id=your-resource-id
+```
 
-### 1. Model Management
-The server provides tools to understand the semantic data model:
-- `GetModels`: Returns a lightweight summary of available models (ID and Display Name). Use this to explore the domain.
-- `GetModel`: Returns the **fully flattened** DTDL definition of a specific model. This includes all inherited properties, relationships, and components from base models, giving the LLM a complete view of the schema without needing to traverse the inheritance hierarchy manually.
-- `SearchModels`: Performs a hybrid search (semantic vector + lexical keyword) to find relevant models.
-- `CreateModels`: Allows creating new DTDL models.
-- `UpdateModelEmbedding`: Updates the vector embedding for a model to enable semantic search.
+This command sets up the connection named `konnektr` using HTTP transport to the specified MCP endpoint.
 
-### 2. Cypher Query Generation
-The server is designed to help LLMs generate optimized Cypher queries for Apache AGE.
-- **Nodes**: Digital Twins always have the `:Twin` label. Models have the `:Model` label.
-- **Inheritance**: To query twins of a specific model *and* its sub-types, use the optimized pattern:
-  ```cypher
-  MATCH (m1:Model {id: 'dtmi:example:TargetModel;1'})<-[:_extends*0..]-(m2:Model)
-  WITH collect(m2.id) AS model_ids
-  MATCH (t:Twin)
-  WHERE t.`$metadata`.`$model` IN model_ids
-  RETURN t
-  ```
-- **Validation**: The system enforces DTDL schema validation on all writes (`CreateOrReplaceDigitalTwin`, `UpdateDigitalTwin`), ensuring data integrity.
 
-### 3. Vector / Hybrid Search
-The system supports semantic search using `pgvector`.
-- **Definition**: Vector properties are defined in DTDL as `Array<Double>` with a semantic description (e.g., "embedding").
-- **Search Tool**: Use the `HybridMemorySearch` tool to perform similarity searches combined with metadata filtering.
-- **Manual Query**: 
-  ```cypher
-  MATCH (t:Twin)
-  WHERE t.`$metadata`.`$model` = 'dtmi:example:MyModel;1'
-  RETURN t
-  ORDER BY l2_distance(t.embedding, [0.1, 0.2, ...]::vector) ASC
-  LIMIT 5
-  ```
+### Gemini CLI Configuration
+For Gemini CLI, you can add the MCP server with a similar command:
 
-### 4. Graph Exploration
-- `ExploreGraphNeighborhood`: Quickly retrieve the subgraph surrounding a specific twin to understand context.
+```bash
+gemini mcp add konnektr --transport http https://mcp.graph.konnektr.io/mcp?resource_id=your-resource-id
+```
 
-## Usage Guide for Agents
+## Available Tools
 
-### Prerequisites
+When an AI agent connects to the MCP server, it gains access to a suite of tools to interact with the digital twin graph.
 
-Before using the MCP server, ensure you have:
-- Valid OAuth 2.1 JWT token from Auth0
-- `mcp:tools` scope in your token
-- `mcp/*` permission in your token claims
+### Model Management
+- **`create_model`**: Creates a new DTDL model.
+- **`delete_model`**: Deletes a DTDL model.
+- **`get_model`**: Retrieves the full definition of a single DTDL model.
+- **`list_models`**: Lists all DTDL models in the graph.
+- **`search_models`**: Searches for DTDL models.
 
-### Workflow
+### Digital Twin Management
+- **`create_or_replace_digital_twin`**: Creates or replaces a digital twin.
+- **`delete_digital_twin`**: Deletes a digital twin.
+- **`get_digital_twin`**: Retrieves a digital twin by its ID.
+- **`update_digital_twin`**: Updates a twin's properties using a JSON Patch.
+- **`search_digital_twins`**: Performs a semantic search for twins.
 
-1. **Understand the Domain**: Call `GetModels` to see what types of entities exist.
-2. **Inspect Schema**: Call `GetModel(modelId)` to understand the properties and relationships of a specific type.
-3. **Search**: 
-   - Use `HybridMemorySearch` if you have a vector or need semantic similarity.
-   - Use `ExploreGraphNeighborhood` to walk the graph.
-   - For complex queries, generate Cypher using the `GenerateQueryPrompt` guidance.
+### Relationship Management
+- **`create_or_replace_relationship`**: Creates or replaces a relationship between two twins.
+- **`delete_relationship`**: Deletes a relationship.
+- **`get_relationship`**: Retrieves a specific relationship.
+- **`list_relationships`**: Lists all outgoing relationships from a twin.
+- **`update_relationship`**: Updates a relationship's properties using a JSON Patch.
 
-### Error Handling
+### Querying
+- **`query_digital_twins`**: Executes a Cypher query against the graph.
 
-The server returns standard OAuth 2.1 error responses:
-
-- **401 Unauthorized**: Missing or invalid JWT token
-- **403 Forbidden (insufficient_scope)**: Missing required OAuth scope
-- **403 Forbidden**: Missing required permission
-
-All responses include the `/.well-known/oauth-protected-resource` URL for client configuration discovery.
+## See Also
+- [How-to Guide: Build a Business Twin with MCP](/how-to-guides/mcp-server-business-twin)
+- [Digital Twins Definition Language (DTDL)](/concepts/dtdl)
+- [Querying the Graph](/concepts/querying)

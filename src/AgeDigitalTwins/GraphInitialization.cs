@@ -105,22 +105,17 @@ public static class GraphInitialization
                     END;
 
                     -- Fallback: legacy inheritance traversal for backward compatibility
-                    -- (models created before descendants field was added)
-                    RETURN EXISTS (
-                        WITH RECURSIVE ancestors AS (
-                            SELECT m.id AS internal_id,
-                                   ag_catalog.agtype_access_operator(m.properties,'""id""'::agtype) AS mid
-                            FROM {graphName}.""Model"" m
-                            WHERE ag_catalog.agtype_access_operator(m.properties,'""id""'::agtype) = twin_model_id
-                            UNION ALL
-                            SELECT parent.id,
-                                   ag_catalog.agtype_access_operator(parent.properties,'""id""'::agtype) AS mid
-                            FROM ancestors a
-                            JOIN {graphName}.""_extends"" e ON e.start_id = a.internal_id
-                            JOIN {graphName}.""Model"" parent ON parent.id = e.end_id
-                        )
-                        SELECT 1 FROM ancestors WHERE mid = model_id
-                    );
+                    -- (models without descendants field)
+                    -- Check inheritance via bases array
+                    EXECUTE format('SELECT m FROM ag_catalog.cypher(''{graphName}'', $$
+                        MATCH (m:Model)
+                        WHERE %s IN m.bases
+                        RETURN collect(m.id)
+                    $$) AS (m agtype)', model_id)
+                    INTO model_descendants;
+                    
+                    -- Check if twin's model ID is in the collected models array
+                    RETURN model_descendants @> ag_catalog.agtype_build_list(twin_model_id);
                 END;
                 $function$"
             ),
@@ -240,7 +235,7 @@ public static class GraphInitialization
                 $$ LANGUAGE plpgsql;"
             ),
             new(
-                // NOTE: This function returns the model id itself plus its descendants. Consider renaming to model_and_descendants for clarity.
+                // NOTE: This function returns the model id itself plus its descendants.
                 @$"CREATE OR REPLACE FUNCTION {graphName}.model_and_descendants(model_id agtype)
                 RETURNS agtype
                 LANGUAGE plpgsql

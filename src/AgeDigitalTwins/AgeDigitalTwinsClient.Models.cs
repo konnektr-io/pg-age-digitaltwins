@@ -11,6 +11,7 @@ using AgeDigitalTwins.Models;
 using DTDLParser;
 using DTDLParser.Models;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
 using Npgsql;
 using Npgsql.Age;
 using Npgsql.Age.Types;
@@ -85,6 +86,7 @@ MATCH (m:Model {{id: dependency}})
     /// <exception cref="ModelNotFoundException">Thrown when the model with the specified ID is not found.</exception>
     public virtual async Task<DigitalTwinsModelData> GetModelAsync(
         string modelId,
+        GetModelOptions? options = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -93,24 +95,128 @@ MATCH (m:Model {{id: dependency}})
 
         try
         {
-            string cypher = $@"MATCH (m:Model {{id: '{modelId}'}}) RETURN m";
+            // Fetch the main model first
+            string mainCypher = $@"MATCH (m:Model {{id: '{modelId}'}}) RETURN m";
             await using var connection = await _dataSource.OpenConnectionAsync(
                 TargetSessionAttributes.PreferStandby,
                 cancellationToken
             );
-            await using var command = connection.CreateCypherCommand(_graphName, cypher);
+            await using var command = connection.CreateCypherCommand(_graphName, mainCypher);
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-
+            DigitalTwinsModelData? mainModel = null;
             if (await reader.ReadAsync(cancellationToken))
             {
                 var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
                 var vertex = (Vertex)agResult;
-                return new DigitalTwinsModelData(vertex.Properties);
+                mainModel = new DigitalTwinsModelData(vertex.Properties);
             }
             else
             {
                 throw new ModelNotFoundException($"Model with ID {modelId} not found");
             }
+            reader.Close();
+
+            if (mainModel == null)
+            {
+                throw new ModelNotFoundException($"Model with ID {modelId} not found");
+            }
+
+            if (options?.IncludeBaseModelContents == true)
+            {
+                // Helper to extract contents by type from DtdlModel
+                List<JsonElement> ExtractContentsByType(
+                    DigitalTwinsModelData model,
+                    string typeName
+                )
+                {
+                    var result = new List<JsonElement>();
+                    if (model.DtdlModelJson.HasValue)
+                    {
+                        var dtdl = model.DtdlModelJson.Value;
+                        JsonElement contents;
+                        if (dtdl.TryGetProperty("contents", out contents))
+                        {
+                            if (contents.ValueKind == JsonValueKind.Object)
+                            {
+                                // Single content as object
+                                if (ContentHasType(contents, typeName))
+                                    result.Add(contents);
+                            }
+                            else if (contents.ValueKind == JsonValueKind.Array)
+                            {
+                                foreach (var item in contents.EnumerateArray())
+                                {
+                                    if (ContentHasType(item, typeName))
+                                        result.Add(item);
+                                }
+                            }
+                        }
+                    }
+                    return result;
+                }
+
+                // Helper to check if a content has a type (handles string or array)
+                bool ContentHasType(JsonElement content, string typeName)
+                {
+                    if (content.TryGetProperty("@type", out var typeProp))
+                    {
+                        if (typeProp.ValueKind == JsonValueKind.String)
+                            return typeProp.GetString() == typeName;
+                        if (typeProp.ValueKind == JsonValueKind.Array)
+                            return typeProp.EnumerateArray().Any(e => e.GetString() == typeName);
+                    }
+                    return false;
+                }
+
+                // Helper to merge all contents of a given type from all models
+                List<JsonElement>? MergeContents(
+                    IEnumerable<DigitalTwinsModelData> models,
+                    string typeName
+                )
+                {
+                    var allContents = new List<JsonElement>();
+                    foreach (var m in models)
+                    {
+                        allContents.AddRange(ExtractContentsByType(m, typeName));
+                    }
+                    if (allContents.Count == 0)
+                        return null;
+                    return allContents;
+                }
+
+                var allModels = new List<DigitalTwinsModelData> { mainModel };
+
+                // If there are bases, fetch and add them
+                if (mainModel.Bases != null && mainModel.Bases.Length > 0)
+                {
+                    string basesList = $"['{string.Join("','", mainModel.Bases)}']";
+                    string cypher = $@"MATCH (m:Model) WHERE m.id IN {basesList} RETURN m";
+                    await using var baseCommand = connection.CreateCypherCommand(
+                        _graphName,
+                        cypher
+                    );
+                    await using var baseReader = await baseCommand.ExecuteReaderAsync(
+                        cancellationToken
+                    );
+                    var baseModels = new List<DigitalTwinsModelData>();
+                    while (await baseReader.ReadAsync(cancellationToken))
+                    {
+                        var agResult = await baseReader.GetFieldValueAsync<Agtype?>(0);
+                        var vertex = (Vertex)agResult;
+                        baseModels.Add(new DigitalTwinsModelData(vertex.Properties));
+                    }
+                    baseReader.Close();
+                    allModels.AddRange(baseModels);
+                }
+
+                mainModel.Properties = MergeContents(allModels, "Property");
+                mainModel.Relationships = MergeContents(allModels, "Relationship");
+                mainModel.Components = MergeContents(allModels, "Component");
+                mainModel.Telemetries = MergeContents(allModels, "Telemetry");
+                mainModel.Commands = MergeContents(allModels, "Command");
+            }
+
+            return mainModel;
         }
         catch (Exception ex)
         {
@@ -149,7 +255,7 @@ MATCH (m:Model {{id: dependency}})
 
         try
         {
-            var objectModel = await _modelParser.ParseAsync(
+            IReadOnlyDictionary<Dtmi, DTEntityInfo>? objectModel = await _modelParser.ParseAsync(
                 ConvertToAsyncEnumerable(dtdlModels),
                 cancellationToken: cancellationToken
             );
@@ -157,7 +263,7 @@ MATCH (m:Model {{id: dependency}})
             // Dictionary to track descendants: key = base model ID, value = list of models that extend it
             var descendantsMap = new Dictionary<string, HashSet<string>>();
 
-            IEnumerable<DigitalTwinsModelData> modelDatas = dtdlModels
+            List<DigitalTwinsModelData> modelDatas = dtdlModels
                 .Select(dtdlModel =>
                 {
                     // Prepare the bases array to store all bases (dtmis that the interface extends from)
@@ -195,7 +301,7 @@ MATCH (m:Model {{id: dependency}})
                 })
                 .ToList(); // Materialize to ensure descendantsMap is fully populated
 
-            // Now assign descendants to each model
+            // Now assign descendants to each model in the current batch
             foreach (var modelData in modelDatas)
             {
                 if (descendantsMap.TryGetValue(modelData.Id, out var descendants))
@@ -207,96 +313,115 @@ MATCH (m:Model {{id: dependency}})
                     modelData.Descendants = Array.Empty<string>();
                 }
             }
-            // This is needed as after unwinding, it gets converted to agtype again
-            string modelsString =
-                $"['{string.Join("','", modelDatas.Select(m => JsonSerializer.Serialize(m, serializerOptions).Replace("'", "\\'")))}']";
 
-            // It is not possible to update or overwrite an existing model
-            // Trying so will raise a unique constraint violation
-            string cypher =
-                $@"UNWIND {modelsString} as model
-WITH model::cstring::agtype as modelAgtype
-CREATE (m:Model {{id: modelAgtype.id}})
-SET m = modelAgtype
-RETURN m";
+            // Identify base models that need descendants updates but aren't in current batch
+            var currentModelIds = new HashSet<string>(modelDatas.Select(m => m.Id));
+            var baseModelsToUpdate = descendantsMap
+                .Keys.Where(baseModelId => !currentModelIds.Contains(baseModelId))
+                .ToDictionary(
+                    baseModelId => baseModelId,
+                    baseModelId => descendantsMap[baseModelId]
+                );
 
-            await using var connection = await _dataSource.OpenConnectionAsync(
-                TargetSessionAttributes.ReadWrite,
-                cancellationToken
-            );
-            await using var command = connection.CreateCypherCommand(_graphName, cypher);
-
-            List<DigitalTwinsModelData> result = [];
-            await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
-            {
-                int k = 0;
-                while (await reader.ReadAsync(cancellationToken))
-                {
-                    var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
-                    var vertex = (Vertex)agResult;
-                    result.Add(new DigitalTwinsModelData(vertex.Properties));
-                    k++;
-                }
-
-                reader.Close();
-            }
-
-            List<string> relationshipNames = [];
+            // Pre-extract edge info and relationship names from the parsed object model
+            // so we can release it before the memory-intensive DB operations
+            var extendsEdges = new List<(string sourceId, string targetId)>();
+            var componentEdges = new List<(string sourceId, string targetId)>();
+            var relationshipNames = new HashSet<string>();
 
             foreach (var entityInfoKv in objectModel)
             {
-                if (entityInfoKv.Value is DTInterfaceInfo dTInterfaceInfo)
+                if (entityInfoKv.Value is DTInterfaceInfo iface)
                 {
-                    // Add edges for dependencies based on the 'extends' field
-                    if (dTInterfaceInfo.Extends != null && dTInterfaceInfo.Extends.Count > 0)
+                    if (iface.Extends != null && iface.Extends.Count > 0)
                     {
-                        // Get extends and create relationships
-                        foreach (var extend in dTInterfaceInfo.Extends)
+                        foreach (var extend in iface.Extends)
                         {
-                            string extendsCypher =
-                                $@"MATCH (m:Model), (m2:Model)
-                                WHERE m.id = '{dTInterfaceInfo
-                                .Id.AbsoluteUri}' AND m2.id = '{extend.Id.AbsoluteUri}'
-                                CREATE (m)-[:_extends]->(m2)";
-                            await using var extendsCommand = connection.CreateCypherCommand(
-                                _graphName,
-                                extendsCypher
-                            );
-                            // TODO: run these as batch commands
-                            await extendsCommand.ExecuteNonQueryAsync(cancellationToken);
+                            extendsEdges.Add((iface.Id.AbsoluteUri, extend.Id.AbsoluteUri));
                         }
                     }
 
-                    // Add edges for dependencies based on the 'schema' field of components
-                    if (dTInterfaceInfo.Components != null && dTInterfaceInfo.Components.Count > 0)
+                    if (iface.Components != null && iface.Components.Count > 0)
                     {
-                        foreach (var component in dTInterfaceInfo.Components.Values)
+                        foreach (var component in iface.Components.Values)
                         {
                             if (component.Schema != null && component.Schema.Id != null)
                             {
-                                string hasComponentCypher =
-                                    $@"MATCH (m:Model), (m2:Model)
-                                    WHERE m.id = '{dTInterfaceInfo
-                                    .Id.AbsoluteUri}' AND m2.id = '{component.Schema.Id.AbsoluteUri}'
-                                    CREATE (m)-[:_hasComponent]->(m2)";
-
-                                await using var hasComponentCommand =
-                                    connection.CreateCypherCommand(_graphName, hasComponentCypher);
-                                await hasComponentCommand.ExecuteNonQueryAsync(cancellationToken);
+                                componentEdges.Add(
+                                    (iface.Id.AbsoluteUri, component.Schema.Id.AbsoluteUri)
+                                );
                             }
                         }
                     }
                 }
 
-                // Collect all relationship names so we can prepare the edge labels with replication full
                 if (entityInfoKv.Value is DTRelationshipInfo dTRelationshipInfo)
                 {
-                    if (relationshipNames.Contains(dTRelationshipInfo.Name))
-                    {
-                        continue;
-                    }
                     relationshipNames.Add(dTRelationshipInfo.Name);
                 }
+            }
+
+            // Release the large parsed object model to free memory before DB operations
+            objectModel = null;
+
+            await using var connection = await _dataSource.OpenConnectionAsync(
+                TargetSessionAttributes.ReadWrite,
+                cancellationToken
+            );
+
+            // Insert models in batches to avoid building a single enormous Cypher query string.
+            // The DTDL parser above still receives all models at once for dependency resolution.
+            const int insertBatchSize = 500;
+            for (int batchStart = 0; batchStart < modelDatas.Count; batchStart += insertBatchSize)
+            {
+                var batch = modelDatas.GetRange(
+                    batchStart,
+                    Math.Min(insertBatchSize, modelDatas.Count - batchStart)
+                );
+
+                // This is needed as after unwinding, it gets converted to agtype again
+                string modelsString =
+                    $"['{string.Join("','", batch.Select(m => JsonSerializer.Serialize(m, serializerOptions).Replace("'", "\\'")))}']";
+
+                // It is not possible to update or overwrite an existing model
+                // Trying so will raise a unique constraint violation
+                string cypher =
+                    $@"UNWIND {modelsString} as model
+WITH model::cstring::agtype as modelAgtype
+CREATE (m:Model {{id: modelAgtype.id}})
+SET m = modelAgtype";
+
+                await using var command = connection.CreateCypherCommand(_graphName, cypher);
+                await command.ExecuteNonQueryAsync(cancellationToken);
+            }
+
+            // Create extends edges using pre-extracted data
+            foreach (var (sourceId, targetId) in extendsEdges)
+            {
+                string extendsCypher =
+                    $@"MATCH (m:Model), (m2:Model)
+                                WHERE m.id = '{sourceId}' AND m2.id = '{targetId}'
+                                CREATE (m)-[:_extends]->(m2)";
+                await using var extendsCommand = connection.CreateCypherCommand(
+                    _graphName,
+                    extendsCypher
+                );
+                // TODO: run these as batch commands
+                await extendsCommand.ExecuteNonQueryAsync(cancellationToken);
+            }
+
+            // Create component edges using pre-extracted data
+            foreach (var (sourceId, targetId) in componentEdges)
+            {
+                string hasComponentCypher =
+                    $@"MATCH (m:Model), (m2:Model)
+                                    WHERE m.id = '{sourceId}' AND m2.id = '{targetId}'
+                                    CREATE (m)-[:_hasComponent]->(m2)";
+                await using var hasComponentCommand = connection.CreateCypherCommand(
+                    _graphName,
+                    hasComponentCypher
+                );
+                await hasComponentCommand.ExecuteNonQueryAsync(cancellationToken);
             }
 
             // Run create elabels and then set replication on the new table for each relationship name to ensure replication full
@@ -328,7 +453,70 @@ RETURN m";
                 await setReplicationCommand.ExecuteNonQueryAsync(cancellationToken);
             }
 
-            return result;
+            // Update descendants for existing base models that aren't in the current batch
+            if (baseModelsToUpdate.Count > 0)
+            {
+                foreach (var (baseModelId, newDescendants) in baseModelsToUpdate)
+                {
+                    // Fetch current descendants from the database
+                    string fetchCypher =
+                        $@"
+                        MATCH (m:Model {{id: '{baseModelId}'}})
+                        RETURN m.descendants";
+
+                    await using var fetchCommand = connection.CreateCypherCommand(
+                        _graphName,
+                        fetchCypher
+                    );
+
+                    HashSet<string> existingDescendants = new HashSet<string>();
+                    await using (
+                        var reader = await fetchCommand.ExecuteReaderAsync(cancellationToken)
+                    )
+                    {
+                        if (await reader.ReadAsync(cancellationToken))
+                        {
+                            var descendantsAgtype = await reader.GetFieldValueAsync<Agtype?>(
+                                0,
+                                cancellationToken
+                            );
+                            if (descendantsAgtype != null)
+                            {
+                                var descendantsList = descendantsAgtype.Value.GetList();
+                                foreach (var desc in descendantsList)
+                                {
+                                    if (desc is string descStr)
+                                    {
+                                        existingDescendants.Add(descStr);
+                                    }
+                                }
+                            }
+                        }
+                    } // Reader is disposed here, closing it before the update command
+
+                    // Merge with new descendants
+                    existingDescendants.UnionWith(newDescendants);
+
+                    // Update the model with merged descendants
+                    var mergedDescendantsJson = JsonSerializer.Serialize(
+                        existingDescendants.ToArray(),
+                        serializerOptions
+                    );
+                    string updateCypher =
+                        $@"
+                        MATCH (m:Model {{id: '{baseModelId}'}})
+                        SET m.descendants = '{mergedDescendantsJson.Replace("'", "\\'")}'::cstring::agtype
+                        RETURN m";
+
+                    await using var updateCommand = connection.CreateCypherCommand(
+                        _graphName,
+                        updateCypher
+                    );
+                    await updateCommand.ExecuteNonQueryAsync(cancellationToken);
+                }
+            }
+
+            return modelDatas;
         }
         catch (PostgresException ex) when (ex.ConstraintName == "model_id_idx")
         {
@@ -427,7 +615,9 @@ RETURN COUNT(m) AS deletedCount";
     /// </summary>
     /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
     /// <returns>A task that represents the asynchronous operation.</returns>
-    public virtual async Task DeleteAllModelsAsync(CancellationToken cancellationToken = default)
+    public virtual async Task<int> DeleteAllModelsAsync(
+        CancellationToken cancellationToken = default
+    )
     {
         using var activity = ActivitySource.StartActivity(
             "DeleteAllModelsAsync",
@@ -450,10 +640,7 @@ RETURN COUNT(m) AS deletedCount";
                 var agResult = await reader.GetFieldValueAsync<Agtype?>(0).ConfigureAwait(false);
                 rowsAffected = (int)agResult;
             }
-            if (rowsAffected <= 0)
-            {
-                throw new ModelNotFoundException($"No models found");
-            }
+            return rowsAffected;
         }
         catch (Exception ex)
         {
@@ -482,7 +669,7 @@ RETURN COUNT(m) AS deletedCount";
         if (_modelCacheExpiration == TimeSpan.Zero)
         {
             // If cache expiration is set to zero, do not use the cache
-            return await GetModelAsync(modelId, cancellationToken);
+            return await GetModelAsync(modelId, cancellationToken: cancellationToken);
         }
         return await _modelCache.GetOrCreateAsync(
             modelId,
@@ -495,7 +682,7 @@ RETURN COUNT(m) AS deletedCount";
                     }
                 );
 
-                return await GetModelAsync(modelId, cancellationToken);
+                return await GetModelAsync(modelId, cancellationToken: cancellationToken);
             }
         );
     }
@@ -581,6 +768,7 @@ RETURN COUNT(m) AS deletedCount";
 
         return modelId;
     }
+
     /// <summary>
     /// Retrieves a model with its schema flattened (including inherited properties, relationships, and components).
     /// </summary>
@@ -597,11 +785,12 @@ RETURN COUNT(m) AS deletedCount";
             ConvertToAsyncEnumerable(new[] { modelId }),
             cancellationToken: cancellationToken
         );
-        
-        var targetInterface = parsedModel.Values
-            .OfType<DTInterfaceInfo>()
-            .FirstOrDefault(i => i.Id == dtmi)
-            ?? throw new ModelNotFoundException($"Model {modelId} not found or is not an interface.");
+
+        var targetInterface =
+            parsedModel.Values.OfType<DTInterfaceInfo>().FirstOrDefault(i => i.Id == dtmi)
+            ?? throw new ModelNotFoundException(
+                $"Model {modelId} not found or is not an interface."
+            );
 
         var properties = new Dictionary<string, object>();
         var relationships = new Dictionary<string, object>();
@@ -625,7 +814,7 @@ RETURN COUNT(m) AS deletedCount";
                         name = prop.Name,
                         schema = prop.Schema.Id.AbsoluteUri,
                         description = prop.Description.Values.FirstOrDefault() ?? "",
-                        writable = prop.Writable
+                        writable = prop.Writable,
                     };
                 }
                 else if (content is DTRelationshipInfo rel)
@@ -638,7 +827,7 @@ RETURN COUNT(m) AS deletedCount";
                         properties = rel.Properties.ToDictionary(
                             p => p.Name,
                             p => new { schema = p.Schema.Id.AbsoluteUri }
-                        )
+                        ),
                     };
                 }
                 else if (content is DTComponentInfo comp)
@@ -647,7 +836,7 @@ RETURN COUNT(m) AS deletedCount";
                     {
                         name = comp.Name,
                         schema = comp.Schema.Id.AbsoluteUri,
-                        description = comp.Description.Values.FirstOrDefault() ?? ""
+                        description = comp.Description.Values.FirstOrDefault() ?? "",
                     };
                 }
             }
@@ -662,10 +851,9 @@ RETURN COUNT(m) AS deletedCount";
             ["description"] = targetInterface.Description.Values.FirstOrDefault() ?? "",
             ["properties"] = properties,
             ["relationships"] = relationships,
-            ["components"] = components
+            ["components"] = components,
         };
     }
-
 
     /// <summary>
     /// Updates the embedding for a specific model asynchronously.
@@ -680,12 +868,13 @@ RETURN COUNT(m) AS deletedCount";
     )
     {
         string vectorString = JsonSerializer.Serialize(embedding);
-        string cypher = $@"MATCH (m:Model {{id: '{modelId}'}}) SET m.embedding = {vectorString}::vector";
-        
+        string cypher =
+            $@"MATCH (m:Model {{id: '{modelId}'}}) SET m.embedding = {vectorString}::vector";
+
         await using var connection = await _dataSource.OpenConnectionAsync(
-             TargetSessionAttributes.ReadWrite,
-             cancellationToken
-         );
+            TargetSessionAttributes.ReadWrite,
+            cancellationToken
+        );
         await using var command = connection.CreateCypherCommand(_graphName, cypher);
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
@@ -707,26 +896,29 @@ RETURN COUNT(m) AS deletedCount";
     {
         if (string.IsNullOrWhiteSpace(query) && vector == null)
         {
-             // If no criteria, regular list with limit
-             var models = new List<DigitalTwinsModelData>();
-             await foreach(var m in GetModelsAsync(cancellationToken: cancellationToken))
-             {
-                 if (models.Count >= limit) break;
-                 if (m != null) models.Add(m);
-             }
-             return models;
+            // If no criteria, regular list with limit
+            var models = new List<DigitalTwinsModelData>();
+            await foreach (var m in GetModelsAsync(cancellationToken: cancellationToken))
+            {
+                if (models.Count >= limit)
+                    break;
+                if (m != null)
+                    models.Add(m);
+            }
+            return models;
         }
 
         string cypher;
         if (vector != null)
         {
-             string vectorString = JsonSerializer.Serialize(vector);
-             string whereClause = !string.IsNullOrWhiteSpace(query)
-                 ? $" WHERE (toLower(toString(m.displayName)) CONTAINS toLower('{query.Replace("'", "\\'")}') OR toLower(toString(m.description)) CONTAINS toLower('{query.Replace("'", "\\'")}') OR toLower(m.id) CONTAINS toLower('{query.Replace("'", "\\'")}' )) "
-                 : "";
-                 
-             // Hybrid: Vector + Filter
-             cypher = $@"
+            string vectorString = JsonSerializer.Serialize(vector);
+            string whereClause = !string.IsNullOrWhiteSpace(query)
+                ? $" WHERE (toLower(toString(m.displayName)) CONTAINS toLower('{query.Replace("'", "\\'")}') OR toLower(toString(m.description)) CONTAINS toLower('{query.Replace("'", "\\'")}') OR toLower(m.id) CONTAINS toLower('{query.Replace("'", "\\'")}' )) "
+                : "";
+
+            // Hybrid: Vector + Filter
+            cypher =
+                $@"
                 MATCH (m:Model)
                 {whereClause}
                 RETURN m
@@ -735,12 +927,13 @@ RETURN COUNT(m) AS deletedCount";
         }
         else
         {
-             // Lexical only
-             // Using CONTAINS (case-insensitive simulation via toLower)
-             // Note: m.displayName and m.description are maps, so toString(m.displayName) might result in valid JSON string which contains the value. 
-             // Ideally we should look into specific language values, but generic string check is a good approximation for 'CONTAINS'.
-             string q = query!.Replace("'", "\\'");
-             cypher = $@"
+            // Lexical only
+            // Using CONTAINS (case-insensitive simulation via toLower)
+            // Note: m.displayName and m.description are maps, so toString(m.displayName) might result in valid JSON string which contains the value.
+            // Ideally we should look into specific language values, but generic string check is a good approximation for 'CONTAINS'.
+            string q = query!.Replace("'", "\\'");
+            cypher =
+                $@"
                 MATCH (m:Model)
                 WHERE toLower(toString(m.displayName)) CONTAINS toLower('{q}') 
                    OR toLower(toString(m.description)) CONTAINS toLower('{q}')
@@ -750,25 +943,26 @@ RETURN COUNT(m) AS deletedCount";
         }
 
         await using var connection = await _dataSource.OpenConnectionAsync(
-             TargetSessionAttributes.PreferStandby,
-             cancellationToken
-         );
+            TargetSessionAttributes.PreferStandby,
+            cancellationToken
+        );
 
         await using var command = connection.CreateCypherCommand(_graphName, cypher);
-        
+
         var results = new List<DigitalTwinsModelData>();
-        try {
+        try
+        {
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
             {
-                 var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
-                 var vertex = (Vertex)agResult;
-                 results.Add(new DigitalTwinsModelData(vertex.Properties));
+                var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
+                var vertex = (Vertex)agResult;
+                results.Add(new DigitalTwinsModelData(vertex.Properties));
             }
         }
         catch (Exception)
         {
-            // Fallback or rethrow? 
+            // Fallback or rethrow?
             // If vector search fails (e.g., extensions not installed), we might bubble it up.
             throw;
         }

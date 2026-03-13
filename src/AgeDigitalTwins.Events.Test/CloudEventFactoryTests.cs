@@ -35,7 +35,7 @@ public class CloudEventFactoryTests
         // Assert
         Assert.Single(result);
         var cloudEvent = result[0];
-        Assert.Equal("Konnektr.DigitalTwins.Twin.Update", cloudEvent.Type);
+        Assert.Equal("Konnektr.Graph.Twin.Update", cloudEvent.Type);
         Assert.Equal("application/json", cloudEvent.DataContentType);
         Assert.Equal("twin1", cloudEvent.Subject);
         Assert.Equal(source, cloudEvent.Source);
@@ -252,7 +252,7 @@ public class CloudEventFactoryTests
         // Assert
         Assert.Single(result);
         var cloudEvent = result[0];
-        Assert.Equal("Konnektr.DigitalTwins.Twin.Lifecycle", cloudEvent.Type);
+        Assert.Equal("Konnektr.Graph.Twin.Lifecycle", cloudEvent.Type);
         Assert.Equal("application/json", cloudEvent.DataContentType);
         Assert.Equal("twin1", cloudEvent.Subject);
         Assert.Equal(source, cloudEvent.Source);
@@ -281,7 +281,7 @@ public class CloudEventFactoryTests
         // Assert
         Assert.Single(result);
         var cloudEvent = result[0];
-        Assert.Equal("Konnektr.DigitalTwins.Twin.Lifecycle", cloudEvent.Type);
+        Assert.Equal("Konnektr.Graph.Twin.Lifecycle", cloudEvent.Type);
         Assert.Equal("application/json", cloudEvent.DataContentType);
         Assert.Equal("twin1", cloudEvent.Subject);
         Assert.Equal(source, cloudEvent.Source);
@@ -310,12 +310,12 @@ public class CloudEventFactoryTests
         // Assert
         Assert.Equal(2, result.Count);
         var lifecycleEvent = result[0];
-        Assert.Equal("Konnektr.DigitalTwins.Twin.Lifecycle", lifecycleEvent.Type);
+        Assert.Equal("Konnektr.Graph.Twin.Lifecycle", lifecycleEvent.Type);
         Assert.Equal("application/json", lifecycleEvent.DataContentType);
         Assert.Equal("twin1", lifecycleEvent.Subject);
         Assert.Equal(source, lifecycleEvent.Source);
         var propertyEvent = result[1];
-        Assert.Equal("Konnektr.DigitalTwins.Property.Event", propertyEvent.Type);
+        Assert.Equal("Konnektr.Graph.Property.Event", propertyEvent.Type);
         Assert.Equal("application/json", propertyEvent.DataContentType);
         Assert.Equal("twin1", propertyEvent.Subject);
         var propertyEventData = propertyEvent.Data as JsonObject;
@@ -349,7 +349,7 @@ public class CloudEventFactoryTests
         // Assert
         Assert.Single(result);
         var cloudEvent = result[0];
-        Assert.Equal("Konnektr.DigitalTwins.Relationship.Lifecycle", cloudEvent.Type);
+        Assert.Equal("Konnektr.Graph.Relationship.Lifecycle", cloudEvent.Type);
         Assert.Equal("application/json", cloudEvent.DataContentType);
         Assert.Equal("twin1/relationships/rel1", cloudEvent.Subject);
         Assert.Equal(source, cloudEvent.Source);
@@ -386,10 +386,10 @@ public class CloudEventFactoryTests
         Assert.Equal(2, result.Count);
 
         var lifeCycleEvent = result.FirstOrDefault(ce =>
-            ce.Type == "Konnektr.DigitalTwins.Relationship.Lifecycle"
+            ce.Type == "Konnektr.Graph.Relationship.Lifecycle"
         );
         Assert.NotNull(lifeCycleEvent);
-        Assert.Equal("Konnektr.DigitalTwins.Relationship.Lifecycle", lifeCycleEvent.Type);
+        Assert.Equal("Konnektr.Graph.Relationship.Lifecycle", lifeCycleEvent.Type);
         Assert.Equal("application/json", lifeCycleEvent.DataContentType);
         Assert.Equal("twin1/relationships/rel1", lifeCycleEvent.Subject);
         Assert.Equal(source, lifeCycleEvent.Source);
@@ -401,11 +401,9 @@ public class CloudEventFactoryTests
         Assert.Equal("rel1", lifeCycleData["relationshipId"]?.ToString());
         Assert.Equal("Create", lifeCycleData["action"]?.ToString());
 
-        var propertyEvent = result.FirstOrDefault(ce =>
-            ce.Type == "Konnektr.DigitalTwins.Property.Event"
-        );
+        var propertyEvent = result.FirstOrDefault(ce => ce.Type == "Konnektr.Graph.Property.Event");
         Assert.NotNull(propertyEvent);
-        Assert.Equal("Konnektr.DigitalTwins.Property.Event", propertyEvent.Type);
+        Assert.Equal("Konnektr.Graph.Property.Event", propertyEvent.Type);
         Assert.Equal("application/json", propertyEvent.DataContentType);
         Assert.Equal("twin1/relationships/rel1", propertyEvent.Subject);
         var propertyData = propertyEvent.Data as JsonObject;
@@ -445,7 +443,7 @@ public class CloudEventFactoryTests
         // Assert
         Assert.Single(result);
         var cloudEvent = result[0];
-        Assert.Equal("Konnektr.DigitalTwins.Property.Event", cloudEvent.Type);
+        Assert.Equal("Konnektr.Graph.Property.Event", cloudEvent.Type);
         Assert.Equal("application/json", cloudEvent.DataContentType);
         Assert.Equal("twin1/relationships/rel1", cloudEvent.Subject);
         Assert.Equal(source, cloudEvent.Source);
@@ -595,7 +593,7 @@ public class CloudEventFactoryTests
         // Assert
         Assert.Single(result); // Should have 1 property event for the same-value update
         var propertyEvent = result[0];
-        Assert.Equal("Konnektr.DigitalTwins.Property.Event", propertyEvent.Type);
+        Assert.Equal("Konnektr.Graph.Property.Event", propertyEvent.Type);
         Assert.Equal("twin1", propertyEvent.Subject);
 
         var data = propertyEvent.Data as JsonObject;
@@ -651,7 +649,7 @@ public class CloudEventFactoryTests
         // Assert
         Assert.Single(result); // Should have 1 property event for the same-value update
         var propertyEvent = result[0];
-        Assert.Equal("Konnektr.DigitalTwins.Property.Event", propertyEvent.Type);
+        Assert.Equal("Konnektr.Graph.Property.Event", propertyEvent.Type);
         Assert.Equal("twin1", propertyEvent.Subject);
 
         var data = propertyEvent.Data as JsonObject;

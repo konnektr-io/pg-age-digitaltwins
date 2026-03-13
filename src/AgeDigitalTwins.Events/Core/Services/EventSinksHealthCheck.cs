@@ -1,6 +1,5 @@
-using Microsoft.Extensions.Diagnostics.HealthChecks;
 using AgeDigitalTwins.Events.Abstractions;
-
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace AgeDigitalTwins.Events.Core.Services;
 

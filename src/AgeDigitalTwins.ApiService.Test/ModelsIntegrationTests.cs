@@ -181,4 +181,146 @@ public class ModelsIntegrationTests : IAsyncLifetime
             );
         }
     }
+
+    [Fact]
+    public async Task GetModel_WithIncludeBaseModelContents_ReturnsPropertiesFieldWithContent()
+    {
+        string[] sModels = [SampleData.DtdlRoom];
+        List<JsonElement> jModels = sModels
+            .Select(m => JsonDocument.Parse(m))
+            .Select(j => j.RootElement)
+            .ToList();
+        var createResponse = await _httpClient!.PostAsync(
+            "/models",
+            new StringContent(JsonSerializer.Serialize(jModels), Encoding.UTF8, "application/json")
+        );
+        createResponse.EnsureSuccessStatusCode();
+
+        // Act: Call the API with includeBaseModelContents=true
+        var getResponse = await _httpClient!.GetAsync(
+            "/models/dtmi:com:adt:dtsample:room;1?includeBaseModelContents=true"
+        );
+        getResponse.EnsureSuccessStatusCode();
+        string getResponseContent = await getResponse.Content.ReadAsStringAsync();
+        JsonDocument getResponseJson = JsonDocument.Parse(getResponseContent);
+        var root = getResponseJson.RootElement;
+
+        // Assert: properties field exists and contains expected property names
+        Assert.True(
+            root.TryGetProperty("properties", out var properties),
+            "properties field missing"
+        );
+        Assert.Equal(JsonValueKind.Array, properties.ValueKind);
+        var propNames = properties
+            .EnumerateArray()
+            .Select(p => p.GetProperty("name").GetString())
+            .ToList();
+        Assert.Contains("name", propNames);
+        Assert.Contains("temperature", propNames);
+        // Should not contain duplicates
+        Assert.Equal(propNames.Distinct().Count(), propNames.Count);
+    }
+
+    [Fact]
+    public async Task GetModels_Pagination_FirstPageHasNextLinkWithContinuationToken()
+    {
+        // Arrange - create multiple models
+        string[] sModels =
+        [
+            SampleData.DtdlCrater,
+            SampleData.DtdlCelestialBody,
+            SampleData.DtdlPlanet,
+        ];
+        List<JsonElement> jModels = sModels
+            .Select(m => JsonDocument.Parse(m))
+            .Select(j => j.RootElement)
+            .ToList();
+        var createResponse = await _httpClient!.PostAsync(
+            "/models",
+            new StringContent(JsonSerializer.Serialize(jModels), Encoding.UTF8, "application/json")
+        );
+        createResponse.EnsureSuccessStatusCode();
+
+        // Act - request first page with a limit of 1 item
+        var request = new HttpRequestMessage(HttpMethod.Get, "/models");
+        request.Headers.Add("max-items-per-page", "1");
+        var getResponse = await _httpClient!.SendAsync(request);
+        getResponse.EnsureSuccessStatusCode();
+
+        string content = await getResponse.Content.ReadAsStringAsync();
+        JsonDocument json = JsonDocument.Parse(content);
+        var results = json.RootElement.GetProperty("value").EnumerateArray().ToList();
+
+        // Assert - first page has exactly 1 item and a nextLink containing a continuationToken
+        Assert.Single(results);
+        Assert.True(
+            json.RootElement.TryGetProperty("nextLink", out var nextLinkEl),
+            "Expected nextLink to be present in paginated response but it was missing."
+        );
+        string nextLink = nextLinkEl.GetString()!;
+        Assert.Contains("continuationToken=", nextLink);
+    }
+
+    [Fact]
+    public async Task GetModels_Pagination_AllModelsReturnedAcrossPages()
+    {
+        // Arrange - create 3 models
+        string[] sModels =
+        [
+            SampleData.DtdlCrater,
+            SampleData.DtdlCelestialBody,
+            SampleData.DtdlPlanet,
+        ];
+        List<JsonElement> jModels = sModels
+            .Select(m => JsonDocument.Parse(m))
+            .Select(j => j.RootElement)
+            .ToList();
+        var createResponse = await _httpClient!.PostAsync(
+            "/models",
+            new StringContent(JsonSerializer.Serialize(jModels), Encoding.UTF8, "application/json")
+        );
+        // 200 OK = created, 409 Conflict = already exists (from a parallel test class) - both are acceptable
+        Assert.True(
+            createResponse.IsSuccessStatusCode
+                || createResponse.StatusCode == HttpStatusCode.Conflict,
+            $"Unexpected status code when creating models: {createResponse.StatusCode}"
+        );
+
+        // Act - paginate through all pages, 1 item per page
+        var allModelIds = new List<string>();
+        string? requestUri = "/models";
+        int pageCount = 0;
+
+        while (requestUri != null)
+        {
+            var relativeUri = requestUri.StartsWith("http")
+                ? new Uri(requestUri).PathAndQuery
+                : requestUri;
+            var request = new HttpRequestMessage(HttpMethod.Get, relativeUri);
+            request.Headers.Add("max-items-per-page", "1");
+            var response = await _httpClient!.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+
+            string pageContent = await response.Content.ReadAsStringAsync();
+            JsonDocument pageJson = JsonDocument.Parse(pageContent);
+
+            allModelIds.AddRange(
+                pageJson
+                    .RootElement.GetProperty("value")
+                    .EnumerateArray()
+                    .Select(r => r.GetProperty("id").GetString()!)
+            );
+            pageCount++;
+
+            requestUri = pageJson.RootElement.TryGetProperty("nextLink", out var nextLinkEl)
+                ? nextLinkEl.GetString()
+                : null;
+        }
+
+        // Assert - all 3 models are returned across multiple pages
+        Assert.True(pageCount > 1, $"Expected multiple pages but got only {pageCount}.");
+        Assert.Contains("dtmi:com:contoso:Crater;1", allModelIds);
+        Assert.Contains("dtmi:com:contoso:CelestialBody;1", allModelIds);
+        Assert.Contains("dtmi:com:contoso:Planet;1", allModelIds);
+    }
 }

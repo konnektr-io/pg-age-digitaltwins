@@ -140,6 +140,11 @@ namespace AgeDigitalTwins.Test
                         ""@type"": ""Property"",
                         ""name"": ""temperature"",
                         ""schema"": ""double""
+                    },
+                    {
+                        ""@type"": ""Relationship"",
+                        ""name"": ""orbits"",
+                        ""target"": ""dtmi:com:contoso:CelestialBody;1""
                     }
                 ]
             }";

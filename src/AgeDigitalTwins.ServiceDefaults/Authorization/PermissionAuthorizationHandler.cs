@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Logging;
 
@@ -45,10 +46,14 @@ public class PermissionAuthorizationHandler : AuthorizationHandler<PermissionReq
         }
         else
         {
+            var userId =
+                context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                ?? context.User.FindFirst("sub")?.Value
+                ?? context.User.Identity.Name;
             _logger.LogWarning(
                 "User lacks required permission: {Permission}. User: {User}",
                 requirement.RequiredPermission,
-                context.User.Identity.Name ?? "Unknown"
+                userId ?? "Unknown"
             );
         }
     }

@@ -34,9 +34,4 @@ public enum ResourceType
     /// Deletion job operations.
     /// </summary>
     JobsDeletions,
-
-    /// <summary>
-    /// MCP tools access - used by MCP server for tool invocation permissions.
-    /// </summary>
-    Mcp,
 }

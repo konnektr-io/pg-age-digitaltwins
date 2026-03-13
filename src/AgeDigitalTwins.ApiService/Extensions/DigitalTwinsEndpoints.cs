@@ -1,7 +1,8 @@
-using System.Text.Json;
+using AgeDigitalTwins.ApiService.Helpers;
+using AgeDigitalTwins.ApiService.Models;
+using AgeDigitalTwins.Models;
 using AgeDigitalTwins.ServiceDefaults.Authorization;
 using AgeDigitalTwins.ServiceDefaults.Authorization.Models;
-using AgeDigitalTwins.ApiService.Helpers;
 using Json.Patch;
 using Microsoft.AspNetCore.Mvc;
 
@@ -24,13 +25,14 @@ public static class DigitalTwinsEndpoints
                     CancellationToken cancellationToken
                 ) =>
                 {
-                    return client.GetDigitalTwinAsync<JsonDocument>(id, cancellationToken);
+                    return client.GetDigitalTwinAsync<BasicDigitalTwin>(id, cancellationToken);
                 }
             )
             .RequirePermission(ResourceType.DigitalTwins, PermissionAction.Read)
             .RequireRateLimiting("LightOperations")
             .WithName("GetDigitalTwin")
-            .WithSummary("Retrieves a digital twin by its ID.");
+            .WithSummary("Retrieves a digital twin by its ID.")
+            .Produces<BasicDigitalTwin>();
 
         // PUT Digital Twin - Heavy create/replace operation
         digitalTwinsGroup
@@ -38,7 +40,7 @@ public static class DigitalTwinsEndpoints
                 "/{id}",
                 (
                     string id,
-                    JsonDocument digitalTwin,
+                    BasicDigitalTwin digitalTwin,
                     HttpContext httpContext,
                     [FromServices] AgeDigitalTwinsClient client,
                     CancellationToken cancellationToken
@@ -56,7 +58,8 @@ public static class DigitalTwinsEndpoints
             .RequirePermission(ResourceType.DigitalTwins, PermissionAction.Write)
             .RequireRateLimiting("HeavyOperations")
             .WithName("CreateOrReplaceDigitalTwin")
-            .WithSummary("Creates or replaces a digital twin by its ID.");
+            .WithSummary("Creates or replaces a digital twin by its ID.")
+            .Produces<BasicDigitalTwin>();
 
         // PATCH Digital Twin - Heavy update operation
         digitalTwinsGroup
@@ -98,6 +101,33 @@ public static class DigitalTwinsEndpoints
             .RequireRateLimiting("HeavyOperations")
             .WithName("DeleteDigitalTwin")
             .WithSummary("Deletes a digital twin by its ID.");
+
+        // POST /digitaltwins/search - Hybrid search endpoint
+        digitalTwinsGroup
+            .MapPost(
+                "/search",
+                async (
+                    [FromBody] DigitalTwinSearchRequest request,
+                    [FromServices] AgeDigitalTwinsClient client,
+                    CancellationToken cancellationToken
+                ) =>
+                {
+                    var result = await client.HybridSearchAsync(
+                        request.Vector,
+                        request.EmbeddingProperty ?? "embedding",
+                        request.ModelFilter,
+                        request.Limit ?? 10,
+                        cancellationToken
+                    );
+                    return Results.Content(result, "application/json");
+                }
+            )
+            .RequirePermission(ResourceType.DigitalTwins, PermissionAction.Read)
+            .RequireRateLimiting("LightOperations")
+            .WithName("SearchDigitalTwins")
+            .WithSummary(
+                "Performs a hybrid search on digital twins using vector similarity and metadata filter."
+            );
 
         return app;
     }

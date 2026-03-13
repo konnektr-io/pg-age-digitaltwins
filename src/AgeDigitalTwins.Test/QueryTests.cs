@@ -1,4 +1,3 @@
-   
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -1536,7 +1535,7 @@ RETURN t";
         Console.WriteLine(output.ToString());
         Assert.True(true, output.ToString());
     }
-    
+
     [Fact]
     public async Task Performance_IsOfModel_WithModelAndDescendantsArray()
     {
@@ -1592,12 +1591,14 @@ RETURN t";
         };
 
         const int iterations = 5;
-        var arrayArgResults = new List<(string name, long totalMs, int expectedCount, int actualCount)>();
+        var arrayArgResults =
+            new List<(string name, long totalMs, int expectedCount, int actualCount)>();
 
         foreach (var (name, modelId, expectedCount) in testCases)
         {
             // Test using is_of_model with model_and_descendants array argument
-            var arrayArgQuery = $@"MATCH (t:Twin) WHERE {graphName}.is_of_model(t, {graphName}.model_and_descendants('{modelId}')) RETURN t";
+            var arrayArgQuery =
+                $@"MATCH (t:Twin) WHERE {graphName}.is_of_model(t, {graphName}.model_and_descendants('{modelId}')) RETURN t";
 
             var totalTime = 0L;
             var actualCount = 0;
@@ -1632,13 +1633,15 @@ RETURN t";
         foreach (var (name, totalMs, expectedCount, actualCount) in arrayArgResults)
         {
             var avgMs = totalMs / (double)iterations;
-            output.AppendLine($"  {name}: {avgMs:F2}ms avg ({totalMs}ms total) - {actualCount}/{expectedCount} results");
+            output.AppendLine(
+                $"  {name}: {avgMs:F2}ms avg ({totalMs}ms total) - {actualCount}/{expectedCount} results"
+            );
         }
 
         Console.WriteLine(output.ToString());
         Assert.True(true, output.ToString());
     }
-    
+
     /* [Fact]
     public async Task Performance_IsOfModel_NewVsOldImplementation()
     {

@@ -23,8 +23,9 @@ public class RelationshipTests : TestBase
         var sensorTwin =
             @"{""$dtId"": ""sensor1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:tempsensor;1""}, ""name"": ""Sensor 1"", ""temperature"": 25.0}";
         await Client.CreateOrReplaceDigitalTwinAsync("sensor1", sensorTwin);
+        // RelationshipId and sourceId are not required in the payload
         var relationship =
-            @"{""$relationshipId"": ""rel1"", ""$sourceId"": ""room1"", ""$relationshipName"": ""rel_has_sensors"", ""$targetId"": ""sensor1""}";
+            @"{""$relationshipName"": ""rel_has_sensors"", ""$targetId"": ""sensor1""}";
         var returnRel = await Client.CreateOrReplaceRelationshipAsync(
             "room1",
             "rel1",
@@ -153,11 +154,7 @@ public class RelationshipTests : TestBase
             @"{""$relationshipId"": ""rel1"", ""$sourceId"": ""room1"", ""$relationshipName"": ""rel_has_sensors"", ""$targetId"": ""nonexistent_sensor""}";
 
         await Assert.ThrowsAsync<ArgumentException>(
-            () => Client.CreateOrReplaceRelationshipAsync(
-                "room1",
-                "rel1",
-                relationship
-            )
+            () => Client.CreateOrReplaceRelationshipAsync("room1", "rel1", relationship)
         );
     }
 }
