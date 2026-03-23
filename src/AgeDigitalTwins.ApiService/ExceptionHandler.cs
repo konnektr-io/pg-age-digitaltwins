@@ -24,7 +24,7 @@ public class ExceptionHandler : Microsoft.AspNetCore.Diagnostics.IExceptionHandl
         {
             httpContext.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
         }
-        else if (exception is ResolutionException or PostgresException)
+        else if (exception is ArgumentException or ResolutionException or PostgresException)
         {
             httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
         }
