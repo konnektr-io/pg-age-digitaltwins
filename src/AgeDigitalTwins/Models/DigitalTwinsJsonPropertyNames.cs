@@ -48,6 +48,12 @@ public static class DigitalTwinsJsonPropertyNames
     public const string MetadataPropertySourceTime = "sourceTime";
 
     /// <summary>
+    /// The ID of the user who last updated a digital twin property, used in the $metadata
+    /// object on a digital twin or component about their properties.
+    /// </summary>
+    public const string MetadataPropertyLastUpdatedBy = "lastUpdatedBy";
+
+    /// <summary>
     /// The JSON property name for the Id field on a relationship.
     /// </summary>
     public const string RelationshipId = "$relationshipId";
