@@ -194,6 +194,31 @@ public static class RelationshipsEndpoints
             .WithName("DeleteRelationship")
             .WithSummary("Deletes a specific relationship for a digital twin.");
 
+        // POST /relationships - Batch create/replace relationships
+        var batchRelationshipsGroup = app.MapGroup("/relationships").WithTags("Relationships");
+
+        batchRelationshipsGroup
+            .MapPost(
+                "/",
+                async (
+                    [FromBody] IEnumerable<BasicRelationship> relationships,
+                    [FromServices] AgeDigitalTwinsClient client,
+                    CancellationToken cancellationToken
+                ) =>
+                {
+                    var result = await client.CreateOrReplaceRelationshipsAsync(
+                        relationships,
+                        cancellationToken
+                    );
+                    return Results.Ok(result);
+                }
+            )
+            .RequirePermission(ResourceType.Relationships, PermissionAction.Write)
+            .RequireRateLimiting("HeavyOperations")
+            .WithName("CreateOrReplaceRelationshipsBatch")
+            .WithSummary("Creates or replaces multiple relationships in a single batch operation.")
+            .Produces<BatchRelationshipResult>();
+
         return app;
     }
 }
