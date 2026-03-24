@@ -102,8 +102,11 @@ MATCH (m:Model {{id: dependency}})
                 TargetSessionAttributes.PreferStandby,
                 cancellationToken
             );
-            await using var command = connection.CreateCypherCommand(_graphName, mainCypher,
-                new Dictionary<string, object?> { { "modelId", modelId } });
+            await using var command = connection.CreateCypherCommand(
+                _graphName,
+                mainCypher,
+                new Dictionary<string, object?> { { "modelId", modelId } }
+            );
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
             DigitalTwinsModelData? mainModel = null;
             if (await reader.ReadAsync(cancellationToken))
@@ -191,13 +194,15 @@ MATCH (m:Model {{id: dependency}})
                 // If there are bases, fetch and add them
                 if (mainModel.Bases != null && mainModel.Bases.Length > 0)
                 {
-                    var basesArray = new JsonArray([.. mainModel.Bases.Select(b => JsonValue.Create(b))]);
+                    var basesArray = new JsonArray(
+                        [.. mainModel.Bases.Select(b => JsonValue.Create(b))]
+                    );
                     var basesParams = new JsonObject { { "modelIds", basesArray } };
                     const string basesCypher = @"MATCH (m:Model) WHERE m.id IN $modelIds RETURN m";
                     await using var baseCommand = connection.CreateCypherCommand(
                         _graphName,
                         basesCypher,
-                        JsonSerializer.Serialize(basesParams)
+                        JsonSerializer.Serialize(basesParams, serializerOptions)
                     );
                     await using var baseReader = await baseCommand.ExecuteReaderAsync(
                         cancellationToken
@@ -385,7 +390,11 @@ MATCH (m:Model {{id: dependency}})
 
                 // Use Cypher parameters for batch model insert
                 var modelsArray = new JsonArray(
-                    [.. batch.Select(m => JsonNode.Parse(JsonSerializer.Serialize(m, serializerOptions)))]
+                    [
+                        .. batch.Select(m =>
+                            JsonNode.Parse(JsonSerializer.Serialize(m, serializerOptions))
+                        ),
+                    ]
                 );
                 var modelsParams = new JsonObject { { "models", modelsArray } };
 
@@ -396,8 +405,11 @@ MATCH (m:Model {{id: dependency}})
 CREATE (m:Model {id: modelAgtype.id})
 SET m = modelAgtype";
 
-                await using var command = connection.CreateCypherCommand(_graphName, cypher,
-                    JsonSerializer.Serialize(modelsParams));
+                await using var command = connection.CreateCypherCommand(
+                    _graphName,
+                    cypher,
+                    JsonSerializer.Serialize(modelsParams, serializerOptions)
+                );
                 await command.ExecuteNonQueryAsync(cancellationToken);
             }
 
@@ -405,12 +417,17 @@ SET m = modelAgtype";
             foreach (var (sourceId, targetId) in extendsEdges)
             {
                 const string extendsCypher =
-                    @"MATCH (m:Model {id: $sourceId}), (m2:Model {id: $targetId})
+                    @"MATCH (m:Model), (m2:Model)
+                                WHERE m.id = $sourceId AND m2.id = $targetId
                                 CREATE (m)-[:_extends]->(m2)";
                 await using var extendsCommand = connection.CreateCypherCommand(
                     _graphName,
                     extendsCypher,
-                    new Dictionary<string, object?> { { "sourceId", sourceId }, { "targetId", targetId } }
+                    new Dictionary<string, object?>
+                    {
+                        { "sourceId", sourceId },
+                        { "targetId", targetId },
+                    }
                 );
                 // TODO: run these as batch commands
                 await extendsCommand.ExecuteNonQueryAsync(cancellationToken);
@@ -420,12 +437,17 @@ SET m = modelAgtype";
             foreach (var (sourceId, targetId) in componentEdges)
             {
                 const string hasComponentCypher =
-                    @"MATCH (m:Model {id: $sourceId}), (m2:Model {id: $targetId})
+                    @"MATCH (m:Model), (m2:Model)
+                                    WHERE m.id = $sourceId AND m2.id = $targetId
                                     CREATE (m)-[:_hasComponent]->(m2)";
                 await using var hasComponentCommand = connection.CreateCypherCommand(
                     _graphName,
                     hasComponentCypher,
-                    new Dictionary<string, object?> { { "sourceId", sourceId }, { "targetId", targetId } }
+                    new Dictionary<string, object?>
+                    {
+                        { "sourceId", sourceId },
+                        { "targetId", targetId },
+                    }
                 );
                 await hasComponentCommand.ExecuteNonQueryAsync(cancellationToken);
             }
@@ -584,8 +606,11 @@ RETURN COUNT(m) AS deletedCount";
                 TargetSessionAttributes.ReadWrite,
                 cancellationToken
             );
-            await using var command = connection.CreateCypherCommand(_graphName, cypher,
-                new Dictionary<string, object?> { { "modelId", modelId } });
+            await using var command = connection.CreateCypherCommand(
+                _graphName,
+                cypher,
+                new Dictionary<string, object?> { { "modelId", modelId } }
+            );
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
             int rowsAffected = 0;
             if (await reader.ReadAsync(cancellationToken))
@@ -756,8 +781,11 @@ RETURN COUNT(m) AS deletedCount";
             @"MATCH (t:Twin {`$dtId`: $twinId})
                           RETURN t.`$metadata`.`$model` as modelId";
 
-        await using var command = connection.CreateCypherCommand(_graphName, cypher,
-            new Dictionary<string, object?> { { "twinId", twinId } });
+        await using var command = connection.CreateCypherCommand(
+            _graphName,
+            cypher,
+            new Dictionary<string, object?> { { "twinId", twinId } }
+        );
 
         var modelIdValue = await command.ExecuteScalarAsync(cancellationToken);
 
@@ -887,8 +915,11 @@ RETURN COUNT(m) AS deletedCount";
             TargetSessionAttributes.ReadWrite,
             cancellationToken
         );
-        await using var command = connection.CreateCypherCommand(_graphName, cypher,
-            new Dictionary<string, object?> { { "modelId", modelId } });
+        await using var command = connection.CreateCypherCommand(
+            _graphName,
+            cypher,
+            new Dictionary<string, object?> { { "modelId", modelId } }
+        );
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
@@ -965,9 +996,10 @@ RETURN COUNT(m) AS deletedCount";
             cancellationToken
         );
 
-        await using var command = parameters.Count > 0
-            ? connection.CreateCypherCommand(_graphName, cypher, parameters)
-            : connection.CreateCypherCommand(_graphName, cypher);
+        await using var command =
+            parameters.Count > 0
+                ? connection.CreateCypherCommand(_graphName, cypher, parameters)
+                : connection.CreateCypherCommand(_graphName, cypher);
 
         var results = new List<DigitalTwinsModelData>();
         try

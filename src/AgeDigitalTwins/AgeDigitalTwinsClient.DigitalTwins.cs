@@ -33,12 +33,12 @@ public partial class AgeDigitalTwinsClient
         CancellationToken cancellationToken = default
     )
     {
-        string cypher =
-            $"MATCH (t:Twin {{`$dtId`: $twinId}}) RETURN t";
-        await using var command = connection.CreateCypherCommand(_graphName, cypher, new Dictionary<string, object?>()
-        {
-            { "twinId", digitalTwinId }
-        });
+        string cypher = $"MATCH (t:Twin {{`$dtId`: $twinId}}) RETURN t";
+        await using var command = connection.CreateCypherCommand(
+            _graphName,
+            cypher,
+            new Dictionary<string, object?>() { { "twinId", digitalTwinId } }
+        );
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         return await reader.ReadAsync(cancellationToken);
     }
@@ -98,12 +98,12 @@ public partial class AgeDigitalTwinsClient
         CancellationToken cancellationToken = default
     )
     {
-        string cypher =
-            $"MATCH (t:Twin {{`$dtId`: $twinId}}) RETURN t";
-        await using var command = connection.CreateCypherCommand(_graphName, cypher, new Dictionary<string, object?>()
-        {
-            { "twinId", digitalTwinId }
-        });
+        string cypher = $"MATCH (t:Twin {{`$dtId`: $twinId}}) RETURN t";
+        await using var command = connection.CreateCypherCommand(
+            _graphName,
+            cypher,
+            new Dictionary<string, object?>() { { "twinId", digitalTwinId } }
+        );
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
         if (await reader.ReadAsync(cancellationToken))
@@ -1122,13 +1122,13 @@ RETURN COUNT(t) AS deletedCount";
 
                 string cypher =
                     @"UNWIND $twins as twin
-MERGE (t:Twin {`$dtId`: twin.`$dtId`})
+MERGE (t:Twin {`$dtId`: twin['$dtId']})
 SET t = twin";
 
                 await using var command = connection.CreateCypherCommand(
                     _graphName,
                     cypher,
-                    JsonSerializer.Serialize(parametersJson)
+                    JsonSerializer.Serialize(parametersJson, serializerOptions)
                 );
                 await command.ExecuteNonQueryAsync(cancellationToken);
 
@@ -1175,15 +1175,17 @@ SET t = twin";
             TargetSessionAttributes.PreferStandby,
             cancellationToken
         );
-        string cypher = $@"
+        string cypher =
+            $@"
             MATCH (t:Twin {{`$dtId`: $twinId}})-[r]-(n:Twin) 
             RETURN t, r, n 
             LIMIT 50";
 
-        await using var command = connection.CreateCypherCommand(_graphName, cypher, new Dictionary<string, object?>()
-        {
-            { "twinId", digitalTwinId }
-        });
+        await using var command = connection.CreateCypherCommand(
+            _graphName,
+            cypher,
+            new Dictionary<string, object?>() { { "twinId", digitalTwinId } }
+        );
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
         var results = new List<object>();

@@ -36,8 +36,15 @@ public partial class AgeDigitalTwinsClient
             TargetSessionAttributes.PreferStandby,
             cancellationToken
         );
-        await using var command = connection.CreateCypherCommand(_graphName, cypher,
-            new Dictionary<string, object?> { { "sourceId", digitalTwinId }, { "relId", relationshipId } });
+        await using var command = connection.CreateCypherCommand(
+            _graphName,
+            cypher,
+            new Dictionary<string, object?>
+            {
+                { "sourceId", digitalTwinId },
+                { "relId", relationshipId },
+            }
+        );
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         return await reader.ReadAsync(cancellationToken);
     }
@@ -71,8 +78,15 @@ public partial class AgeDigitalTwinsClient
                 Npgsql.TargetSessionAttributes.PreferStandby,
                 cancellationToken
             );
-            await using var command = connection.CreateCypherCommand(_graphName, cypher,
-                new Dictionary<string, object?> { { "sourceId", digitalTwinId }, { "relId", relationshipId } });
+            await using var command = connection.CreateCypherCommand(
+                _graphName,
+                cypher,
+                new Dictionary<string, object?>
+                {
+                    { "sourceId", digitalTwinId },
+                    { "relId", relationshipId },
+                }
+            );
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
             if (await reader.ReadAsync(cancellationToken))
@@ -389,14 +403,17 @@ MATCH (source:Twin {{`$dtId`: $sourceId}}),(target:Twin {{`$dtId`: $targetId}})
 MERGE (source)-[r:{relationshipName} {{`$relationshipId`: $relId}}]->(target)
 SET r = rel
 RETURN r";
-        await using var command = connection.CreateCypherCommand(_graphName, cypher,
+        await using var command = connection.CreateCypherCommand(
+            _graphName,
+            cypher,
             new Dictionary<string, object?>
             {
                 { "relationship", updatedRelationshipJson },
                 { "sourceId", digitalTwinId },
                 { "targetId", targetId },
                 { "relId", relationshipId },
-            });
+            }
+        );
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
         if (await reader.ReadAsync(cancellationToken))
@@ -513,13 +530,16 @@ SET r = rel";
                 Npgsql.TargetSessionAttributes.ReadWrite,
                 cancellationToken
             );
-            await using var command = connection.CreateCypherCommand(_graphName, cypher,
+            await using var command = connection.CreateCypherCommand(
+                _graphName,
+                cypher,
                 new Dictionary<string, object?>
                 {
                     { "relationship", updatedRelJson },
                     { "sourceId", digitalTwinId },
                     { "relId", relationshipId },
-                });
+                }
+            );
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
         catch (Exception ex)
@@ -569,8 +589,15 @@ SET r = rel";
                 TargetSessionAttributes.ReadWrite,
                 cancellationToken
             );
-            await using var command = connection.CreateCypherCommand(_graphName, cypher,
-                new Dictionary<string, object?> { { "sourceId", digitalTwinId }, { "relId", relationshipId } });
+            await using var command = connection.CreateCypherCommand(
+                _graphName,
+                cypher,
+                new Dictionary<string, object?>
+                {
+                    { "sourceId", digitalTwinId },
+                    { "relId", relationshipId },
+                }
+            );
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
             int rowsAffected = 0;
             if (await reader.ReadAsync(cancellationToken))
@@ -807,8 +834,11 @@ WHERE t.`$dtId` IN $twinIds
 RETURN t.`$dtId` AS twinId";
 
         await using (
-            var existenceCommand = connection.CreateCypherCommand(_graphName, existenceCheckCypher,
-                JsonSerializer.Serialize(twinCheckParams))
+            var existenceCommand = connection.CreateCypherCommand(
+                _graphName,
+                existenceCheckCypher,
+                JsonSerializer.Serialize(twinCheckParams, serializerOptions)
+            )
         )
         {
             await using (
@@ -905,8 +935,11 @@ RETURN t.`$dtId` AS twinId";
                     MERGE (source)-[r:{relationshipName} {{`$relationshipId`: relationship['$relationshipId']}}]->(target)
                     SET r = relationship";
 
-                await using var command = connection.CreateCypherCommand(_graphName, cypher,
-                    JsonSerializer.Serialize(relParams));
+                await using var command = connection.CreateCypherCommand(
+                    _graphName,
+                    cypher,
+                    JsonSerializer.Serialize(relParams, serializerOptions)
+                );
                 await command.ExecuteNonQueryAsync(cancellationToken);
             }
 
