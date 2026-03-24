@@ -1121,9 +1121,8 @@ RETURN COUNT(t) AS deletedCount";
                     };
 
                 string cypher =
-                    $@"UNWIND $twins as twinJson
-WITH twinJson::cstring::agtype as twin
-MERGE (t:Twin {{`$dtId`: twin.`$dtId`}})
+                    @"UNWIND $twins as twin
+MERGE (t:Twin {`$dtId`: twin.`$dtId`})
 SET t = twin";
 
                 await using var command = connection.CreateCypherCommand(
