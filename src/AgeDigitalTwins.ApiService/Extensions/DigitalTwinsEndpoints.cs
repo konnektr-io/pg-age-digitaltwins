@@ -105,6 +105,29 @@ public static class DigitalTwinsEndpoints
             .WithName("DeleteDigitalTwin")
             .WithSummary("Deletes a digital twin by its ID.");
 
+        // POST /digitaltwins - Batch create/replace digital twins
+        digitalTwinsGroup
+            .MapPost(
+                "/",
+                async (
+                    [FromBody] IEnumerable<BasicDigitalTwin> digitalTwins,
+                    [FromServices] AgeDigitalTwinsClient client,
+                    CancellationToken cancellationToken
+                ) =>
+                {
+                    var result = await client.CreateOrReplaceDigitalTwinsAsync(
+                        digitalTwins,
+                        cancellationToken
+                    );
+                    return Results.Ok(result);
+                }
+            )
+            .RequirePermission(ResourceType.DigitalTwins, PermissionAction.Write)
+            .RequireRateLimiting("HeavyOperations")
+            .WithName("CreateOrReplaceDigitalTwinsBatch")
+            .WithSummary("Creates or replaces multiple digital twins in a single batch operation.")
+            .Produces<BatchDigitalTwinResult>();
+
         // POST /digitaltwins/search - Hybrid search endpoint
         digitalTwinsGroup
             .MapPost(
