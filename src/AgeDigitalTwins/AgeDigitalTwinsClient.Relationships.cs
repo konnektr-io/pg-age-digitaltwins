@@ -954,8 +954,7 @@ MATCH (target:Twin {{`$dtId`: targetId}})
 MERGE (source)-[r:{relationshipName} {{`$relationshipId`: relId}}]->(target)
 SET r = rel";
 
-                await using var command = CreateCypherCommandWithTextParam(
-                    connection,
+                await using var command = connection.CreateCypherCommand(
                     _graphName,
                     cypher,
                     JsonSerializer.Serialize(relParams, serializerOptions)

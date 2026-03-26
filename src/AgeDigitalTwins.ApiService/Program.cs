@@ -75,6 +75,13 @@ builder.AddNpgsqlMultihostDataSource(
             new(settings.ConnectionString)
             {
                 SearchPath = "ag_catalog, \"$user\", public",
+                // Increase write buffer to handle large agtype parameters (batch UNWIND operations).
+                // PgBufferedConverter requires the full value to fit in the write buffer;
+                // at the default 8192 bytes, large batches trigger a sync Flush on the async writer.
+                WriteBufferSize = builder.Configuration.GetValue(
+                    "Parameters:WriteBufferSize",
+                    1024 * 1024
+                ),
                 ConnectionIdleLifetime = builder.Configuration.GetValue(
                     "Parameters:ConnectionIdleLifetime",
                     60

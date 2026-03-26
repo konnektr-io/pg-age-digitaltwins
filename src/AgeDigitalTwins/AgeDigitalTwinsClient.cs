@@ -9,7 +9,6 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Npgsql;
 using Npgsql.Age;
-using NpgsqlTypes;
 
 namespace AgeDigitalTwins;
 
@@ -145,27 +144,6 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
     /// Gets the job service for managing import and other jobs.
     /// </summary>
     public JobService JobService { get; }
-
-    /// <summary>
-    /// Creates a Cypher command that passes parameters as text with ::agtype cast,
-    /// bypassing the agtype PgBufferedConverter to avoid buffer flush issues with large payloads.
-    /// </summary>
-    private static NpgsqlCommand CreateCypherCommandWithTextParam(
-        NpgsqlConnection connection,
-        string graphName,
-        string cypher,
-        string parametersJson
-    )
-    {
-        var command = new NpgsqlCommand(
-            $"SELECT * FROM ag_catalog.cypher('{graphName}', $$ {cypher} $$, $1::agtype) as (result agtype)",
-            connection
-        );
-        command.Parameters.Add(
-            new NpgsqlParameter { Value = parametersJson, NpgsqlDbType = NpgsqlDbType.Text }
-        );
-        return command;
-    }
 }
 
 public class AgeDigitalTwinsClientOptions

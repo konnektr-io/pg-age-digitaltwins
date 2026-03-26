@@ -405,8 +405,7 @@ MATCH (m:Model {{id: dependency}})
 CREATE (m:Model {id: modelAgtype.id})
 SET m = modelAgtype";
 
-                await using var command = CreateCypherCommandWithTextParam(
-                    connection,
+                await using var command = connection.CreateCypherCommand(
                     _graphName,
                     cypher,
                     JsonSerializer.Serialize(modelsParams, serializerOptions)
