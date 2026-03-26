@@ -22,7 +22,14 @@ public class TestBase : IAsyncDisposable
         var graphName = "temp_graph_" + Guid.NewGuid().ToString("N");
 
         NpgsqlConnectionStringBuilder connectionStringBuilder =
-            new(connectionString) { SearchPath = "ag_catalog, \"$user\", public" };
+            new(connectionString)
+            {
+                SearchPath = "ag_catalog, \"$user\", public",
+                // Increase write buffer to handle large agtype parameters (batch UNWIND operations).
+                // PgBufferedConverter requires the full value to fit in the write buffer;
+                // at the default 8192 bytes, large batches trigger a sync Flush on the async writer.
+                WriteBufferSize = 1024 * 1024, // 1 MB
+            };
         NpgsqlDataSourceBuilder dataSourceBuilder = new(connectionStringBuilder.ConnectionString);
 
         // UseAge(true) for CNPG images, controlled by CNPG_TEST env var

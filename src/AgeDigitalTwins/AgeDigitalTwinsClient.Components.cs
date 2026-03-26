@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Text.Json;
@@ -338,17 +339,20 @@ public partial class AgeDigitalTwinsClient
         digitalTwin["$etag"] = newEtag;
 
         // Save the updated digital twin
-        string updatedDigitalTwinJson = JsonSerializer
-            .Serialize(digitalTwin, serializerOptions)
-            .Replace("'", "\\'");
+        string updatedDigitalTwinJson = JsonSerializer.Serialize(digitalTwin, serializerOptions);
 
-        string cypher =
-            $@"WITH '{updatedDigitalTwinJson}'::cstring::agtype as twin
-MERGE (t: Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})
+        const string cypher =
+            @"WITH $twin::cstring::agtype as twin
+MERGE (t: Twin {`$dtId`: $twinId})
 SET t = twin
 RETURN t";
 
-        await using var command = connection.CreateCypherCommand(_graphName, cypher);
+        await using var command = connection.CreateCypherCommand(_graphName, cypher,
+            new Dictionary<string, object?>
+            {
+                { "twin", updatedDigitalTwinJson },
+                { "twinId", digitalTwinId },
+            });
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
         if (!await reader.ReadAsync(cancellationToken))

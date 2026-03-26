@@ -1,4 +1,5 @@
 # Konnektr Graph
+
 ### Digital Twins for Apache AGE
 
 [![Deploy Graph](https://img.shields.io/badge/Deploy-Graph_Now-1E9E95?style=for-the-badge)](https://ktrlplane.konnektr.io/resources/create?resource_type=Konnektr.Graph&utm_source=github&utm_medium=product_readme&utm_campaign=graph)
@@ -24,24 +25,28 @@
 ## ✨ Key Features
 
 ### 🔄 Azure Digital Twins Compatible
+
 - **Drop-in replacement** for Azure Digital Twins API
 - **Use standard Azure SDKs** (.NET, Python, JavaScript)
 - **Easy migration** from Azure with minimal code changes
 - Full **DTDL** (Digital Twins Definition Language) support
 
 ### 🎯 Built for Performance
+
 - **PostgreSQL + Apache AGE** - Enterprise-grade graph database
 - **Powerful Cypher queries** - Complex graph traversals
 - **Horizontal scaling** - Handles millions of twins
 - **Real-time eventing** - Stream state changes instantly
 
 ### 🔌 Event Streaming
+
 - **Multiple sinks** - Kafka, Azure Data Explorer, MQTT, and more
 - **CloudEvents standard** - Industry-standard event format
 - **Flexible routing** - Route events based on type and filters
 - **Durable & real-time** - Both lifecycle and telemetry events
 
 ### 🤖 AI-Ready
+
 - **Model Context Protocol (MCP)** - Native LLM integration
 - **Semantic queries** - AI-powered twin discovery
 - **Rich metadata** - DTDL models provide structured context
@@ -79,7 +84,7 @@ from datetime import datetime
 class StaticTokenCredential:
     def __init__(self, token):
         self.token = token
-    
+
     def get_token(self, *scopes, **kwargs):
         # Return token valid for 1 hour (adjust based on your token expiry)
         expires_on = int(datetime.now().timestamp()) + 3600
@@ -126,15 +131,15 @@ helm install my-graph konnektr/agedigitaltwins -f values.yaml
 
 ## 📊 Deployment Options
 
-|  | Hosted | Self-Hosted |
-|---|---|---|
-| **Setup Time** | 5 minutes | 1-2 hours |
-| **Maintenance** | Zero - fully managed | You manage updates |
-| **Scaling** | Automatic | Manual configuration |
-| **Azure SDK Compatible** | ✅ Yes | ✅ Yes |
-| **Direct DB Access** | ❌ No | ✅ Yes |
-| **Custom Auth** | Auth0 (managed) | BYO identity provider |
-| **Best For** | Most users | Advanced users, compliance needs |
+|                          | Hosted               | Self-Hosted                      |
+| ------------------------ | -------------------- | -------------------------------- |
+| **Setup Time**           | 5 minutes            | 1-2 hours                        |
+| **Maintenance**          | Zero - fully managed | You manage updates               |
+| **Scaling**              | Automatic            | Manual configuration             |
+| **Azure SDK Compatible** | ✅ Yes               | ✅ Yes                           |
+| **Direct DB Access**     | ❌ No                | ✅ Yes                           |
+| **Custom Auth**          | Auth0 (managed)      | BYO identity provider            |
+| **Best For**             | Most users           | Advanced users, compliance needs |
 
 **[→ See detailed comparison](https://docs.konnektr.io/docs/graph/deployment-installation/comparison?utm_source=github&utm_medium=product_readme&utm_campaign=graph)**
 
@@ -194,4 +199,9 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 
 **Ready to build your digital twin solution?**
 
+<<<<<<< HEAD
+→ <!-- [Start with Hosted Platform](https://ktrlplane.konnektr.io) | --> [Read the Docs](https://docs.konnektr.io/docs/graph/) | [Deploy Self-Hosted](https://docs.konnektr.io/docs/graph/deployment-installation/self-host)
+=======
 → <!-- [Start with Hosted Platform](https://ktrlplane.konnektr.io) | --> [Read the Docs](https://docs.konnektr.io/docs/graph/?utm_source=github&utm_medium=product_readme&utm_campaign=graph) | [Deploy Self-Hosted](https://docs.konnektr.io/docs/graph/deployment-installation/self-host?utm_source=github&utm_medium=product_readme&utm_campaign=graph)
+
+> > > > > > > main
