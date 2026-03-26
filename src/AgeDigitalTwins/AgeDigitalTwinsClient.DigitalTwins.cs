@@ -1106,15 +1106,21 @@ RETURN COUNT(t) AS deletedCount";
         }
 
         // Phase 4: Execute batch database operation
-        if (finalValidTwins.Count > 0)
+        // Sub-batch into chunks of 25 to keep each UNWIND parameter payload within the write buffer limit.
+        const int unwindChunkSize = 25;
+        for (int chunkStart = 0; chunkStart < finalValidTwins.Count; chunkStart += unwindChunkSize)
         {
+            var chunk = finalValidTwins.GetRange(
+                chunkStart,
+                Math.Min(unwindChunkSize, finalValidTwins.Count - chunkStart)
+            );
             try
             {
                 // Wrap each twin with a non-$-prefixed dtId key to avoid
                 // AGE interpreting '$dtId' inside bracket notation as a parameter reference
                 var items = new JsonArray(
                     [
-                        .. finalValidTwins.Select(t =>
+                        .. chunk.Select(t =>
                             (JsonNode?)
                                 new JsonObject
                                 {
@@ -1139,16 +1145,14 @@ SET t = twin";
                 );
                 await command.ExecuteNonQueryAsync(cancellationToken);
 
-                // Mark all successfully processed twins
-                foreach (var (digitalTwinId, _) in finalValidTwins)
+                foreach (var (digitalTwinId, _) in chunk)
                 {
                     results.Add(DigitalTwinOperationResult.Success(digitalTwinId));
                 }
             }
             catch (Exception ex)
             {
-                // Mark all remaining twins as failed due to database error
-                foreach (var (digitalTwinId, _) in finalValidTwins)
+                foreach (var (digitalTwinId, _) in chunk)
                 {
                     results.Add(
                         DigitalTwinOperationResult.Failure(

@@ -903,92 +903,98 @@ RETURN t.`$dtId` AS twinId";
         }
 
         // Phase 3: Execute batch database operation using UNWIND - grouped by relationship name
-        try
+        // Add ETags to validated relationships
+        foreach (var item in validatedRelationships)
         {
-            // Add ETags to validated relationships
-            foreach (var item in validatedRelationships)
+            var relationshipId = item.jsonObject["$relationshipId"]?.GetValue<string>();
+            var etag = ETagGenerator.GenerateEtag(relationshipId ?? string.Empty, now);
+            item.jsonObject["$etag"] = etag;
+        }
+
+        // Group relationships by relationship name since we need separate queries for each relationship type
+        var relationshipGroups = validatedRelationships.GroupBy(x => x.relationshipName).ToList();
+
+        // Sub-batch into chunks of 25 to keep each UNWIND parameter payload within the write buffer limit.
+        const int unwindChunkSize = 25;
+
+        // Execute batch operation for each relationship type
+        foreach (var group in relationshipGroups)
+        {
+            var relationshipName = group.Key;
+            var groupData = group.Select(x => x.jsonObject).ToList();
+
+            for (int chunkStart = 0; chunkStart < groupData.Count; chunkStart += unwindChunkSize)
             {
-                var relationshipId = item.jsonObject["$relationshipId"]?.GetValue<string>();
-                var etag = ETagGenerator.GenerateEtag(relationshipId ?? string.Empty, now);
-                item.jsonObject["$etag"] = etag;
-            }
-
-            // Group relationships by relationship name since we need separate queries for each relationship type
-            var relationshipGroups = validatedRelationships
-                .GroupBy(x => x.relationshipName)
-                .ToList();
-
-            // Execute batch operation for each relationship type
-            foreach (var group in relationshipGroups)
-            {
-                var relationshipName = group.Key;
-                var groupData = group.Select(x => x.jsonObject).ToList();
-
-                // Wrap each relationship with non-$-prefixed keys to avoid
-                // AGE interpreting '$sourceId' etc. inside bracket notation as parameter references
-                var items = new JsonArray(
-                    [
-                        .. groupData.Select(r =>
-                        {
-                            var sourceId = r["$sourceId"]?.GetValue<string>();
-                            var targetId = r["$targetId"]?.GetValue<string>();
-                            var relId = r["$relationshipId"]?.GetValue<string>();
-                            return (JsonNode?)
-                                new JsonObject
-                                {
-                                    ["sourceId"] = sourceId,
-                                    ["targetId"] = targetId,
-                                    ["relId"] = relId,
-                                    ["rel"] = r.DeepClone(),
-                                };
-                        }),
-                    ]
+                var chunk = groupData.GetRange(
+                    chunkStart,
+                    Math.Min(unwindChunkSize, groupData.Count - chunkStart)
                 );
-                var relParams = new JsonObject { { "items", items } };
+                try
+                {
+                    // Wrap each relationship with non-$-prefixed keys to avoid
+                    // AGE interpreting '$sourceId' etc. inside bracket notation as parameter references
+                    var items = new JsonArray(
+                        [
+                            .. chunk.Select(r =>
+                            {
+                                var sourceId = r["$sourceId"]?.GetValue<string>();
+                                var targetId = r["$targetId"]?.GetValue<string>();
+                                var relId = r["$relationshipId"]?.GetValue<string>();
+                                return (JsonNode?)
+                                    new JsonObject
+                                    {
+                                        ["sourceId"] = sourceId,
+                                        ["targetId"] = targetId,
+                                        ["relId"] = relId,
+                                        ["rel"] = r.DeepClone(),
+                                    };
+                            }),
+                        ]
+                    );
+                    var relParams = new JsonObject { { "items", items } };
 
-                string cypher =
-                    $@"UNWIND $items as item
+                    string cypher =
+                        $@"UNWIND $items as item
 WITH item.sourceId as sourceId, item.targetId as targetId, item.relId as relId, item.rel as rel
 MATCH (source:Twin {{`$dtId`: sourceId}})
 MATCH (target:Twin {{`$dtId`: targetId}})
 MERGE (source)-[r:{relationshipName} {{`$relationshipId`: relId}}]->(target)
 SET r = rel";
 
-                await using var command = connection.CreateCypherCommand(
-                    _graphName,
-                    cypher,
-                    JsonSerializer.Serialize(relParams, serializerOptions)
-                );
-                await command.ExecuteNonQueryAsync(cancellationToken);
-            }
+                    await using var command = connection.CreateCypherCommand(
+                        _graphName,
+                        cypher,
+                        JsonSerializer.Serialize(relParams, serializerOptions)
+                    );
+                    await command.ExecuteNonQueryAsync(cancellationToken);
 
-            // Mark all relationships as successful
-            foreach (var item in validatedRelationships)
-            {
-                var sourceId = item.jsonObject["$sourceId"]?.GetValue<string>();
-                var relationshipId = item.jsonObject["$relationshipId"]?.GetValue<string>();
-                results.Add(
-                    RelationshipOperationResult.Success(
-                        sourceId ?? string.Empty,
-                        relationshipId ?? string.Empty
-                    )
-                );
-            }
-        }
-        catch (Exception ex)
-        {
-            // Mark all remaining relationships as failed due to database error
-            foreach (var item in validatedRelationships)
-            {
-                var sourceId = item.jsonObject["$sourceId"]?.GetValue<string>();
-                var relationshipId = item.jsonObject["$relationshipId"]?.GetValue<string>();
-                results.Add(
-                    RelationshipOperationResult.Failure(
-                        sourceId ?? string.Empty,
-                        relationshipId ?? string.Empty,
-                        $"Database operation failed: {ex.Message}"
-                    )
-                );
+                    foreach (var r in chunk)
+                    {
+                        var sourceId = r["$sourceId"]?.GetValue<string>();
+                        var relationshipId = r["$relationshipId"]?.GetValue<string>();
+                        results.Add(
+                            RelationshipOperationResult.Success(
+                                sourceId ?? string.Empty,
+                                relationshipId ?? string.Empty
+                            )
+                        );
+                    }
+                }
+                catch (Exception ex)
+                {
+                    foreach (var r in chunk)
+                    {
+                        var sourceId = r["$sourceId"]?.GetValue<string>();
+                        var relationshipId = r["$relationshipId"]?.GetValue<string>();
+                        results.Add(
+                            RelationshipOperationResult.Failure(
+                                sourceId ?? string.Empty,
+                                relationshipId ?? string.Empty,
+                                $"Database operation failed: {ex.Message}"
+                            )
+                        );
+                    }
+                }
             }
         }
 

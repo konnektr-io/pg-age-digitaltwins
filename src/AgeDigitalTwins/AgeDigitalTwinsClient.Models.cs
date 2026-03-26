@@ -380,7 +380,9 @@ MATCH (m:Model {{id: dependency}})
 
             // Insert models in batches to avoid building a single enormous Cypher query string.
             // The DTDL parser above still receives all models at once for dependency resolution.
-            const int insertBatchSize = 500;
+            // Batch size is kept small because large DTDL models can be 5-20 KB each and the
+            // agtype serializer requires the entire parameter to fit in a single write buffer (1 MB).
+            const int insertBatchSize = 50;
             for (int batchStart = 0; batchStart < modelDatas.Count; batchStart += insertBatchSize)
             {
                 var batch = modelDatas.GetRange(
