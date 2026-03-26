@@ -1110,19 +1110,26 @@ RETURN COUNT(t) AS deletedCount";
         {
             try
             {
-                // Prepare twins for batch insert - construct full query like models
-                JsonObject parametersJson =
-                    new()
-                    {
-                        {
-                            "twins",
-                            new JsonArray([.. finalValidTwins.Select(t => t.digitalTwinObject)])
-                        },
-                    };
+                // Wrap each twin with a non-$-prefixed dtId key to avoid
+                // AGE interpreting '$dtId' inside bracket notation as a parameter reference
+                var items = new JsonArray(
+                    [
+                        .. finalValidTwins.Select(t =>
+                            (JsonNode?)
+                                new JsonObject
+                                {
+                                    ["dtId"] = JsonValue.Create(t.digitalTwinId),
+                                    ["twin"] = t.digitalTwinObject.DeepClone(),
+                                }
+                        ),
+                    ]
+                );
+                var parametersJson = new JsonObject { { "items", items } };
 
                 string cypher =
-                    @"UNWIND $twins as twin
-MERGE (t:Twin {`$dtId`: twin['$dtId']})
+                    @"UNWIND $items as item
+WITH item.dtId as dtId, item.twin as twin
+MERGE (t:Twin {`$dtId`: dtId})
 SET t = twin";
 
                 await using var command = connection.CreateCypherCommand(

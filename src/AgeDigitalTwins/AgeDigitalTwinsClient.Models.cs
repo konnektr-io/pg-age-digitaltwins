@@ -417,9 +417,9 @@ SET m = modelAgtype";
             foreach (var (sourceId, targetId) in extendsEdges)
             {
                 const string extendsCypher =
-                    @"MATCH (m:Model), (m2:Model)
-                                WHERE m.id = $sourceId AND m2.id = $targetId
-                                CREATE (m)-[:_extends]->(m2)";
+                    @"MATCH (m:Model {id: $sourceId})
+MATCH (m2:Model {id: $targetId})
+CREATE (m)-[:_extends]->(m2)";
                 await using var extendsCommand = connection.CreateCypherCommand(
                     _graphName,
                     extendsCypher,
@@ -437,9 +437,9 @@ SET m = modelAgtype";
             foreach (var (sourceId, targetId) in componentEdges)
             {
                 const string hasComponentCypher =
-                    @"MATCH (m:Model), (m2:Model)
-                                    WHERE m.id = $sourceId AND m2.id = $targetId
-                                    CREATE (m)-[:_hasComponent]->(m2)";
+                    @"MATCH (m:Model {id: $sourceId})
+MATCH (m2:Model {id: $targetId})
+CREATE (m)-[:_hasComponent]->(m2)";
                 await using var hasComponentCommand = connection.CreateCypherCommand(
                     _graphName,
                     hasComponentCypher,

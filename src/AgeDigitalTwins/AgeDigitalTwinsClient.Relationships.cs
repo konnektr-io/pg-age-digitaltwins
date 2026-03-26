@@ -924,16 +924,35 @@ RETURN t.`$dtId` AS twinId";
                 var relationshipName = group.Key;
                 var groupData = group.Select(x => x.jsonObject).ToList();
 
-                // Use Cypher parameters for batch relationship insert
-                var relArray = new JsonArray([.. groupData.Select(r => (JsonNode?)r.DeepClone())]);
-                var relParams = new JsonObject { { "relationships", relArray } };
+                // Wrap each relationship with non-$-prefixed keys to avoid
+                // AGE interpreting '$sourceId' etc. inside bracket notation as parameter references
+                var items = new JsonArray(
+                    [
+                        .. groupData.Select(r =>
+                        {
+                            var sourceId = r["$sourceId"]?.GetValue<string>();
+                            var targetId = r["$targetId"]?.GetValue<string>();
+                            var relId = r["$relationshipId"]?.GetValue<string>();
+                            return (JsonNode?)
+                                new JsonObject
+                                {
+                                    ["sourceId"] = sourceId,
+                                    ["targetId"] = targetId,
+                                    ["relId"] = relId,
+                                    ["rel"] = r.DeepClone(),
+                                };
+                        }),
+                    ]
+                );
+                var relParams = new JsonObject { { "items", items } };
 
                 string cypher =
-                    $@"UNWIND $relationships as relationship
-                    MATCH (source:Twin {{`$dtId`: relationship['$sourceId']}})
-                    MATCH (target:Twin {{`$dtId`: relationship['$targetId']}})
-                    MERGE (source)-[r:{relationshipName} {{`$relationshipId`: relationship['$relationshipId']}}]->(target)
-                    SET r = relationship";
+                    $@"UNWIND $items as item
+WITH item.sourceId as sourceId, item.targetId as targetId, item.relId as relId, item.rel as rel
+MATCH (source:Twin {{`$dtId`: sourceId}})
+MATCH (target:Twin {{`$dtId`: targetId}})
+MERGE (source)-[r:{relationshipName} {{`$relationshipId`: relId}}]->(target)
+SET r = rel";
 
                 await using var command = connection.CreateCypherCommand(
                     _graphName,
