@@ -1132,7 +1132,8 @@ WITH item.dtId as dtId, item.twin as twin
 MERGE (t:Twin {`$dtId`: dtId})
 SET t = twin";
 
-                await using var command = connection.CreateCypherCommand(
+                await using var command = CreateCypherCommandWithTextParam(
+                    connection,
                     _graphName,
                     cypher,
                     JsonSerializer.Serialize(parametersJson, serializerOptions)
