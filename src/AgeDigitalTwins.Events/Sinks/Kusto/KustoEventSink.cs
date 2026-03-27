@@ -49,44 +49,7 @@ public class KustoEventSink : IEventSink, IDisposable
                     IngestionMapping = new IngestionMapping
                     {
                         IngestionMappingKind = IngestionMappingKind.Json,
-                        IngestionMappings =
-                        [
-                            new(
-                                "TimeStamp",
-                                "datetime",
-                                new() { { MappingConsts.Path, "$.timeStamp" } }
-                            ),
-                            new(
-                                "SourceTimeStamp",
-                                "datetime",
-                                new() { { MappingConsts.Path, "$.sourceTimeStamp" } }
-                            ),
-                            new(
-                                "ServiceId",
-                                "string",
-                                new() { { MappingConsts.Path, "$.serviceId" } }
-                            ),
-                            new("Id", "string", new() { { MappingConsts.Path, "$.id" } }),
-                            new("ModelId", "string", new() { { MappingConsts.Path, "$.modelId" } }),
-                            new("Key", "string", new() { { MappingConsts.Path, "$.key" } }),
-                            new("Value", "dynamic", new() { { MappingConsts.Path, "$.value" } }),
-                            new(
-                                "RelationshipTarget",
-                                "string",
-                                new() { { MappingConsts.Path, "$.relationshipTarget" } }
-                            ),
-                            new(
-                                "RelationshipId",
-                                "string",
-                                new() { { MappingConsts.Path, "$.relationshipId" } }
-                            ),
-                            new("Action", "string", new() { { MappingConsts.Path, "$.action" } }),
-                            new(
-                                "UpdatedBy",
-                                "string",
-                                new() { { MappingConsts.Path, "$.updatedBy" } }
-                            ),
-                        ],
+                        IngestionMappings = BuildPropertyEventMappings(options.TrackLastUpdatedBy),
                     },
                 }
             },
@@ -247,7 +210,7 @@ public class KustoEventSink : IEventSink, IDisposable
                         {
                             _isHealthy = false;
                             _logger.LogError(
-                                "Ingestion to Kusto sink '{SinkName}' failed: {Status}",
+                                "Queued ingestion to Kusto sink '{SinkName}' reported an immediate failure: {Status}",
                                 Name,
                                 JsonSerializer.Serialize(status)
                             );
@@ -256,14 +219,14 @@ public class KustoEventSink : IEventSink, IDisposable
                         {
                             _isHealthy = true;
                             _logger.LogDebug(
-                                "Ingestion to Kusto sink '{SinkName}' succeeded: {Status}",
+                                "Queued ingestion to Kusto sink '{SinkName}' accepted with status: {Status}. Final result is determined asynchronously by ADX (check '.show ingestion failures').",
                                 Name,
                                 JsonSerializer.Serialize(status)
                             );
                         }
                     });
                 _logger.LogInformation(
-                    "Ingested {EventCount} event(s) of type {EventType} with source {EventSource} to Kusto sink '{SinkName}'",
+                    "Queued {EventCount} event(s) of type {EventType} with source {EventSource} for ingestion to Kusto sink '{SinkName}'. Final ingestion status is asynchronous.",
                     eventGroup.Count(),
                     eventType,
                     eventGroup.FirstOrDefault()?.Source?.ToString() ?? "unknown",
@@ -282,6 +245,38 @@ public class KustoEventSink : IEventSink, IDisposable
                 throw;
             }
         }
+    }
+
+    private static List<ColumnMapping> BuildPropertyEventMappings(bool trackLastUpdatedBy)
+    {
+        var mappings = new List<ColumnMapping>
+        {
+            new("TimeStamp", "datetime", new() { { MappingConsts.Path, "$.timeStamp" } }),
+            new(
+                "SourceTimeStamp",
+                "datetime",
+                new() { { MappingConsts.Path, "$.sourceTimeStamp" } }
+            ),
+            new("ServiceId", "string", new() { { MappingConsts.Path, "$.serviceId" } }),
+            new("Id", "string", new() { { MappingConsts.Path, "$.id" } }),
+            new("ModelId", "string", new() { { MappingConsts.Path, "$.modelId" } }),
+            new("Key", "string", new() { { MappingConsts.Path, "$.key" } }),
+            new("Value", "dynamic", new() { { MappingConsts.Path, "$.value" } }),
+            new(
+                "RelationshipTarget",
+                "string",
+                new() { { MappingConsts.Path, "$.relationshipTarget" } }
+            ),
+            new("RelationshipId", "string", new() { { MappingConsts.Path, "$.relationshipId" } }),
+            new("Action", "string", new() { { MappingConsts.Path, "$.action" } }),
+        };
+        if (trackLastUpdatedBy)
+        {
+            mappings.Add(
+                new("UpdatedBy", "string", new() { { MappingConsts.Path, "$.updatedBy" } })
+            );
+        }
+        return mappings;
     }
 
     public void Dispose()
