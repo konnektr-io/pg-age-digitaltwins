@@ -274,6 +274,7 @@ public class KustoEventSink : IEventSink, IDisposable
                     Name,
                     ex.Message
                 );
+                throw;
             }
         }
     }
