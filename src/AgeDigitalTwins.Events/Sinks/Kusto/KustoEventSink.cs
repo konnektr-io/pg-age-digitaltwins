@@ -81,6 +81,11 @@ public class KustoEventSink : IEventSink, IDisposable
                                 new() { { MappingConsts.Path, "$.relationshipId" } }
                             ),
                             new("Action", "string", new() { { MappingConsts.Path, "$.action" } }),
+                            new(
+                                "UpdatedBy",
+                                "string",
+                                new() { { MappingConsts.Path, "$.updatedBy" } }
+                            ),
                         ],
                     },
                 }
