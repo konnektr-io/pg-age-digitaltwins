@@ -350,6 +350,4 @@ app.UseOutputCache();
 
 app.MapDefaultEndpoints();
 
-//  app.UseHsts();
-
-app.Run();
+await app.RunAsync();
