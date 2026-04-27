@@ -1,4 +1,4 @@
-name: Build and Publish Events Image to GHCR
+name: Build and Publish Events Image to ACR
 
 on:
   release:
@@ -9,31 +9,68 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
     steps:
-      - name: Checkout GitHub Action
-        uses: actions/checkout@v6
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Log in to the GitHub Container registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Set VERSION variable from tag
         run: |
-          TAG=${{github.event.release.tag_name}}
+          TAG=${{ github.event.release.tag_name }}
           echo "VERSION=${TAG#v}" >> $GITHUB_ENV
 
-      - name: Build and load
+      - name: Set up Docker Context for Buildx
+        run: docker context create builders
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          endpoint: builders
+
+      - name: Build
         uses: docker/build-push-action@v6
         with:
           context: ./src
           file: ./src/AgeDigitalTwins.Events/Dockerfile
-          push: true
-          load: true
-          tags: ghcr.io/${{ github.repository }}/agedigitaltwins-events:${{github.event.release.tag_name && env.VERSION}}
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: ${{ vars.AZURE_CONTAINER_REGISTRY }}/agedigitaltwins-events:${{ env.VERSION }}
+          outputs: type=docker,dest=/tmp/agedigitaltwins-events.tar
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: agedigitaltwins-events-${{ github.run_id }}
+          path: /tmp/agedigitaltwins-events.tar
+          retention-days: 1
+
+  publish:
+    needs: [build]
+    runs-on: [pda-self-hosted-linux]
+    steps:
+      - name: Set VERSION variable from tag
+        run: |
+          TAG=${{ github.event.release.tag_name }}
+          echo "VERSION=${TAG#v}" >> $GITHUB_ENV
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: agedigitaltwins-events-${{ github.run_id }}
+          path: /tmp
+
+      - name: Load image
+        run: |
+          docker load --input /tmp/agedigitaltwins-events.tar
+          docker image ls -a
+
+      - name: Login to Azure Container Registry
+        uses: azure/docker-login@v1
+        with:
+          login-server: ${{ vars.AZURE_CONTAINER_REGISTRY }}
+          username: ${{ secrets.LZ_SPN_APP_ID }}
+          password: ${{ secrets.LZ_SPN_APP_SECRET }}
+
+      - name: Push image
+        run: |
+          docker push ${{ vars.AZURE_CONTAINER_REGISTRY }}/agedigitaltwins-events:${{ env.VERSION }}
