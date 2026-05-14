@@ -1929,4 +1929,125 @@ RETURN t";
         // but will show the results in the test output
         Assert.True(true, output.ToString());
     } */
+
+    [Fact]
+    public async Task QueryAsync_Collect_Vertices_ReturnsTwinPropertiesAsList()
+    {
+        // Verifies that collect(a), where a is a vertex, returns a JSON array of
+        // twin property dicts — this was broken before the GetArray() fix because
+        // the agtype list contained ::vertex-annotated items that are not valid JSON.
+        await IntializeAsync();
+
+        await Client.CreateOrReplaceDigitalTwinAsync(
+            "room1",
+            @"{""$dtId"": ""room1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""Room 1""}"
+        );
+        await Client.CreateOrReplaceDigitalTwinAsync(
+            "sensor1",
+            @"{""$dtId"": ""sensor1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:tempsensor;1""}, ""name"": ""Sensor 1"", ""temperature"": 25.0}"
+        );
+        await Client.CreateOrReplaceDigitalTwinAsync(
+            "sensor2",
+            @"{""$dtId"": ""sensor2"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:tempsensor;1""}, ""name"": ""Sensor 2"", ""temperature"": 30.0}"
+        );
+        await Client.CreateOrReplaceRelationshipAsync(
+            "room1",
+            "rel1",
+            @"{""$relationshipId"": ""rel1"", ""$sourceId"": ""room1"", ""$relationshipName"": ""rel_has_sensors"", ""$targetId"": ""sensor1""}"
+        );
+        await Client.CreateOrReplaceRelationshipAsync(
+            "room1",
+            "rel2",
+            @"{""$relationshipId"": ""rel2"", ""$sourceId"": ""room1"", ""$relationshipName"": ""rel_has_sensors"", ""$targetId"": ""sensor2""}"
+        );
+
+        var result = await Client
+            .QueryAsync<JsonDocument>(
+                @"MATCH (r:Twin { `$dtId`: 'room1' })
+                  OPTIONAL MATCH (r)-[:rel_has_sensors]->(s:Twin)
+                  RETURN r, collect(s) AS sensors"
+            )
+            .FirstOrDefaultAsync();
+
+        Assert.NotNull(result);
+        Assert.Equal("room1", result.RootElement.GetProperty("r").GetProperty("$dtId").GetString());
+
+        var sensors = result.RootElement.GetProperty("sensors");
+        Assert.Equal(JsonValueKind.Array, sensors.ValueKind);
+        Assert.Equal(2, sensors.GetArrayLength());
+
+        var dtIds = sensors
+            .EnumerateArray()
+            .Select(s => s.GetProperty("$dtId").GetString())
+            .OrderBy(id => id)
+            .ToList();
+        Assert.Equal(new[] { "sensor1", "sensor2" }, dtIds);
+    }
+
+    [Fact]
+    public async Task QueryAsync_Collect_Properties_ReturnsMapsAsList()
+    {
+        // Verifies that collect(properties(a)), the previous workaround for the
+        // ::vertex annotation issue, still produces the correct result after the fix.
+        await IntializeAsync();
+
+        await Client.CreateOrReplaceDigitalTwinAsync(
+            "room1",
+            @"{""$dtId"": ""room1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""Room 1""}"
+        );
+        await Client.CreateOrReplaceDigitalTwinAsync(
+            "sensor1",
+            @"{""$dtId"": ""sensor1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:tempsensor;1""}, ""name"": ""Sensor 1"", ""temperature"": 25.0}"
+        );
+        await Client.CreateOrReplaceRelationshipAsync(
+            "room1",
+            "rel1",
+            @"{""$relationshipId"": ""rel1"", ""$sourceId"": ""room1"", ""$relationshipName"": ""rel_has_sensors"", ""$targetId"": ""sensor1""}"
+        );
+
+        var result = await Client
+            .QueryAsync<JsonDocument>(
+                @"MATCH (r:Twin { `$dtId`: 'room1' })
+                  OPTIONAL MATCH (r)-[:rel_has_sensors]->(s:Twin)
+                  RETURN r, collect(properties(s)) AS sensors"
+            )
+            .FirstOrDefaultAsync();
+
+        Assert.NotNull(result);
+        Assert.Equal("room1", result.RootElement.GetProperty("r").GetProperty("$dtId").GetString());
+
+        var sensors = result.RootElement.GetProperty("sensors");
+        Assert.Equal(JsonValueKind.Array, sensors.ValueKind);
+        Assert.Equal(1, sensors.GetArrayLength());
+        Assert.Equal("sensor1", sensors[0].GetProperty("$dtId").GetString());
+        Assert.Equal(25.0, sensors[0].GetProperty("temperature").GetDouble());
+    }
+
+    [Fact]
+    public async Task QueryAsync_Collect_WithNoMatches_ReturnsEmptyList()
+    {
+        // Verifies that collect() returns an empty array when OPTIONAL MATCH finds nothing,
+        // rather than throwing or returning null.
+        await IntializeAsync();
+
+        await Client.CreateOrReplaceDigitalTwinAsync(
+            "room1",
+            @"{""$dtId"": ""room1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""Room 1""}"
+        );
+
+        var result = await Client
+            .QueryAsync<JsonDocument>(
+                @"MATCH (r:Twin { `$dtId`: 'room1' })
+                  OPTIONAL MATCH (r)-[:rel_has_sensors]->(s:Twin)
+                  RETURN r, collect(s) AS sensors"
+            )
+            .FirstOrDefaultAsync();
+
+        Assert.NotNull(result);
+        Assert.Equal("room1", result.RootElement.GetProperty("r").GetProperty("$dtId").GetString());
+
+        var sensors = result.RootElement.GetProperty("sensors");
+        Assert.Equal(JsonValueKind.Array, sensors.ValueKind);
+        Assert.Equal(0, sensors.GetArrayLength());
+    }
 }
