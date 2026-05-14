@@ -155,54 +155,23 @@ Program.cs
  Microsoft.AspNetCore.WebUtilities.dll
  Microsoft.Extensions.Caching.Abstractions.dll
  Microsoft.Extensions.Caching.Memory.dll
- Microsoft.Extensions.Configuration.Abstractions.dll
- Microsoft.Extensions.Configuration.Binder.dll
- Microsoft.Extensions.Configuration.CommandLine.dll
- Microsoft.Extensions.Configuration.dll
- Microsoft.Extensions.Configuration.EnvironmentVariables.dll
- Microsoft.Extensions.Configuration.FileExtensions.dll
  Microsoft.Extensions.Configuration.Ini.dll
- Microsoft.Extensions.Configuration.Json.dll
  Microsoft.Extensions.Configuration.KeyPerFile.dll
- Microsoft.Extensions.Configuration.UserSecrets.dll
  Microsoft.Extensions.Configuration.Xml.dll
- Microsoft.Extensions.DependencyInjection.Abstractions.dll
- Microsoft.Extensions.DependencyInjection.dll
- Microsoft.Extensions.Diagnostics.Abstractions.dll
- Microsoft.Extensions.Diagnostics.dll
- Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions.dll
- Microsoft.Extensions.Diagnostics.HealthChecks.dll
  Microsoft.Extensions.Features.dll
- Microsoft.Extensions.FileProviders.Abstractions.dll
  Microsoft.Extensions.FileProviders.Composite.dll
  Microsoft.Extensions.FileProviders.Embedded.dll
- Microsoft.Extensions.FileProviders.Physical.dll
- Microsoft.Extensions.FileSystemGlobbing.dll
- Microsoft.Extensions.Hosting.Abstractions.dll
- Microsoft.Extensions.Hosting.dll
- Microsoft.Extensions.Http.dll
  Microsoft.Extensions.Identity.Core.dll
  Microsoft.Extensions.Identity.Stores.dll
  Microsoft.Extensions.Localization.Abstractions.dll
  Microsoft.Extensions.Localization.dll
- Microsoft.Extensions.Logging.Abstractions.dll
- Microsoft.Extensions.Logging.Configuration.dll
- Microsoft.Extensions.Logging.Console.dll
- Microsoft.Extensions.Logging.Debug.dll
- Microsoft.Extensions.Logging.dll
- Microsoft.Extensions.Logging.EventLog.dll
- Microsoft.Extensions.Logging.EventSource.dll
  Microsoft.Extensions.Logging.TraceSource.dll
  Microsoft.Extensions.ObjectPool.dll
- Microsoft.Extensions.Options.ConfigurationExtensions.dll
  Microsoft.Extensions.Options.DataAnnotations.dll
- Microsoft.Extensions.Options.dll
- Microsoft.Extensions.Primitives.dll
  Microsoft.Extensions.Validation.dll
  Microsoft.Extensions.WebEncoders.dll
  Microsoft.JSInterop.dll
  Microsoft.Net.Http.Headers.dll
- System.Diagnostics.EventLog.dll
  System.Formats.Cbor.dll
  System.Security.Cryptography.Xml.dll
  System.Threading.RateLimiting.dll
@@ -375,35 +344,69 @@ Program.cs
  System.Xml.XPath.XDocument.dll
  WindowsBase.dll
 <NUGET>/
- aspire.hosting.apphost/13.0.2/lib/net10.0/Aspire.Hosting.AppHost.dll
- aspire.hosting.postgresql/13.0.2/lib/net8.0/Aspire.Hosting.PostgreSQL.dll
- aspire.hosting/13.0.2/lib/net8.0/Aspire.Hosting.dll
+ aspire.hosting.apphost/13.3.2/lib/net10.0/Aspire.Hosting.AppHost.dll
+ aspire.hosting.postgresql/13.3.2/lib/net8.0/Aspire.Hosting.PostgreSQL.dll
+ aspire.hosting/13.3.2/lib/net8.0/Aspire.Hosting.dll
  aspnetcore.healthchecks.npgsql/9.0.0/lib/net8.0/HealthChecks.NpgSql.dll
  aspnetcore.healthchecks.uris/9.0.0/lib/net8.0/HealthChecks.Uris.dll
  fractions/7.3.0/lib/netstandard2.1/Fractions.dll
- google.protobuf/3.33.0/lib/net5.0/Google.Protobuf.dll
- grpc.aspnetcore.server.clientfactory/2.71.0/lib/net9.0/Grpc.AspNetCore.Server.ClientFactory.dll
- grpc.aspnetcore.server/2.71.0/lib/net9.0/Grpc.AspNetCore.Server.dll
- grpc.core.api/2.71.0/lib/netstandard2.1/Grpc.Core.Api.dll
- grpc.net.client/2.71.0/lib/net8.0/Grpc.Net.Client.dll
- grpc.net.clientfactory/2.71.0/lib/net8.0/Grpc.Net.ClientFactory.dll
- grpc.net.common/2.71.0/lib/net8.0/Grpc.Net.Common.dll
+ google.protobuf/3.33.5/lib/net5.0/Google.Protobuf.dll
+ grpc.aspnetcore.server.clientfactory/2.76.0/lib/net10.0/Grpc.AspNetCore.Server.ClientFactory.dll
+ grpc.aspnetcore.server/2.76.0/lib/net10.0/Grpc.AspNetCore.Server.dll
+ grpc.core.api/2.76.0/lib/netstandard2.1/Grpc.Core.Api.dll
+ grpc.net.client/2.76.0/lib/net10.0/Grpc.Net.Client.dll
+ grpc.net.clientfactory/2.76.0/lib/net10.0/Grpc.Net.ClientFactory.dll
+ grpc.net.common/2.76.0/lib/net10.0/Grpc.Net.Common.dll
  humanizer.core/2.14.1/lib/net6.0/Humanizer.dll
  json.more.net/2.1.0/lib/net9.0/Json.More.dll
  jsonpatch.net/3.3.0/lib/net9.0/JsonPatch.Net.dll
  jsonpointer.net/5.2.0/lib/net9.0/JsonPointer.Net.dll
- kubernetesclient/18.0.5/lib/net9.0/KubernetesClient.dll
+ kubernetesclient/18.0.13/lib/net10.0/KubernetesClient.dll
  messagepack.annotations/2.5.192/lib/netstandard2.0/MessagePack.Annotations.dll
  messagepack/2.5.192/lib/net6.0/MessagePack.dll
+ microsoft.extensions.ai.abstractions/10.3.0/lib/net10.0/Microsoft.Extensions.AI.Abstractions.dll
+ microsoft.extensions.configuration.abstractions/10.0.7/lib/net10.0/Microsoft.Extensions.Configuration.Abstractions.dll
+ microsoft.extensions.configuration.binder/10.0.7/lib/net10.0/Microsoft.Extensions.Configuration.Binder.dll
+ microsoft.extensions.configuration.commandline/10.0.7/lib/net10.0/Microsoft.Extensions.Configuration.CommandLine.dll
+ microsoft.extensions.configuration.environmentvariables/10.0.7/lib/net10.0/Microsoft.Extensions.Configuration.EnvironmentVariables.dll
+ microsoft.extensions.configuration.fileextensions/10.0.7/lib/net10.0/Microsoft.Extensions.Configuration.FileExtensions.dll
+ microsoft.extensions.configuration.json/10.0.7/lib/net10.0/Microsoft.Extensions.Configuration.Json.dll
+ microsoft.extensions.configuration.usersecrets/10.0.7/lib/net10.0/Microsoft.Extensions.Configuration.UserSecrets.dll
+ microsoft.extensions.configuration/10.0.7/lib/net10.0/Microsoft.Extensions.Configuration.dll
+ microsoft.extensions.dependencyinjection.abstractions/10.0.7/lib/net10.0/Microsoft.Extensions.DependencyInjection.Abstractions.dll
+ microsoft.extensions.dependencyinjection/10.0.7/lib/net10.0/Microsoft.Extensions.DependencyInjection.dll
+ microsoft.extensions.diagnostics.abstractions/10.0.7/lib/net10.0/Microsoft.Extensions.Diagnostics.Abstractions.dll
+ microsoft.extensions.diagnostics.healthchecks.abstractions/10.0.7/lib/net10.0/Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions.dll
+ microsoft.extensions.diagnostics.healthchecks/10.0.7/lib/net10.0/Microsoft.Extensions.Diagnostics.HealthChecks.dll
+ microsoft.extensions.diagnostics/10.0.7/lib/net10.0/Microsoft.Extensions.Diagnostics.dll
+ microsoft.extensions.fileproviders.abstractions/10.0.7/lib/net10.0/Microsoft.Extensions.FileProviders.Abstractions.dll
+ microsoft.extensions.fileproviders.physical/10.0.7/lib/net10.0/Microsoft.Extensions.FileProviders.Physical.dll
+ microsoft.extensions.filesystemglobbing/10.0.7/lib/net10.0/Microsoft.Extensions.FileSystemGlobbing.dll
+ microsoft.extensions.hosting.abstractions/10.0.7/lib/net10.0/Microsoft.Extensions.Hosting.Abstractions.dll
+ microsoft.extensions.hosting/10.0.7/lib/net10.0/Microsoft.Extensions.Hosting.dll
+ microsoft.extensions.http/10.0.7/lib/net10.0/Microsoft.Extensions.Http.dll
+ microsoft.extensions.logging.abstractions/10.0.7/lib/net10.0/Microsoft.Extensions.Logging.Abstractions.dll
+ microsoft.extensions.logging.configuration/10.0.7/lib/net10.0/Microsoft.Extensions.Logging.Configuration.dll
+ microsoft.extensions.logging.console/10.0.7/lib/net10.0/Microsoft.Extensions.Logging.Console.dll
+ microsoft.extensions.logging.debug/10.0.7/lib/net10.0/Microsoft.Extensions.Logging.Debug.dll
+ microsoft.extensions.logging.eventlog/10.0.7/lib/net10.0/Microsoft.Extensions.Logging.EventLog.dll
+ microsoft.extensions.logging.eventsource/10.0.7/lib/net10.0/Microsoft.Extensions.Logging.EventSource.dll
+ microsoft.extensions.logging/10.0.7/lib/net10.0/Microsoft.Extensions.Logging.dll
+ microsoft.extensions.options.configurationextensions/10.0.7/lib/net10.0/Microsoft.Extensions.Options.ConfigurationExtensions.dll
+ microsoft.extensions.options/10.0.7/lib/net10.0/Microsoft.Extensions.Options.dll
+ microsoft.extensions.primitives/10.0.7/lib/net10.0/Microsoft.Extensions.Primitives.dll
  microsoft.visualstudio.threading.only/17.13.61/lib/net8.0/Microsoft.VisualStudio.Threading.dll
  microsoft.visualstudio.validation/17.8.8/lib/net6.0/Microsoft.VisualStudio.Validation.dll
+ modelcontextprotocol.core/1.0.0/lib/net10.0/ModelContextProtocol.Core.dll
+ modelcontextprotocol/1.0.0/lib/net10.0/ModelContextProtocol.dll
  nerdbank.streams/2.12.87/lib/net8.0/Nerdbank.Streams.dll
  newtonsoft.json/13.0.4/lib/net6.0/Newtonsoft.Json.dll
  npgsql/8.0.3/lib/net8.0/Npgsql.dll
- polly.core/8.6.4/lib/net8.0/Polly.Core.dll
+ polly.core/8.6.5/lib/net8.0/Polly.Core.dll
  semver/3.0.0/lib/net5.0/Semver.dll
  streamjsonrpc/2.22.23/lib/net8.0/StreamJsonRpc.dll
- system.io.hashing/9.0.10/lib/net9.0/System.IO.Hashing.dll
+ system.diagnostics.eventlog/10.0.7/lib/net10.0/System.Diagnostics.EventLog.dll
+ system.io.hashing/10.0.3/lib/net10.0/System.IO.Hashing.dll
  yamldotnet/16.3.0/lib/net8.0/YamlDotNet.dll
 
 [analyzerReferences]
@@ -412,8 +415,6 @@ Program.cs
  Microsoft.AspNetCore.App.CodeFixes.dll
  Microsoft.AspNetCore.App.SourceGenerators.dll
  Microsoft.AspNetCore.Components.Analyzers.dll
- Microsoft.Extensions.Logging.Generators.dll
- Microsoft.Extensions.Options.SourceGeneration.dll
  Microsoft.Extensions.Validation.ValidationsGenerator.dll
 <DOTNET>/packs/Microsoft.NETCore.App.Ref/10.0.6/analyzers/dotnet/cs/
  Microsoft.Interop.ComInterfaceGenerator.dll
@@ -425,7 +426,11 @@ Program.cs
 <DOTNET>/sdk/10.0.202/Sdks/Microsoft.NET.Sdk/analyzers/
  Microsoft.CodeAnalysis.CSharp.NetAnalyzers.dll
  Microsoft.CodeAnalysis.NetAnalyzers.dll
-<NUGET>/aspire.hosting.apphost/13.0.2/analyzers/dotnet/cs/Aspire.Hosting.Analyzers.dll
+<NUGET>/
+ aspire.hosting.apphost/13.3.2/analyzers/dotnet/cs/Aspire.Hosting.Analyzers.dll
+ microsoft.extensions.logging.abstractions/10.0.7/analyzers/dotnet/roslyn4.4/cs/Microsoft.Extensions.Logging.Generators.dll
+ microsoft.extensions.options/10.0.7/analyzers/dotnet/roslyn4.4/cs/Microsoft.Extensions.Options.SourceGeneration.dll
+ modelcontextprotocol.core/1.0.0/analyzers/dotnet/cs/ModelContextProtocol.Analyzers.dll
 
 [analyzerConfigFiles]
 <DOTNET>/sdk/10.0.202/Sdks/Microsoft.NET.Sdk/analyzers/build/config/analysislevel_10_default.globalconfig

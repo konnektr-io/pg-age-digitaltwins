@@ -386,30 +386,30 @@ obj/Debug/net10.0/
  System.Xml.XPath.XDocument.dll
  WindowsBase.dll
 <NUGET>/
- aspire.npgsql/13.0.2/lib/net10.0/Aspire.Npgsql.dll
+ aspire.npgsql/13.3.2/lib/net10.0/Aspire.Npgsql.dll
  aspnetcore.healthchecks.npgsql/9.0.0/lib/net8.0/HealthChecks.NpgSql.dll
- microsoft.extensions.ambientmetadata.application/10.1.0/lib/net10.0/Microsoft.Extensions.AmbientMetadata.Application.dll
- microsoft.extensions.compliance.abstractions/10.1.0/lib/net10.0/Microsoft.Extensions.Compliance.Abstractions.dll
- microsoft.extensions.dependencyinjection.autoactivation/10.1.0/lib/net10.0/Microsoft.Extensions.DependencyInjection.AutoActivation.dll
- microsoft.extensions.diagnostics.exceptionsummarization/10.1.0/lib/net10.0/Microsoft.Extensions.Diagnostics.ExceptionSummarization.dll
- microsoft.extensions.http.diagnostics/10.1.0/lib/net10.0/Microsoft.Extensions.Http.Diagnostics.dll
- microsoft.extensions.http.resilience/10.1.0/lib/net10.0/Microsoft.Extensions.Http.Resilience.dll
- microsoft.extensions.resilience/10.1.0/lib/net10.0/Microsoft.Extensions.Resilience.dll
- microsoft.extensions.servicediscovery.abstractions/10.1.0/lib/net10.0/Microsoft.Extensions.ServiceDiscovery.Abstractions.dll
- microsoft.extensions.servicediscovery/10.1.0/lib/net10.0/Microsoft.Extensions.ServiceDiscovery.dll
- microsoft.extensions.telemetry.abstractions/10.1.0/lib/net10.0/Microsoft.Extensions.Telemetry.Abstractions.dll
- microsoft.extensions.telemetry/10.1.0/lib/net10.0/Microsoft.Extensions.Telemetry.dll
- npgsql.dependencyinjection/10.0.0/lib/net8.0/Npgsql.DependencyInjection.dll
- npgsql.opentelemetry/10.0.0/lib/net8.0/Npgsql.OpenTelemetry.dll
- npgsql/10.0.0/lib/net10.0/Npgsql.dll
- opentelemetry.api.providerbuilderextensions/1.14.0/lib/net10.0/OpenTelemetry.Api.ProviderBuilderExtensions.dll
- opentelemetry.api/1.14.0/lib/net10.0/OpenTelemetry.Api.dll
- opentelemetry.exporter.opentelemetryprotocol/1.14.0/lib/net10.0/OpenTelemetry.Exporter.OpenTelemetryProtocol.dll
- opentelemetry.extensions.hosting/1.14.0/lib/net10.0/OpenTelemetry.Extensions.Hosting.dll
- opentelemetry.instrumentation.aspnetcore/1.14.0/lib/net10.0/OpenTelemetry.Instrumentation.AspNetCore.dll
- opentelemetry.instrumentation.http/1.14.0/lib/net10.0/OpenTelemetry.Instrumentation.Http.dll
- opentelemetry.instrumentation.runtime/1.14.0/lib/net10.0/OpenTelemetry.Instrumentation.Runtime.dll
- opentelemetry/1.14.0/lib/net10.0/OpenTelemetry.dll
+ microsoft.extensions.ambientmetadata.application/10.6.0/lib/net10.0/Microsoft.Extensions.AmbientMetadata.Application.dll
+ microsoft.extensions.compliance.abstractions/10.6.0/lib/net10.0/Microsoft.Extensions.Compliance.Abstractions.dll
+ microsoft.extensions.dependencyinjection.autoactivation/10.6.0/lib/net10.0/Microsoft.Extensions.DependencyInjection.AutoActivation.dll
+ microsoft.extensions.diagnostics.exceptionsummarization/10.6.0/lib/net10.0/Microsoft.Extensions.Diagnostics.ExceptionSummarization.dll
+ microsoft.extensions.http.diagnostics/10.6.0/lib/net10.0/Microsoft.Extensions.Http.Diagnostics.dll
+ microsoft.extensions.http.resilience/10.6.0/lib/net10.0/Microsoft.Extensions.Http.Resilience.dll
+ microsoft.extensions.resilience/10.6.0/lib/net10.0/Microsoft.Extensions.Resilience.dll
+ microsoft.extensions.servicediscovery.abstractions/10.6.0/lib/net10.0/Microsoft.Extensions.ServiceDiscovery.Abstractions.dll
+ microsoft.extensions.servicediscovery/10.6.0/lib/net10.0/Microsoft.Extensions.ServiceDiscovery.dll
+ microsoft.extensions.telemetry.abstractions/10.6.0/lib/net10.0/Microsoft.Extensions.Telemetry.Abstractions.dll
+ microsoft.extensions.telemetry/10.6.0/lib/net10.0/Microsoft.Extensions.Telemetry.dll
+ npgsql.dependencyinjection/10.0.1/lib/net8.0/Npgsql.DependencyInjection.dll
+ npgsql.opentelemetry/10.0.2/lib/net8.0/Npgsql.OpenTelemetry.dll
+ npgsql/10.0.2/lib/net10.0/Npgsql.dll
+ opentelemetry.api.providerbuilderextensions/1.15.3/lib/net10.0/OpenTelemetry.Api.ProviderBuilderExtensions.dll
+ opentelemetry.api/1.15.3/lib/net10.0/OpenTelemetry.Api.dll
+ opentelemetry.exporter.opentelemetryprotocol/1.15.3/lib/net10.0/OpenTelemetry.Exporter.OpenTelemetryProtocol.dll
+ opentelemetry.extensions.hosting/1.15.3/lib/net10.0/OpenTelemetry.Extensions.Hosting.dll
+ opentelemetry.instrumentation.aspnetcore/1.15.2/lib/net10.0/OpenTelemetry.Instrumentation.AspNetCore.dll
+ opentelemetry.instrumentation.http/1.15.1/lib/net10.0/OpenTelemetry.Instrumentation.Http.dll
+ opentelemetry.instrumentation.runtime/1.15.1/lib/net10.0/OpenTelemetry.Instrumentation.Runtime.dll
+ opentelemetry/1.15.3/lib/net10.0/OpenTelemetry.dll
  polly.core/8.4.2/lib/net8.0/Polly.Core.dll
  polly.extensions/8.4.2/lib/net8.0/Polly.Extensions.dll
  polly.ratelimiting/8.4.2/lib/net8.0/Polly.RateLimiting.dll
@@ -432,7 +432,7 @@ obj/Debug/net10.0/
 <DOTNET>/sdk/10.0.202/Sdks/Microsoft.NET.Sdk/analyzers/
  Microsoft.CodeAnalysis.CSharp.NetAnalyzers.dll
  Microsoft.CodeAnalysis.NetAnalyzers.dll
-<NUGET>/microsoft.extensions.telemetry.abstractions/10.1.0/analyzers/dotnet/cs/
+<NUGET>/microsoft.extensions.telemetry.abstractions/10.6.0/analyzers/dotnet/cs/
  Microsoft.Gen.Logging.dll
  Microsoft.Gen.Metrics.dll
 

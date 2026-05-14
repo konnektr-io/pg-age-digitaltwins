@@ -31,3 +31,5 @@ logs
 
 # Package lock files
 pnpm-lock.yaml
+
+*.lscache

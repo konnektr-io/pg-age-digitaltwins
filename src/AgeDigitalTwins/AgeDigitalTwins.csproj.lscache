@@ -278,18 +278,18 @@ Validation/ParserDtmiResolverAsync.cs
  WindowsBase.dll
 <NUGET>/
  dtdlparser/1.1.3/lib/netstandard2.1/DTDLParser.dll
- humanizer.core/3.0.1/lib/net10.0/Humanizer.dll
- json.more.net/2.2.0/lib/net10.0/Json.More.dll
- jsonpatch.net/4.0.0/lib/net10.0/JsonPatch.Net.dll
- jsonpointer.net/6.0.0/lib/net10.0/JsonPointer.Net.dll
- konnektr.npgsql.age/1.2.1/lib/net10.0/Npgsql.Age.dll
- microsoft.extensions.caching.abstractions/10.0.1/lib/net10.0/Microsoft.Extensions.Caching.Abstractions.dll
- microsoft.extensions.caching.memory/10.0.1/lib/net10.0/Microsoft.Extensions.Caching.Memory.dll
- microsoft.extensions.dependencyinjection.abstractions/10.0.1/lib/net10.0/Microsoft.Extensions.DependencyInjection.Abstractions.dll
- microsoft.extensions.logging.abstractions/10.0.1/lib/net10.0/Microsoft.Extensions.Logging.Abstractions.dll
- microsoft.extensions.options/10.0.1/lib/net10.0/Microsoft.Extensions.Options.dll
- microsoft.extensions.primitives/10.0.1/lib/net10.0/Microsoft.Extensions.Primitives.dll
- npgsql/10.0.0/lib/net10.0/Npgsql.dll
+ humanizer.core/3.0.10/lib/net10.0/Humanizer.dll
+ json.more.net/3.0.1/lib/net10.0/Json.More.dll
+ jsonpatch.net/5.0.2/lib/net10.0/JsonPatch.Net.dll
+ jsonpointer.net/7.0.1/lib/net10.0/JsonPointer.Net.dll
+ konnektr.npgsql.age/1.3.0/lib/net10.0/Npgsql.Age.dll
+ microsoft.extensions.caching.abstractions/10.0.8/lib/net10.0/Microsoft.Extensions.Caching.Abstractions.dll
+ microsoft.extensions.caching.memory/10.0.8/lib/net10.0/Microsoft.Extensions.Caching.Memory.dll
+ microsoft.extensions.dependencyinjection.abstractions/10.0.8/lib/net10.0/Microsoft.Extensions.DependencyInjection.Abstractions.dll
+ microsoft.extensions.logging.abstractions/10.0.8/lib/net10.0/Microsoft.Extensions.Logging.Abstractions.dll
+ microsoft.extensions.options/10.0.8/lib/net10.0/Microsoft.Extensions.Options.dll
+ microsoft.extensions.primitives/10.0.8/lib/net10.0/Microsoft.Extensions.Primitives.dll
+ npgsql/10.0.2/lib/net10.0/Npgsql.dll
 
 [analyzerReferences]
 <DOTNET>/packs/Microsoft.NETCore.App.Ref/10.0.6/analyzers/dotnet/cs/
@@ -297,15 +297,15 @@ Validation/ParserDtmiResolverAsync.cs
  Microsoft.Interop.JavaScript.JSImportGenerator.dll
  Microsoft.Interop.LibraryImportGenerator.dll
  Microsoft.Interop.SourceGeneration.dll
- System.Text.Json.SourceGeneration.dll
  System.Text.RegularExpressions.Generator.dll
 <DOTNET>/sdk/10.0.202/Sdks/Microsoft.NET.Sdk/analyzers/
  Microsoft.CodeAnalysis.CSharp.NetAnalyzers.dll
  Microsoft.CodeAnalysis.NetAnalyzers.dll
 <NUGET>/
- humanizer.core/3.0.1/analyzers/dotnet/roslyn3.8/cs/Humanizer.Analyzers.dll
- microsoft.extensions.logging.abstractions/10.0.1/analyzers/dotnet/roslyn4.4/cs/Microsoft.Extensions.Logging.Generators.dll
- microsoft.extensions.options/10.0.1/analyzers/dotnet/roslyn4.4/cs/Microsoft.Extensions.Options.SourceGeneration.dll
+ humanizer.core/3.0.10/analyzers/dotnet/roslyn4.14/cs/Humanizer.Analyzers.dll
+ microsoft.extensions.logging.abstractions/10.0.8/analyzers/dotnet/roslyn4.4/cs/Microsoft.Extensions.Logging.Generators.dll
+ microsoft.extensions.options/10.0.8/analyzers/dotnet/roslyn4.4/cs/Microsoft.Extensions.Options.SourceGeneration.dll
+ system.text.json/10.0.8/analyzers/dotnet/roslyn4.4/cs/System.Text.Json.SourceGeneration.dll
 
 [analyzerConfigFiles]
 <DOTNET>/sdk/10.0.202/Sdks/Microsoft.NET.Sdk/analyzers/build/config/analysislevel_10_default.globalconfig
@@ -575,22 +575,22 @@ Validation/ParserDtmiResolverAsync.cs
  WindowsBase.dll
 <NUGET>/
  dtdlparser/1.1.3/lib/netstandard2.1/DTDLParser.dll
- humanizer.core/3.0.1/lib/net8.0/Humanizer.dll
- json.more.net/2.2.0/lib/net8.0/Json.More.dll
- jsonpatch.net/4.0.0/lib/net8.0/JsonPatch.Net.dll
- jsonpointer.net/6.0.0/lib/net8.0/JsonPointer.Net.dll
- konnektr.npgsql.age/1.2.1/lib/net8.0/Npgsql.Age.dll
- microsoft.extensions.caching.abstractions/10.0.1/lib/net8.0/Microsoft.Extensions.Caching.Abstractions.dll
- microsoft.extensions.caching.memory/10.0.1/lib/net8.0/Microsoft.Extensions.Caching.Memory.dll
- microsoft.extensions.dependencyinjection.abstractions/10.0.1/lib/net8.0/Microsoft.Extensions.DependencyInjection.Abstractions.dll
- microsoft.extensions.logging.abstractions/10.0.1/lib/net8.0/Microsoft.Extensions.Logging.Abstractions.dll
- microsoft.extensions.options/10.0.1/lib/net8.0/Microsoft.Extensions.Options.dll
- microsoft.extensions.primitives/10.0.1/lib/net8.0/Microsoft.Extensions.Primitives.dll
- npgsql/10.0.0/lib/net8.0/Npgsql.dll
- system.diagnostics.diagnosticsource/10.0.1/lib/net8.0/System.Diagnostics.DiagnosticSource.dll
- system.io.pipelines/10.0.1/lib/net8.0/System.IO.Pipelines.dll
- system.text.encodings.web/10.0.1/lib/net8.0/System.Text.Encodings.Web.dll
- system.text.json/10.0.1/lib/net8.0/System.Text.Json.dll
+ humanizer.core/2.14.1/lib/net6.0/Humanizer.dll
+ json.more.net/3.0.1/lib/net8.0/Json.More.dll
+ jsonpatch.net/5.0.2/lib/net8.0/JsonPatch.Net.dll
+ jsonpointer.net/7.0.1/lib/net8.0/JsonPointer.Net.dll
+ konnektr.npgsql.age/1.3.0/lib/net8.0/Npgsql.Age.dll
+ microsoft.extensions.caching.abstractions/10.0.8/lib/net8.0/Microsoft.Extensions.Caching.Abstractions.dll
+ microsoft.extensions.caching.memory/10.0.8/lib/net8.0/Microsoft.Extensions.Caching.Memory.dll
+ microsoft.extensions.dependencyinjection.abstractions/10.0.8/lib/net8.0/Microsoft.Extensions.DependencyInjection.Abstractions.dll
+ microsoft.extensions.logging.abstractions/10.0.8/lib/net8.0/Microsoft.Extensions.Logging.Abstractions.dll
+ microsoft.extensions.options/10.0.8/lib/net8.0/Microsoft.Extensions.Options.dll
+ microsoft.extensions.primitives/10.0.8/lib/net8.0/Microsoft.Extensions.Primitives.dll
+ npgsql/10.0.2/lib/net8.0/Npgsql.dll
+ system.diagnostics.diagnosticsource/10.0.8/lib/net8.0/System.Diagnostics.DiagnosticSource.dll
+ system.io.pipelines/10.0.8/lib/net8.0/System.IO.Pipelines.dll
+ system.text.encodings.web/10.0.8/lib/net8.0/System.Text.Encodings.Web.dll
+ system.text.json/10.0.8/lib/net8.0/System.Text.Json.dll
 
 [analyzerReferences]
 <DOTNET>/packs/Microsoft.NETCore.App.Ref/8.0.26/analyzers/dotnet/cs/
@@ -603,10 +603,9 @@ Validation/ParserDtmiResolverAsync.cs
  Microsoft.CodeAnalysis.CSharp.NetAnalyzers.dll
  Microsoft.CodeAnalysis.NetAnalyzers.dll
 <NUGET>/
- humanizer.core/3.0.1/analyzers/dotnet/roslyn3.8/cs/Humanizer.Analyzers.dll
- microsoft.extensions.logging.abstractions/10.0.1/analyzers/dotnet/roslyn4.4/cs/Microsoft.Extensions.Logging.Generators.dll
- microsoft.extensions.options/10.0.1/analyzers/dotnet/roslyn4.4/cs/Microsoft.Extensions.Options.SourceGeneration.dll
- system.text.json/10.0.1/analyzers/dotnet/roslyn4.4/cs/System.Text.Json.SourceGeneration.dll
+ microsoft.extensions.logging.abstractions/10.0.8/analyzers/dotnet/roslyn4.4/cs/Microsoft.Extensions.Logging.Generators.dll
+ microsoft.extensions.options/10.0.8/analyzers/dotnet/roslyn4.4/cs/Microsoft.Extensions.Options.SourceGeneration.dll
+ system.text.json/10.0.8/analyzers/dotnet/roslyn4.4/cs/System.Text.Json.SourceGeneration.dll
 
 [analyzerConfigFiles]
 <DOTNET>/sdk/10.0.202/Sdks/Microsoft.NET.Sdk/analyzers/build/config/analysislevel_8_default.globalconfig
@@ -876,22 +875,22 @@ Validation/ParserDtmiResolverAsync.cs
  WindowsBase.dll
 <NUGET>/
  dtdlparser/1.1.3/lib/netstandard2.1/DTDLParser.dll
- humanizer.core/3.0.1/lib/net8.0/Humanizer.dll
- json.more.net/2.2.0/lib/net9.0/Json.More.dll
- jsonpatch.net/4.0.0/lib/net9.0/JsonPatch.Net.dll
- jsonpointer.net/6.0.0/lib/net9.0/JsonPointer.Net.dll
- konnektr.npgsql.age/1.2.1/lib/net9.0/Npgsql.Age.dll
- microsoft.extensions.caching.abstractions/10.0.1/lib/net9.0/Microsoft.Extensions.Caching.Abstractions.dll
- microsoft.extensions.caching.memory/10.0.1/lib/net9.0/Microsoft.Extensions.Caching.Memory.dll
- microsoft.extensions.dependencyinjection.abstractions/10.0.1/lib/net9.0/Microsoft.Extensions.DependencyInjection.Abstractions.dll
- microsoft.extensions.logging.abstractions/10.0.1/lib/net9.0/Microsoft.Extensions.Logging.Abstractions.dll
- microsoft.extensions.options/10.0.1/lib/net9.0/Microsoft.Extensions.Options.dll
- microsoft.extensions.primitives/10.0.1/lib/net9.0/Microsoft.Extensions.Primitives.dll
- npgsql/10.0.0/lib/net9.0/Npgsql.dll
- system.diagnostics.diagnosticsource/10.0.1/lib/net9.0/System.Diagnostics.DiagnosticSource.dll
- system.io.pipelines/10.0.1/lib/net9.0/System.IO.Pipelines.dll
- system.text.encodings.web/10.0.1/lib/net9.0/System.Text.Encodings.Web.dll
- system.text.json/10.0.1/lib/net9.0/System.Text.Json.dll
+ humanizer.core/3.0.10/lib/net8.0/Humanizer.dll
+ json.more.net/3.0.1/lib/net9.0/Json.More.dll
+ jsonpatch.net/5.0.2/lib/net9.0/JsonPatch.Net.dll
+ jsonpointer.net/7.0.1/lib/net9.0/JsonPointer.Net.dll
+ konnektr.npgsql.age/1.3.0/lib/net9.0/Npgsql.Age.dll
+ microsoft.extensions.caching.abstractions/10.0.8/lib/net9.0/Microsoft.Extensions.Caching.Abstractions.dll
+ microsoft.extensions.caching.memory/10.0.8/lib/net9.0/Microsoft.Extensions.Caching.Memory.dll
+ microsoft.extensions.dependencyinjection.abstractions/10.0.8/lib/net9.0/Microsoft.Extensions.DependencyInjection.Abstractions.dll
+ microsoft.extensions.logging.abstractions/10.0.8/lib/net9.0/Microsoft.Extensions.Logging.Abstractions.dll
+ microsoft.extensions.options/10.0.8/lib/net9.0/Microsoft.Extensions.Options.dll
+ microsoft.extensions.primitives/10.0.8/lib/net9.0/Microsoft.Extensions.Primitives.dll
+ npgsql/10.0.2/lib/net9.0/Npgsql.dll
+ system.diagnostics.diagnosticsource/10.0.8/lib/net9.0/System.Diagnostics.DiagnosticSource.dll
+ system.io.pipelines/10.0.8/lib/net9.0/System.IO.Pipelines.dll
+ system.text.encodings.web/10.0.8/lib/net9.0/System.Text.Encodings.Web.dll
+ system.text.json/10.0.8/lib/net9.0/System.Text.Json.dll
 
 [analyzerReferences]
 <DOTNET>/packs/Microsoft.NETCore.App.Ref/9.0.15/analyzers/dotnet/cs/
@@ -904,10 +903,10 @@ Validation/ParserDtmiResolverAsync.cs
  Microsoft.CodeAnalysis.CSharp.NetAnalyzers.dll
  Microsoft.CodeAnalysis.NetAnalyzers.dll
 <NUGET>/
- humanizer.core/3.0.1/analyzers/dotnet/roslyn3.8/cs/Humanizer.Analyzers.dll
- microsoft.extensions.logging.abstractions/10.0.1/analyzers/dotnet/roslyn4.4/cs/Microsoft.Extensions.Logging.Generators.dll
- microsoft.extensions.options/10.0.1/analyzers/dotnet/roslyn4.4/cs/Microsoft.Extensions.Options.SourceGeneration.dll
- system.text.json/10.0.1/analyzers/dotnet/roslyn4.4/cs/System.Text.Json.SourceGeneration.dll
+ humanizer.core/3.0.10/analyzers/dotnet/roslyn4.14/cs/Humanizer.Analyzers.dll
+ microsoft.extensions.logging.abstractions/10.0.8/analyzers/dotnet/roslyn4.4/cs/Microsoft.Extensions.Logging.Generators.dll
+ microsoft.extensions.options/10.0.8/analyzers/dotnet/roslyn4.4/cs/Microsoft.Extensions.Options.SourceGeneration.dll
+ system.text.json/10.0.8/analyzers/dotnet/roslyn4.4/cs/System.Text.Json.SourceGeneration.dll
 
 [analyzerConfigFiles]
 <DOTNET>/sdk/10.0.202/Sdks/Microsoft.NET.Sdk/analyzers/build/config/analysislevel_9_default.globalconfig

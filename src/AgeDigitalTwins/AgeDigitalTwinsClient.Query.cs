@@ -145,61 +145,9 @@ public partial class AgeDigitalTwinsClient
                             var value = await reader.GetFieldValueAsync<Agtype?>(i);
                             if (value == null)
                                 continue;
-                            if (((Agtype)value).IsVertex)
-                            {
-                                var props = ((Vertex)value).Properties;
-                                row.Add(column.ColumnName, props);
-                                totalProperties += props.Count;
-                            }
-                            else if (((Agtype)value).IsEdge)
-                            {
-                                var props = ((Edge)value).Properties;
-                                row.Add(column.ColumnName, props);
-                                totalProperties += props.Count;
-                            }
-                            else
-                            {
-                                string valueString = ((Agtype)value).GetString().Trim('\u0001');
-                                if (int.TryParse(valueString, out int intValue))
-                                {
-                                    row.Add(column.ColumnName, intValue);
-                                }
-                                else if (double.TryParse(valueString, out double doubleValue))
-                                {
-                                    row.Add(column.ColumnName, doubleValue);
-                                }
-                                else if (bool.TryParse(valueString, out bool boolValue))
-                                {
-                                    row.Add(column.ColumnName, boolValue);
-                                }
-                                else if (valueString.StartsWith('"') && valueString.EndsWith('"'))
-                                {
-                                    row.Add(column.ColumnName, valueString.Trim('"'));
-                                }
-                                else if (valueString.StartsWith('[') && valueString.EndsWith(']'))
-                                {
-                                    row.Add(column.ColumnName, ((Agtype)value).GetList());
-                                }
-                                else if (valueString.StartsWith('{') && valueString.EndsWith('}'))
-                                {
-                                    var dict = JsonSerializer.Deserialize<
-                                        Dictionary<string, object>
-                                    >(valueString);
-                                    if (dict != null)
-                                    {
-                                        row.Add(column.ColumnName, dict);
-                                        totalProperties += dict.Count;
-                                    }
-                                    else
-                                    {
-                                        row.Add(column.ColumnName, valueString);
-                                    }
-                                }
-                                else
-                                {
-                                    row.Add(column.ColumnName, valueString);
-                                }
-                            }
+                            var (colValue, propCount) = ConvertAgtypeToObject((Agtype)value);
+                            row.Add(column.ColumnName, colValue!);
+                            totalProperties += propCount;
                         }
                         if (typeof(T) == typeof(string))
                         {
@@ -303,4 +251,55 @@ public partial class AgeDigitalTwinsClient
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
     )]
     internal static partial Regex VariableLengthEdgeRegex();
+
+    /// <summary>
+    /// Converts an <see cref="Agtype"/> value to a plain .NET object, recursively handling
+    /// arrays so that <see cref="Agtype.IsVertex"/>, <see cref="Agtype.IsEdge"/>, etc.
+    /// are applied to every element.
+    /// </summary>
+    /// <returns>
+    /// A tuple of the converted value and the total number of properties encountered
+    /// (used for query-charge accounting).
+    /// </returns>
+    private static (object? Value, int PropertiesCount) ConvertAgtypeToObject(Agtype agtype)
+    {
+        if (agtype.IsVertex)
+        {
+            var props = agtype.GetVertex().Properties;
+            return (props, props.Count);
+        }
+        if (agtype.IsEdge)
+        {
+            var props = agtype.GetEdge().Properties;
+            return (props, props.Count);
+        }
+        if (agtype.IsArray)
+        {
+            var list = new List<object?>();
+            int count = 0;
+            foreach (var element in agtype.GetArray())
+            {
+                var (val, c) = ConvertAgtypeToObject(element);
+                list.Add(val);
+                count += c;
+            }
+            return (list, count);
+        }
+        if (agtype.IsMap)
+        {
+            var dict = agtype.GetMap();
+            return (dict, dict.Count);
+        }
+        if (agtype.IsNull)
+            return (null, 0);
+
+        var s = agtype.GetString();
+        if (int.TryParse(s, out int intVal))
+            return (intVal, 0);
+        if (double.TryParse(s, out double doubleVal))
+            return (doubleVal, 0);
+        if (bool.TryParse(s, out bool boolVal))
+            return (boolVal, 0);
+        return (s, 0);
+    }
 }
