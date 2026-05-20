@@ -184,6 +184,19 @@ Monitors and protects the database from overload. Controlled by `Parameters:Rate
 | `Parameters:MetricsRetentionMinutes` | `10` | How long to retain per-user metrics before cleanup |
 | `Parameters:QueryComplexityWindowMinutes` | `1` | Time window for query complexity tracking |
 
+### User ID Header Delegation
+
+When Konnektr Graph runs behind an authenticating proxy (e.g., a proxy that validates Azure B2C tokens and forwards requests using a managed identity), the proxy can inject the original user's ID via an HTTP header. The API service uses this header value for authorization lookups and `TrackLastUpdatedBy` instead of the managed identity's claims.
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `Parameters:UserIdHeaderName` | `""` (disabled) | HTTP header name to read the original user ID from (e.g., `X-User-Id`). Empty string disables the feature. |
+| `Parameters:UserIdHeaderRequired` | `false` | When `true` and `UserIdHeaderName` is set, requests missing the header receive a `401 Unauthorized` response. When `false`, requests without the header fall back to the managed identity's claims (current behavior). |
+
+When enabled, a `UserIdHeaderMiddleware` runs in the request pipeline after authentication and before authorization. It creates a synthetic `ClaimsIdentity` with the header value as the `sub`, `NameIdentifier`, and `Name` claims, then prepends it to the `ClaimsPrincipal`. Original managed identity claims (`permissions`, `roles`, `scp`) are copied to the synthetic identity so permission providers continue to work.
+
+See [Security](/docs/graph/advanced-topics/security) for details.
+
 ### Import Jobs
 
 | Key | Default | Description |
@@ -546,5 +559,7 @@ All configuration keys can be set as environment variables. The `__` (double und
 | `Authorization__PermissionsClaimName` | `Authorization:PermissionsClaimName` |
 | `Parameters__AgePublication` | `Parameters:AgePublication` |
 | `Parameters__AgeReplicationSlot` | `Parameters:AgeReplicationSlot` |
+| `Parameters__UserIdHeaderName` | `Parameters:UserIdHeaderName` |
+| `Parameters__UserIdHeaderRequired` | `Parameters:UserIdHeaderRequired` |
 | `Parameters__WalReceiverTimeoutSeconds` | `Parameters:WalReceiverTimeoutSeconds` |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | OpenTelemetry OTLP exporter endpoint |
