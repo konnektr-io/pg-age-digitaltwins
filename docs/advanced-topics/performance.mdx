@@ -30,52 +30,32 @@ The following rate limiting policies are applied per user/IP address:
 
 ### Configuration
 
-All settings can be customized through the `Parameters` section in `appsettings.json`:
+All settings can be customized through the `Parameters` section in `appsettings.json`. See the [Configuration Reference](/docs/graph/reference/configuration) for the complete list of parameters, including defaults.
 
-```json
-{
-  "Parameters": {
-    // PostgreSQL Connection Settings
-    "ConnectionIdleLifetime": 60,
-    "ConnectionLifetime": 300,
-    "MaxPoolSize": 100,
-    "MinPoolSize": 0,
-    "ConnectionTimeout": 15,
-    "CommandTimeout": 30,
-    
-    // Rate Limiting Settings (per second unless noted)
-    "GlobalPermitLimit": 1000,
-    "GlobalWindowSeconds": 1,
-    "LightOperationsPermitLimit": 100,
-    "LightOperationsWindowSeconds": 1,
-    "MediumOperationsPermitLimit": 50,
-    "MediumOperationsWindowSeconds": 1,
-    "HeavyOperationsPermitLimit": 20,
-    "HeavyOperationsWindowSeconds": 1,
-    "AdminOperationsPermitLimit": 50,
-    "AdminOperationsWindowMinutes": 1,  // Note: per minute
-    
-    // Database Protection Settings
-    "MaxConcurrentRequestsPerUser": 50,
-    "MaxQueryComplexityPerWindow": 20000,
-    "BaseQueryComplexity": 1
-  }
-}
-```
+Key defaults:
+
+| Setting | Default |
+|---------|---------|
+| `Parameters:GlobalPermitLimit` | `1000` requests/second |
+| `Parameters:LightOperationsPermitLimit` | `100` requests/second |
+| `Parameters:MediumOperationsPermitLimit` | `50` requests/second |
+| `Parameters:HeavyOperationsPermitLimit` | `20` requests/second |
+| `Parameters:AdminOperationsPermitLimit` | `50` requests/minute |
+| `Parameters:MaxConcurrentRequestsPerUser` | `20` (database protection) |
+| `Parameters:MaxQueryComplexityPerWindow` | `1000` (query units per window) |
+| `Parameters:BaseQueryComplexity` | `10` (units per query) |
 
 ### Environment Variable Support
 
-All parameters support environment variable overrides using the pattern `Parameters__<SettingName>`:
+All parameters support environment variable overrides using `__` (double underscore) as the hierarchy separator:
 
 ```bash
-# PostgreSQL settings
-Parameters__MaxPoolSize=200
-Parameters__ConnectionTimeout=30
-
-# Rate limiting settings  
+# Rate limiting env vars
 Parameters__GlobalPermitLimit=2000
 Parameters__LightOperationsPermitLimit=200
 Parameters__HeavyOperationsPermitLimit=50
+Parameters__MaxConcurrentRequestsPerUser=50
+Parameters__MaxQueryComplexityPerWindow=5000
 ```
 
 ### Error Response

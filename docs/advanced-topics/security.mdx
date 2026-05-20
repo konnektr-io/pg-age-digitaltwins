@@ -1,6 +1,248 @@
 ---
 title: Security
 icon: Shield
+description: Security features, TrackLastUpdatedBy, database protection, and best practices.
 ---
 
-Security best practices and advanced topics.
+# Security
+
+This guide covers the security features available in Konnektr Graph, including user tracking, database protection, transport security, and operational best practices.
+
+---
+
+## TrackLastUpdatedBy
+
+The `TrackLastUpdatedBy` feature records which user last modified each property on a digital twin. When enabled, the user ID is stored in each updated property's metadata as `lastUpdatedBy`.
+
+### How It Works
+
+When `TrackLastUpdatedBy` is enabled:
+
+1. **Write operations** (`CreateOrReplaceDigitalTwin`, `UpdateDigitalTwin`) accept a `userId` parameter
+2. For each property being written or patched, the SDK injects a `lastUpdatedBy` field into that property's `$metadata`
+3. The metadata is stored as part of the twin's JSON document in the AGE graph
+4. When reading the twin via the REST API, the `$metadata` includes `lastUpdatedBy` on each property
+
+### Configuration
+
+**API Service** (`appsettings.json` or environment variable):
+
+```json
+{
+  "Parameters": {
+    "TrackLastUpdatedBy": true
+  }
+}
+```
+
+Environment variable: `Parameters__TrackLastUpdatedBy=true`
+
+### How the User ID Is Determined
+
+When `TrackLastUpdatedBy` is enabled and a request reaches the API Service, the user ID is extracted from the JWT token claims via `RequestHelper.ParseUserId()`:
+
+1. First tries `ClaimTypes.NameIdentifier` (`http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier`)
+2. Falls back to the `sub` claim
+
+Returns `null` if the user is unauthenticated or no suitable claim exists (in which case `lastUpdatedBy` is omitted).
+
+### Events Pipeline Integration
+
+In the **Events Service**, when `TrackLastUpdatedBy` is enabled:
+
+- The `SharedEventConsumer` passes `trackLastUpdatedBy: true` to `CloudEventFactory.CreateDataHistoryEvents()`
+- When building DataHistory property events, the factory inspects the JSON patch for `/$metadata/{key}/lastUpdatedBy` operations
+- If found, an `updatedBy` field is added to the CloudEvent body
+
+**Kusto Sink**: When `TrackLastUpdatedBy` is enabled, the `KustoEventSink` adds an `UpdatedBy` column mapping to the `AdtPropertyEvents` table. This ensures `updatedBy` values are ingested into Kusto for historical querying.
+
+### Enabling TrackLastUpdatedBy
+
+To enable end-to-end tracking:
+
+1. **API Service**: Set `Parameters:TrackLastUpdatedBy: true`
+2. **Events Service**: Set `Parameters:TrackLastUpdatedBy: true` (so `updatedBy` fields appear in CloudEvents)
+3. **Ensure authentication is enabled** so the JWT contains a user identifier claim
+
+### Privacy Considerations
+
+- The `lastUpdatedBy` value comes from the JWT `sub` or `nameidentifier` claim — typically an opaque user or service account ID
+- Consider whether your use case requires storing user identifiers in twin metadata for compliance or auditing purposes
+- This feature is opt-in and disabled by default
+
+---
+
+## Database Protection Middleware
+
+The API Service includes a middleware layer that protects the database from overload caused by excessive or misbehaving clients.
+
+### Concurrent Request Limit
+
+Limits the number of simultaneous requests per user (or per IP if unauthenticated).
+
+| Configuration | Default | Description |
+|---------------|---------|-------------|
+| `Parameters:MaxConcurrentRequestsPerUser` | `20` | Returns HTTP 429 when exceeded |
+
+### Query Complexity Limit
+
+Tracks a sliding-window complexity score per user specifically for `/query` endpoint requests.
+
+| Configuration | Default | Description |
+|---------------|---------|-------------|
+| `Parameters:MaxQueryComplexityPerWindow` | `1000` | Query units allowed per window |
+| `Parameters:BaseQueryComplexity` | `10` | Units added per query request |
+| `Parameters:QueryComplexityWindowMinutes` | `1` | Window duration in minutes |
+
+### Slow Request Detection
+
+Logs warnings when database operations exceed a threshold, helpful for identifying problematic queries.
+
+| Configuration | Default | Description |
+|---------------|---------|-------------|
+| `Parameters:SlowRequestThresholdMs` | `5000` | Logs `Warning` when exceeded |
+
+### Cleanup
+
+Per-user metrics are retained for a configurable period and cleaned up periodically.
+
+| Configuration | Default | Description |
+|---------------|---------|-------------|
+| `Parameters:MetricsRetentionMinutes` | `10` | Minutes before inactive user metrics are evicted |
+
+### Enable / Disable
+
+The database protection middleware only runs when rate limiting is enabled:
+
+```json
+{
+  "Parameters": {
+    "RateLimitingEnabled": true
+  }
+}
+```
+
+---
+
+## Rate Limiting
+
+Rate limiting protects the API from abuse and ensures fair resource distribution. See [Performance](/docs/graph/advanced-topics/performance) for detailed rate limit policy configurations.
+
+Key security aspects of the rate limiter:
+- **Per-user/IP partitioning** — limits are applied independently to each client
+- **Rejection response** — HTTP 429 with `Retry-After` header and JSON error body
+- **Queue-based overflow** — requests beyond the limit are queued (up to a configurable limit) rather than immediately rejected, preventing thundering herd problems
+
+---
+
+## Transport Security
+
+### TLS / HTTPS
+
+Konnektr Graph does not terminate TLS itself. In production:
+
+- **Hosted version**: TLS is handled by the Konnektr platform edge
+- **Self-hosted**: Terminate TLS at your ingress gateway (Kubernetes Ingress, Azure Application Gateway, nginx, etc.)
+- **Internal communication** between the API Service and PostgreSQL should use TLS if they are not on the same network
+
+### Database Connection Security
+
+- Connection strings support all standard PostgreSQL SSL modes (`sslmode=require`, `sslmode=verify-full`, etc.)
+- For cloud deployments, use private networking (VNet, peering) between services and the database
+
+---
+
+## Authentication & Authorization
+
+See the dedicated [Authentication & Authorization](/docs/graph/advanced-topics/authorization-architecture) guide for detailed configuration of:
+
+- JWT Bearer token validation
+- Permission-based authorization (Claims provider vs API provider)
+- Integration with Auth0, Azure AD, Keycloak, Okta
+- MCP Server authentication
+- Error responses (401, 403)
+
+---
+
+## Input Validation
+
+### DTDL Model Validation
+
+All DTDL models are validated during upload using the open-source `DTDLParser`. This ensures:
+- Valid DTDL syntax (v2 through v4 supported)
+- Schema conformance
+- Reference integrity within model dependencies
+
+### Digital Twin Validation
+
+Twins are validated when created or replaced:
+- Required properties are enforced
+- Property types must match the DTDL model definition
+- Component references must exist
+
+### JSON Patch Validation
+
+JSON Patch operations for twin and component updates are validated before application, including:
+- Path existence checking
+- Value type validation against the DTDL model
+- Referential integrity for component updates
+
+---
+
+## Security Best Practices
+
+### Production Deployment
+
+1. **Enable authentication** — Set `Authentication:Enabled: true` and configure a proper OAuth provider
+2. **Enable authorization** — Set `Authorization:Enabled: true` and assign least-privilege permissions
+3. **Use strong connection secrets** — Rotate database credentials regularly
+4. **Keep connection strings out of source control** — Use environment variables, secrets managers, or Azure Key Vault
+
+### Network Security
+
+1. Deploy PostgreSQL in a private network (not publicly accessible)
+2. Use Kubernetes NetworkPolicies to restrict pod-to-pod communication
+3. If direct database access is needed, use a bastion or proxy
+
+### Monitoring
+
+1. **Enable OpenTelemetry** — Set `OTEL_EXPORTER_OTLP_ENDPOINT` to forward traces and metrics
+2. **Monitor rate limit rejections** — HTTP 429 responses indicate potential abuse or misconfiguration
+3. **Watch for slow queries** — The database protection middleware logs warnings for requests exceeding `SlowRequestThresholdMs`
+4. **Audit authentication logs** — Log levels `Microsoft.AspNetCore.Authentication:Debug` provide JWT validation details
+
+### Operational Security
+
+1. **Rotate secrets** — Client secrets, API keys, and database passwords should be rotated regularly
+2. **Use short-lived tokens** — Configure OAuth token expiry to 1 hour or less
+3. **Separate read/write permissions** — Use granular permissions (`digitaltwins/read`, `digitaltwins/write`, `digitaltwins/delete`) rather than wildcards
+4. **Use service accounts** — Dedicated credentials for automated integrations
+
+---
+
+## Security Event Monitoring
+
+### TrackLastUpdatedBy for Audit
+
+With `TrackLastUpdatedBy` enabled, you can trace every property change to the user or service account that made it. Combined with DataHistory event routing to Kusto, this provides a complete audit trail:
+
+```
+Which user changed what property, on which twin, at what time
+```
+
+### Dead Letter Queue
+
+The Events Service writes failed event deliveries to a dead letter queue table (`digitaltwins_eventing.dead_letter_queue`). Monitor this table for:
+- Sink connectivity issues (network, credentials)
+- Schema mismatches (e.g., Kusto table column changes)
+- Event format errors
+
+### Health Checks
+
+Both services expose health check endpoints that can be integrated with monitoring systems:
+
+| Endpoint | Service | Purpose |
+|----------|---------|---------|
+| `GET /health` | Both | Full readiness check (including DB connection) |
+| `GET /alive` | Both | Liveness check (process is running) |
+| `GET /health` | Events | Includes replication health and event sink connectivity |
