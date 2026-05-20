@@ -905,11 +905,12 @@ RETURN COUNT(m) AS deletedCount";
         }
 
         string cypher;
+        string q = query!.Replace("'", "\\'");
         if (vector != null)
         {
             string vectorString = JsonSerializer.Serialize(vector);
             string whereClause = !string.IsNullOrWhiteSpace(query)
-                ? $" WHERE (toLower(toString(m.displayName)) CONTAINS toLower('{query.Replace("'", "\\'")}') OR toLower(toString(m.description)) CONTAINS toLower('{query.Replace("'", "\\'")}') OR toLower(m.id) CONTAINS toLower('{query.Replace("'", "\\'")}' )) "
+                ? $" WHERE (toLower(toString(m.displayName)) CONTAINS toLower('{q}') OR toLower(toString(m.description)) CONTAINS toLower('{q}') OR toLower(m.id) CONTAINS toLower('{q}' )) "
                 : "";
 
             // Hybrid: Vector + Filter
@@ -927,7 +928,6 @@ RETURN COUNT(m) AS deletedCount";
             // Using CONTAINS (case-insensitive simulation via toLower)
             // Note: m.displayName and m.description are maps, so toString(m.displayName) might result in valid JSON string which contains the value.
             // Ideally we should look into specific language values, but generic string check is a good approximation for 'CONTAINS'.
-            string q = query!.Replace("'", "\\'");
             cypher =
                 $@"
                 MATCH (m:Model)
