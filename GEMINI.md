@@ -53,6 +53,7 @@ The project follows a set of established conventions to ensure code quality and 
     -   Follow **SOLID principles** and idiomatic C#/.NET practices.
     -   Maintain a **decoupled architecture**. Do not introduce direct dependencies on other platform applications; use APIs or asynchronous messaging.
     -   All authentication/authorization is handled by a central **Control Plane (KtrlPlane)**. The application validates JWTs from this service.
+    -   When running behind an authenticating proxy (e.g., validating Azure B2C tokens), the `UserIdHeaderMiddleware` can inject the original user ID from a configurable header (`Parameters:UserIdHeaderName`, e.g. `X-User-Id`) into the `ClaimsPrincipal` for authorization and `TrackLastUpdatedBy`. Set `Parameters:UserIdHeaderRequired` to `true` to reject requests missing the header with 401.
 
 -   **Code Quality & Naming**:
     -   Use `AgeDigitalTwins` for open-source code artifacts (namespaces, packages).

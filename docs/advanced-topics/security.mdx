@@ -152,6 +152,80 @@ Konnektr Graph does not terminate TLS itself. In production:
 
 ---
 
+## User ID Header Delegation (Proxy Scenario)
+
+When Konnektr Graph is deployed behind an authenticating proxy (such as a reverse proxy that validates Azure B2C tokens and then re-authenticates to the API service using a managed identity), the `ClaimsPrincipal` always represents the managed identity — never the original end user. This breaks `TrackLastUpdatedBy` (which records the managed identity ID instead of the actual user) and authorization lookups (which check the managed identity's permissions).
+
+To solve this, Konnektr Graph supports delegating the user identity via an HTTP header.
+
+### How It Works
+
+The proxy validates the end-user's token (e.g., an Azure B2C token), extracts the user ID, and injects it into a configurable HTTP header (e.g., `X-User-Id`). The API service's `UserIdHeaderMiddleware` reads this header and replaces the effective identity for the remainder of the request.
+
+The middleware:
+
+1. Runs **after** `UseAuthentication()` and **before** `UseAuthorization()` in the ASP.NET Core pipeline
+2. Reads the configured header name from `Parameters:UserIdHeaderName`
+3. Creates a synthetic `ClaimsIdentity` carrying the header value as `sub`, `NameIdentifier`, and `Name`
+4. Copies relevant claims (`permissions`, `roles`, `scp`) from the original managed identity into the synthetic identity
+5. Prepends the synthetic identity to the `ClaimsPrincipal` — making it the primary identity for all downstream consumers
+
+### Configuration
+
+**API Service** (`appsettings.json`):
+
+```json
+{
+  "Parameters": {
+    "UserIdHeaderName": "X-User-Id",
+    "UserIdHeaderRequired": false
+  }
+}
+```
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `Parameters:UserIdHeaderName` | `""` (disabled) | HTTP header name to read. Empty string disables the middleware entirely. |
+| `Parameters:UserIdHeaderRequired` | `false` | When `true`, requests missing the header receive `401 Unauthorized` immediately. When `false`, the request falls back to the managed identity's claims. |
+
+### Effect on Security Features
+
+| Feature | Without header | With header |
+|---------|----------------|-------------|
+| `TrackLastUpdatedBy` | Records the managed identity ID | Records the B2C user ID from the header |
+| `ClaimsPermissionProvider` | Checks managed identity's permission claims | Managed identity's permission claims are preserved and still checked |
+| `ApiPermissionProvider` | Looks up permissions by managed identity sub | Looks up permissions by the B2C user ID from the header |
+| Rate limiting | Partitioned by managed identity sub | Partitioned by the B2C user ID |
+| Database protection | Keyed by managed identity name | Keyed by the B2C user ID |
+
+### Best Practices
+
+1. **Enable authentication** — The managed identity token should be validated first; the middleware enriches rather than replaces the authentication layer
+2. **Use `UserIdHeaderRequired: true` when the proxy is always present** — This ensures requests cannot bypass the proxy and reach the API service without a delegated user ID
+3. **Prefer `Api` authorization provider** — The managed identity typically doesn't carry individual user permissions in its claims. Configure `Authorization:Provider: Api` to look up permissions by the delegated user ID from an external service
+4. **Secure the header** — Ensure the proxy strips or overwrites any `X-User-Id` header from incoming client requests so end users cannot impersonate others
+
+### Example: Proxy Configuration
+
+```
+End User (B2C token)
+    │
+    ▼
+Authenticating Proxy
+  - Validates B2C token
+  - Extracts B2C user ID (e.g., "user-abc-123")
+  - Authenticates to API with managed identity token
+  - Injects X-User-Id: user-abc-123 header
+    │
+    ▼
+Konnektr Graph API Service
+  - Validates managed identity JWT (UseAuthentication)
+  - UserIdHeaderMiddleware reads X-User-Id
+  - Creates synthetic identity with sub=user-abc-123
+  - UseAuthorization checks permissions for user-abc-123
+  - Twin writes record lastUpdatedBy=user-abc-123
+```
+
 ## Authentication & Authorization
 
 See the dedicated [Authentication & Authorization](/docs/graph/advanced-topics/authorization-architecture) guide for detailed configuration of:

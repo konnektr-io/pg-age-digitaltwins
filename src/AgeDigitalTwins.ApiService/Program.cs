@@ -323,6 +323,14 @@ if (enableRateLimiting)
 }
 
 app.UseAuthentication();
+
+var userIdHeaderName = builder.Configuration.GetValue("Parameters:UserIdHeaderName", "");
+if (!string.IsNullOrEmpty(userIdHeaderName))
+{
+    var userIdHeaderRequired = builder.Configuration.GetValue("Parameters:UserIdHeaderRequired", false);
+    app.UseMiddleware<UserIdHeaderMiddleware>(userIdHeaderName, userIdHeaderRequired);
+}
+
 app.UseAuthorization();
 
 // Map endpoints for Age Digital Twins API
