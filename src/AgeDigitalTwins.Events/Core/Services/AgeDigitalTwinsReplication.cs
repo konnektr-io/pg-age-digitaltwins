@@ -129,7 +129,7 @@ public class AgeDigitalTwinsReplication(
                             && oce.CancellationToken != cancellationToken
                         )
                         {
-                            _logger.LogWarning(
+                            _logger.LogDebug(
                                 "Replication watchdog triggered: connection closed after silence timeout. Retrying..."
                             );
                         }
@@ -255,7 +255,7 @@ public class AgeDigitalTwinsReplication(
                         - new DateTime(Interlocked.Read(ref _lastReplicationMessageAtTicks));
                     if (silence > _walReceiverTimeout)
                     {
-                        _logger.LogWarning(
+                        _logger.LogDebug(
                             "No replication message received for {Elapsed:N0} s (timeout: {Timeout:N0} s). "
                                 + "Closing connection to allow CloudNativePG failover.",
                             silence.TotalSeconds,
