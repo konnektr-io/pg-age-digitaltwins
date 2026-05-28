@@ -33,9 +33,11 @@ public partial class AgeDigitalTwinsClient
         CancellationToken cancellationToken = default
     )
     {
-        string cypher =
-            $"MATCH (t:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}}) RETURN t";
-        await using var command = connection.CreateCypherCommand(_graphName, cypher);
+        string cypher = "MATCH (t:Twin {`$dtId`: $twinId}) RETURN t";
+        await using var command = connection.CreateCypherCommand(
+            _graphName, cypher,
+            new Dictionary<string, object?> { { "twinId", digitalTwinId } }
+        );
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         return await reader.ReadAsync(cancellationToken);
     }
@@ -95,9 +97,11 @@ public partial class AgeDigitalTwinsClient
         CancellationToken cancellationToken = default
     )
     {
-        string cypher =
-            $"MATCH (t:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}}) RETURN t";
-        await using var command = connection.CreateCypherCommand(_graphName, cypher);
+        string cypher = "MATCH (t:Twin {`$dtId`: $twinId}) RETURN t";
+        await using var command = connection.CreateCypherCommand(
+            _graphName, cypher,
+            new Dictionary<string, object?> { { "twinId", digitalTwinId } }
+        );
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
         if (await reader.ReadAsync(cancellationToken))
@@ -462,17 +466,18 @@ public partial class AgeDigitalTwinsClient
         string newEtag = ETagGenerator.GenerateEtag(digitalTwinId, now);
         digitalTwinObject["$etag"] = newEtag;
 
-        // Serialize the updated digital twin
-        string updatedDigitalTwinJson = EscapeForCypher(
-            JsonSerializer.Serialize(digitalTwinObject, serializerOptions)
-        );
-
         string cypher =
-            $@"WITH '{updatedDigitalTwinJson}'::cstring::agtype as twin
-MERGE (t: Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})
-SET t = twin
+            @"MERGE (t: Twin {`$dtId`: $twinId})
+SET t = $twin
 RETURN t";
-        await using var command = connection.CreateCypherCommand(_graphName, cypher);
+        await using var command = connection.CreateCypherCommand(
+            _graphName, cypher,
+            new Dictionary<string, object?>
+            {
+                { "twinId", digitalTwinId },
+                { "twin", digitalTwinObject },
+            }
+        );
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
         if (await reader.ReadAsync(cancellationToken))
@@ -746,14 +751,17 @@ RETURN t";
         string newEtag = ETagGenerator.GenerateEtag(digitalTwinId, now);
         patchedTwin["$etag"] = newEtag;
         // Replace the entire twin in the database
-        string updatedDigitalTwinJson = EscapeForCypher(
-            JsonSerializer.Serialize(patchedTwin, serializerOptions)
-        );
         string cypher =
-            $@"WITH '{updatedDigitalTwinJson}'::cstring::agtype as twin
-MERGE (t: Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})
-SET t = twin";
-        await using var command = connection.CreateCypherCommand(_graphName, cypher);
+            @"MERGE (t: Twin {`$dtId`: $twinId})
+SET t = $twin";
+        await using var command = connection.CreateCypherCommand(
+            _graphName, cypher,
+            new Dictionary<string, object?>
+            {
+                { "twinId", digitalTwinId },
+                { "twin", patchedTwin },
+            }
+        );
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
@@ -809,10 +817,13 @@ SET t = twin";
     )
     {
         string cypher =
-            $@"MATCH (t:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}}) 
+            @"MATCH (t:Twin {`$dtId`: $twinId}) 
 DELETE t
 RETURN COUNT(t) AS deletedCount";
-        await using var command = connection.CreateCypherCommand(_graphName, cypher);
+        await using var command = connection.CreateCypherCommand(
+            _graphName, cypher,
+            new Dictionary<string, object?> { { "twinId", digitalTwinId } }
+        );
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         int rowsAffected = 0;
         if (await reader.ReadAsync(cancellationToken))
@@ -1127,17 +1138,18 @@ RETURN COUNT(t) AS deletedCount";
         {
             try
             {
-                // Prepare twins for batch insert - construct full query like models
-                string twinsString =
-                    $"['{string.Join("','", finalValidTwins.Select(t => EscapeForCypher(JsonSerializer.Serialize(t.digitalTwinObject, serializerOptions))))}']";
-
                 string cypher =
-                    $@"UNWIND {twinsString} as twinJson
-WITH twinJson::cstring::agtype as twin
-MERGE (t:Twin {{`$dtId`: twin['$dtId']}})
+                    @"UNWIND $twins as twin
+MERGE (t:Twin {`$dtId`: twin['$dtId']})
 SET t = twin";
 
-                await using var command = connection.CreateCypherCommand(_graphName, cypher);
+                await using var command = connection.CreateCypherCommand(
+                    _graphName, cypher,
+                    new Dictionary<string, object?>
+                    {
+                        { "twins", finalValidTwins.Select(t => t.digitalTwinObject).ToList() },
+                    }
+                );
                 await command.ExecuteNonQueryAsync(cancellationToken);
 
                 // Mark all successfully processed twins
@@ -1185,12 +1197,14 @@ SET t = twin";
         );
 
         string cypher =
-            $@"
-            MATCH (t:Twin {{`$dtId`: '{twinId.Replace("'", "\\'")}'}})-[r]-(n:Twin) 
+            @"MATCH (t:Twin {`$dtId`: $twinId})-[r]-(n:Twin) 
             RETURN t, r, n 
             LIMIT 50";
 
-        await using var command = connection.CreateCypherCommand(_graphName, cypher);
+        await using var command = connection.CreateCypherCommand(
+            _graphName, cypher,
+            new Dictionary<string, object?> { { "twinId", twinId } }
+        );
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
         var results = new List<object>();

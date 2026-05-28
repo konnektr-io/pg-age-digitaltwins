@@ -30,13 +30,19 @@ public partial class AgeDigitalTwinsClient
         CancellationToken cancellationToken = default
     )
     {
-        string cypher =
-            $"MATCH (:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})-[rel {{`$relationshipId`: '{relationshipId.Replace("'", "\\'")}'}}]->(:Twin) RETURN rel";
+        string cypher = "MATCH (:Twin {`$dtId`: $sourceId})-[rel {`$relationshipId`: $relId}]->(:Twin) RETURN rel";
         await using var connection = await _dataSource.OpenConnectionAsync(
             TargetSessionAttributes.PreferStandby,
             cancellationToken
         );
-        await using var command = connection.CreateCypherCommand(_graphName, cypher);
+        await using var command = connection.CreateCypherCommand(
+            _graphName, cypher,
+            new Dictionary<string, object?>
+            {
+                { "sourceId", digitalTwinId },
+                { "relId", relationshipId },
+            }
+        );
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         return await reader.ReadAsync(cancellationToken);
     }
@@ -64,13 +70,19 @@ public partial class AgeDigitalTwinsClient
 
         try
         {
-            string cypher =
-                $"MATCH (:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})-[rel {{`$relationshipId`: '{relationshipId.Replace("'", "\\'")}'}}]->(:Twin) RETURN rel";
+            string cypher = "MATCH (:Twin {`$dtId`: $sourceId})-[rel {`$relationshipId`: $relId}]->(:Twin) RETURN rel";
             await using var connection = await _dataSource.OpenConnectionAsync(
                 Npgsql.TargetSessionAttributes.PreferStandby,
                 cancellationToken
             );
-            await using var command = connection.CreateCypherCommand(_graphName, cypher);
+            await using var command = connection.CreateCypherCommand(
+                _graphName, cypher,
+                new Dictionary<string, object?>
+                {
+                    { "sourceId", digitalTwinId },
+                    { "relId", relationshipId },
+                }
+            );
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
             if (await reader.ReadAsync(cancellationToken))
@@ -176,6 +188,7 @@ public partial class AgeDigitalTwinsClient
         {
             string cypher =
                 $@"MATCH (:Twin)-[rel]->(:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}}) RETURN *";
+
             return QueryAsync<T>(cypher, cancellationToken);
         }
         catch (Exception ex)
@@ -376,18 +389,21 @@ public partial class AgeDigitalTwinsClient
         string newEtag = ETagGenerator.GenerateEtag($"{digitalTwinId}-{relationshipId}", now);
         relationshipObject["$etag"] = newEtag;
 
-        string updatedRelationshipJson = JsonSerializer.Serialize(
-            relationshipObject,
-            serializerOptions
-        );
-
         string cypher =
-            $@"WITH '{updatedRelationshipJson}'::cstring::agtype as relationship
-MATCH (source:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}}),(target:Twin {{`$dtId`: '{targetId.Replace("'", "\\'")}'}})
-MERGE (source)-[rel:{relationshipName} {{`$relationshipId`: '{relationshipId.Replace("'", "\\'")}'}}]->(target)
-SET rel = relationship
+            @"MATCH (source:Twin {`$dtId`: $sourceId}),(target:Twin {`$dtId`: $targetId})
+MERGE (source)-[rel:" + relationshipName + @" {`$relationshipId`: $relId}]->(target)
+SET rel = $relationship
 RETURN rel";
-        await using var command = connection.CreateCypherCommand(_graphName, cypher);
+        await using var command = connection.CreateCypherCommand(
+            _graphName, cypher,
+            new Dictionary<string, object?>
+            {
+                { "sourceId", digitalTwinId },
+                { "targetId", targetId },
+                { "relId", relationshipId },
+                { "relationship", relationshipObject },
+            }
+        );
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
         if (await reader.ReadAsync(cancellationToken))
@@ -495,18 +511,22 @@ RETURN rel";
             );
 
             // Replace the entire relationship in the database
-            string updatedRelJson = EscapeForCypher(
-                JsonSerializer.Serialize(patchedRel, serializerOptions)
-            );
             string cypher =
-                $@"WITH '{updatedRelJson}'::cstring::agtype AS relationship
-MATCH (:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})-[rel {{`$relationshipId`: '{relationshipId.Replace("'", "\\'")}'}}]->(:Twin)
-SET rel = relationship";
+                @"MATCH (:Twin {`$dtId`: $sourceId})-[rel {`$relationshipId`: $relId}]->(:Twin)
+SET rel = $relationship";
             await using var connection = await _dataSource.OpenConnectionAsync(
                 Npgsql.TargetSessionAttributes.ReadWrite,
                 cancellationToken
             );
-            await using var command = connection.CreateCypherCommand(_graphName, cypher);
+            await using var command = connection.CreateCypherCommand(
+                _graphName, cypher,
+                new Dictionary<string, object?>
+                {
+                    { "sourceId", digitalTwinId },
+                    { "relId", relationshipId },
+                    { "relationship", patchedRel },
+                }
+            );
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
         catch (Exception ex)
@@ -550,13 +570,19 @@ SET rel = relationship";
 
         try
         {
-            string cypher =
-                $"MATCH (:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})-[rel {{`$relationshipId`: '{relationshipId.Replace("'", "\\'")}'}}]->(:Twin) DELETE rel RETURN COUNT(rel) AS deletedCount";
+            string cypher = "MATCH (:Twin {`$dtId`: $sourceId})-[rel {`$relationshipId`: $relId}]->(:Twin) DELETE rel RETURN COUNT(rel) AS deletedCount";
             await using var connection = await _dataSource.OpenConnectionAsync(
                 TargetSessionAttributes.ReadWrite,
                 cancellationToken
             );
-            await using var command = connection.CreateCypherCommand(_graphName, cypher);
+            await using var command = connection.CreateCypherCommand(
+                _graphName, cypher,
+                new Dictionary<string, object?>
+                {
+                    { "sourceId", digitalTwinId },
+                    { "relId", relationshipId },
+                }
+            );
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
             int rowsAffected = 0;
             if (await reader.ReadAsync(cancellationToken))
@@ -785,14 +811,16 @@ SET rel = relationship";
 
         // Batch check if all required twins exist
         var existingTwins = new HashSet<string>();
-        var twinIdsString = string.Join("','", allTwinIds.Select(id => id!.Replace("'", "\\'")));
         string existenceCheckCypher =
-            $@"MATCH (t:Twin) 
-WHERE t.`$dtId` IN ['{twinIdsString}']
+            @"MATCH (t:Twin) 
+WHERE t.`$dtId` IN $twinIds
 RETURN t.`$dtId` AS twinId";
 
         await using (
-            var existenceCommand = connection.CreateCypherCommand(_graphName, existenceCheckCypher)
+            var existenceCommand = connection.CreateCypherCommand(
+                _graphName, existenceCheckCypher,
+                new Dictionary<string, object?> { { "twinIds", allTwinIds.Where(id => id != null).Cast<string>().ToList() } }
+            )
         )
         {
             await using (
@@ -878,19 +906,17 @@ RETURN t.`$dtId` AS twinId";
                 var relationshipName = group.Key;
                 var groupData = group.Select(x => x.jsonObject).ToList();
 
-                // Convert to JSON strings for the UNWIND operation - construct full query like models
-                string relationshipsString =
-                    $"['{string.Join("','", groupData.Select(r => EscapeForCypher(JsonSerializer.Serialize(r, serializerOptions))))}']";
-
                 string cypher =
-                    $@"UNWIND {relationshipsString} as relationshipJson
-                    WITH relationshipJson::cstring::agtype as relationship
-                    MATCH (source:Twin {{`$dtId`: relationship['$sourceId']}})
-                    MATCH (target:Twin {{`$dtId`: relationship['$targetId']}})
-                    MERGE (source)-[r:{relationshipName} {{`$relationshipId`: relationship['$relationshipId']}}]->(target)
+                    @"UNWIND $relationships as relationship
+                    MATCH (source:Twin {`$dtId`: relationship['$sourceId']})
+                    MATCH (target:Twin {`$dtId`: relationship['$targetId']})
+                    MERGE (source)-[r:" + relationshipName + @" {`$relationshipId`: relationship['$relationshipId']}]->(target)
                     SET r = relationship";
 
-                await using var command = connection.CreateCypherCommand(_graphName, cypher);
+                await using var command = connection.CreateCypherCommand(
+                    _graphName, cypher,
+                    new Dictionary<string, object?> { { "relationships", groupData } }
+                );
                 await command.ExecuteNonQueryAsync(cancellationToken);
             }
 
