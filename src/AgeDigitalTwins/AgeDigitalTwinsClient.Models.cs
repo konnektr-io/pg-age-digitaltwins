@@ -381,14 +381,19 @@ MATCH (m:Model {{id: dependency}})
                     Math.Min(insertBatchSize, modelDatas.Count - batchStart)
                 );
 
+                var modelJsonStrings = batch
+                    .Select(m => JsonSerializer.Serialize(m))
+                    .ToList();
+
                 string cypher =
-                    @"UNWIND $models as model
+                    @"UNWIND $modelJsonStrings as modelJson
+WITH modelJson::cstring::agtype as model
 CREATE (m:Model {id: model.id})
 SET m = model";
 
                 await using var command = connection.CreateCypherCommand(
                     _graphName, cypher,
-                    new Dictionary<string, object?> { { "models", batch.ToList() } }
+                    new Dictionary<string, object?> { { "modelJsonStrings", modelJsonStrings } }
                 );
                 await command.ExecuteNonQueryAsync(cancellationToken);
             }

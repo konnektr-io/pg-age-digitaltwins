@@ -338,9 +338,12 @@ public partial class AgeDigitalTwinsClient
         string newEtag = ETagGenerator.GenerateEtag(digitalTwinId, now);
         digitalTwin["$etag"] = newEtag;
 
+        string updatedTwinJson = JsonSerializer.Serialize(digitalTwin);
+
         string cypher =
-            @"MERGE (t: Twin {`$dtId`: $twinId})
-SET t = $twin
+            @"WITH $twinJson::cstring::agtype as twin
+MERGE (t: Twin {`$dtId`: $twinId})
+SET t = twin
 RETURN t";
 
         await using var command = connection.CreateCypherCommand(
@@ -348,7 +351,7 @@ RETURN t";
             new Dictionary<string, object?>
             {
                 { "twinId", digitalTwinId },
-                { "twin", digitalTwin },
+                { "twinJson", updatedTwinJson },
             }
         );
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);

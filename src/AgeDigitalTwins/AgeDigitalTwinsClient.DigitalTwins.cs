@@ -466,16 +466,19 @@ public partial class AgeDigitalTwinsClient
         string newEtag = ETagGenerator.GenerateEtag(digitalTwinId, now);
         digitalTwinObject["$etag"] = newEtag;
 
+        string updatedTwinJson = JsonSerializer.Serialize(digitalTwinObject);
+
         string cypher =
-            @"MERGE (t: Twin {`$dtId`: $twinId})
-SET t = $twin
+            @"WITH $twinJson::cstring::agtype as twin
+MERGE (t: Twin {`$dtId`: $twinId})
+SET t = twin
 RETURN t";
         await using var command = connection.CreateCypherCommand(
             _graphName, cypher,
             new Dictionary<string, object?>
             {
                 { "twinId", digitalTwinId },
-                { "twin", digitalTwinObject },
+                { "twinJson", updatedTwinJson },
             }
         );
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
@@ -750,16 +753,18 @@ RETURN t";
         // Set new etag
         string newEtag = ETagGenerator.GenerateEtag(digitalTwinId, now);
         patchedTwin["$etag"] = newEtag;
-        // Replace the entire twin in the database
+        string updatedTwinJson = JsonSerializer.Serialize(patchedTwin);
+
         string cypher =
-            @"MERGE (t: Twin {`$dtId`: $twinId})
-SET t = $twin";
+            @"WITH $twinJson::cstring::agtype as twin
+MERGE (t: Twin {`$dtId`: $twinId})
+SET t = twin";
         await using var command = connection.CreateCypherCommand(
             _graphName, cypher,
             new Dictionary<string, object?>
             {
                 { "twinId", digitalTwinId },
-                { "twin", patchedTwin },
+                { "twinJson", updatedTwinJson },
             }
         );
         await command.ExecuteNonQueryAsync(cancellationToken);
@@ -1138,8 +1143,13 @@ RETURN COUNT(t) AS deletedCount";
         {
             try
             {
+                var twinJsonStrings = finalValidTwins
+                    .Select(t => JsonSerializer.Serialize(t.digitalTwinObject))
+                    .ToList();
+
                 string cypher =
-                    @"UNWIND $twins as twin
+                    @"UNWIND $twinJsonStrings as twinJson
+WITH twinJson::cstring::agtype as twin
 MERGE (t:Twin {`$dtId`: twin['$dtId']})
 SET t = twin";
 
@@ -1147,7 +1157,7 @@ SET t = twin";
                     _graphName, cypher,
                     new Dictionary<string, object?>
                     {
-                        { "twins", finalValidTwins.Select(t => t.digitalTwinObject).ToList() },
+                        { "twinJsonStrings", twinJsonStrings },
                     }
                 );
                 await command.ExecuteNonQueryAsync(cancellationToken);
