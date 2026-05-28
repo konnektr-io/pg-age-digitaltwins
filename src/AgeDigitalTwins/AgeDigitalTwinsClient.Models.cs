@@ -482,9 +482,10 @@ SET m = modelAgtype";
                             );
                             if (descendantsAgtype != null)
                             {
-                                foreach (var desc in descendantsAgtype.Value.GetArray())
+                                foreach (var desc in descendantsAgtype.Value.GetList())
                                 {
-                                    existingDescendants.Add(desc.GetString());
+                                    if (desc is Agtype descAgtype)
+                                        existingDescendants.Add(descAgtype.GetString());
                                 }
                             }
                         }
@@ -752,8 +753,7 @@ RETURN COUNT(m) AS deletedCount";
             );
         }
 
-        // Handle AGE type conversion to string
-        string? modelId = ((Agtype)modelIdValue).GetString().Trim('\u0001').Trim('"');
+        string? modelId = ((Agtype)modelIdValue).GetString();
 
         if (string.IsNullOrEmpty(modelId))
         {

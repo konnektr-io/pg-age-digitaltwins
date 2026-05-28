@@ -277,9 +277,11 @@ public partial class AgeDigitalTwinsClient
         {
             var list = new List<object?>();
             int count = 0;
-            foreach (var element in agtype.GetArray())
+            foreach (var element in agtype.GetList())
             {
-                var (val, c) = ConvertAgtypeToObject(element);
+                if (element is not Agtype agElement)
+                    continue;
+                var (val, c) = ConvertAgtypeToObject(agElement);
                 list.Add(val);
                 count += c;
             }
@@ -293,13 +295,24 @@ public partial class AgeDigitalTwinsClient
         if (agtype.IsNull)
             return (null, 0);
 
-        var s = agtype.GetString();
-        if (int.TryParse(s, out int intVal))
-            return (intVal, 0);
-        if (double.TryParse(s, out double doubleVal))
-            return (doubleVal, 0);
-        if (bool.TryParse(s, out bool boolVal))
-            return (boolVal, 0);
-        return (s, 0);
+        var jsonElement = agtype.Get<JsonElement>();
+        if (jsonElement.ValueKind == JsonValueKind.String)
+        {
+            var s = jsonElement.GetString()!;
+            if (bool.TryParse(s, out bool boolVal))
+                return (boolVal, 0);
+            return (s, 0);
+        }
+        if (jsonElement.ValueKind == JsonValueKind.Number)
+        {
+            if (jsonElement.TryGetInt32(out int intVal))
+                return (intVal, 0);
+            return (jsonElement.GetDouble(), 0);
+        }
+        if (jsonElement.ValueKind is JsonValueKind.True or JsonValueKind.False)
+        {
+            return (jsonElement.ValueKind == JsonValueKind.True, 0);
+        }
+        return (null, 0);
     }
 }
