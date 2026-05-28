@@ -381,7 +381,7 @@ MATCH (m:Model {{id: dependency}})
 
                 // This is needed as after unwinding, it gets converted to agtype again
                 string modelsString =
-                    $"['{string.Join("','", batch.Select(m => JsonSerializer.Serialize(m, serializerOptions).Replace("'", "\\'")))}']";
+                    $"['{string.Join("','", batch.Select(m => EscapeForCypher(JsonSerializer.Serialize(m, serializerOptions))))}']";
 
                 // It is not possible to update or overwrite an existing model
                 // Trying so will raise a unique constraint violation
@@ -502,7 +502,7 @@ SET m = modelAgtype";
                     string updateCypher =
                         $@"
                         MATCH (m:Model {{id: '{baseModelId}'}})
-                        SET m.descendants = '{mergedDescendantsJson.Replace("'", "\\'")}'::cstring::agtype
+                        SET m.descendants = '{EscapeForCypher(mergedDescendantsJson)}'::cstring::agtype
                         RETURN m";
 
                     await using var updateCommand = connection.CreateCypherCommand(

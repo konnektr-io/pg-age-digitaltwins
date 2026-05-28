@@ -463,9 +463,9 @@ public partial class AgeDigitalTwinsClient
         digitalTwinObject["$etag"] = newEtag;
 
         // Serialize the updated digital twin
-        string updatedDigitalTwinJson = JsonSerializer
-            .Serialize(digitalTwinObject, serializerOptions)
-            .Replace("'", "\\'");
+        string updatedDigitalTwinJson = EscapeForCypher(
+            JsonSerializer.Serialize(digitalTwinObject, serializerOptions)
+        );
 
         string cypher =
             $@"WITH '{updatedDigitalTwinJson}'::cstring::agtype as twin
@@ -746,9 +746,9 @@ RETURN t";
         string newEtag = ETagGenerator.GenerateEtag(digitalTwinId, now);
         patchedTwin["$etag"] = newEtag;
         // Replace the entire twin in the database
-        string updatedDigitalTwinJson = JsonSerializer
-            .Serialize(patchedTwin, serializerOptions)
-            .Replace("'", "\\'");
+        string updatedDigitalTwinJson = EscapeForCypher(
+            JsonSerializer.Serialize(patchedTwin, serializerOptions)
+        );
         string cypher =
             $@"WITH '{updatedDigitalTwinJson}'::cstring::agtype as twin
 MERGE (t: Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})
@@ -1129,7 +1129,7 @@ RETURN COUNT(t) AS deletedCount";
             {
                 // Prepare twins for batch insert - construct full query like models
                 string twinsString =
-                    $"['{string.Join("','", finalValidTwins.Select(t => JsonSerializer.Serialize(t.digitalTwinObject, serializerOptions).Replace("'", "\\'")))}']";
+                    $"['{string.Join("','", finalValidTwins.Select(t => EscapeForCypher(JsonSerializer.Serialize(t.digitalTwinObject, serializerOptions))))}']";
 
                 string cypher =
                     $@"UNWIND {twinsString} as twinJson

@@ -338,9 +338,9 @@ public partial class AgeDigitalTwinsClient
         digitalTwin["$etag"] = newEtag;
 
         // Save the updated digital twin
-        string updatedDigitalTwinJson = JsonSerializer
-            .Serialize(digitalTwin, serializerOptions)
-            .Replace("'", "\\'");
+        string updatedDigitalTwinJson = EscapeForCypher(
+            JsonSerializer.Serialize(digitalTwin, serializerOptions)
+        );
 
         string cypher =
             $@"WITH '{updatedDigitalTwinJson}'::cstring::agtype as twin

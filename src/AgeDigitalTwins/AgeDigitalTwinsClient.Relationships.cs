@@ -495,9 +495,9 @@ RETURN rel";
             );
 
             // Replace the entire relationship in the database
-            string updatedRelJson = JsonSerializer
-                .Serialize(patchedRel, serializerOptions)
-                .Replace("'", "\\'");
+            string updatedRelJson = EscapeForCypher(
+                JsonSerializer.Serialize(patchedRel, serializerOptions)
+            );
             string cypher =
                 $@"WITH '{updatedRelJson}'::cstring::agtype AS relationship
 MATCH (:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})-[rel {{`$relationshipId`: '{relationshipId.Replace("'", "\\'")}'}}]->(:Twin)
@@ -880,7 +880,7 @@ RETURN t.`$dtId` AS twinId";
 
                 // Convert to JSON strings for the UNWIND operation - construct full query like models
                 string relationshipsString =
-                    $"['{string.Join("','", groupData.Select(r => JsonSerializer.Serialize(r, serializerOptions).Replace("'", "\\'")))}']";
+                    $"['{string.Join("','", groupData.Select(r => EscapeForCypher(JsonSerializer.Serialize(r, serializerOptions))))}']";
 
                 string cypher =
                     $@"UNWIND {relationshipsString} as relationshipJson

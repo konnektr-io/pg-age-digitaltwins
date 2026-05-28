@@ -137,6 +137,11 @@ namespace AgeDigitalTwins.Models
                     // Parse the string to a JsonElement
                     DtdlModel = modelString;
                 }
+                else if (modelValue is Dictionary<string, object> modelDict)
+                {
+                    var serialized = JsonSerializer.Serialize(modelDict);
+                    DtdlModel = serialized;
+                }
             }
 
             UploadedOn =
