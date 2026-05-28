@@ -14,4 +14,6 @@ public class KustoSinkOptions : SinkOptions
     public string? TenantId { get; set; }
     public string? ClientId { get; set; }
     public string? ClientSecret { get; set; }
+
+    public bool TrackLastUpdatedBy { get; set; }
 }

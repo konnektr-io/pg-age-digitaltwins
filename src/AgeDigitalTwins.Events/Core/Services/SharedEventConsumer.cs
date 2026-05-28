@@ -18,6 +18,7 @@ public class SharedEventConsumer
     private readonly Timer _batchTimer;
     private readonly int _batchSize;
     private readonly TimeSpan _batchInterval;
+    private readonly bool _trackLastUpdatedBy;
 
     // Event processing metrics
     private long _totalEventsProcessed = 0;
@@ -28,7 +29,8 @@ public class SharedEventConsumer
         ILogger<SharedEventConsumer> logger,
         Uri sourceUri,
         int batchSize = 100,
-        TimeSpan? batchInterval = null
+        TimeSpan? batchInterval = null,
+        bool trackLastUpdatedBy = false
     )
     {
         _eventQueue = eventQueue;
@@ -36,6 +38,7 @@ public class SharedEventConsumer
         _sourceUri = sourceUri;
         _batchSize = batchSize;
         _batchInterval = batchInterval ?? TimeSpan.FromSeconds(5);
+        _trackLastUpdatedBy = trackLastUpdatedBy;
 
         // Set up batch processing timer
         _batchTimer = new Timer(TriggerBatchProcessing, null, _batchInterval, _batchInterval);
@@ -173,7 +176,8 @@ public class SharedEventConsumer
                     EventFormat.DataHistory => CloudEventFactory.CreateDataHistoryEvents(
                         eventData,
                         _sourceUri,
-                        route.TypeMappings ?? []
+                        route.TypeMappings ?? [],
+                        _trackLastUpdatedBy
                     ),
                     EventFormat.Telemetry => CloudEventFactory.CreateTelemetryEvents(
                         eventData,

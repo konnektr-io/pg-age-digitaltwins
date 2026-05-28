@@ -107,9 +107,19 @@ Key `Parameters:` prefixed values in configuration:
 - `JobsEnabled` — enable/disable import job endpoints and resumption service
 - `ModelCacheExpirationSeconds`, `DefaultBatchSize`, `DefaultCheckpointInterval`
 - `RateLimitingEnabled`, `MaxPoolSize`, `MinPoolSize`, `ConnectionTimeout`, `CommandTimeout`
+- `TrackLastUpdatedBy` — enable `lastUpdatedBy` tracking on twin metadata (default: `false`)
 
 Authentication: `Authentication:Enabled`, `Authentication:Authority`, `Authentication:Audience`, `Authentication:Issuer`
 Authorization: `Authorization:Enabled`, `Authorization:Provider` (`Claims` or `Api`)
+
+#### User ID header delegation (proxy scenario)
+
+When an authenticating proxy (e.g., validating Azure B2C tokens) injects the original user ID via a header, the API service can use it for authorization lookups and `TrackLastUpdatedBy` instead of the managed identity's sub/NameIdentifier claim. Configured via:
+
+- `Parameters:UserIdHeaderName` — the HTTP header name to read (e.g. `X-User-Id`). Empty/not set = disabled.
+- `Parameters:UserIdHeaderRequired` — when `true`, reject requests missing the header with `401`. Default: `false` (fallback to managed identity claims).
+
+The middleware (`UserIdHeaderMiddleware`) runs after `UseAuthentication()` and before `UseAuthorization()`. It creates a synthetic `ClaimsIdentity` with the header value as `sub`, `NameIdentifier`, and `Name` claims, then prepends it to the `ClaimsPrincipal`. Original managed identity claims (`permissions`, `roles`, `role`, `scp`) are copied to the synthetic identity. When the header is absent and `Required` is `true`, the middleware returns `401` immediately without calling downstream middleware.
 
 ## Key conventions
 

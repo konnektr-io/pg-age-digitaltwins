@@ -512,13 +512,9 @@ CREATE (m)-[:_hasComponent]->(m2)";
                             );
                             if (descendantsAgtype != null)
                             {
-                                var descendantsList = descendantsAgtype.Value.GetList();
-                                foreach (var desc in descendantsList)
+                                foreach (var desc in descendantsAgtype.Value.GetArray())
                                 {
-                                    if (desc is string descStr)
-                                    {
-                                        existingDescendants.Add(descStr);
-                                    }
+                                    existingDescendants.Add(desc.GetString());
                                 }
                             }
                         }

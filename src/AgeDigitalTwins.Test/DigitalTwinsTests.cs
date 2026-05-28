@@ -360,7 +360,7 @@ public class DigitalTwinsTests : TestBase
 
         Assert.Contains("temperature", exception.Message);
     }
-    
+
     [Fact]
     public async Task UpdateDigitalTwinAsync_RemoveNewProperty_ShouldFail()
     {
@@ -496,7 +496,7 @@ public class DigitalTwinsTests : TestBase
 
         // The query string with special characters that need proper escaping
         string queryValue =
-            "MATCH (current:Twin)-[*1..2]->(T:Twin) WHERE current['$dtId']= '@_selectedAssessementGroupId' AND (digitaltwins.is_of_model(T,'dtmi:com:arcadis:climaterisk:Asset;1')) RETURN T.$dtId as Id, T.name as Name  ORDER BY Name ASC";
+            "MATCH (current:Twin)-[*1..2]->(T:Twin) WHERE current['$dtId']= '@_selectedAssessementGroupId' AND (digitaltwins.is_of_model(T,'dtmi:com:konnektr:Asset;1')) RETURN T.$dtId as Id, T.name as Name  ORDER BY Name ASC";
 
         // Create JSON patch - the JsonPatch library should handle the escaping
         JsonPatch jsonPatch = new(PatchOperation.Add(JsonPointer.Parse("/query"), queryValue));
@@ -516,7 +516,7 @@ public class DigitalTwinsTests : TestBase
         // Verify specific characters are preserved
         Assert.Contains("'$dtId'", actualQuery);
         Assert.Contains("'@_selectedAssessementGroupId'", actualQuery);
-        Assert.Contains("'dtmi:com:arcadis:climaterisk:Asset;1'", actualQuery);
+        Assert.Contains("'dtmi:com:konnektr:Asset;1'", actualQuery);
     }
 
     [Fact]
@@ -538,7 +538,7 @@ public class DigitalTwinsTests : TestBase
             @"[{
             ""op"": ""add"",
             ""path"": ""/query"",
-            ""value"": ""MATCH (current:Twin)-[*1..2]->(T:Twin) WHERE current['$dtId']= '@_selectedAssessementGroupId' AND (digitaltwins.is_of_model(T,'dtmi:com:arcadis:climaterisk:Asset;1')) RETURN T.$dtId as Id, T.name as Name  ORDER BY Name ASC""
+            ""value"": ""MATCH (current:Twin)-[*1..2]->(T:Twin) WHERE current['$dtId']= '@_selectedAssessementGroupId' AND (digitaltwins.is_of_model(T,'dtmi:com:konnektr:Asset;1')) RETURN T.$dtId as Id, T.name as Name  ORDER BY Name ASC""
         }]";
 
         JsonPatch jsonPatch = JsonSerializer.Deserialize<JsonPatch>(jsonPatchString)!;
@@ -554,13 +554,13 @@ public class DigitalTwinsTests : TestBase
         // Verify the query value is correctly stored
         string actualQuery = readTwin.Contents["query"].ToString()!;
         string expectedQuery =
-            "MATCH (current:Twin)-[*1..2]->(T:Twin) WHERE current['$dtId']= '@_selectedAssessementGroupId' AND (digitaltwins.is_of_model(T,'dtmi:com:arcadis:climaterisk:Asset;1')) RETURN T.$dtId as Id, T.name as Name  ORDER BY Name ASC";
+            "MATCH (current:Twin)-[*1..2]->(T:Twin) WHERE current['$dtId']= '@_selectedAssessementGroupId' AND (digitaltwins.is_of_model(T,'dtmi:com:konnektr:Asset;1')) RETURN T.$dtId as Id, T.name as Name  ORDER BY Name ASC";
         Assert.Equal(expectedQuery, actualQuery);
 
         // Check for proper handling of single quotes and special characters
         Assert.Contains("'$dtId'", actualQuery);
         Assert.Contains("'@_selectedAssessementGroupId'", actualQuery);
-        Assert.Contains("'dtmi:com:arcadis:climaterisk:Asset;1'", actualQuery);
+        Assert.Contains("'dtmi:com:konnektr:Asset;1'", actualQuery);
     }
 
     [Fact]

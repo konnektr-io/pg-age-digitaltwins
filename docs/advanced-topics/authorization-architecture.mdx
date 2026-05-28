@@ -198,6 +198,10 @@ Authorization__Provider=Claims
 Authorization__PermissionsClaimName=permissions
 Authorization__RequiredScopes__0=mcp:tools
 
+# User ID header delegation (optional - proxy scenario)
+Parameters__UserIdHeaderName=X-User-Id
+Parameters__UserIdHeaderRequired=false
+
 # MCP metadata
 MCP__ServerName=My Graph MCP Server
 MCP__Version=1.0.0
@@ -285,6 +289,25 @@ Fetch permissions from an external API on each request:
 - Requires external API call
 - Potential latency
 - Dependency on external service
+
+### Proxy Delegation
+
+When the API service runs behind an authenticating proxy that uses a managed identity to forward requests, the delegated user ID from an HTTP header can be used instead of the managed identity's sub claim. This is configured via:
+
+```json
+{
+  "Parameters": {
+    "UserIdHeaderName": "X-User-Id",
+    "UserIdHeaderRequired": false
+  }
+}
+```
+
+When enabled, the `UserIdHeaderMiddleware` reads the header value (e.g., a B2C user ID injected by the proxy) and creates a synthetic `ClaimsIdentity` prepended to the `ClaimsPrincipal`. All downstream authorization checks and `TrackLastUpdatedBy` use this synthetic identity.
+
+For the `Api` permission provider, the synthetic identity's `sub` claim (from the header) is used for permission lookups. For the `Claims` provider, original managed identity permission claims are preserved and accessible.
+
+See [Security](/docs/graph/advanced-topics/security) for details.
 
 ### Configuring Your Auth Provider
 

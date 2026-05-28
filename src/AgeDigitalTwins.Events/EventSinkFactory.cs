@@ -126,6 +126,10 @@ public class EventSinkFactory(
             {
                 try
                 {
+                    kustoSink.TrackLastUpdatedBy = _configuration.GetValue(
+                        "Parameters:TrackLastUpdatedBy",
+                        false
+                    );
                     var sink = new KustoEventSink(
                         kustoSink,
                         CredentialFactory.CreateCredential(

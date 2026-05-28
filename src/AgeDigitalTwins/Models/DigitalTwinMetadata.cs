@@ -45,4 +45,11 @@ public class DigitalTwinPropertyMetadata
     [JsonPropertyName("sourceTime")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public DateTimeOffset? SourceTime { get; set; }
+
+    /// <summary>
+    /// The ID of the user who last updated the property (optional).
+    /// </summary>
+    [JsonPropertyName("lastUpdatedBy")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? LastUpdatedBy { get; set; }
 }

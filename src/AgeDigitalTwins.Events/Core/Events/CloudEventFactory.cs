@@ -346,7 +346,8 @@ public static class CloudEventFactory
     public static List<CloudEvent> CreateDataHistoryEvents(
         EventData eventData,
         Uri source,
-        Dictionary<SinkEventType, string>? typeMapping = null
+        Dictionary<SinkEventType, string>? typeMapping = null,
+        bool trackLastUpdatedBy = false
     )
     {
         var mapping = typeMapping ?? DefaultDataHistoryTypeMapping;
@@ -355,14 +356,16 @@ public static class CloudEventFactory
             EventType.TwinCreate or EventType.TwinDelete => CreateTwinLifeCycleEvents(
                 eventData,
                 source,
-                mapping
+                mapping,
+                trackLastUpdatedBy
             ),
             EventType.RelationshipCreate or EventType.RelationshipDelete =>
-                CreateRelationshipLifeCycleEvents(eventData, source, mapping),
+                CreateRelationshipLifeCycleEvents(eventData, source, mapping, trackLastUpdatedBy),
             EventType.TwinUpdate or EventType.RelationshipUpdate => CreatePropertyEvents(
                 eventData,
                 source,
-                mapping
+                mapping,
+                trackLastUpdatedBy
             ),
             _ => throw new ArgumentException(
                 "EventType must be TwinCreate, TwinUpdate, TwinDelete, RelationshipCreate, RelationshipUpdate, or RelationshipDelete",
@@ -374,7 +377,8 @@ public static class CloudEventFactory
     public static List<CloudEvent> CreateTwinLifeCycleEvents(
         EventData eventData,
         Uri source,
-        Dictionary<SinkEventType, string> typeMapping
+        Dictionary<SinkEventType, string> typeMapping,
+        bool trackLastUpdatedBy = false
     )
     {
         ArgumentNullException.ThrowIfNull(eventData);
@@ -412,14 +416,15 @@ public static class CloudEventFactory
                 Time = eventData.Timestamp,
             };
         cloudEvents.Add(cloudEvent);
-        cloudEvents.AddRange(CreateCloudEventsFromPatch(eventData, source, typeMapping));
+        cloudEvents.AddRange(CreateCloudEventsFromPatch(eventData, source, typeMapping, trackLastUpdatedBy));
         return cloudEvents;
     }
 
     public static List<CloudEvent> CreateRelationshipLifeCycleEvents(
         EventData eventData,
         Uri source,
-        Dictionary<SinkEventType, string> typeMapping
+        Dictionary<SinkEventType, string> typeMapping,
+        bool trackLastUpdatedBy = false
     )
     {
         ArgumentNullException.ThrowIfNull(eventData);
@@ -463,14 +468,15 @@ public static class CloudEventFactory
                 Time = eventData.Timestamp,
             };
         cloudEvents.Add(cloudEvent);
-        cloudEvents.AddRange(CreateCloudEventsFromPatch(eventData, source, typeMapping));
+        cloudEvents.AddRange(CreateCloudEventsFromPatch(eventData, source, typeMapping, trackLastUpdatedBy));
         return cloudEvents;
     }
 
     public static List<CloudEvent> CreatePropertyEvents(
         EventData eventData,
         Uri source,
-        Dictionary<SinkEventType, string> typeMapping
+        Dictionary<SinkEventType, string> typeMapping,
+        bool trackLastUpdatedBy = false
     )
     {
         ArgumentNullException.ThrowIfNull(eventData);
@@ -520,14 +526,15 @@ public static class CloudEventFactory
             cloudEvents.Add(cloudEvent);
         }
         // Now create property events for each changed property
-        cloudEvents.AddRange(CreateCloudEventsFromPatch(eventData, source, typeMapping));
+        cloudEvents.AddRange(CreateCloudEventsFromPatch(eventData, source, typeMapping, trackLastUpdatedBy));
         return cloudEvents;
     }
 
     private static List<CloudEvent> CreateCloudEventsFromPatch(
         EventData eventData,
         Uri source,
-        Dictionary<SinkEventType, string> typeMapping
+        Dictionary<SinkEventType, string> typeMapping,
+        bool trackLastUpdatedBy = false
     )
     {
         JsonPatch jsonPatch = eventData.OldValue.CreatePatch(eventData.NewValue);
@@ -559,7 +566,8 @@ public static class CloudEventFactory
                 source,
                 typeMapping,
                 jsonPatch,
-                cloudEvents
+                cloudEvents,
+                trackLastUpdatedBy
             );
         }
 
@@ -574,7 +582,8 @@ public static class CloudEventFactory
         Uri source,
         Dictionary<SinkEventType, string> typeMapping,
         JsonPatch jsonPatch,
-        List<CloudEvent> cloudEvents
+        List<CloudEvent> cloudEvents,
+        bool trackLastUpdatedBy = false
     )
     {
         JsonObject body =
@@ -599,12 +608,25 @@ public static class CloudEventFactory
                 },
             };
 
+        string metadataKeyPath = $"/$metadata/{key.Replace("_", "/")}/";
+
         PatchOperation? sourceTimeOperation = jsonPatch.Operations.FirstOrDefault(o =>
-            o.Path.ToString() == $"/$metadata/{key.Replace("_", "/")}/sourceTime"
+            o.Path.ToString() == $"{metadataKeyPath}sourceTime"
         );
         if (sourceTimeOperation != null)
         {
             body["sourceTimeStamp"] = sourceTimeOperation.Value?.DeepClone();
+        }
+
+        if (trackLastUpdatedBy)
+        {
+            PatchOperation? lastUpdatedByOperation = jsonPatch.Operations.FirstOrDefault(o =>
+                o.Path.ToString() == $"{metadataKeyPath}lastUpdatedBy"
+            );
+            if (lastUpdatedByOperation != null)
+            {
+                body["updatedBy"] = lastUpdatedByOperation.Value?.DeepClone();
+            }
         }
 
         var type = typeMapping.TryGetValue(SinkEventType.PropertyEvent, out var t)

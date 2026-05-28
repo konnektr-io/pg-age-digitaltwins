@@ -47,10 +47,12 @@ public static class DigitalTwinsEndpoints
                 ) =>
                 {
                     string? etag = RequestHelper.ParseETag(httpContext, "If-None-Match");
+                    string? userId = RequestHelper.ParseUserId(httpContext);
                     return client.CreateOrReplaceDigitalTwinAsync(
                         id,
                         digitalTwin,
                         etag,
+                        userId,
                         cancellationToken
                     );
                 }
@@ -74,7 +76,8 @@ public static class DigitalTwinsEndpoints
                 ) =>
                 {
                     string? etag = RequestHelper.ParseETag(httpContext, "If-Match");
-                    await client.UpdateDigitalTwinAsync(id, patch, etag, cancellationToken);
+                    string? userId = RequestHelper.ParseUserId(httpContext);
+                    await client.UpdateDigitalTwinAsync(id, patch, etag, userId, cancellationToken);
                     return Results.NoContent();
                 }
             )

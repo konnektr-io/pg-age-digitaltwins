@@ -128,12 +128,14 @@ public partial class AgeDigitalTwinsClient
     /// <param name="digitalTwinId">The ID of the digital twin to create or replace.</param>
     /// <param name="digitalTwin">The digital twin object to create or replace.</param>
     /// <param name="ifNoneMatch">The If-None-Match header value to check for conditional creation.</param>
+    /// <param name="userId">The ID of the user performing the operation, stored in property metadata when <see cref="AgeDigitalTwinsClientOptions.TrackLastUpdatedBy"/> is enabled.</param>
     /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
     /// <returns>A task that represents the asynchronous operation. The task result contains the created or replaced digital twin.</returns>
     public virtual async Task<T?> CreateOrReplaceDigitalTwinAsync<T>(
         string digitalTwinId,
         T digitalTwin,
         string? ifNoneMatch = null,
+        string? userId = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -155,6 +157,7 @@ public partial class AgeDigitalTwinsClient
                     digitalTwinId,
                     digitalTwin,
                     ifNoneMatch,
+                    userId,
                     cancellationToken
                 )
                 .ConfigureAwait(false);
@@ -188,6 +191,7 @@ public partial class AgeDigitalTwinsClient
         string digitalTwinId,
         T digitalTwin,
         string? ifNoneMatch = null,
+        string? userId = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -310,13 +314,22 @@ public partial class AgeDigitalTwinsClient
                     )
                     {
                         metadataPropertyObject["lastUpdateTime"] = now.ToString("o");
+                        if (_trackLastUpdatedBy && userId != null)
+                        {
+                            metadataPropertyObject["lastUpdatedBy"] = userId;
+                        }
                     }
                     else
                     {
-                        metadataObject[property] = new JsonObject
+                        var newPropertyMetadata = new JsonObject
                         {
                             ["lastUpdateTime"] = now.ToString("o"),
                         };
+                        if (_trackLastUpdatedBy && userId != null)
+                        {
+                            newPropertyMetadata["lastUpdatedBy"] = userId;
+                        }
+                        metadataObject[property] = newPropertyMetadata;
                     }
                 }
             }
@@ -392,14 +405,23 @@ public partial class AgeDigitalTwinsClient
                     ) || componentMetadataNode is not JsonObject componentMetadataObject
                 )
                 {
-                    componentObject["$metadata"] = new JsonObject
+                    var newComponentMetadata = new JsonObject
                     {
                         ["lastUpdateTime"] = now.ToString("o"),
                     };
+                    if (_trackLastUpdatedBy && userId != null)
+                    {
+                        newComponentMetadata["lastUpdatedBy"] = userId;
+                    }
+                    componentObject["$metadata"] = newComponentMetadata;
                 }
                 else
                 {
                     componentMetadataObject["lastUpdateTime"] = now.ToString("o");
+                    if (_trackLastUpdatedBy && userId != null)
+                    {
+                        componentMetadataObject["lastUpdatedBy"] = userId;
+                    }
                 }
 
                 // Set component metadata in the twin's metadata
@@ -409,13 +431,22 @@ public partial class AgeDigitalTwinsClient
                 )
                 {
                     metadataPropertyObject["lastUpdateTime"] = now.ToString("o");
+                    if (_trackLastUpdatedBy && userId != null)
+                    {
+                        metadataPropertyObject["lastUpdatedBy"] = userId;
+                    }
                 }
                 else
                 {
-                    metadataObject[property] = new JsonObject
+                    var newPropertyMetadata = new JsonObject
                     {
                         ["lastUpdateTime"] = now.ToString("o"),
                     };
+                    if (_trackLastUpdatedBy && userId != null)
+                    {
+                        newPropertyMetadata["lastUpdatedBy"] = userId;
+                    }
+                    metadataObject[property] = newPropertyMetadata;
                 }
             }
             else
@@ -483,12 +514,14 @@ RETURN t";
     /// <param name="digitalTwinId">The ID of the digital twin to update.</param>
     /// <param name="patch">The JSON patch document containing the updates.</param>
     /// <param name="ifMatch">The If-Match header value to check for conditional updates.</param>
+    /// <param name="userId">The ID of the user performing the operation, stored in property metadata when <see cref="AgeDigitalTwinsClientOptions.TrackLastUpdatedBy"/> is enabled.</param>
     /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
     /// <returns>A task that represents the asynchronous operation.</returns>
     public virtual async Task UpdateDigitalTwinAsync(
         string digitalTwinId,
         JsonPatch patch,
         string? ifMatch = null,
+        string? userId = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -509,6 +542,7 @@ RETURN t";
                     digitalTwinId,
                     patch,
                     ifMatch,
+                    userId,
                     cancellationToken
                 )
                 .ConfigureAwait(false);
@@ -541,6 +575,7 @@ RETURN t";
         string digitalTwinId,
         JsonPatch patch,
         string? ifMatch = null,
+        string? userId = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -689,13 +724,22 @@ RETURN t";
                         )
                         {
                             metadataPropertyObject["lastUpdateTime"] = now.ToString("o");
+                            if (_trackLastUpdatedBy && userId != null)
+                            {
+                                metadataPropertyObject["lastUpdatedBy"] = userId;
+                            }
                         }
                         else
                         {
-                            metadataObject[property] = new JsonObject
+                            var newPropertyMetadata = new JsonObject
                             {
                                 ["lastUpdateTime"] = now.ToString("o"),
                             };
+                            if (_trackLastUpdatedBy && userId != null)
+                            {
+                                newPropertyMetadata["lastUpdatedBy"] = userId;
+                            }
+                            metadataObject[property] = newPropertyMetadata;
                         }
                     }
                 }

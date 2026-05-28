@@ -60,7 +60,12 @@ builder.Services.AddSingleton(sp =>
         sourceUri = uriBuilder.Uri;
     }
 
-    return new SharedEventConsumer(eventQueue, logger, sourceUri);
+    return new SharedEventConsumer(
+        eventQueue,
+        logger,
+        sourceUri,
+        trackLastUpdatedBy: builder.Configuration.GetValue("Parameters:TrackLastUpdatedBy", false)
+    );
 });
 
 // Register EventSinkFactory as a singleton

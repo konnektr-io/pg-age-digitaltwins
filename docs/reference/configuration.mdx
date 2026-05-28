@@ -1,6 +1,565 @@
 ---
 title: Configuration
 icon: SlidersVertical
+description: Complete reference for all configuration options in Konnektr Graph.
 ---
 
-All configuration options and their usage.
+# Configuration Reference
+
+Konnektr Graph consists of two services — the **API Service** (REST API) and the **Events Service** (event streaming) — plus the **Core SDK** (`AgeDigitalTwinsClient`). Each reads configuration from `appsettings.json`, environment variables, or the .NET Aspire configuration system.
+
+All configuration keys use the standard .NET configuration hierarchy. Environment variables use `__` (double underscore) as a separator. For example, `Parameters:TrackLastUpdatedBy` becomes `Parameters__TrackLastUpdatedBy`.
+
+---
+
+## API Service
+
+The API Service (`AgeDigitalTwins.ApiService`) exposes the ADT-compatible REST API.
+
+### Connection Strings
+
+| Key | Required | Default | Description |
+|-----|----------|---------|-------------|
+| `ConnectionStrings:agedb` | If no `Parameters:AgeConnectionString` | — | PostgreSQL connection string |
+| `Parameters:AgeConnectionString` | If no `ConnectionStrings:agedb` | — | Fallback connection string |
+| `Parameters:UseCnpgAge` | No | `true` | Use `true` for CNPG-flavor AGE images, `false` for Apache AGE images |
+| `Parameters:AgeGraphName` | No | `digitaltwins` | Name of the Apache AGE graph |
+
+The connection string **must** include the database host, port, credentials, and database name. The search path is automatically set to `ag_catalog, "$user", public`.
+
+### Npgsql Connection Pooling
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `Parameters:MaxPoolSize` | `100` | Maximum connections in the pool |
+| `Parameters:MinPoolSize` | `0` | Minimum connections maintained in the pool |
+| `Parameters:ConnectionTimeout` | `15` | Connection open timeout in seconds |
+| `Parameters:CommandTimeout` | `30` | Command execution timeout in seconds |
+| `Parameters:ConnectionIdleLifetime` | `60` | Max idle time before a connection is closed (seconds) |
+| `Parameters:ConnectionLifetime` | `300` | Max connection lifetime before recycling (seconds) |
+
+### Core SDK Options
+
+These configure the `AgeDigitalTwinsClient` instance used internally.
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `Parameters:ModelCacheExpirationSeconds` | `10` | How long DTDL model definitions are cached in memory |
+| `Parameters:DefaultBatchSize` | `50` | Default batch size for import jobs |
+| `Parameters:DefaultCheckpointInterval` | `50` | Checkpoint interval for import jobs |
+| `Parameters:TrackLastUpdatedBy` | `false` | When `true`, stores the user ID in each property's `$metadata.lastUpdatedBy` field. See [Security](/docs/graph/advanced-topics/security) for details. |
+
+### Authentication
+
+Authentication is **disabled by default** and must be explicitly enabled.
+
+| Key | Required | Default | Description |
+|-----|----------|---------|-------------|
+| `Authentication:Enabled` | Yes | `false` | Set to `true` to enable JWT Bearer authentication |
+| `Authentication:Authority` | If enabled | — | OAuth authority URL (e.g., `https://your-tenant.auth0.com/`) |
+| `Authentication:Audience` | If enabled | — | Expected JWT audience (e.g., `https://graph.konnektr.io`) |
+| `Authentication:Issuer` | No | — | Expected JWT issuer (validated when set) |
+| `Authentication:MetadataAddress` | No | — | Explicit OIDC metadata URL (overrides discovery from Authority) |
+
+When enabled, the API validates JWT tokens using:
+- Issuer validation (if `Issuer` is set)
+- Audience validation
+- Signing key validation
+- `MapInboundClaims = false` (preserves original claim types)
+
+### Authorization
+
+Requires `Authentication:Enabled = true`.
+
+| Key | Required | Default | Description |
+|-----|----------|---------|-------------|
+| `Authorization:Enabled` | Yes | `false` | Set to `true` to enable permission-based authorization |
+| `Authorization:Provider` | No | `Claims` | Permission provider: `Claims` (JWT claim) or `Api` (external API) |
+| `Authorization:PermissionsClaimName` | No | `permissions` | Name of the JWT claim holding permission strings |
+| `Authorization:RequiredScopes` | No | `[]` | Array of required OAuth scopes (e.g., `["mcp:tools"]`) |
+| `Authorization:ScopesSupported` | No | `[]` | Array of supported OAuth scopes (for discovery) |
+
+#### API Provider Options
+
+When `Authorization:Provider = Api`, configure these under `Authorization:ApiProvider`:
+
+| Key | Required | Default | Description |
+|-----|----------|---------|-------------|
+| `ApiProvider:BaseUrl` | Yes | — | Base URL of the external permissions API |
+| `ApiProvider:CheckEndpoint` | No | `/api/v1/permissions/check` | Endpoint for permission checks |
+| `ApiProvider:ResourceName` | No | `digitaltwins` | Resource identifier sent to the permissions API |
+| `ApiProvider:CacheExpirationMinutes` | No | `5` | How long to cache permission responses |
+| `ApiProvider:TimeoutSeconds` | No | `10` | HTTP request timeout to the permissions API |
+| `ApiProvider:TokenEndpoint` | If OAuth | — | OAuth token endpoint for M2M client credentials flow |
+| `ApiProvider:Audience` | If OAuth | — | Audience for the M2M token |
+| `ApiProvider:ClientId` | If OAuth | — | Client ID for the M2M flow |
+| `ApiProvider:ClientSecret` | If OAuth | — | Client secret for the M2M flow |
+
+When `Api` provider is used, the `ClaimsPermissionProvider` is also registered alongside the `ApiPermissionProvider`. Both are aggregated via `CompositePermissionProvider` — permissions from either source grant access.
+
+### CORS
+
+| Key | Required | Default | Description |
+|-----|----------|---------|-------------|
+| `Cors:Enabled` | No | `false` | Set to `true` to enable CORS |
+| `Cors:AllowedOrigins` | If enabled | — | Array of allowed origins (wildcard `*` is **not** supported) |
+| `Cors:AllowedMethods` | No | `["GET","POST","PUT","DELETE","OPTIONS"]` | Allowed HTTP methods |
+| `Cors:AllowedHeaders` | No | `["*"]` | Allowed request headers |
+
+### Rate Limiting
+
+Rate limiting is **enabled by default**. Controlled by `Parameters:RateLimitingEnabled`.
+
+#### Global Rate Limit
+
+Applies to all endpoints as a per-user/IP safety net.
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `Parameters:GlobalPermitLimit` | `1000` | Max requests per window per user |
+| `Parameters:GlobalWindowSeconds` | `1` | Window duration in seconds |
+| `Parameters:GlobalQueueLimit` | `200` | Max queued requests when rate limited |
+
+#### Light Operations
+
+Used for read operations (GET single items, list operations).
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `Parameters:LightOperationsPermitLimit` | `100` | Max requests per second |
+| `Parameters:LightOperationsWindowSeconds` | `1` | Window in seconds |
+| `Parameters:LightOperationsQueueLimit` | `50` | Queue capacity |
+
+#### Medium Operations
+
+Used for queries and batch operations.
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `Parameters:MediumOperationsPermitLimit` | `50` | Max requests per second |
+| `Parameters:MediumOperationsWindowSeconds` | `1` | Window in seconds |
+| `Parameters:MediumOperationsQueueLimit` | `25` | Queue capacity |
+
+#### Heavy Operations
+
+Used for create/update/delete operations.
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `Parameters:HeavyOperationsPermitLimit` | `20` | Max requests per second |
+| `Parameters:HeavyOperationsWindowSeconds` | `1` | Window in seconds |
+| `Parameters:HeavyOperationsQueueLimit` | `10` | Queue capacity |
+
+#### Admin Operations
+
+Used for model management and job operations. Window is per-minute (not per-second).
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `Parameters:AdminOperationsPermitLimit` | `50` | Max requests per minute |
+| `Parameters:AdminOperationsWindowMinutes` | `1` | Window in minutes |
+| `Parameters:AdminOperationsQueueLimit` | `25` | Queue capacity |
+
+#### Weighted Query (Token Bucket)
+
+Used for the `/query` endpoint. Each query consumes tokens proportional to its `query-charge`.
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `Parameters:WeightedQueryTokenLimit` | `1000` | Max token bucket capacity |
+| `Parameters:WeightedQueryQueueLimit` | `100` | Queue capacity |
+| `Parameters:WeightedQueryReplenishSeconds` | `1` | Replenishment period in seconds |
+| `Parameters:WeightedQueryTokensPerPeriod` | `100` | Tokens added per replenishment period |
+
+### Database Protection Middleware
+
+Monitors and protects the database from overload. Controlled by `Parameters:RateLimitingEnabled` (the middleware only runs when rate limiting is enabled).
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `Parameters:MaxConcurrentRequestsPerUser` | `20` | Max concurrent requests per user/IP before 429 |
+| `Parameters:MaxQueryComplexityPerWindow` | `1000` | Max query complexity score per window before 429 |
+| `Parameters:BaseQueryComplexity` | `10` | Complexity score added per query endpoint request |
+| `Parameters:SlowRequestThresholdMs` | `5000` | Logs a warning for requests exceeding this duration (ms) |
+| `Parameters:MetricsRetentionMinutes` | `10` | How long to retain per-user metrics before cleanup |
+| `Parameters:QueryComplexityWindowMinutes` | `1` | Time window for query complexity tracking |
+
+### User ID Header Delegation
+
+When Konnektr Graph runs behind an authenticating proxy (e.g., a proxy that validates Azure B2C tokens and forwards requests using a managed identity), the proxy can inject the original user's ID via an HTTP header. The API service uses this header value for authorization lookups and `TrackLastUpdatedBy` instead of the managed identity's claims.
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `Parameters:UserIdHeaderName` | `""` (disabled) | HTTP header name to read the original user ID from (e.g., `X-User-Id`). Empty string disables the feature. |
+| `Parameters:UserIdHeaderRequired` | `false` | When `true` and `UserIdHeaderName` is set, requests missing the header receive a `401 Unauthorized` response. When `false`, requests without the header fall back to the managed identity's claims (current behavior). |
+
+When enabled, a `UserIdHeaderMiddleware` runs in the request pipeline after authentication and before authorization. It creates a synthetic `ClaimsIdentity` with the header value as the `sub`, `NameIdentifier`, and `Name` claims, then prepends it to the `ClaimsPrincipal`. Original managed identity claims (`permissions`, `roles`, `scp`) are copied to the synthetic identity so permission providers continue to work.
+
+See [Security](/docs/graph/advanced-topics/security) for details.
+
+### Import Jobs
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `Parameters:JobsEnabled` | `true` | Set to `false` to disable import job endpoints and blob storage |
+
+When jobs are enabled, blob storage services are registered for import/export of ND-JSON data:
+- `AzureBlobStorageService` — Azure Blob Storage (SAS URIs)
+- `DefaultBlobStorageService` — AWS S3, Google Cloud Storage, or local filesystem (routed by URI scheme)
+- `JobResumptionService` — hosted service that resumes interrupted import jobs on startup
+
+### OpenAPI / Scalar
+
+| Key | Required | Default | Description |
+|-----|----------|---------|-------------|
+| `OpenApi:Enabled` | No | Only in Development | Set to `true` to enable OpenAPI and Scalar UI in non-Development environments |
+
+---
+
+## Events Service
+
+The Events Service (`AgeDigitalTwins.Events`) captures database changes via PostgreSQL logical replication (`LISTEN`/`NOTIFY` for telemetry) and routes them to configured sinks as CloudEvents.
+
+### Connection Strings
+
+Falls back through this chain: `GetConnectionString("agedb")` → `ConnectionStrings:agedb` → `AgeConnectionString`.
+
+| Key | Required | Default | Description |
+|-----|----------|---------|-------------|
+| `ConnectionStrings:agedb` | Yes* | — | PostgreSQL connection string |
+| `AgeConnectionString` | No | — | Fallback connection string |
+
+### Replication
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `Parameters:AgePublication` | `age_pub` | PostgreSQL publication name for logical replication |
+| `Parameters:AgeReplicationSlot` | `age_slot` | Replication slot name |
+| `Parameters:MaxBatchSize` | `50` | Max events to batch from WAL changes |
+| `Parameters:WalReceiverTimeoutSeconds` | `30` | Seconds without WAL message before declaring connection dead. Keep shorter than CNPG's WAL-receiver drain timeout for failover scenarios |
+
+### Event Source / CloudEvents Source URI
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `Parameters:CustomEventSource` | Derived from connection string host | Custom URI for the CloudEvents `source` attribute |
+
+### TrackLastUpdatedBy
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `Parameters:TrackLastUpdatedBy` | `false` | When `true`, includes `updatedBy` fields in DataHistory CloudEvents from the metadata `lastUpdatedBy` values |
+
+### Event Sinks
+
+Event sinks are configured under the `EventSinks` section. Each sink type supports multiple instances (configured as arrays).
+
+#### Kafka
+
+Configured under `EventSinks:Kafka` as an array.
+
+| Key | Required | Description |
+|-----|----------|-------------|
+| `Name` | Yes | Sink name (referenced by `EventRoutes`) |
+| `BrokerList` | Yes | Kafka broker list (e.g., `broker1:9092,broker2:9092`) |
+| `Topic` | Yes | Kafka topic name |
+| `SaslMechanism` | No | SASL mechanism: `PLAIN` or `OAUTHBEARER` |
+| `SaslUsername` | If PLAIN | SASL username |
+| `SaslPassword` | If PLAIN | SASL password |
+| `SecurityProtocol` | No | Defaults to `SaslSsl` |
+| `TenantId` | If OAUTHBEARER | Azure AD tenant ID (for `ClientSecretCredential`) |
+| `ClientId` | If OAUTHBEARER | OAuth client ID |
+| `ClientSecret` | If OAUTHBEARER | OAuth client secret |
+| `TokenEndpoint` | If OAUTHBEARER | OAuth token endpoint |
+| `AuthenticationType` | No | Not used for Kafka (uses SASL config) |
+| `Scope` | No | Event scope filter |
+| `EventTypeMappings` | No | Maps `SinkEventType` to custom topic names |
+
+#### MQTT
+
+Configured under `EventSinks:MQTT` as an array.
+
+| Key | Required | Default | Description |
+|-----|----------|---------|-------------|
+| `Name` | Yes | — | Sink name |
+| `Broker` | Yes | — | MQTT broker hostname |
+| `Port` | Yes | — | MQTT broker port |
+| `Topic` | Yes | — | MQTT topic |
+| `ClientId` | Yes | — | MQTT client ID |
+| `Username` | Yes | — | MQTT username |
+| `Password` | Yes | — | MQTT password |
+| `ProtocolVersion` | No | `5.0.0` | MQTT protocol version (`3.1.0`, `3.1.1`, or `5.0.0`) |
+| `TenantId` | No | — | Azure AD tenant ID (for OAuth token refresh) |
+| `ClientId` (OAuth) | No | — | OAuth client ID |
+| `ClientSecret` | No | — | OAuth client secret |
+| `TokenEndpoint` | No | — | OAuth token endpoint |
+| `Scope` | No | — | Event scope filter |
+| `EventTypeMappings` | No | — | Maps `SinkEventType` to custom topic names |
+
+#### Webhook
+
+Configured under `EventSinks:Webhook` as an array.
+
+| Key | Required | Description |
+|-----|----------|-------------|
+| `Name` | Yes | Sink name |
+| `Url` | Yes | Webhook endpoint URL |
+| `AuthenticationType` | Yes | Auth type: `None`, `Basic`, `Bearer`, `ApiKey` |
+| `Username` | If Basic Auth | Username |
+| `Password` | If Basic Auth | Password |
+| `Token` | If Bearer Auth | Static bearer token |
+| `HeaderName` | If ApiKey | HTTP header name |
+| `HeaderValue` | If ApiKey | HTTP header value |
+| `TokenEndpoint` | If OAuth | OAuth token endpoint |
+| `ClientId` | If OAuth | OAuth client ID |
+| `ClientSecret` | If OAuth | OAuth client secret |
+| `Scope` | No | Event scope filter |
+| `EventTypeMappings` | No | Maps `SinkEventType` to custom topics |
+
+#### Azure Data Explorer (Kusto)
+
+Configured under `EventSinks:Kusto` as an array.
+
+| Key | Required | Description |
+|-----|----------|-------------|
+| `Name` | Yes | Sink name |
+| `IngestionUri` | Yes | Kusto cluster ingestion URI (e.g., `https://ingest-cluster.kusto.windows.net`) |
+| `Database` | Yes | Kusto database name |
+| `PropertyEventsTable` | No | Table name for property change events (`AdtPropertyEvents` by convention) |
+| `TwinLifeCycleEventsTable` | No | Table name for twin lifecycle events (`AdtTwinLifeCycleEvents` by convention) |
+| `RelationshipLifeCycleEventsTable` | No | Table name for relationship lifecycle events (`AdtRelationshipLifeCycleEvents` by convention) |
+| `TenantId` | Yes | Azure AD tenant ID |
+| `ClientId` | Yes | Service principal client ID |
+| `ClientSecret` | Yes | Service principal client secret |
+| `TrackLastUpdatedBy` | No | Inherits from `Parameters:TrackLastUpdatedBy`. When true, adds an `UpdatedBy` column mapping |
+| `Scope` | No | Event scope filter |
+| `EventTypeMappings` | No | Maps `SinkEventType` to custom tables |
+
+### Event Routes
+
+Configured under `EventRoutes` as an array. Routes map event types to sinks.
+
+| Key | Required | Description |
+|-----|----------|-------------|
+| `SinkName` | Yes | Must match a sink's `Name` |
+| `EventFormat` | No | Output format: `EventNotification` (default) or `DataHistory` |
+| `TypeMappings` | No | Dictionary mapping `SinkEventType` to destination-specific keys (e.g., Kafka topic, Kusto table) |
+
+#### SinkEventType Enum
+
+| Value | Description |
+|-------|-------------|
+| `TwinCreate` | Digital twin created |
+| `TwinUpdate` | Digital twin updated |
+| `TwinDelete` | Digital twin deleted |
+| `RelationshipCreate` | Relationship created |
+| `RelationshipUpdate` | Relationship updated |
+| `RelationshipDelete` | Relationship deleted |
+| `Telemetry` | Telemetry message published |
+| `PropertyEvent` | Individual property change (DataHistory format) |
+| `TwinLifecycle` | Twin create/delete (DataHistory format) |
+| `RelationshipLifecycle` | Relationship create/delete (DataHistory format) |
+
+#### EventFormat Enum
+
+| Value | Description |
+|-------|-------------|
+| `EventNotification` | Full CloudEvents format with complete details |
+| `DataHistory` | Optimized format for time-series storage |
+| `Telemetry` | Telemetry message format |
+
+### Dead Letter Queue
+
+The Events Service maintains a dead letter queue table (`digitaltwins_eventing.dead_letter_queue` in the same PostgreSQL database) for events that fail to deliver after all retries.
+
+Schema is automatically created on startup. No user configuration required.
+
+### Credential Resolution for Sinks
+
+Credentials are resolved via `CredentialFactory` using this priority:
+1. If `TokenEndpoint` + `ClientId` + `ClientSecret` are provided → `GenericClientCredential` (generic OAuth2)
+2. If `ClientId` + `ClientSecret` are provided (with optional `TenantId`) → `ClientSecretCredential` (Azure AD)
+3. If none of the above → `DefaultAzureCredential` (Azure-managed identity fallback)
+
+---
+
+## Common Configuration
+
+Both services use `AddServiceDefaults()` from `AgeDigitalTwins.ServiceDefaults`.
+
+### OpenTelemetry
+
+| Key | Description |
+|-----|-------------|
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | If set, enables OTLP exporter for OpenTelemetry traces and metrics |
+
+OpenTelemetry is configured with:
+- **Metrics**: ASP.NET Core instrumentation, HTTP client instrumentation, runtime instrumentation, custom meters (`AgeDigitalTwins.SDK`, `AgeDigitalTwins.Events`)
+- **Tracing**: ASP.NET Core instrumentation, HTTP client instrumentation, custom sources (`AgeDigitalTwins.SDK`, `AgeDigitalTwins.Events`)
+- **Logging**: OpenTelemetry logging with formatted messages and scopes
+
+### Health Checks
+
+Both services expose:
+- `GET /health` — All health checks pass (ready to accept traffic). Anonymous access.
+- `GET /alive` — Only `live`-tagged checks pass (is the process alive?). Anonymous access.
+
+API Service health checks:
+- PostgreSQL connection (via Aspire Npgsql integration)
+
+Events Service health checks:
+- `replication` — `AgeDigitalTwinsReplication.IsHealthy` (tagged: `live`)
+- `event_sinks` — All registered `IEventSink.IsHealthy` (tagged: `live`)
+
+### Logging
+
+Standard ASP.NET Core logging configuration applies. Key namespaces for debugging:
+
+| Namespace | Purpose |
+|-----------|---------|
+| `Microsoft.AspNetCore.Authentication` | JWT token validation details |
+| `Microsoft.AspNetCore.Authorization` | Authorization decisions |
+| `AgeDigitalTwins.ServiceDefaults.Authorization` | Permission provider operations |
+| `AgeDigitalTwins.ApiService.Middleware` | Database protection, rate limiting |
+| `AgeDigitalTwins.Events.Core.Services` | Replication, event consumer |
+
+---
+
+## Example Configuration
+
+### Minimal (No Authentication, No Event Sinks)
+
+```json
+{
+  "ConnectionStrings": {
+    "agedb": "Host=localhost;Port=5432;Database=app;Username=app;Password=app"
+  },
+  "Parameters": {
+    "AgeGraphName": "digitaltwins",
+    "UseCnpgAge": true
+  }
+}
+```
+
+### Full API Service with Auth and Rate Limiting
+
+```json
+{
+  "ConnectionStrings": {
+    "agedb": "Host=localhost;Port=5432;Database=app;Username=app;Password=app"
+  },
+  "Parameters": {
+    "AgeGraphName": "digitaltwins",
+    "UseCnpgAge": true,
+    "ModelCacheExpirationSeconds": 30,
+    "MaxPoolSize": 50,
+    "TrackLastUpdatedBy": true,
+    "JobsEnabled": true,
+    "RateLimitingEnabled": true,
+    "GlobalPermitLimit": 500,
+    "LightOperationsPermitLimit": 50,
+    "HeavyOperationsPermitLimit": 10
+  },
+  "Authentication": {
+    "Enabled": true,
+    "Authority": "https://your-tenant.auth0.com/",
+    "Audience": "https://graph.konnektr.io",
+    "Issuer": "https://your-tenant.auth0.com/"
+  },
+  "Authorization": {
+    "Enabled": true,
+    "Provider": "Claims",
+    "PermissionsClaimName": "permissions"
+  },
+  "Cors": {
+    "Enabled": true,
+    "AllowedOrigins": ["https://myapp.example.com"],
+    "AllowedMethods": ["GET", "POST", "PUT", "DELETE"]
+  }
+}
+```
+
+### Full Events Service with Kafka and Kusto Sinks
+
+```json
+{
+  "ConnectionStrings": {
+    "agedb": "Host=localhost;Port=5432;Database=app;Username=app;Password=app"
+  },
+  "Parameters": {
+    "AgePublication": "age_pub",
+    "AgeReplicationSlot": "age_slot",
+    "MaxBatchSize": 100,
+    "WalReceiverTimeoutSeconds": 30,
+    "TrackLastUpdatedBy": true
+  },
+  "EventSinks": {
+    "Kafka": [
+      {
+        "Name": "production-kafka",
+        "BrokerList": "broker1:9092,broker2:9092",
+        "Topic": "digitaltwins-events",
+        "SaslMechanism": "PLAIN",
+        "SaslUsername": "user",
+        "SaslPassword": "pass",
+        "SecurityProtocol": "SaslSsl"
+      }
+    ],
+    "Kusto": [
+      {
+        "Name": "archive-kusto",
+        "IngestionUri": "https://ingest-cluster.kusto.windows.net",
+        "Database": "DigitalTwinsHistory",
+        "TenantId": "tenant-id",
+        "ClientId": "sp-client-id",
+        "ClientSecret": "sp-client-secret"
+      }
+    ]
+  },
+  "EventRoutes": [
+    {
+      "SinkName": "production-kafka",
+      "EventFormat": "EventNotification",
+      "TypeMappings": {
+        "TwinCreate": "twin-created",
+        "TwinUpdate": "twin-updated",
+        "TwinDelete": "twin-deleted",
+        "Telemetry": "twin-telemetry"
+      }
+    },
+    {
+      "SinkName": "archive-kusto",
+      "EventFormat": "DataHistory"
+    }
+  ]
+}
+```
+
+---
+
+## Environment Variable Reference
+
+All configuration keys can be set as environment variables. The `__` (double underscore) replaces `:` (colon) as the hierarchy separator.
+
+| Environment Variable | Corresponding Config Key |
+|---------------------|--------------------------|
+| `ConnectionStrings__agedb` | `ConnectionStrings:agedb` |
+| `Parameters__AgeGraphName` | `Parameters:AgeGraphName` |
+| `Parameters__UseCnpgAge` | `Parameters:UseCnpgAge` |
+| `Parameters__TrackLastUpdatedBy` | `Parameters:TrackLastUpdatedBy` |
+| `Parameters__MaxPoolSize` | `Parameters:MaxPoolSize` |
+| `Parameters__RateLimitingEnabled` | `Parameters:RateLimitingEnabled` |
+| `Parameters__JobsEnabled` | `Parameters:JobsEnabled` |
+| `Authentication__Enabled` | `Authentication:Enabled` |
+| `Authentication__Authority` | `Authentication:Authority` |
+| `Authentication__Audience` | `Authentication:Audience` |
+| `Authentication__Issuer` | `Authentication:Issuer` |
+| `Authorization__Enabled` | `Authorization:Enabled` |
+| `Authorization__Provider` | `Authorization:Provider` |
+| `Authorization__PermissionsClaimName` | `Authorization:PermissionsClaimName` |
+| `Parameters__AgePublication` | `Parameters:AgePublication` |
+| `Parameters__AgeReplicationSlot` | `Parameters:AgeReplicationSlot` |
+| `Parameters__UserIdHeaderName` | `Parameters:UserIdHeaderName` |
+| `Parameters__UserIdHeaderRequired` | `Parameters:UserIdHeaderRequired` |
+| `Parameters__WalReceiverTimeoutSeconds` | `Parameters:WalReceiverTimeoutSeconds` |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OpenTelemetry OTLP exporter endpoint |

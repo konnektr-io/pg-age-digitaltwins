@@ -1513,4 +1513,79 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         _output.WriteLine($"Successfully captured telemetry event with automatic timestamp");
         _output.WriteLine($"Event Time: {receivedEvent.Time:O}");
     }
+
+    [Fact]
+    public async Task UpdateDigitalTwinWithUserId_TrackLastUpdatedBy_ShouldIncludeUpdatedByInPropertyEvent()
+    {
+        // Arrange
+        await _fixture.WaitForReplicationHealthy();
+
+        string[] models = [SampleData.DtdlCrater];
+        try
+        {
+            await Client.CreateModelsAsync(models);
+        }
+        catch (Exceptions.ModelAlreadyExistsException)
+        {
+            // Model already exists, ignore
+        }
+
+        var uniqueTwinId = $"crater_{Guid.NewGuid():N}";
+        var digitalTwin = JsonSerializer.Deserialize<SdkBasicDigitalTwin>(SampleData.TwinCrater);
+        digitalTwin!.Id = uniqueTwinId;
+        digitalTwin.Contents["diameter"] = 100.0;
+
+        // Create the twin using the standard client (no userId)
+        await Client.CreateOrReplaceDigitalTwinAsync(digitalTwin.Id, digitalTwin);
+
+        // Clear events after creation
+        TestSink.ClearEvents();
+
+        // Act - Update the property using the client that has TrackLastUpdatedBy enabled,
+        // passing a userId so lastUpdatedBy is written to property metadata
+        const string testUserId = "test-user-abc123";
+        digitalTwin.Contents["diameter"] = 250.0;
+        await _fixture.ClientWithTrackLastUpdatedBy.CreateOrReplaceDigitalTwinAsync(
+            digitalTwin.Id,
+            digitalTwin,
+            userId: testUserId
+        );
+
+        // Assert - wait for the property event and verify updatedBy is present
+        // Poll until we see the diameter=250 property event (or timeout)
+        CloudNative.CloudEvents.CloudEvent? diameterPropertyEvent = null;
+        var endTime = DateTime.UtcNow.AddSeconds(30);
+        while (DateTime.UtcNow < endTime)
+        {
+            diameterPropertyEvent = TestSink
+                .GetCapturedEvents()
+                .FirstOrDefault(e =>
+                {
+                    var data = e.Data as JsonObject;
+                    return e.Subject == uniqueTwinId
+                        && e.Type == "Konnektr.Graph.Property.Event"
+                        && data?["key"]?.ToString() == "diameter"
+                        && data["value"]?.ToString() == "250";
+                });
+            if (diameterPropertyEvent is not null)
+                break;
+            await Task.Delay(100);
+        }
+
+        var allEvents = TestSink.GetCapturedEvents().ToList();
+
+        Assert.NotNull(diameterPropertyEvent);
+
+        var propertyEventData = diameterPropertyEvent.Data as JsonObject;
+        Assert.NotNull(propertyEventData);
+        Assert.Equal(uniqueTwinId, propertyEventData["id"]?.ToString());
+        Assert.Equal("diameter", propertyEventData["key"]?.ToString());
+        Assert.Equal("250", propertyEventData["value"]?.ToString());
+        Assert.Equal(testUserId, propertyEventData["updatedBy"]?.ToString());
+
+        _output.WriteLine(
+            $"Successfully captured property event with updatedBy for {uniqueTwinId}"
+        );
+        _output.WriteLine($"updatedBy: {propertyEventData["updatedBy"]}");
+    }
 }

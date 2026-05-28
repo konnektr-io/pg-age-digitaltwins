@@ -135,6 +135,7 @@ builder.Services.AddSingleton(sp =>
         ModelCacheExpiration = TimeSpan.FromSeconds(modelCacheExpiration),
         DefaultBatchSize = defaultBatchSize,
         DefaultCheckpointInterval = defaultCheckpointInterval,
+        TrackLastUpdatedBy = builder.Configuration.GetValue("Parameters:TrackLastUpdatedBy", false),
     };
     var client = new AgeDigitalTwinsClient(dataSource, options);
 
@@ -329,6 +330,14 @@ if (enableRateLimiting)
 }
 
 app.UseAuthentication();
+
+var userIdHeaderName = builder.Configuration.GetValue("Parameters:UserIdHeaderName", "");
+if (!string.IsNullOrEmpty(userIdHeaderName))
+{
+    var userIdHeaderRequired = builder.Configuration.GetValue("Parameters:UserIdHeaderRequired", false);
+    app.UseMiddleware<UserIdHeaderMiddleware>(userIdHeaderName, userIdHeaderRequired);
+}
+
 app.UseAuthorization();
 
 // Map endpoints for Age Digital Twins API
@@ -356,6 +365,4 @@ app.UseOutputCache();
 
 app.MapDefaultEndpoints();
 
-//  app.UseHsts();
-
-app.Run();
+await app.RunAsync();

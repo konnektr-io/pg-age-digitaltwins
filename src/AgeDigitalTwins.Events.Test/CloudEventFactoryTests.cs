@@ -659,4 +659,223 @@ public class CloudEventFactoryTests
         Assert.Equal("60.0", data["value"]?.ToString());
         Assert.Equal("Update", data["action"]?.ToString());
     }
+
+    [Fact]
+    public void CreateDataHistoryEvents_TrackLastUpdatedBy_IncludesUpdatedByInPropertyEvent()
+    {
+        // Arrange - Property 'temperature' updated, with lastUpdatedBy in metadata
+        var eventData = new EventData(Guid.NewGuid().ToString(), "digitaltwins", "Twin")
+        {
+            EventType = EventType.TwinUpdate,
+            NewValue = JsonNode
+                .Parse(
+                    @"{
+                    ""$dtId"": ""twin1"",
+                    ""$metadata"": {
+                        ""$model"": ""model1"",
+                        ""temperature"": {
+                            ""lastUpdateTime"": ""2024-01-15T10:30:00Z"",
+                            ""lastUpdatedBy"": ""user-123""
+                        }
+                    },
+                    ""temperature"": 22.5
+                }"
+                )!
+                .AsObject(),
+            OldValue = JsonNode
+                .Parse(
+                    @"{
+                    ""$dtId"": ""twin1"",
+                    ""$metadata"": {
+                        ""$model"": ""model1"",
+                        ""temperature"": {
+                            ""lastUpdateTime"": ""2024-01-15T10:00:00Z""
+                        }
+                    },
+                    ""temperature"": 20.0
+                }"
+                )!
+                .AsObject(),
+            Timestamp = DateTime.UtcNow,
+        };
+        var source = new Uri("http://example.com");
+
+        // Act - with trackLastUpdatedBy=true
+        var result = CloudEventFactory.CreateDataHistoryEvents(
+            eventData,
+            source,
+            [],
+            trackLastUpdatedBy: true
+        );
+
+        // Assert
+        Assert.Single(result);
+        var data = result[0].Data as JsonObject;
+        Assert.NotNull(data);
+        Assert.Equal("temperature", data["key"]?.ToString());
+        Assert.Equal("22.5", data["value"]?.ToString());
+        Assert.Equal("user-123", data["updatedBy"]?.ToString());
+    }
+
+    [Fact]
+    public void CreateDataHistoryEvents_TrackLastUpdatedByFalse_OmitsUpdatedByFromPropertyEvent()
+    {
+        // Arrange - Property 'temperature' updated, with lastUpdatedBy in metadata
+        var eventData = new EventData(Guid.NewGuid().ToString(), "digitaltwins", "Twin")
+        {
+            EventType = EventType.TwinUpdate,
+            NewValue = JsonNode
+                .Parse(
+                    @"{
+                    ""$dtId"": ""twin1"",
+                    ""$metadata"": {
+                        ""$model"": ""model1"",
+                        ""temperature"": {
+                            ""lastUpdateTime"": ""2024-01-15T10:30:00Z"",
+                            ""lastUpdatedBy"": ""user-123""
+                        }
+                    },
+                    ""temperature"": 22.5
+                }"
+                )!
+                .AsObject(),
+            OldValue = JsonNode
+                .Parse(
+                    @"{
+                    ""$dtId"": ""twin1"",
+                    ""$metadata"": {
+                        ""$model"": ""model1"",
+                        ""temperature"": {
+                            ""lastUpdateTime"": ""2024-01-15T10:00:00Z""
+                        }
+                    },
+                    ""temperature"": 20.0
+                }"
+                )!
+                .AsObject(),
+            Timestamp = DateTime.UtcNow,
+        };
+        var source = new Uri("http://example.com");
+
+        // Act - with trackLastUpdatedBy=false (default)
+        var result = CloudEventFactory.CreateDataHistoryEvents(eventData, source, []);
+
+        // Assert
+        Assert.Single(result);
+        var data = result[0].Data as JsonObject;
+        Assert.NotNull(data);
+        Assert.Equal("temperature", data["key"]?.ToString());
+        Assert.False(data.ContainsKey("updatedBy"), "updatedBy should be absent when trackLastUpdatedBy is false");
+    }
+
+    [Fact]
+    public void CreateDataHistoryEvents_TrackLastUpdatedByTrue_NoLastUpdatedByInMetadata_OmitsUpdatedBy()
+    {
+        // Arrange - Property updated, no lastUpdatedBy in metadata
+        var eventData = new EventData(Guid.NewGuid().ToString(), "digitaltwins", "Twin")
+        {
+            EventType = EventType.TwinUpdate,
+            NewValue = JsonNode
+                .Parse(
+                    @"{
+                    ""$dtId"": ""twin1"",
+                    ""$metadata"": {
+                        ""$model"": ""model1"",
+                        ""temperature"": {
+                            ""lastUpdateTime"": ""2024-01-15T10:30:00Z""
+                        }
+                    },
+                    ""temperature"": 22.5
+                }"
+                )!
+                .AsObject(),
+            OldValue = JsonNode
+                .Parse(
+                    @"{
+                    ""$dtId"": ""twin1"",
+                    ""$metadata"": {
+                        ""$model"": ""model1"",
+                        ""temperature"": {
+                            ""lastUpdateTime"": ""2024-01-15T10:00:00Z""
+                        }
+                    },
+                    ""temperature"": 20.0
+                }"
+                )!
+                .AsObject(),
+            Timestamp = DateTime.UtcNow,
+        };
+        var source = new Uri("http://example.com");
+
+        // Act - with trackLastUpdatedBy=true but no lastUpdatedBy in metadata
+        var result = CloudEventFactory.CreateDataHistoryEvents(
+            eventData,
+            source,
+            [],
+            trackLastUpdatedBy: true
+        );
+
+        // Assert
+        Assert.Single(result);
+        var data = result[0].Data as JsonObject;
+        Assert.NotNull(data);
+        Assert.False(data.ContainsKey("updatedBy"), "updatedBy should be absent when not present in metadata");
+    }
+
+    [Fact]
+    public void CreateDataHistoryEvents_TwinUpdate_TrackLastUpdatedBy_SameValueUpdate_IncludesUpdatedBy()
+    {
+        // Arrange - Property 'humidity' same value, but lastUpdatedBy added to metadata
+        var eventData = new EventData(Guid.NewGuid().ToString(), "digitaltwins", "Twin")
+        {
+            EventType = EventType.TwinUpdate,
+            NewValue = JsonNode
+                .Parse(
+                    @"{
+                    ""$dtId"": ""twin1"",
+                    ""$metadata"": {
+                        ""$model"": ""model1"",
+                        ""humidity"": {
+                            ""lastUpdateTime"": ""2024-01-15T10:30:00Z"",
+                            ""lastUpdatedBy"": ""user-456""
+                        }
+                    },
+                    ""humidity"": 55.0
+                }"
+                )!
+                .AsObject(),
+            OldValue = JsonNode
+                .Parse(
+                    @"{
+                    ""$dtId"": ""twin1"",
+                    ""$metadata"": {
+                        ""$model"": ""model1"",
+                        ""humidity"": {
+                            ""lastUpdateTime"": ""2024-01-15T10:00:00Z""
+                        }
+                    },
+                    ""humidity"": 55.0
+                }"
+                )!
+                .AsObject(),
+            Timestamp = DateTime.UtcNow,
+        };
+        var source = new Uri("http://example.com");
+
+        // Act
+        var result = CloudEventFactory.CreateDataHistoryEvents(
+            eventData,
+            source,
+            [],
+            trackLastUpdatedBy: true
+        );
+
+        // Assert: one property event for the same-value update
+        Assert.Single(result);
+        var propertyEvent = result.First(e => e.Type == "Konnektr.Graph.Property.Event");
+        var data = propertyEvent.Data as JsonObject;
+        Assert.NotNull(data);
+        Assert.Equal("humidity", data["key"]?.ToString());
+        Assert.Equal("user-456", data["updatedBy"]?.ToString());
+    }
 }

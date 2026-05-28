@@ -1,0 +1,107 @@
+Konnektr Graph (AgeDigitalTwins)
+Copyright 2024-2026 Niko Raes
+
+This product is licensed under the Apache License, Version 2.0.
+You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+
+This product includes software developed by the following third parties:
+
+---
+
+Apache AGE
+Copyright 2021 The Apache Software Foundation
+Licensed under the Apache License, Version 2.0
+https://age.apache.org/
+
+---
+
+PostgreSQL
+Copyright (c) 1996-2024, The PostgreSQL Global Development Group
+Copyright (c) 1994, The Regents of the University of California
+Licensed under the PostgreSQL License
+https://www.postgresql.org/
+
+---
+
+Npgsql (via Konnektr.Npgsql.Age)
+Copyright (c) 2002-2024 Npgsql Contributors
+Licensed under the PostgreSQL License
+https://www.npgsql.org/
+
+---
+
+DTDLParser
+Copyright (c) Microsoft Corporation
+Licensed under the MIT License
+https://github.com/digitaltwinconsortium/DTDLParser
+
+---
+
+JsonPatch.Net
+Copyright (c) 2022 Greg Dennis
+Licensed under the MIT License
+https://github.com/gregsdennis/json-everything
+
+---
+
+CloudNative.CloudEvents
+Copyright (c) Cloud Native Computing Foundation
+Licensed under the Apache License, Version 2.0
+https://github.com/cloudevents/sdk-csharp
+
+---
+
+Confluent.Kafka
+Copyright (c) 2016-2024 Confluent Inc.
+Licensed under the Apache License, Version 2.0
+https://github.com/confluentinc/confluent-kafka-dotnet
+
+---
+
+MQTTnet
+Copyright (c) Christian Kratky and MQTTnet contributors
+Licensed under the MIT License
+https://github.com/dotnet/MQTTnet
+
+---
+
+Microsoft.Azure.Kusto.Ingest
+Copyright (c) Microsoft Corporation
+Licensed under the MIT License
+https://github.com/Azure/azure-kusto-dotnet
+
+---
+
+Azure SDK for .NET (Azure.Identity, Azure.Storage.Blobs)
+Copyright (c) Microsoft Corporation
+Licensed under the MIT License
+https://github.com/Azure/azure-sdk-for-net
+
+---
+
+AWS SDK for .NET (AWSSDK.S3)
+Copyright (c) Amazon.com, Inc. or its affiliates
+Licensed under the Apache License, Version 2.0
+https://github.com/aws/aws-sdk-net
+
+---
+
+Google Cloud Storage .NET client (Google.Cloud.Storage.V1)
+Copyright (c) Google LLC
+Licensed under the Apache License, Version 2.0
+https://github.com/googleapis/google-cloud-dotnet
+
+---
+
+.NET and ASP.NET Core (Microsoft.AspNetCore._, System.Text.Json, System.Linq.Async, OpenTelemetry._)
+Copyright (c) Microsoft Corporation and .NET Foundation Contributors
+Licensed under the MIT License
+https://github.com/dotnet/aspnetcore
+https://github.com/dotnet/runtime
+
+---
+
+Scalar.AspNetCore
+Copyright (c) Scalar Authors
+Licensed under the MIT License
+<https://github.com/scalar/scalarr>>>>
