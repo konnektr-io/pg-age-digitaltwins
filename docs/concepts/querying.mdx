@@ -45,4 +45,41 @@ The used query language is automatically detected based on the query syntax.
 | `IS_NULL`          | `IS NULL`         |
 | `IS_DEFINED`       | `IS NOT NULL`     |
 
-For more examples, refer to the [AdtQueryToCypherTests.cs](../src/AgeDigitalTwins.Test/AdtQueryToCypherTests.cs).
+## Parameterized Queries
+
+Cypher queries support parameterized placeholders (`$param`) to safely pass dynamic values:
+
+### HTTP API
+
+Include a `parameters` object in the request body:
+
+```json
+{
+  "query": "MATCH (t:Twin) WHERE t.temperature > $minTemp RETURN t",
+  "parameters": {
+    "minTemp": 25.0
+  }
+}
+```
+
+Parameters support the following value types:
+- **Primitives**: strings, numbers, booleans, null
+- **Arrays**: lists of values (e.g. `["a", "b", "c"]`)
+- **Objects**: nested maps/dictionaries (e.g. `{"color": "blue", "size": 100}`)
+
+### SDK Usage
+
+Pass a dictionary as the second argument to `QueryAsync<T>`:
+
+```csharp
+var result = await client.QueryAsync<JsonDocument>(
+    "MATCH (t:Twin { `$dtId`: $id }) RETURN t",
+    new Dictionary<string, object?> { { "id", "myTwinId" } }
+).FirstOrDefaultAsync();
+```
+
+### Continuation Tokens
+
+Parameters are automatically embedded in continuation tokens for pagination. You only need to supply parameters on the first request; subsequent pages reuse them transparently.
+
+For more examples, refer to the [QueryTests.cs](../src/AgeDigitalTwins.Test/QueryTests.cs) and [AdtQueryToCypherTests.cs](../src/AgeDigitalTwins.Test/AdtQueryToCypherTests.cs).
