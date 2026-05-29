@@ -1263,7 +1263,7 @@ SET t = twin";
 
         string vectorString = JsonSerializer.Serialize(vector);
         string whereClause = !string.IsNullOrEmpty(modelFilter)
-            ? $" WHERE t.`$metadata`.`$model` = '{modelFilter}' "
+            ? " WHERE t.`$metadata`.`$model` = $modelFilter "
             : "";
 
         // Ensure we cast the array to vector using ::vector
@@ -1273,9 +1273,18 @@ SET t = twin";
             {whereClause}
             RETURN t
             ORDER BY l2_distance(t.{embeddingProperty}, {vectorString}::vector) ASC
-            LIMIT {limit}";
+            LIMIT $limit";
 
-        await using var command = connection.CreateCypherCommand(_graphName, cypher);
+        var parameters = new Dictionary<string, object?>
+        {
+            { "limit", limit },
+        };
+        if (!string.IsNullOrEmpty(modelFilter))
+        {
+            parameters["modelFilter"] = modelFilter;
+        }
+
+        await using var command = connection.CreateCypherCommand(_graphName, cypher, parameters);
         try
         {
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);

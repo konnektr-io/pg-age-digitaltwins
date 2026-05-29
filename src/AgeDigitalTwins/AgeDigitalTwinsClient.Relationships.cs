@@ -143,9 +143,12 @@ public partial class AgeDigitalTwinsClient
             string edgeLabel = !string.IsNullOrEmpty(relationshipName)
                 ? $":{relationshipName}"
                 : "";
-            string cypher =
-                $@"MATCH (:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})-[rel{edgeLabel}]->(:Twin) RETURN *";
-            return QueryAsync<T>(cypher, cancellationToken);
+            string cypher = "MATCH (:Twin {`$dtId`: $sourceId})-[rel" + edgeLabel + "]->(:Twin) RETURN *";
+            return QueryAsync<T>(
+                cypher,
+                new Dictionary<string, object?> { { "sourceId", digitalTwinId } },
+                cancellationToken
+            );
         }
         catch (Exception ex)
         {
@@ -186,10 +189,13 @@ public partial class AgeDigitalTwinsClient
 
         try
         {
-            string cypher =
-                $@"MATCH (:Twin)-[rel]->(:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}}) RETURN *";
+            string cypher = "MATCH (:Twin)-[rel]->(:Twin {`$dtId`: $targetId}) RETURN *";
 
-            return QueryAsync<T>(cypher, cancellationToken);
+            return QueryAsync<T>(
+                cypher,
+                new Dictionary<string, object?> { { "targetId", digitalTwinId } },
+                cancellationToken
+            );
         }
         catch (Exception ex)
         {
@@ -370,21 +376,18 @@ public partial class AgeDigitalTwinsClient
             );
         }
 
-        if (ifNoneMatch == "*")
+        if (ifNoneMatch == "*" && await RelationshipExistsAsync(digitalTwinId, relationshipId, cancellationToken))
         {
-            if (await RelationshipExistsAsync(digitalTwinId, relationshipId, cancellationToken))
-            {
-                throw new PreconditionFailedException(
-                    $"If-None-Match: * header was specified but a relationship with the id {relationshipId} on twin with id {digitalTwinId} was found. Please specify a different twin and relationship id."
-                );
-            }
+            throw new PreconditionFailedException(
+                $"If-None-Match: * header was specified but a relationship with the id {relationshipId} on twin with id {digitalTwinId} was found. Please specify a different twin and relationship id."
+            );
         }
 
         // TODO: Get source and target models and check relationship validity with DTDL parser
 
         // Ensure $sourceId and $relationshipId are present and correct
-        relationshipObject["$sourceId"] = digitalTwinId;
-        relationshipObject["$relationshipId"] = relationshipId;
+        relationshipObject[DigitalTwinsJsonPropertyNames.RelationshipSourceId] = digitalTwinId;
+        relationshipObject[DigitalTwinsJsonPropertyNames.RelationshipId] = relationshipId;
         // Set new etag
         string newEtag = ETagGenerator.GenerateEtag($"{digitalTwinId}-{relationshipId}", now);
         relationshipObject[DigitalTwinsJsonPropertyNames.DigitalTwinETag] = newEtag;
