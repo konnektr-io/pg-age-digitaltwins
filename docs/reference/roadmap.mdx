@@ -9,6 +9,7 @@ This page tracks the current implementation status and planned features for Konn
 ## 🎯 SDK Features
 
 ### Digital Twins Operations
+
 - [x] Digital Twins CRUD operations
 - [x] Models CRUD operations
 - [x] Relationships CRUD operations
@@ -17,12 +18,14 @@ This page tracks the current implementation status and planned features for Konn
 - [ ] Commands (planned)
 
 ### Validation & Data Quality
+
 - [x] Model Validation with DTDLParser
 - [x] Twin Validation with DTDLParser
 - [x] Update Validation with DTDLParser
 - [ ] Relationship Validation with DTDLParser (planned)
 
 ### Query Engine
+
 - [x] ADT Query Conversion (to Cypher)
   - [x] WHERE clauses
   - [x] MATCH patterns
@@ -32,6 +35,7 @@ This page tracks the current implementation status and planned features for Konn
   - [x] Type check functions
 
 ### Core Infrastructure
+
 - [x] Error handling and exception management
 - [x] ETags for optimistic concurrency
 - [x] Pagination support
@@ -44,6 +48,7 @@ This page tracks the current implementation status and planned features for Konn
 ## 🌐 API Features
 
 ### REST API Endpoints
+
 - [x] Digital Twins CRUD operations
 - [x] Models CRUD operations
 - [x] Relationships CRUD operations
@@ -53,8 +58,9 @@ This page tracks the current implementation status and planned features for Konn
 - [x] Delete Jobs
 
 ### Security & Performance
+
 - [x] Authentication (JWT-based)
-- [ ] Authorization (role-based access control) (planned)
+- [x] Authorization (role-based access control)
 - [x] OpenTelemetry support
 - [x] Rate Limiting
 - [x] Error Handling
@@ -75,12 +81,14 @@ Enable LLMs to interact with your digital twin graph:
 ## 🚀 Deployment & Operations
 
 ### Infrastructure
+
 - [x] Dockerize the API
 - [x] Helm chart for Kubernetes deployment
 - [x] PostgreSQL with Apache AGE integration
 - [x] Hosted platform (Konnektr Graph)
 
 ### Monitoring & Observability
+
 - [x] OpenTelemetry integration
 - [x] Prometheus metrics
 - [x] Structured logging
@@ -91,6 +99,7 @@ Enable LLMs to interact with your digital twin graph:
 ## 📡 Event Routing
 
 ### Event Capture
+
 - [x] Logical replication connection with AgType parser
 - [x] Data History output (Azure Digital Twins format)
 - [x] Event Notification output
@@ -98,17 +107,19 @@ Enable LLMs to interact with your digital twin graph:
 - [x] CloudEvents format support
 
 ### Event Sinks
+
 - [x] Kafka sink (including Azure Event Hubs)
 - [x] Kusto sink (Azure Data Explorer / Fabric Real-Time)
 - [x] MQTT sink
+- [x] Custom webhook sink
 - [ ] Postgres sink (planned)
-- [ ] Custom webhook sink (planned)
 
 ### Event Processing
-- [ ] Event filtering by twin type (in progress)
+
+- [x] Event filtering by twin type
+- [x] Dead letter queue handling
 - [ ] Event filtering by property changes (planned)
 - [ ] Event transformation and enrichment (planned)
-- [ ] Dead letter queue handling (planned)
 
 ---
 
@@ -120,18 +131,6 @@ Planned features for ingesting data into digital twins:
 - [ ] Kafka Ingestion (planned)
 - [ ] Ingestion Mapping configuration (planned)
 - [ ] CSV/JSON bulk import (planned)
-
----
-
-## 🔮 Future Enhancements
-
-### Developer Experience
-- [ ] Enhanced MCP capabilities for AI agents
-- [ ] Visual graph explorer UI
-
-### Integration & Ecosystem
-- [ ] More event sink types
-- [ ] Pre-built DTDL model libraries
 
 ---
 
@@ -151,4 +150,4 @@ Major milestones and releases are documented in our [GitHub Releases](https://gi
 
 ---
 
-*Last updated: November 2025*
+_Last updated: May 2026_

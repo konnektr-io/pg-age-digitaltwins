@@ -19,34 +19,34 @@ public class BasicRelationship
     /// The unique Id of the relationship.
     /// This field is present on every relationship.
     /// </summary>
-    [JsonPropertyName("$relationshipId")]
+    [JsonPropertyName(DigitalTwinsJsonPropertyNames.RelationshipId)]
     public string? Id { get; set; } = string.Empty;
 
     /// <summary>
     /// The unique Id of the target digital twin.
     /// This field is present on every relationship.
     /// </summary>
-    [JsonPropertyName("$targetId")]
+    [JsonPropertyName(DigitalTwinsJsonPropertyNames.RelationshipTargetId)]
     public string TargetId { get; set; } = string.Empty;
 
     /// <summary>
     /// The unique Id of the source digital twin.
     /// This field is present on every relationship.
     /// </summary>
-    [JsonPropertyName("$sourceId")]
+    [JsonPropertyName(DigitalTwinsJsonPropertyNames.RelationshipSourceId)]
     public string? SourceId { get; set; } = string.Empty;
 
     /// <summary>
     /// The name of the relationship, which defines the type of link (e.g. Contains).
     /// This field is present on every relationship.
     /// </summary>
-    [JsonPropertyName("$relationshipName")]
+    [JsonPropertyName(DigitalTwinsJsonPropertyNames.RelationshipName)]
     public string Name { get; set; } = string.Empty;
 
     /// <summary>
     /// A string representing a weak ETag for the entity.
     /// </summary>
-    [JsonPropertyName("$etag")]
+    [JsonPropertyName(DigitalTwinsJsonPropertyNames.DigitalTwinETag)]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ETag { get; set; }
 

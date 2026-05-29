@@ -120,7 +120,7 @@ public partial class AgeDigitalTwinsClient
             ["timestamp"] = timestamp.ToString("o"),
             ["eventType"] = "Telemetry",
             ["graphName"] = _graphName,
-            ["telemetry"] = JsonSerializer.SerializeToNode(telemetry, serializerOptions),
+            ["telemetry"] = JsonSerializer.SerializeToNode(telemetry),
         };
 
         // Add model ID if available
@@ -131,7 +131,7 @@ public partial class AgeDigitalTwinsClient
 
         // Publish via PostgreSQL NOTIFY
         string channel = "digitaltwins_telemetry";
-        string payload = JsonSerializer.Serialize(telemetryEvent, serializerOptions);
+        string payload = JsonSerializer.Serialize(telemetryEvent);
 
         await using var command = new NpgsqlCommand("SELECT pg_notify($1, $2)", connection);
         command.Parameters.AddWithValue(channel);
@@ -175,7 +175,7 @@ public partial class AgeDigitalTwinsClient
             ["timestamp"] = timestamp.ToString("o"),
             ["eventType"] = "ComponentTelemetry",
             ["graphName"] = _graphName,
-            ["telemetry"] = JsonSerializer.SerializeToNode(telemetry, serializerOptions),
+            ["telemetry"] = JsonSerializer.SerializeToNode(telemetry),
         };
 
         // Add model ID if available
@@ -186,7 +186,7 @@ public partial class AgeDigitalTwinsClient
 
         // Publish via PostgreSQL NOTIFY
         string channel = "digitaltwins_telemetry";
-        string payload = JsonSerializer.Serialize(telemetryEvent, serializerOptions);
+        string payload = JsonSerializer.Serialize(telemetryEvent);
 
         await using var command = new NpgsqlCommand("SELECT pg_notify($1, $2)", connection);
         command.Parameters.AddWithValue(channel);
