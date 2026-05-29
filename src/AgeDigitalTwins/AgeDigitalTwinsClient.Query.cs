@@ -272,7 +272,11 @@ public partial class AgeDigitalTwinsClient
         if (element is Edge edge)
             return (edge.Properties, edge.Properties.Count);
         if (element is Dictionary<string, object?> dict)
+        {
+            if (dict.TryGetValue("properties", out var propsObj) && propsObj is Dictionary<string, object?> props)
+                return (props, props.Count);
             return (dict, dict.Count);
+        }
         if (element is List<object?> nestedList)
         {
             var list = new List<object?>();
