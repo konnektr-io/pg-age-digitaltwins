@@ -259,7 +259,7 @@ public partial class AgeDigitalTwinsClient
     /// have their <c>.properties</c> extracted so the output matches ADT's flattened
     /// twin/relationship format.
     /// </summary>
-    private static (object? Value, int PropertiesCount) ConvertAgtypeToObject(Agtype agtype)
+    internal static (object? Value, int PropertiesCount) ConvertAgtypeToObject(Agtype agtype)
     {
         if (agtype.IsNull)
             return (null, 0);
@@ -316,14 +316,12 @@ public partial class AgeDigitalTwinsClient
                 }
                 // Regular map / untyped object
                 var result = new Dictionary<string, object?>();
-                int objCount = 0;
                 foreach (var prop in element.EnumerateObject())
                 {
-                    var (val, count) = ConvertJsonElement(prop.Value);
+                    var (val, _) = ConvertJsonElement(prop.Value);
                     result[prop.Name] = val;
-                    objCount += count;
                 }
-                return (result, objCount);
+                return (result, result.Count);
             }
 
             case JsonValueKind.Array:

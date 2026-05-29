@@ -2050,4 +2050,143 @@ RETURN t";
         Assert.Equal(JsonValueKind.Array, sensors.ValueKind);
         Assert.Equal(0, sensors.GetArrayLength());
     }
+
+    [Fact]
+    public async Task QueryAsync_Collect_Edges_ReturnsRelationshipPropertiesAsList()
+    {
+        await IntializeAsync();
+
+        await Client.CreateOrReplaceDigitalTwinAsync(
+            "room1",
+            @"{""$dtId"": ""room1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""Room 1""}"
+        );
+        await Client.CreateOrReplaceDigitalTwinAsync(
+            "sensor1",
+            @"{""$dtId"": ""sensor1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:tempsensor;1""}, ""name"": ""Sensor 1"", ""temperature"": 25.0}"
+        );
+        await Client.CreateOrReplaceRelationshipAsync(
+            "room1",
+            "rel1",
+            @"{""$relationshipId"": ""rel1"", ""$sourceId"": ""room1"", ""$relationshipName"": ""rel_has_sensors"", ""$targetId"": ""sensor1""}"
+        );
+
+        var result = await Client
+            .QueryAsync<JsonDocument>(
+                @"MATCH (r:Twin { `$dtId`: 'room1' })-[e:rel_has_sensors]->(s:Twin)
+                  RETURN r, collect(e) AS edges"
+            )
+            .FirstOrDefaultAsync();
+
+        Assert.NotNull(result);
+        Assert.Equal("room1", result.RootElement.GetProperty("r").GetProperty("$dtId").GetString());
+
+        var edges = result.RootElement.GetProperty("edges");
+        Assert.Equal(JsonValueKind.Array, edges.ValueKind);
+        Assert.Equal(1, edges.GetArrayLength());
+
+        var edge = edges[0];
+        Assert.Equal("rel1", edge.GetProperty("$relationshipId").GetString());
+        Assert.Equal("room1", edge.GetProperty("$sourceId").GetString());
+        Assert.Equal("sensor1", edge.GetProperty("$targetId").GetString());
+        Assert.Equal("rel_has_sensors", edge.GetProperty("$relationshipName").GetString());
+    }
+
+    [Fact]
+    public async Task QueryAsync_Collect_MultipleColumns_ReturnsAllCorrectly()
+    {
+        await IntializeAsync();
+
+        await Client.CreateOrReplaceDigitalTwinAsync(
+            "room1",
+            @"{""$dtId"": ""room1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""Room 1""}"
+        );
+        await Client.CreateOrReplaceDigitalTwinAsync(
+            "sensor1",
+            @"{""$dtId"": ""sensor1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:tempsensor;1""}, ""name"": ""Sensor 1"", ""temperature"": 25.0}"
+        );
+        await Client.CreateOrReplaceDigitalTwinAsync(
+            "sensor2",
+            @"{""$dtId"": ""sensor2"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:tempsensor;1""}, ""name"": ""Sensor 2"", ""temperature"": 30.0}"
+        );
+        await Client.CreateOrReplaceRelationshipAsync(
+            "room1",
+            "rel1",
+            @"{""$relationshipId"": ""rel1"", ""$sourceId"": ""room1"", ""$relationshipName"": ""rel_has_sensors"", ""$targetId"": ""sensor1""}"
+        );
+        await Client.CreateOrReplaceRelationshipAsync(
+            "room1",
+            "rel2",
+            @"{""$relationshipId"": ""rel2"", ""$sourceId"": ""room1"", ""$relationshipName"": ""rel_has_sensors"", ""$targetId"": ""sensor2""}"
+        );
+
+        var result = await Client
+            .QueryAsync<JsonDocument>(
+                @"MATCH (r:Twin { `$dtId`: 'room1' })
+                  OPTIONAL MATCH (r)-[:rel_has_sensors]->(s:Twin)
+                  RETURN collect(s) AS sensors, collect(properties(s)) AS props"
+            )
+            .FirstOrDefaultAsync();
+
+        Assert.NotNull(result);
+
+        var sensors = result.RootElement.GetProperty("sensors");
+        Assert.Equal(JsonValueKind.Array, sensors.ValueKind);
+        Assert.Equal(2, sensors.GetArrayLength());
+
+        var props = result.RootElement.GetProperty("props");
+        Assert.Equal(JsonValueKind.Array, props.ValueKind);
+        Assert.Equal(2, props.GetArrayLength());
+
+        var sensorDtIds = sensors.EnumerateArray().Select(s => s.GetProperty("$dtId").GetString()).OrderBy(id => id).ToList();
+        Assert.Equal(new[] { "sensor1", "sensor2" }, sensorDtIds);
+
+        var propDtIds = props.EnumerateArray().Select(p => p.GetProperty("$dtId").GetString()).OrderBy(id => id).ToList();
+        Assert.Equal(new[] { "sensor1", "sensor2" }, propDtIds);
+    }
+
+    [Fact]
+    public async Task QueryAsync_Collect_Vertices_WithNestedProperties_ReturnsCorrectly()
+    {
+        await IntializeAsync();
+
+        // Room has a dimensions property which is a nested object
+        await Client.CreateOrReplaceDigitalTwinAsync(
+            "room1",
+            @"{""$dtId"": ""room1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""Room 1"", ""dimensions"": {""length"": 5.0, ""width"": 4.0, ""height"": 3.0}}"
+        );
+        await Client.CreateOrReplaceDigitalTwinAsync(
+            "room2",
+            @"{""$dtId"": ""room2"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""Room 2"", ""dimensions"": {""length"": 10.0, ""width"": 8.0, ""height"": 6.0}}"
+        );
+
+        var result = await Client
+            .QueryAsync<JsonDocument>(
+                @"MATCH (r:Twin)
+                  WHERE r.`$metadata`.`$model` = 'dtmi:com:adt:dtsample:room;1'
+                  RETURN collect(r) AS rooms"
+            )
+            .FirstOrDefaultAsync();
+
+        Assert.NotNull(result);
+
+        var rooms = result.RootElement.GetProperty("rooms");
+        Assert.Equal(JsonValueKind.Array, rooms.ValueKind);
+        Assert.Equal(2, rooms.GetArrayLength());
+
+        var room1 = rooms[0];
+        Assert.Equal("room1", room1.GetProperty("$dtId").GetString());
+
+        var dimensions = room1.GetProperty("dimensions");
+        Assert.Equal(5.0, dimensions.GetProperty("length").GetDouble());
+        Assert.Equal(4.0, dimensions.GetProperty("width").GetDouble());
+        Assert.Equal(3.0, dimensions.GetProperty("height").GetDouble());
+
+        var room2 = rooms[1];
+        Assert.Equal("room2", room2.GetProperty("$dtId").GetString());
+
+        var dimensions2 = room2.GetProperty("dimensions");
+        Assert.Equal(10.0, dimensions2.GetProperty("length").GetDouble());
+        Assert.Equal(8.0, dimensions2.GetProperty("width").GetDouble());
+        Assert.Equal(6.0, dimensions2.GetProperty("height").GetDouble());
+    }
 }
