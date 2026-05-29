@@ -110,14 +110,14 @@ MATCH (m:Model {{id: dependency}})
             if (await reader.ReadAsync(cancellationToken))
             {
                 var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
-                var vertex = (Vertex)agResult;
+                var vertex = (Vertex)agResult!;
                 mainModel = new DigitalTwinsModelData(vertex.Properties);
             }
             else
             {
                 throw new ModelNotFoundException($"Model with ID {modelId} not found");
             }
-            reader.Close();
+            await reader.CloseAsync();
 
             if (mainModel == null)
             {
@@ -204,10 +204,10 @@ MATCH (m:Model {{id: dependency}})
                     while (await baseReader.ReadAsync(cancellationToken))
                     {
                         var agResult = await baseReader.GetFieldValueAsync<Agtype?>(0);
-                        var vertex = (Vertex)agResult;
+                        var vertex = (Vertex)agResult!;
                         baseModels.Add(new DigitalTwinsModelData(vertex.Properties));
                     }
-                    baseReader.Close();
+                    await baseReader.CloseAsync();
                     allModels.AddRange(baseModels);
                 }
 
@@ -587,7 +587,7 @@ RETURN COUNT(m) AS deletedCount";
             if (await reader.ReadAsync(cancellationToken))
             {
                 var agResult = await reader.GetFieldValueAsync<Agtype?>(0).ConfigureAwait(false);
-                rowsAffected = (int)agResult;
+                rowsAffected = (int)agResult!;
             }
             if (rowsAffected <= 0)
             {
@@ -645,7 +645,7 @@ RETURN COUNT(m) AS deletedCount";
             if (await reader.ReadAsync(cancellationToken))
             {
                 var agResult = await reader.GetFieldValueAsync<Agtype?>(0).ConfigureAwait(false);
-                rowsAffected = (int)agResult;
+                rowsAffected = (int)agResult!;
             }
             return rowsAffected;
         }
@@ -754,7 +754,7 @@ RETURN COUNT(m) AS deletedCount";
 
         await using var command = connection.CreateCypherCommand(
             _graphName, cypher,
-            new Dictionary<string, object?> { { "twinId", twinId } }
+            new Dictionary<string, object?> { { DigitalTwinsJsonPropertyNames.TwinIdParameter, twinId } }
         );
 
         var modelIdValue = await command.ExecuteScalarAsync(cancellationToken);
@@ -965,7 +965,7 @@ RETURN COUNT(m) AS deletedCount";
             while (await reader.ReadAsync(cancellationToken))
             {
                 var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
-                var vertex = (Vertex)agResult;
+                var vertex = (Vertex)agResult!;
                 results.Add(new DigitalTwinsModelData(vertex.Properties));
             }
         }

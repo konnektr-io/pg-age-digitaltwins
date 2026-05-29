@@ -85,13 +85,13 @@ public partial class AgeDigitalTwinsClient
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             activity?.AddEvent(
                 new ActivityEvent(
-                    "Exception",
+                    DiagnosticConstants.ActivityEventException,
                     default,
                     new ActivityTagsCollection
                     {
-                        { "exception.type", ex.GetType().FullName },
-                        { "exception.message", ex.Message },
-                        { "exception.stacktrace", ex.StackTrace },
+                        { DiagnosticConstants.ActivityTagExceptionType, ex.GetType().FullName },
+                        { DiagnosticConstants.ActivityTagExceptionMessage, ex.Message },
+                        { DiagnosticConstants.ActivityTagExceptionStackTrace, ex.StackTrace },
                     }
                 )
             );
@@ -192,13 +192,13 @@ public partial class AgeDigitalTwinsClient
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             activity?.AddEvent(
                 new ActivityEvent(
-                    "Exception",
+                    DiagnosticConstants.ActivityEventException,
                     default,
                     new ActivityTagsCollection
                     {
-                        { "exception.type", ex.GetType().FullName },
-                        { "exception.message", ex.Message },
-                        { "exception.stacktrace", ex.StackTrace },
+                        { DiagnosticConstants.ActivityTagExceptionType, ex.GetType().FullName },
+                        { DiagnosticConstants.ActivityTagExceptionMessage, ex.Message },
+                        { DiagnosticConstants.ActivityTagExceptionStackTrace, ex.StackTrace },
                     }
                 )
             );
@@ -228,7 +228,7 @@ public partial class AgeDigitalTwinsClient
         if (!string.IsNullOrEmpty(ifMatch) && !ifMatch.Equals("*"))
         {
             if (
-                digitalTwin.TryGetPropertyValue("$etag", out JsonNode? etagNode)
+                digitalTwin.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.DigitalTwinETag, out JsonNode? etagNode)
                 && etagNode is JsonValue etagValue
                 && etagValue.GetValueKind() == JsonValueKind.String
                 && !etagValue.ToString().Equals(ifMatch, StringComparison.Ordinal)
@@ -290,28 +290,28 @@ public partial class AgeDigitalTwinsClient
 
         // Update metadata
         if (
-            digitalTwin.TryGetPropertyValue("$metadata", out JsonNode? metadataNode)
+            digitalTwin.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.DigitalTwinMetadata, out JsonNode? metadataNode)
             && metadataNode is JsonObject metadataObject
         )
         {
             // Update global last update time
-            metadataObject["$lastUpdateTime"] = now.ToString("o");
+            metadataObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdateTime] = now.ToString("o");
 
             // Update component metadata
             if (
                 patchedComponent.TryGetPropertyValue(
-                    "$metadata",
+                    DigitalTwinsJsonPropertyNames.DigitalTwinMetadata,
                     out JsonNode? componentMetadataNode
                 ) && componentMetadataNode is JsonObject componentMetadataObject
             )
             {
-                componentMetadataObject["$lastUpdateTime"] = now.ToString("o");
+                componentMetadataObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdateTime] = now.ToString("o");
             }
             else
             {
-                patchedComponent["$metadata"] = new JsonObject
+                patchedComponent[DigitalTwinsJsonPropertyNames.DigitalTwinMetadata] = new JsonObject
                 {
-                    ["$lastUpdateTime"] = now.ToString("o"),
+                    [DigitalTwinsJsonPropertyNames.MetadataLastUpdateTime] = now.ToString("o"),
                 };
             }
 
@@ -323,20 +323,20 @@ public partial class AgeDigitalTwinsClient
                 ) && twinComponentMetadataNode is JsonObject twinComponentMetadataObject
             )
             {
-                twinComponentMetadataObject["lastUpdateTime"] = now.ToString("o");
+                twinComponentMetadataObject[DigitalTwinsJsonPropertyNames.MetadataPropertyLastUpdateTime] = now.ToString("o");
             }
             else
             {
                 metadataObject[componentName] = new JsonObject
                 {
-                    ["lastUpdateTime"] = now.ToString("o"),
+                    [DigitalTwinsJsonPropertyNames.MetadataPropertyLastUpdateTime] = now.ToString("o"),
                 };
             }
         }
 
         // Generate new ETag
         string newEtag = ETagGenerator.GenerateEtag(digitalTwinId, now);
-        digitalTwin["$etag"] = newEtag;
+        digitalTwin[DigitalTwinsJsonPropertyNames.DigitalTwinETag] = newEtag;
 
         string updatedTwinJson = JsonSerializer.Serialize(digitalTwin);
 
@@ -350,7 +350,7 @@ RETURN t";
             _graphName, cypher,
             new Dictionary<string, object?>
             {
-                { "twinId", digitalTwinId },
+                { DigitalTwinsJsonPropertyNames.TwinIdParameter, digitalTwinId },
                 { "twinJson", updatedTwinJson },
             }
         );
@@ -394,7 +394,7 @@ RETURN t";
     {
         // Get the twin ID
         if (
-            !digitalTwin.TryGetPropertyValue("$dtId", out JsonNode? dtIdNode)
+            !digitalTwin.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.DigitalTwinId, out JsonNode? dtIdNode)
             || dtIdNode is not JsonValue dtIdValue
             || dtIdValue.GetValueKind() != JsonValueKind.String
         )
@@ -469,7 +469,7 @@ RETURN t";
             string property = kv.Key;
 
             // Skip metadata properties
-            if (property == "$metadata")
+            if (property == DigitalTwinsJsonPropertyNames.DigitalTwinMetadata)
             {
                 continue;
             }

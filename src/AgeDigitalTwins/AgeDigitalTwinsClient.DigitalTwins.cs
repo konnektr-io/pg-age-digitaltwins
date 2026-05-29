@@ -36,7 +36,7 @@ public partial class AgeDigitalTwinsClient
         string cypher = "MATCH (t:Twin {`$dtId`: $twinId}) RETURN t";
         await using var command = connection.CreateCypherCommand(
             _graphName, cypher,
-            new Dictionary<string, object?> { { "twinId", digitalTwinId } }
+            new Dictionary<string, object?> { { DigitalTwinsJsonPropertyNames.TwinIdParameter, digitalTwinId } }
         );
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         return await reader.ReadAsync(cancellationToken);
@@ -77,13 +77,13 @@ public partial class AgeDigitalTwinsClient
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             activity?.AddEvent(
                 new ActivityEvent(
-                    "Exception",
+                    DiagnosticConstants.ActivityEventException,
                     default,
                     new ActivityTagsCollection
                     {
-                        { "exception.type", ex.GetType().FullName },
-                        { "exception.message", ex.Message },
-                        { "exception.stacktrace", ex.StackTrace },
+                        { DiagnosticConstants.ActivityTagExceptionType, ex.GetType().FullName },
+                        { DiagnosticConstants.ActivityTagExceptionMessage, ex.Message },
+                        { DiagnosticConstants.ActivityTagExceptionStackTrace, ex.StackTrace },
                     }
                 )
             );
@@ -100,15 +100,15 @@ public partial class AgeDigitalTwinsClient
         string cypher = "MATCH (t:Twin {`$dtId`: $twinId}) RETURN t";
         await using var command = connection.CreateCypherCommand(
             _graphName, cypher,
-            new Dictionary<string, object?> { { "twinId", digitalTwinId } }
+            new Dictionary<string, object?> { { DigitalTwinsJsonPropertyNames.TwinIdParameter, digitalTwinId } }
         );
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
         if (await reader.ReadAsync(cancellationToken))
         {
             var agResult = await reader.GetFieldValueAsync<Agtype?>(0).ConfigureAwait(false);
-            var vertex = (Vertex)agResult;
-            return JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(vertex.Properties))
+            var vertex = (Vertex)agResult!;
+            return JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(vertex!.Properties))
                 ?? throw new SerializationException(
                     $"Digital Twin with ID {digitalTwinId} could not be deserialized"
                 );
@@ -170,13 +170,13 @@ public partial class AgeDigitalTwinsClient
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             activity?.AddEvent(
                 new ActivityEvent(
-                    "Exception",
+                    DiagnosticConstants.ActivityEventException,
                     default,
                     new ActivityTagsCollection
                     {
-                        { "exception.type", ex.GetType().FullName },
-                        { "exception.message", ex.Message },
-                        { "exception.stacktrace", ex.StackTrace },
+                        { DiagnosticConstants.ActivityTagExceptionType, ex.GetType().FullName },
+                        { DiagnosticConstants.ActivityTagExceptionMessage, ex.Message },
+                        { DiagnosticConstants.ActivityTagExceptionStackTrace, ex.StackTrace },
                     }
                 )
             );
@@ -204,7 +204,7 @@ public partial class AgeDigitalTwinsClient
             JsonNode.Parse(digitalTwinJson)?.AsObject()
             ?? throw new ArgumentException("Invalid digital twin JSON");
         if (
-            !digitalTwinObject.TryGetPropertyValue("$metadata", out JsonNode? metadataNode)
+            !digitalTwinObject.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.DigitalTwinMetadata, out JsonNode? metadataNode)
             || metadataNode is not JsonObject metadataObject
         )
         {
@@ -213,7 +213,7 @@ public partial class AgeDigitalTwinsClient
             );
         }
         if (
-            !metadataObject.TryGetPropertyValue("$model", out JsonNode? modelNode)
+            !metadataObject.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.MetadataModel, out JsonNode? modelNode)
             || modelNode is not JsonValue modelValue
             || modelValue.GetValueKind() != JsonValueKind.String
         )
@@ -223,7 +223,7 @@ public partial class AgeDigitalTwinsClient
             );
         }
         if (
-            digitalTwinObject.TryGetPropertyValue("$dtId", out JsonNode? dtIdNode)
+            digitalTwinObject.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.DigitalTwinId, out JsonNode? dtIdNode)
             && dtIdNode is JsonValue dtIdValue
             && digitalTwinId != dtIdValue.ToString()
         )
@@ -237,14 +237,11 @@ public partial class AgeDigitalTwinsClient
             );
         }
 
-        if (ifNoneMatch == "*")
+        if (ifNoneMatch == "*" &&  await DigitalTwinExistsAsync(connection, digitalTwinId, cancellationToken))
         {
-            if (await DigitalTwinExistsAsync(connection, digitalTwinId, cancellationToken))
-            {
-                throw new PreconditionFailedException(
-                    $"If-None-Match: * header was specified but a twin with the id {digitalTwinId} was found. Please specify a different twin id."
-                );
-            }
+            throw new PreconditionFailedException(
+                $"If-None-Match: * header was specified but a twin with the id {digitalTwinId} was found. Please specify a different twin id."
+            );
         }
 
         string modelId =
@@ -274,10 +271,10 @@ public partial class AgeDigitalTwinsClient
             string property = kv.Key;
 
             if (
-                property == "$metadata"
-                || property == "$dtId"
-                || property == "$etag"
-                || property == "$lastUpdateTime"
+                property == DigitalTwinsJsonPropertyNames.DigitalTwinMetadata
+                || property == DigitalTwinsJsonPropertyNames.DigitalTwinId
+                || property == DigitalTwinsJsonPropertyNames.DigitalTwinETag
+                || property == DigitalTwinsJsonPropertyNames.MetadataLastUpdateTime
             )
             {
                 continue;
@@ -311,21 +308,21 @@ public partial class AgeDigitalTwinsClient
                         ) && metadataPropertyNode is JsonObject metadataPropertyObject
                     )
                     {
-                        metadataPropertyObject["lastUpdateTime"] = now.ToString("o");
+                        metadataPropertyObject[DigitalTwinsJsonPropertyNames.MetadataPropertyLastUpdateTime] = now.ToString("o");
                         if (_trackLastUpdatedBy && userId != null)
                         {
-                            metadataPropertyObject["lastUpdatedBy"] = userId;
+                            metadataPropertyObject[DigitalTwinsJsonPropertyNames.MetadataPropertyLastUpdatedBy] = userId;
                         }
                     }
                     else
                     {
                         var newPropertyMetadata = new JsonObject
                         {
-                            ["lastUpdateTime"] = now.ToString("o"),
+                            [DigitalTwinsJsonPropertyNames.MetadataPropertyLastUpdateTime] = now.ToString("o"),
                         };
                         if (_trackLastUpdatedBy && userId != null)
                         {
-                            newPropertyMetadata["lastUpdatedBy"] = userId;
+                            newPropertyMetadata[DigitalTwinsJsonPropertyNames.MetadataPropertyLastUpdatedBy] = userId;
                         }
                         metadataObject[property] = newPropertyMetadata;
                     }
@@ -355,7 +352,7 @@ public partial class AgeDigitalTwinsClient
                     string componentProperty = componentKv.Key;
 
                     // Skip metadata properties
-                    if (componentProperty == "$metadata")
+                    if (componentProperty == DigitalTwinsJsonPropertyNames.DigitalTwinMetadata)
                     {
                         continue;
                     }
@@ -398,27 +395,27 @@ public partial class AgeDigitalTwinsClient
                 // Set component metadata
                 if (
                     !componentObject.TryGetPropertyValue(
-                        "$metadata",
+                        DigitalTwinsJsonPropertyNames.DigitalTwinMetadata,
                         out JsonNode? componentMetadataNode
                     ) || componentMetadataNode is not JsonObject componentMetadataObject
                 )
                 {
                     var newComponentMetadata = new JsonObject
                     {
-                        ["lastUpdateTime"] = now.ToString("o"),
+                        [DigitalTwinsJsonPropertyNames.MetadataPropertyLastUpdateTime] = now.ToString("o"),
                     };
                     if (_trackLastUpdatedBy && userId != null)
                     {
-                        newComponentMetadata["lastUpdatedBy"] = userId;
+                        newComponentMetadata[DigitalTwinsJsonPropertyNames.MetadataPropertyLastUpdatedBy] = userId;
                     }
-                    componentObject["$metadata"] = newComponentMetadata;
+                    componentObject[DigitalTwinsJsonPropertyNames.DigitalTwinMetadata] = newComponentMetadata;
                 }
                 else
                 {
-                    componentMetadataObject["lastUpdateTime"] = now.ToString("o");
+                    componentMetadataObject[DigitalTwinsJsonPropertyNames.MetadataPropertyLastUpdateTime] = now.ToString("o");
                     if (_trackLastUpdatedBy && userId != null)
                     {
-                        componentMetadataObject["lastUpdatedBy"] = userId;
+                        componentMetadataObject[DigitalTwinsJsonPropertyNames.MetadataPropertyLastUpdatedBy] = userId;
                     }
                 }
 
@@ -428,21 +425,21 @@ public partial class AgeDigitalTwinsClient
                     && metadataPropertyNode is JsonObject metadataPropertyObject
                 )
                 {
-                    metadataPropertyObject["lastUpdateTime"] = now.ToString("o");
+                    metadataPropertyObject[DigitalTwinsJsonPropertyNames.MetadataPropertyLastUpdateTime] = now.ToString("o");
                     if (_trackLastUpdatedBy && userId != null)
                     {
-                        metadataPropertyObject["lastUpdatedBy"] = userId;
+                        metadataPropertyObject[DigitalTwinsJsonPropertyNames.MetadataPropertyLastUpdatedBy] = userId;
                     }
                 }
                 else
                 {
                     var newPropertyMetadata = new JsonObject
                     {
-                        ["lastUpdateTime"] = now.ToString("o"),
+                        [DigitalTwinsJsonPropertyNames.MetadataPropertyLastUpdateTime] = now.ToString("o"),
                     };
                     if (_trackLastUpdatedBy && userId != null)
                     {
-                        newPropertyMetadata["lastUpdatedBy"] = userId;
+                        newPropertyMetadata[DigitalTwinsJsonPropertyNames.MetadataPropertyLastUpdatedBy] = userId;
                     }
                     metadataObject[property] = newPropertyMetadata;
                 }
@@ -461,10 +458,10 @@ public partial class AgeDigitalTwinsClient
         }
 
         // Set global last update time
-        metadataObject["$lastUpdateTime"] = now.ToString("o");
+        metadataObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdateTime] = now.ToString("o");
         // Set new etag
         string newEtag = ETagGenerator.GenerateEtag(digitalTwinId, now);
-        digitalTwinObject["$etag"] = newEtag;
+        digitalTwinObject[DigitalTwinsJsonPropertyNames.DigitalTwinETag] = newEtag;
 
         string updatedTwinJson = JsonSerializer.Serialize(digitalTwinObject);
 
@@ -477,7 +474,7 @@ RETURN t";
             _graphName, cypher,
             new Dictionary<string, object?>
             {
-                { "twinId", digitalTwinId },
+                { DigitalTwinsJsonPropertyNames.TwinIdParameter, digitalTwinId },
                 { "twinJson", updatedTwinJson },
             }
         );
@@ -486,15 +483,15 @@ RETURN t";
         if (await reader.ReadAsync(cancellationToken))
         {
             var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
-            var vertex = (Vertex)agResult;
+            var vertex = (Vertex)agResult!;
 
             if (typeof(T) == typeof(string))
             {
-                return (T)(object)JsonSerializer.Serialize(vertex.Properties);
+                return (T)(object)JsonSerializer.Serialize(vertex!.Properties);
             }
             else
             {
-                return JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(vertex.Properties));
+                return JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(vertex!.Properties));
             }
         }
         else
@@ -549,13 +546,13 @@ RETURN t";
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             activity?.AddEvent(
                 new ActivityEvent(
-                    "Exception",
+                    DiagnosticConstants.ActivityEventException,
                     default,
                     new ActivityTagsCollection
                     {
-                        { "exception.type", ex.GetType().FullName },
-                        { "exception.message", ex.Message },
-                        { "exception.stacktrace", ex.StackTrace },
+                        { DiagnosticConstants.ActivityTagExceptionType, ex.GetType().FullName },
+                        { DiagnosticConstants.ActivityTagExceptionMessage, ex.Message },
+                        { DiagnosticConstants.ActivityTagExceptionStackTrace, ex.StackTrace },
                     }
                 )
             );
@@ -582,19 +579,16 @@ RETURN t";
             );
 
         // Check if etag matches if If-Match header is provided
-        if (!string.IsNullOrEmpty(ifMatch) && !ifMatch.Equals("*"))
-        {
-            if (
-                currentTwin.TryGetPropertyValue("$etag", out JsonNode? etagNode)
+        if (!string.IsNullOrEmpty(ifMatch) 
+                && !ifMatch.Equals("*") 
+                && currentTwin.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.DigitalTwinETag, out JsonNode? etagNode)
                 && etagNode is JsonValue etagValue
                 && etagValue.GetValueKind() == JsonValueKind.String
-                && !etagValue.ToString().Equals(ifMatch, StringComparison.Ordinal)
-            )
-            {
-                throw new PreconditionFailedException(
-                    $"If-Match: {ifMatch} header value does not match the current ETag value of the digital twin with id {digitalTwinId}"
-                );
-            }
+                && !etagValue.ToString().Equals(ifMatch, StringComparison.Ordinal))
+        {
+            throw new PreconditionFailedException(
+                $"If-Match: {ifMatch} header value does not match the current ETag value of the digital twin with id {digitalTwinId}"
+            );
         }
 
         JsonNode patchedTwinNode = currentTwin.DeepClone();
@@ -621,15 +615,15 @@ RETURN t";
         }
 
         if (
-            !patchedTwin.TryGetPropertyValue("$dtId", out JsonNode? dtIdNode)
+            !patchedTwin.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.DigitalTwinId, out JsonNode? dtIdNode)
             || dtIdNode is not JsonValue
         )
         {
-            patchedTwin["$dtId"] = digitalTwinId;
+            patchedTwin[DigitalTwinsJsonPropertyNames.DigitalTwinId] = digitalTwinId;
         }
 
         if (
-            !patchedTwin.TryGetPropertyValue("$metadata", out JsonNode? metaNode)
+            !patchedTwin.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.DigitalTwinMetadata, out JsonNode? metaNode)
             || metaNode is not JsonObject metadataObject
         )
         {
@@ -638,7 +632,7 @@ RETURN t";
             );
         }
         if (
-            !metadataObject.TryGetPropertyValue("$model", out JsonNode? modelNode2)
+            !metadataObject.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.MetadataModel, out JsonNode? modelNode2)
             || modelNode2 is not JsonValue modelValue
             || modelValue.GetValueKind() != JsonValueKind.String
         )
@@ -680,10 +674,10 @@ RETURN t";
         {
             string property = kv.Key;
             if (
-                property == "$metadata"
-                || property == "$dtId"
-                || property == "$etag"
-                || property == "$lastUpdateTime"
+                property == DigitalTwinsJsonPropertyNames.DigitalTwinMetadata
+                || property == DigitalTwinsJsonPropertyNames.DigitalTwinId
+                || property == DigitalTwinsJsonPropertyNames.DigitalTwinETag
+                || property == DigitalTwinsJsonPropertyNames.MetadataLastUpdateTime
             )
             {
                 continue;
@@ -716,21 +710,21 @@ RETURN t";
                             ) && metadataPropertyNode is JsonObject metadataPropertyObject
                         )
                         {
-                            metadataPropertyObject["lastUpdateTime"] = now.ToString("o");
+                            metadataPropertyObject[DigitalTwinsJsonPropertyNames.MetadataPropertyLastUpdateTime] = now.ToString("o");
                             if (_trackLastUpdatedBy && userId != null)
                             {
-                                metadataPropertyObject["lastUpdatedBy"] = userId;
+                                metadataPropertyObject[DigitalTwinsJsonPropertyNames.MetadataPropertyLastUpdatedBy] = userId;
                             }
                         }
                         else
                         {
                             var newPropertyMetadata = new JsonObject
                             {
-                                ["lastUpdateTime"] = now.ToString("o"),
+                                [DigitalTwinsJsonPropertyNames.MetadataPropertyLastUpdateTime] = now.ToString("o"),
                             };
                             if (_trackLastUpdatedBy && userId != null)
                             {
-                                newPropertyMetadata["lastUpdatedBy"] = userId;
+                                newPropertyMetadata[DigitalTwinsJsonPropertyNames.MetadataPropertyLastUpdatedBy] = userId;
                             }
                             metadataObject[property] = newPropertyMetadata;
                         }
@@ -749,10 +743,10 @@ RETURN t";
             throw new ValidationFailedException(string.Join(" AND ", violations));
         }
         // Set global last update time
-        metadataObject["$lastUpdateTime"] = now.ToString("o");
+        metadataObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdateTime] = now.ToString("o");
         // Set new etag
         string newEtag = ETagGenerator.GenerateEtag(digitalTwinId, now);
-        patchedTwin["$etag"] = newEtag;
+        patchedTwin[DigitalTwinsJsonPropertyNames.DigitalTwinETag] = newEtag;
         string updatedTwinJson = JsonSerializer.Serialize(patchedTwin);
 
         string cypher =
@@ -763,7 +757,7 @@ SET t = twin";
             _graphName, cypher,
             new Dictionary<string, object?>
             {
-                { "twinId", digitalTwinId },
+                { DigitalTwinsJsonPropertyNames.TwinIdParameter, digitalTwinId },
                 { "twinJson", updatedTwinJson },
             }
         );
@@ -801,13 +795,13 @@ SET t = twin";
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             activity?.AddEvent(
                 new ActivityEvent(
-                    "Exception",
+                    DiagnosticConstants.ActivityEventException,
                     default,
                     new ActivityTagsCollection
                     {
-                        { "exception.type", ex.GetType().FullName },
-                        { "exception.message", ex.Message },
-                        { "exception.stacktrace", ex.StackTrace },
+                        { DiagnosticConstants.ActivityTagExceptionType, ex.GetType().FullName },
+                        { DiagnosticConstants.ActivityTagExceptionMessage, ex.Message },
+                        { DiagnosticConstants.ActivityTagExceptionStackTrace, ex.StackTrace },
                     }
                 )
             );
@@ -827,14 +821,14 @@ DELETE t
 RETURN COUNT(t) AS deletedCount";
         await using var command = connection.CreateCypherCommand(
             _graphName, cypher,
-            new Dictionary<string, object?> { { "twinId", digitalTwinId } }
+            new Dictionary<string, object?> { { DigitalTwinsJsonPropertyNames.TwinIdParameter, digitalTwinId } }
         );
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         int rowsAffected = 0;
         if (await reader.ReadAsync(cancellationToken))
         {
             var agResult = await reader.GetFieldValueAsync<Agtype?>(0).ConfigureAwait(false);
-            rowsAffected = (int)agResult;
+            rowsAffected = (int)agResult!;
         }
         if (rowsAffected <= 0)
         {
@@ -897,13 +891,13 @@ RETURN COUNT(t) AS deletedCount";
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             activity?.AddEvent(
                 new ActivityEvent(
-                    "Exception",
+                    DiagnosticConstants.ActivityEventException,
                     default,
                     new ActivityTagsCollection
                     {
-                        { "exception.type", ex.GetType().FullName },
-                        { "exception.message", ex.Message },
-                        { "exception.stacktrace", ex.StackTrace },
+                        { DiagnosticConstants.ActivityTagExceptionType, ex.GetType().FullName },
+                        { DiagnosticConstants.ActivityTagExceptionMessage, ex.Message },
+                        { DiagnosticConstants.ActivityTagExceptionStackTrace, ex.StackTrace },
                     }
                 )
             );
@@ -941,7 +935,7 @@ RETURN COUNT(t) AS deletedCount";
 
                 // Extract $dtId from the twin object
                 if (
-                    digitalTwinObject.TryGetPropertyValue("$dtId", out JsonNode? dtIdNode)
+                    digitalTwinObject.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.DigitalTwinId, out JsonNode? dtIdNode)
                     && dtIdNode is JsonValue dtIdValue
                 )
                 {
@@ -954,7 +948,7 @@ RETURN COUNT(t) AS deletedCount";
 
                 // Validate $metadata property
                 if (
-                    !digitalTwinObject.TryGetPropertyValue("$metadata", out JsonNode? metadataNode)
+                    !digitalTwinObject.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.DigitalTwinMetadata, out JsonNode? metadataNode)
                     || metadataNode is not JsonObject metadataObject
                 )
                 {
@@ -965,7 +959,7 @@ RETURN COUNT(t) AS deletedCount";
 
                 // Validate $model property
                 if (
-                    !metadataObject.TryGetPropertyValue("$model", out JsonNode? modelNode)
+                    !metadataObject.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.MetadataModel, out JsonNode? modelNode)
                     || modelNode is not JsonValue modelValue
                     || modelValue.GetValueKind() != JsonValueKind.String
                 )
@@ -991,7 +985,7 @@ RETURN COUNT(t) AS deletedCount";
         // Phase 2: Load and cache all unique models
         var modelCache = new Dictionary<string, DTInterfaceInfo>();
         var uniqueModelIds = validTwins
-            .Select(t => t.digitalTwinObject["$metadata"]!["$model"]!.ToString())
+            .Select(t => t.digitalTwinObject[DigitalTwinsJsonPropertyNames.DigitalTwinMetadata]![DigitalTwinsJsonPropertyNames.MetadataModel]!.ToString())
             .Distinct()
             .ToList();
 
@@ -1026,7 +1020,7 @@ RETURN COUNT(t) AS deletedCount";
             {
                 // Mark all twins using this model as failed
                 var failedTwins = validTwins
-                    .Where(t => t.digitalTwinObject["$metadata"]!["$model"]!.ToString() == modelId)
+                    .Where(t => t.digitalTwinObject[DigitalTwinsJsonPropertyNames.DigitalTwinMetadata]![DigitalTwinsJsonPropertyNames.MetadataModel]!.ToString() == modelId)
                     .Select(t => t.digitalTwinId)
                     .ToList();
 
@@ -1037,7 +1031,7 @@ RETURN COUNT(t) AS deletedCount";
 
                 // Remove failed twins from processing
                 validTwins.RemoveAll(t =>
-                    t.digitalTwinObject["$metadata"]!["$model"]!.ToString() == modelId
+                    t.digitalTwinObject[DigitalTwinsJsonPropertyNames.DigitalTwinMetadata]![DigitalTwinsJsonPropertyNames.MetadataModel]!.ToString() == modelId
                 );
             }
         }
@@ -1049,9 +1043,9 @@ RETURN COUNT(t) AS deletedCount";
         {
             try
             {
-                string modelId = digitalTwinObject["$metadata"]!["$model"]!.ToString();
+                string modelId = digitalTwinObject[DigitalTwinsJsonPropertyNames.DigitalTwinMetadata]![DigitalTwinsJsonPropertyNames.MetadataModel]!.ToString();
                 var dtInterfaceInfo = modelCache[modelId];
-                var metadataObject = digitalTwinObject["$metadata"]!.AsObject();
+                var metadataObject = digitalTwinObject[DigitalTwinsJsonPropertyNames.DigitalTwinMetadata]!.AsObject();
                 var violations = new List<string>();
 
                 // Validate all properties against the model
@@ -1060,10 +1054,10 @@ RETURN COUNT(t) AS deletedCount";
                     string property = kvp.Key;
 
                     if (
-                        property == "$metadata"
-                        || property == "$dtId"
-                        || property == "$etag"
-                        || property == "$lastUpdateTime"
+                        property == DigitalTwinsJsonPropertyNames.DigitalTwinMetadata
+                        || property == DigitalTwinsJsonPropertyNames.DigitalTwinId
+                        || property == DigitalTwinsJsonPropertyNames.DigitalTwinETag
+                        || property == DigitalTwinsJsonPropertyNames.MetadataLastUpdateTime
                     )
                     {
                         continue;
@@ -1101,13 +1095,13 @@ RETURN COUNT(t) AS deletedCount";
                                 ) && metadataPropertyNode is JsonObject metadataPropertyObject
                             )
                             {
-                                metadataPropertyObject["lastUpdateTime"] = now.ToString("o");
+                                metadataPropertyObject[DigitalTwinsJsonPropertyNames.MetadataPropertyLastUpdateTime] = now.ToString("o");
                             }
                             else
                             {
                                 metadataObject[property] = new JsonObject
                                 {
-                                    ["lastUpdateTime"] = now.ToString("o"),
+                                    [DigitalTwinsJsonPropertyNames.MetadataPropertyLastUpdateTime] = now.ToString("o"),
                                 };
                             }
                         }
@@ -1126,9 +1120,9 @@ RETURN COUNT(t) AS deletedCount";
                 }
 
                 // Set global metadata
-                metadataObject["$lastUpdateTime"] = now.ToString("o");
+                metadataObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdateTime] = now.ToString("o");
                 string newEtag = ETagGenerator.GenerateEtag(digitalTwinId, now);
-                digitalTwinObject["$etag"] = newEtag;
+                digitalTwinObject[DigitalTwinsJsonPropertyNames.DigitalTwinETag] = newEtag;
 
                 finalValidTwins.Add((digitalTwinId, digitalTwinObject));
             }
@@ -1197,9 +1191,6 @@ SET t = twin";
     {
         if (hops < 1)
             hops = 1;
-        // Limit to 1 hop for current implementation stability with AGE return types
-        // Multi-hop path serialization requires handling Path/EdgeList return types which are complex in Agtype
-        hops = 1;
 
         await using var connection = await _dataSource.OpenConnectionAsync(
             TargetSessionAttributes.PreferStandby,
@@ -1207,29 +1198,42 @@ SET t = twin";
         );
 
         string cypher =
-            @"MATCH (t:Twin {`$dtId`: $twinId})-[r]-(n:Twin) 
+            $@"MATCH path = (t:Twin {{`$dtId`: $twinId}})-[r*1..{hops}]-(n:Twin) 
             RETURN t, r, n 
             LIMIT 50";
 
         await using var command = connection.CreateCypherCommand(
             _graphName, cypher,
-            new Dictionary<string, object?> { { "twinId", twinId } }
+            new Dictionary<string, object?> { { DigitalTwinsJsonPropertyNames.TwinIdParameter, twinId } }
         );
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
         var results = new List<object>();
         while (await reader.ReadAsync(cancellationToken))
         {
-            var agResultT = (Vertex)await reader.GetFieldValueAsync<Agtype?>(0);
-            var agResultR = (Edge)await reader.GetFieldValueAsync<Agtype?>(1);
-            var agResultN = (Vertex)await reader.GetFieldValueAsync<Agtype?>(2);
+            var agResultT = (Vertex)(await reader.GetFieldValueAsync<Agtype?>(0))!;
+            var agResultR = await reader.GetFieldValueAsync<Agtype>(1);
+            var agResultN = (Vertex)(await reader.GetFieldValueAsync<Agtype?>(2))!;
+
+            object relationshipData;
+            if (agResultR.IsArray)
+            {
+                var edges = agResultR.GetList();
+                relationshipData = edges is { Count: 1 } && edges[0] is Edge singleEdge
+                    ? singleEdge.Label
+                    : edges?.Select(e => (object?)(e is Edge edge ? edge.Label : null)).ToList() ?? [];
+            }
+            else
+            {
+                relationshipData = ((Edge)agResultR).Label;
+            }
 
             results.Add(
                 new
                 {
-                    sourceId = agResultT.Properties["$dtId"],
-                    relationship = agResultR.Label,
-                    targetId = agResultN.Properties["$dtId"],
+                    sourceId = agResultT.Properties[DigitalTwinsJsonPropertyNames.DigitalTwinId],
+                    relationship = relationshipData,
+                    targetId = agResultN.Properties[DigitalTwinsJsonPropertyNames.DigitalTwinId],
                     target = agResultN.Properties,
                 }
             );
@@ -1279,8 +1283,8 @@ SET t = twin";
             while (await reader.ReadAsync(cancellationToken))
             {
                 var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
-                var vertex = (Vertex)agResult;
-                results.Add(vertex.Properties);
+                var vertex = (Vertex)agResult!;
+                results.Add(vertex!.Properties);
             }
             return JsonSerializer.Serialize(
                 results,

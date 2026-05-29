@@ -72,4 +72,9 @@ public static class DigitalTwinsJsonPropertyNames
     /// The JSON property name for the name field on a relationship.
     /// </summary>
     public const string RelationshipName = "$relationshipName";
+
+    /// <summary>
+    /// The parameter name for a digital twin ID in Cypher queries.
+    /// </summary>
+    public const string TwinIdParameter = "twinId";
 }

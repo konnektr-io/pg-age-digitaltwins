@@ -218,13 +218,13 @@ public partial class AgeDigitalTwinsClient
                     activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
                     activity?.AddEvent(
                         new ActivityEvent(
-                            "Exception",
+                            DiagnosticConstants.ActivityEventException,
                             default,
                             new ActivityTagsCollection
                             {
-                                { "exception.type", ex.GetType().FullName },
-                                { "exception.message", ex.Message },
-                                { "exception.stacktrace", ex.StackTrace },
+                                { DiagnosticConstants.ActivityTagExceptionType, ex.GetType().FullName },
+                                { DiagnosticConstants.ActivityTagExceptionMessage, ex.Message },
+                                { DiagnosticConstants.ActivityTagExceptionStackTrace, ex.StackTrace },
                             }
                         )
                     );

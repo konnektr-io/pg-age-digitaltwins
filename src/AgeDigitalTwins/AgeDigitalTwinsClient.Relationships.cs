@@ -88,7 +88,7 @@ public partial class AgeDigitalTwinsClient
             if (await reader.ReadAsync(cancellationToken))
             {
                 var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
-                var edge = (Edge)agResult;
+                var edge = (Edge)agResult!;
                 return JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(edge.Properties));
             }
             else
@@ -103,13 +103,13 @@ public partial class AgeDigitalTwinsClient
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             activity?.AddEvent(
                 new ActivityEvent(
-                    "Exception",
+                    DiagnosticConstants.ActivityEventException,
                     default,
                     new ActivityTagsCollection
                     {
-                        { "exception.type", ex.GetType().FullName },
-                        { "exception.message", ex.Message },
-                        { "exception.stacktrace", ex.StackTrace },
+                        { DiagnosticConstants.ActivityTagExceptionType, ex.GetType().FullName },
+                        { DiagnosticConstants.ActivityTagExceptionMessage, ex.Message },
+                        { DiagnosticConstants.ActivityTagExceptionStackTrace, ex.StackTrace },
                     }
                 )
             );
@@ -152,13 +152,13 @@ public partial class AgeDigitalTwinsClient
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             activity?.AddEvent(
                 new ActivityEvent(
-                    "Exception",
+                    DiagnosticConstants.ActivityEventException,
                     default,
                     new ActivityTagsCollection
                     {
-                        { "exception.type", ex.GetType().FullName },
-                        { "exception.message", ex.Message },
-                        { "exception.stacktrace", ex.StackTrace },
+                        { DiagnosticConstants.ActivityTagExceptionType, ex.GetType().FullName },
+                        { DiagnosticConstants.ActivityTagExceptionMessage, ex.Message },
+                        { DiagnosticConstants.ActivityTagExceptionStackTrace, ex.StackTrace },
                     }
                 )
             );
@@ -196,13 +196,13 @@ public partial class AgeDigitalTwinsClient
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             activity?.AddEvent(
                 new ActivityEvent(
-                    "Exception",
+                    DiagnosticConstants.ActivityEventException,
                     default,
                     new ActivityTagsCollection
                     {
-                        { "exception.type", ex.GetType().FullName },
-                        { "exception.message", ex.Message },
-                        { "exception.stacktrace", ex.StackTrace },
+                        { DiagnosticConstants.ActivityTagExceptionType, ex.GetType().FullName },
+                        { DiagnosticConstants.ActivityTagExceptionMessage, ex.Message },
+                        { DiagnosticConstants.ActivityTagExceptionStackTrace, ex.StackTrace },
                     }
                 )
             );
@@ -256,13 +256,13 @@ public partial class AgeDigitalTwinsClient
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             activity?.AddEvent(
                 new ActivityEvent(
-                    "Exception",
+                    DiagnosticConstants.ActivityEventException,
                     default,
                     new ActivityTagsCollection
                     {
-                        { "exception.type", ex.GetType().FullName },
-                        { "exception.message", ex.Message },
-                        { "exception.stacktrace", ex.StackTrace },
+                        { DiagnosticConstants.ActivityTagExceptionType, ex.GetType().FullName },
+                        { DiagnosticConstants.ActivityTagExceptionMessage, ex.Message },
+                        { DiagnosticConstants.ActivityTagExceptionStackTrace, ex.StackTrace },
                     }
                 )
             );
@@ -387,7 +387,7 @@ public partial class AgeDigitalTwinsClient
         relationshipObject["$relationshipId"] = relationshipId;
         // Set new etag
         string newEtag = ETagGenerator.GenerateEtag($"{digitalTwinId}-{relationshipId}", now);
-        relationshipObject["$etag"] = newEtag;
+        relationshipObject[DigitalTwinsJsonPropertyNames.DigitalTwinETag] = newEtag;
 
         string updatedRelJson = JsonSerializer.Serialize(relationshipObject);
 
@@ -472,7 +472,7 @@ RETURN rel";
             if (!string.IsNullOrEmpty(ifMatch) && !ifMatch.Equals("*"))
             {
                 if (
-                    currentRel.TryGetPropertyValue("$etag", out var etagNode)
+                    currentRel.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.DigitalTwinETag, out var etagNode)
                     && etagNode is JsonValue etagValue
                     && etagValue.GetValueKind() == JsonValueKind.String
                     && !etagValue.ToString().Equals(ifMatch, StringComparison.OrdinalIgnoreCase)
@@ -508,7 +508,7 @@ RETURN rel";
             // TODO: Add validation logic
 
             // Update $etag
-            patchedRel["$etag"] = ETagGenerator.GenerateEtag(
+            patchedRel[DigitalTwinsJsonPropertyNames.DigitalTwinETag] = ETagGenerator.GenerateEtag(
                 $"{digitalTwinId}-{relationshipId}",
                 now
             );
@@ -539,13 +539,13 @@ SET rel = relationship";
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             activity?.AddEvent(
                 new ActivityEvent(
-                    "Exception",
+                    DiagnosticConstants.ActivityEventException,
                     default,
                     new ActivityTagsCollection
                     {
-                        { "exception.type", ex.GetType().FullName },
-                        { "exception.message", ex.Message },
-                        { "exception.stacktrace", ex.StackTrace },
+                        { DiagnosticConstants.ActivityTagExceptionType, ex.GetType().FullName },
+                        { DiagnosticConstants.ActivityTagExceptionMessage, ex.Message },
+                        { DiagnosticConstants.ActivityTagExceptionStackTrace, ex.StackTrace },
                     }
                 )
             );
@@ -593,7 +593,7 @@ SET rel = relationship";
             if (await reader.ReadAsync(cancellationToken))
             {
                 var agResult = await reader.GetFieldValueAsync<Agtype?>(0).ConfigureAwait(false);
-                rowsAffected = (int)agResult;
+                rowsAffected = (int)agResult!;
             }
             if (rowsAffected <= 0)
             {
@@ -607,13 +607,13 @@ SET rel = relationship";
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             activity?.AddEvent(
                 new ActivityEvent(
-                    "Exception",
+                    DiagnosticConstants.ActivityEventException,
                     default,
                     new ActivityTagsCollection
                     {
-                        { "exception.type", ex.GetType().FullName },
-                        { "exception.message", ex.Message },
-                        { "exception.stacktrace", ex.StackTrace },
+                        { DiagnosticConstants.ActivityTagExceptionType, ex.GetType().FullName },
+                        { DiagnosticConstants.ActivityTagExceptionMessage, ex.Message },
+                        { DiagnosticConstants.ActivityTagExceptionStackTrace, ex.StackTrace },
                     }
                 )
             );
@@ -835,7 +835,7 @@ RETURN t.`$dtId` AS twinId";
                 while (await existenceReader.ReadAsync(cancellationToken))
                 {
                     var agTwinId = await existenceReader.GetFieldValueAsync<Agtype?>(0);
-                    string twinId = ((Agtype)agTwinId).GetString();
+                    string twinId = ((Agtype)agTwinId!).GetString();
                     if (twinId.StartsWith('"') && twinId.EndsWith('"'))
                     {
                         twinId = twinId[1..^1]; // Remove surrounding quotes
@@ -897,7 +897,7 @@ RETURN t.`$dtId` AS twinId";
             {
                 var relationshipId = item.jsonObject["$relationshipId"]?.GetValue<string>();
                 var etag = ETagGenerator.GenerateEtag(relationshipId ?? string.Empty, now);
-                item.jsonObject["$etag"] = etag;
+                item.jsonObject[DigitalTwinsJsonPropertyNames.DigitalTwinETag] = etag;
             }
 
             // Group relationships by relationship name since we need separate queries for each relationship type

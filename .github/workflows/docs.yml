@@ -18,12 +18,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: source
 
       - name: Checkout docs repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: konnektr-io/docs
           token: ${{ secrets.GITHUB_TOKEN }}
