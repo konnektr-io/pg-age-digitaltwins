@@ -43,7 +43,7 @@ public static class QueryEndpoints
 
                     var page = await client
                         // Query can be empty in case of a continuation token, as the cypher query is also embedded in the continuation token
-                        .QueryAsync<JsonDocument>(request.Query ?? string.Empty, cancellationToken)
+                        .QueryAsync<JsonDocument>(request.Query ?? string.Empty, request.Parameters, cancellationToken)
                         .AsPages(
                             request.ContinuationToken,
                             RequestHelper.ParseMaxItemsPerPage(httpContext),

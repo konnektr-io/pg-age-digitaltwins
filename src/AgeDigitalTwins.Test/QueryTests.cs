@@ -2189,4 +2189,296 @@ RETURN t";
         Assert.Equal(8.0, dimensions2.GetProperty("width").GetDouble());
         Assert.Equal(6.0, dimensions2.GetProperty("height").GetDouble());
     }
+
+    [Fact]
+    public async Task QueryAsync_WithParameters_StringParam_ReturnsFilteredTwin()
+    {
+        await IntializeAsync();
+        var twin =
+            @"{""$dtId"": ""paramroom1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""Param Room""}";
+        await Client.CreateOrReplaceDigitalTwinAsync("paramroom1", twin);
+
+        var result = await Client
+            .QueryAsync<JsonDocument>(
+                "MATCH (t:Twin { `$dtId`: $id }) RETURN t",
+                new Dictionary<string, object?> { { "id", "paramroom1" } }
+            )
+            .FirstOrDefaultAsync();
+
+        Assert.NotNull(result);
+        Assert.Equal(
+            "paramroom1",
+            result.RootElement.GetProperty("t").GetProperty("$dtId").GetString()
+        );
+    }
+
+    [Fact]
+    public async Task QueryAsync_WithParameters_NumericParam_ReturnsFilteredTwin()
+    {
+        await IntializeAsync();
+        await Client.CreateOrReplaceDigitalTwinAsync(
+            "numparam1",
+            @"{""$dtId"": ""numparam1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:tempsensor;1""}, ""name"": ""Sensor A"", ""temperature"": 42.5}"
+        );
+
+        var result = await Client
+            .QueryAsync<JsonDocument>(
+                "MATCH (t:Twin) WHERE t.temperature > $minTemp RETURN t",
+                new Dictionary<string, object?> { { "minTemp", 40.0 } }
+            )
+            .FirstOrDefaultAsync();
+
+        Assert.NotNull(result);
+        Assert.Equal(
+            "numparam1",
+            result.RootElement.GetProperty("t").GetProperty("$dtId").GetString()
+        );
+    }
+
+    [Fact]
+    public async Task QueryAsync_WithParameters_BoolParam_ReturnsFilteredTwin()
+    {
+        await IntializeAsync();
+        await Client.CreateOrReplaceDigitalTwinAsync(
+            "boolparam1",
+            @"{""$dtId"": ""boolparam1"", ""$metadata"": {""$model"": ""dtmi:com:contoso:HabitablePlanet;1""}, ""name"": ""Earth 2.0"", ""hasLife"": true}"
+        );
+
+        var result = await Client
+            .QueryAsync<JsonDocument>(
+                "MATCH (t:Twin) WHERE t.hasLife = $alive RETURN t",
+                new Dictionary<string, object?> { { "alive", true } }
+            )
+            .FirstOrDefaultAsync();
+
+        Assert.NotNull(result);
+        Assert.Equal(
+            "boolparam1",
+            result.RootElement.GetProperty("t").GetProperty("$dtId").GetString()
+        );
+
+        // Query with false should return nothing
+        var noResult = await Client
+            .QueryAsync<JsonDocument>(
+                "MATCH (t:Twin) WHERE t.hasLife = $alive RETURN t",
+                new Dictionary<string, object?> { { "alive", false } }
+            )
+            .FirstOrDefaultAsync();
+
+        Assert.Null(noResult);
+    }
+
+    [Fact]
+    public async Task QueryAsync_WithParameters_MultipleParams_ReturnsFilteredTwin()
+    {
+        await IntializeAsync();
+        await Client.CreateOrReplaceDigitalTwinAsync(
+            "multiparam1",
+            @"{""$dtId"": ""multiparam1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:tempsensor;1""}, ""name"": ""Multi Sensor"", ""temperature"": 36.0, ""humidity"": 0.7}"
+        );
+
+        var result = await Client
+            .QueryAsync<JsonDocument>(
+                "MATCH (t:Twin) WHERE t.temperature > $minTemp AND t.humidity > $minHumidity RETURN t",
+                new Dictionary<string, object?>
+                {
+                    { "minTemp", 30.0 },
+                    { "minHumidity", 0.5 },
+                }
+            )
+            .FirstOrDefaultAsync();
+
+        Assert.NotNull(result);
+        Assert.Equal(
+            "multiparam1",
+            result.RootElement.GetProperty("t").GetProperty("$dtId").GetString()
+        );
+    }
+
+    [Fact]
+    public async Task QueryAsync_WithParameters_NullParam_ReturnsFilteredTwin()
+    {
+        await IntializeAsync();
+        await Client.CreateOrReplaceDigitalTwinAsync(
+            "nullparam1",
+            @"{""$dtId"": ""nullparam1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": null}"
+        );
+
+        var result = await Client
+            .QueryAsync<JsonDocument>(
+                "MATCH (t:Twin) WHERE t.name IS $val RETURN t",
+                new Dictionary<string, object?> { { "val", null } }
+            )
+            .FirstOrDefaultAsync();
+
+        Assert.NotNull(result);
+        Assert.Equal(
+            "nullparam1",
+            result.RootElement.GetProperty("t").GetProperty("$dtId").GetString()
+        );
+    }
+
+    [Fact]
+    public async Task QueryAsync_WithParameters_ListParam_ReturnsFilteredTwin()
+    {
+        await IntializeAsync();
+        Dictionary<string, string> twins = new()
+        {
+            { "listp1", "{\"$dtId\": \"listp1\", \"$metadata\": {\"$model\": \"dtmi:com:adt:dtsample:room;1\"}, \"name\": \"Room Alpha\"}" },
+            { "listp2", "{\"$dtId\": \"listp2\", \"$metadata\": {\"$model\": \"dtmi:com:adt:dtsample:room;1\"}, \"name\": \"Room Beta\"}" },
+            { "listp3", "{\"$dtId\": \"listp3\", \"$metadata\": {\"$model\": \"dtmi:com:adt:dtsample:room;1\"}, \"name\": \"Room Gamma\"}" },
+        };
+
+        foreach (var twin in twins)
+        {
+            await Client.CreateOrReplaceDigitalTwinAsync(twin.Key, twin.Value);
+        }
+
+        int count = 0;
+        await foreach (
+            var line in Client.QueryAsync<JsonDocument>(
+                "MATCH (t:Twin) WHERE t.`$dtId` IN $ids RETURN t",
+                new Dictionary<string, object?>
+                {
+                    { "ids", new List<string> { "listp1", "listp3" } },
+                }
+            )
+        )
+        {
+            Assert.NotNull(line);
+            count++;
+        }
+        Assert.Equal(2, count);
+    }
+
+    [Fact]
+    public async Task QueryAsync_WithParameters_MapParam_ReturnsFilteredTwin()
+    {
+        await IntializeAsync();
+        await Client.CreateOrReplaceDigitalTwinAsync(
+            "mapparam1",
+            @"{""$dtId"": ""mapparam1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""Room Map"", ""settings"": {""color"": ""blue"", ""size"": 100}}"
+        );
+
+        // Use a map parameter to match the settings property
+        var result = await Client
+            .QueryAsync<JsonDocument>(
+                "MATCH (t:Twin) WHERE t.settings = $settings RETURN t",
+                new Dictionary<string, object?>
+                {
+                    {
+                        "settings",
+                        new Dictionary<string, object?>
+                        {
+                            { "color", "blue" },
+                            { "size", 100 },
+                        }
+                    },
+                }
+            )
+            .FirstOrDefaultAsync();
+
+        Assert.NotNull(result);
+        Assert.Equal(
+            "mapparam1",
+            result.RootElement.GetProperty("t").GetProperty("$dtId").GetString()
+        );
+    }
+
+    [Fact]
+    public async Task QueryAsync_WithParameters_Pagination_PreservesParameters()
+    {
+        await IntializeAsync();
+
+        // Create twins with names that can be filtered by parameter
+        for (int i = 1; i <= 5; i++)
+        {
+            await Client.CreateOrReplaceDigitalTwinAsync(
+                $"paramPageTwin{i}",
+                $"{{\"$dtId\": \"paramPageTwin{i}\", \"$metadata\": {{\"$model\": \"dtmi:com:adt:dtsample:room;1\"}}, \"name\": \"Param Twin {i}\"}}"
+            );
+        }
+
+        var prefix = "paramPageTwin";
+        var firstPage = await Client
+            .QueryAsync<JsonDocument>(
+                "MATCH (t:Twin) WHERE t.`$dtId` STARTS WITH $prefix RETURN t ORDER BY t.`$dtId`",
+                new Dictionary<string, object?> { { "prefix", prefix } }
+            )
+            .AsPages(pageSizeHint: 2)
+            .FirstAsync();
+
+        Assert.NotNull(firstPage);
+        Assert.Equal(2, firstPage.Value.Count());
+        Assert.NotNull(firstPage.ContinuationToken);
+
+        // Second page — the parameters should be carried forward by the continuation token
+        var secondPage = await Client
+            .QueryAsync<JsonDocument>(
+                "MATCH (t:Twin) WHERE t.`$dtId` STARTS WITH $prefix RETURN t ORDER BY t.`$dtId`",
+                null // no need to pass parameters again; they are in the continuation token
+            )
+            .AsPages(firstPage.ContinuationToken, pageSizeHint: 2)
+            .FirstAsync();
+
+        Assert.NotNull(secondPage);
+        Assert.Equal(2, secondPage.Value.Count());
+        Assert.NotNull(secondPage.ContinuationToken);
+
+        // Third page
+        var thirdPage = await Client
+            .QueryAsync<JsonDocument>(
+                string.Empty, // query is embedded in the continuation token
+                null
+            )
+            .AsPages(secondPage.ContinuationToken, pageSizeHint: 2)
+            .FirstAsync();
+
+        Assert.NotNull(thirdPage);
+        Assert.Single(thirdPage.Value);
+        Assert.Null(thirdPage.ContinuationToken);
+    }
+
+    [Fact]
+    public async Task QueryAsync_WithParameters_NoResults_ReturnsEmpty()
+    {
+        await IntializeAsync();
+        await Client.CreateOrReplaceDigitalTwinAsync(
+            "noroom1",
+            @"{""$dtId"": ""noroom1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""Room""}"
+        );
+
+        var result = await Client
+            .QueryAsync<JsonDocument>(
+                "MATCH (t:Twin { `$dtId`: $id }) RETURN t",
+                new Dictionary<string, object?> { { "id", "non_existent" } }
+            )
+            .FirstOrDefaultAsync();
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task QueryAsync_WithParameters_AdtQuery_WorksWithParameters()
+    {
+        // Parameters are only meaningful for raw Cypher queries, but should not break ADT queries.
+        await IntializeAsync();
+        await Client.CreateOrReplaceDigitalTwinAsync(
+            "adtparam1",
+            @"{""$dtId"": ""adtparam1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""ADT Param Room""}"
+        );
+
+        var result = await Client
+            .QueryAsync<JsonDocument>(
+                @"SELECT * FROM DIGITALTWINS WHERE $dtId = 'adtparam1'",
+                new Dictionary<string, object?> { { "ignored", "value" } }
+            )
+            .FirstOrDefaultAsync();
+
+        Assert.NotNull(result);
+        Assert.Equal(
+            "adtparam1",
+            result.RootElement.GetProperty("$dtId").GetString()
+        );
+    }
 }

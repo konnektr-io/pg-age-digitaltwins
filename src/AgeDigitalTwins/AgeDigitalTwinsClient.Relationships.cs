@@ -313,7 +313,7 @@ public partial class AgeDigitalTwinsClient
         // Check if $targetId is present and matches the arguments
         string targetId;
         if (
-            relationshipObject.TryGetPropertyValue("$targetId", out var targetIdNode)
+            relationshipObject.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.RelationshipTargetId, out var targetIdNode)
             && targetIdNode is JsonValue targetIdValue
         )
         {
@@ -329,7 +329,7 @@ public partial class AgeDigitalTwinsClient
         }
         // Check if $sourceId is present and matches the arguments
         if (
-            relationshipObject.TryGetPropertyValue("$sourceId", out var sourceIdNode)
+            relationshipObject.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.RelationshipSourceId, out var sourceIdNode)
             && sourceIdNode is JsonValue sourceIdValue
         )
         {
@@ -347,7 +347,7 @@ public partial class AgeDigitalTwinsClient
         }
         // Check if $relationshipId is present and matches the arguments
         if (
-            relationshipObject.TryGetPropertyValue("$relationshipId", out var relationshipIdNode)
+            relationshipObject.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.RelationshipId, out var relationshipIdNode)
             && relationshipIdNode is JsonValue relationshipIdValue
         )
         {
