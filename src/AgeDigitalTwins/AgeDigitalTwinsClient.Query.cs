@@ -253,95 +253,94 @@ public partial class AgeDigitalTwinsClient
     internal static partial Regex VariableLengthEdgeRegex();
 
     /// <summary>
-    /// Converts an <see cref="Agtype"/> value to a plain .NET object, recursively handling
-    /// arrays so that <see cref="Agtype.IsVertex"/>, <see cref="Agtype.IsEdge"/>, etc.
-    /// are applied to every element.
+    /// Converts an <see cref="Agtype"/> value to a plain .NET object by materializing
+    /// it as a <see cref="JsonElement"/> and walking the JSON tree recursively.
+    /// Vertices and edges (identified by <c>$type: "vertex"</c> or <c>"edge"</c>)
+    /// have their <c>.properties</c> extracted so the output matches ADT's flattened
+    /// twin/relationship format.
     /// </summary>
-    /// <returns>
-    /// A tuple of the converted value and the total number of properties encountered
-    /// (used for query-charge accounting).
-    /// </returns>
-    private static (object? Value, int PropertiesCount) ConvertAgtypeListElementToObject(
-        object? element
-    )
-    {
-        if (element is Agtype agElement)
-            return ConvertAgtypeToObject(agElement);
-        if (element is Vertex vertex)
-            return (vertex.Properties, vertex.Properties.Count);
-        if (element is Edge edge)
-            return (edge.Properties, edge.Properties.Count);
-        if (element is Dictionary<string, object?> dict)
-        {
-            if (dict.TryGetValue("properties", out var propsObj) && propsObj is Dictionary<string, object?> props)
-                return (props, props.Count);
-            return (dict, dict.Count);
-        }
-        if (element is List<object?> nestedList)
-        {
-            var list = new List<object?>();
-            int count = 0;
-            foreach (var nested in nestedList)
-            {
-                var (val, c) = ConvertAgtypeListElementToObject(nested);
-                list.Add(val);
-                count += c;
-            }
-            return (list, count);
-        }
-        return (element, 0);
-    }
-
     private static (object? Value, int PropertiesCount) ConvertAgtypeToObject(Agtype agtype)
     {
-        if (agtype.IsVertex)
-        {
-            var props = agtype.GetVertex().Properties;
-            return (props, props.Count);
-        }
-        if (agtype.IsEdge)
-        {
-            var props = agtype.GetEdge().Properties;
-            return (props, props.Count);
-        }
-        if (agtype.IsArray)
-        {
-            var list = new List<object?>();
-            int count = 0;
-            foreach (var element in agtype.GetList())
-            {
-                var (val, c) = ConvertAgtypeListElementToObject(element);
-                list.Add(val);
-                count += c;
-            }
-            return (list, count);
-        }
-        if (agtype.IsMap)
-        {
-            var dict = agtype.GetMap();
-            return (dict, dict.Count);
-        }
         if (agtype.IsNull)
             return (null, 0);
 
-        var jsonElement = agtype.Get<JsonElement>();
-        if (jsonElement.ValueKind == JsonValueKind.String)
+        var element = agtype.Get<JsonElement>();
+        return ConvertJsonElement(element);
+    }
+
+    private static (object? Value, int PropertiesCount) ConvertJsonElement(JsonElement element)
+    {
+        switch (element.ValueKind)
         {
-            var s = jsonElement.GetString()!;
-            if (bool.TryParse(s, out bool boolVal))
-                return (boolVal, 0);
-            return (s, 0);
+            case JsonValueKind.Null:
+                return (null, 0);
+
+            case JsonValueKind.String:
+            {
+                var s = element.GetString()!;
+                if (bool.TryParse(s, out bool boolVal))
+                    return (boolVal, 0);
+                return (s, 0);
+            }
+
+            case JsonValueKind.Number:
+            {
+                if (element.TryGetInt32(out int intVal))
+                    return (intVal, 0);
+                return (element.GetDouble(), 0);
+            }
+
+            case JsonValueKind.True:
+                return (true, 0);
+
+            case JsonValueKind.False:
+                return (false, 0);
+
+            case JsonValueKind.Object:
+            {
+                // Vertices/edges from AGE have a $type discriminator:
+                // {"$type":"vertex","id":1,"label":"Twin","properties":{...}}
+                if (element.TryGetProperty("$type", out var typeProp))
+                {
+                    var typeStr = typeProp.GetString();
+                    if (typeStr is "vertex" or "edge")
+                    {
+                        if (element.TryGetProperty("properties", out var props))
+                        {
+                            var (val, _) = ConvertJsonElement(props);
+                            if (val is Dictionary<string, object?> dict)
+                                return (dict, dict.Count);
+                        }
+                        return (new Dictionary<string, object?>(), 0);
+                    }
+                }
+                // Regular map / untyped object
+                var result = new Dictionary<string, object?>();
+                int objCount = 0;
+                foreach (var prop in element.EnumerateObject())
+                {
+                    var (val, count) = ConvertJsonElement(prop.Value);
+                    result[prop.Name] = val;
+                    objCount += count;
+                }
+                return (result, objCount);
+            }
+
+            case JsonValueKind.Array:
+            {
+                var list = new List<object?>();
+                int totalCount = 0;
+                foreach (var item in element.EnumerateArray())
+                {
+                    var (val, count) = ConvertJsonElement(item);
+                    list.Add(val);
+                    totalCount += count;
+                }
+                return (list, totalCount);
+            }
+
+            default:
+                return (null, 0);
         }
-        if (jsonElement.ValueKind == JsonValueKind.Number)
-        {
-            if (jsonElement.TryGetInt32(out int intVal))
-                return (intVal, 0);
-            return (jsonElement.GetDouble(), 0);
-        }
-        if (jsonElement.ValueKind is JsonValueKind.True or JsonValueKind.False)
-        {
-            return (jsonElement.ValueKind == JsonValueKind.True, 0);
-        }
-        return (null, 0);
     }
 }
