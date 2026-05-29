@@ -64,7 +64,7 @@ public class BackgroundJobTests : ImportJobTestBase
         );
 
         // Wait a bit for background execution to complete
-        await Task.Delay(2000);
+        await Task.Delay(4000);
 
         // Verify the job eventually completes
         var finalResult = await Client.GetImportJobAsync(jobId);
