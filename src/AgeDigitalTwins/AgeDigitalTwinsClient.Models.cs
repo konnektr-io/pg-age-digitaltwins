@@ -56,25 +56,29 @@ public partial class AgeDigitalTwinsClient
 
         if (options.DependenciesFor != null && options.DependenciesFor.Length > 0)
         {
-            string dependenciesForList = $"['{string.Join("','", options.DependenciesFor)}']";
+            var dependenciesList = options.DependenciesFor.ToList();
             cypher =
-                $@"
-MATCH (m:Model) WHERE m.id IN {dependenciesForList}
-{returnStateMent}
+                @"
+MATCH (m:Model) WHERE m.id IN $dependencies
+" + returnStateMent + @"
 UNION
-UNWIND {dependenciesForList} AS modelId
-MATCH (m1:Model {{id: modelId}})
+UNWIND $dependencies AS modelId
+MATCH (m1:Model {id: modelId})
 UNWIND m1.bases AS dependency
-MATCH (m:Model {{id: dependency}})
-{returnStateMent}";
+MATCH (m:Model {id: dependency})
+" + returnStateMent;
+            return QueryAsync<DigitalTwinsModelData>(
+                cypher,
+                new Dictionary<string, object?> { { "dependencies", dependenciesList } },
+                cancellationToken
+            );
         }
         else
         {
             cypher = @"MATCH (m:Model)";
             cypher += returnStateMent;
+            return QueryAsync<DigitalTwinsModelData>(cypher, cancellationToken);
         }
-
-        return QueryAsync<DigitalTwinsModelData>(cypher, cancellationToken);
     }
 
     /// <summary>
@@ -921,6 +925,8 @@ RETURN COUNT(m) AS deletedCount";
         }
 
         string cypher;
+        var parameters = new Dictionary<string, object?>();
+
         if (vector != null)
         {
             string vectorString = JsonSerializer.Serialize(vector);
@@ -948,6 +954,11 @@ RETURN COUNT(m) AS deletedCount";
                 LIMIT {limit}";
         }
 
+        if (!string.IsNullOrWhiteSpace(query))
+        {
+            parameters["query"] = query!;
+        }
+
         await using var connection = await _dataSource.OpenConnectionAsync(
             TargetSessionAttributes.PreferStandby,
             cancellationToken
@@ -955,7 +966,7 @@ RETURN COUNT(m) AS deletedCount";
 
         await using var command = connection.CreateCypherCommand(
             _graphName, cypher,
-            new Dictionary<string, object?> { { "query", query! } }
+            parameters
         );
 
         var results = new List<DigitalTwinsModelData>();

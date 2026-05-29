@@ -225,19 +225,18 @@ public partial class AgeDigitalTwinsClient
             );
 
         // Check if etag matches if If-Match header is provided
-        if (!string.IsNullOrEmpty(ifMatch) && !ifMatch.Equals("*"))
-        {
-            if (
-                digitalTwin.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.DigitalTwinETag, out JsonNode? etagNode)
+        if (!string.IsNullOrEmpty(ifMatch) 
+                && !ifMatch.Equals("*") 
+                && digitalTwin.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.DigitalTwinETag, out JsonNode? etagNode)
                 && etagNode is JsonValue etagValue
                 && etagValue.GetValueKind() == JsonValueKind.String
-                && !etagValue.ToString().Equals(ifMatch, StringComparison.Ordinal)
-            )
-            {
-                throw new PreconditionFailedException(
-                    $"If-Match: {ifMatch} header value does not match the current ETag value of the digital twin with id {digitalTwinId}"
-                );
-            }
+                && !etagValue.ToString().Equals(ifMatch, StringComparison.Ordinal))
+        {
+            
+            throw new PreconditionFailedException(
+                $"If-Match: {ifMatch} header value does not match the current ETag value of the digital twin with id {digitalTwinId}"
+            );
+            
         }
 
         // Validate that the component exists in the model
