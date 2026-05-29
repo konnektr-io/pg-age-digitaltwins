@@ -325,15 +325,11 @@ public static class DeleteJob
     )
     {
         // Query for a batch of relationships between twins and delete them
-        var query = "MATCH (:Twin)-[r]->(:Twin) RETURN r LIMIT $batchSize";
+        var query = $"MATCH (:Twin)-[r]->(:Twin) RETURN r LIMIT {batchSize}";
         int deletedCount = 0;
 
         await foreach (
-            var relationship in client.QueryAsync<JsonDocument>(
-                query,
-                new Dictionary<string, object?> { { "batchSize", batchSize } },
-                cancellationToken
-            )
+            var relationship in client.QueryAsync<JsonDocument>(query, cancellationToken)
         )
         {
             try
@@ -403,16 +399,10 @@ public static class DeleteJob
     )
     {
         // Query for a batch of twins and delete them
-        var query = "MATCH (t:Twin) RETURN t.`$dtId` as dtId LIMIT $batchSize";
+        var query = $"MATCH (t:Twin) RETURN t.`$dtId` as dtId LIMIT {batchSize}";
         int deletedCount = 0;
 
-        await foreach (
-            var twin in client.QueryAsync<JsonDocument>(
-                query,
-                new Dictionary<string, object?> { { "batchSize", batchSize } },
-                cancellationToken
-            )
-        )
+        await foreach (var twin in client.QueryAsync<JsonDocument>(query, cancellationToken))
         {
             try
             {

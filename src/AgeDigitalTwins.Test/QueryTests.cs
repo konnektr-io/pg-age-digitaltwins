@@ -2274,16 +2274,16 @@ RETURN t";
         await IntializeAsync();
         await Client.CreateOrReplaceDigitalTwinAsync(
             "multiparam1",
-            @"{""$dtId"": ""multiparam1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:tempsensor;1""}, ""name"": ""Multi Sensor"", ""temperature"": 36.0, ""humidity"": 0.7}"
+            @"{""$dtId"": ""multiparam1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:tempsensor;1""}, ""name"": ""Multi Sensor"", ""temperature"": 36.0}"
         );
 
         var result = await Client
             .QueryAsync<JsonDocument>(
-                "MATCH (t:Twin) WHERE t.temperature > $minTemp AND t.humidity > $minHumidity RETURN t",
+                "MATCH (t:Twin) WHERE t.temperature > $minTemp AND t.`$dtId` = $id RETURN t",
                 new Dictionary<string, object?>
                 {
                     { "minTemp", 30.0 },
-                    { "minHumidity", 0.5 },
+                    { "id", "multiparam1" },
                 }
             )
             .FirstOrDefaultAsync();
@@ -2301,13 +2301,13 @@ RETURN t";
         await IntializeAsync();
         await Client.CreateOrReplaceDigitalTwinAsync(
             "nullparam1",
-            @"{""$dtId"": ""nullparam1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": null}"
+            @"{""$dtId"": ""nullparam1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""Room with null check""}"
         );
 
         var result = await Client
             .QueryAsync<JsonDocument>(
-                "MATCH (t:Twin) WHERE t.name IS $val RETURN t",
-                new Dictionary<string, object?> { { "val", null } }
+                "MATCH (t:Twin) WHERE t.`$dtId` = $id AND $val IS NULL RETURN t",
+                new Dictionary<string, object?> { { "id", "nullparam1" }, { "val", null } }
             )
             .FirstOrDefaultAsync();
 
@@ -2316,6 +2316,16 @@ RETURN t";
             "nullparam1",
             result.RootElement.GetProperty("t").GetProperty("$dtId").GetString()
         );
+
+        // Verify that a non-null value in the same position would not match
+        var noResult = await Client
+            .QueryAsync<JsonDocument>(
+                "MATCH (t:Twin) WHERE t.`$dtId` = $id AND $val IS NULL RETURN t",
+                new Dictionary<string, object?> { { "id", "nullparam1" }, { "val", "something" } }
+            )
+            .FirstOrDefaultAsync();
+
+        Assert.Null(noResult);
     }
 
     [Fact]
@@ -2357,21 +2367,22 @@ RETURN t";
         await IntializeAsync();
         await Client.CreateOrReplaceDigitalTwinAsync(
             "mapparam1",
-            @"{""$dtId"": ""mapparam1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""Room Map"", ""settings"": {""color"": ""blue"", ""size"": 100}}"
+            @"{""$dtId"": ""mapparam1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""Room Map"", ""dimensions"": {""length"": 5.0, ""width"": 4.0, ""height"": 3.0}}"
         );
 
-        // Use a map parameter to match the settings property
+        // Use a map parameter to match the dimensions property
         var result = await Client
             .QueryAsync<JsonDocument>(
-                "MATCH (t:Twin) WHERE t.settings = $settings RETURN t",
+                "MATCH (t:Twin) WHERE t.dimensions = $dims RETURN t",
                 new Dictionary<string, object?>
                 {
                     {
-                        "settings",
+                        "dims",
                         new Dictionary<string, object?>
                         {
-                            { "color", "blue" },
-                            { "size", 100 },
+                            { "length", 5.0 },
+                            { "width", 4.0 },
+                            { "height", 3.0 },
                         }
                     },
                 }

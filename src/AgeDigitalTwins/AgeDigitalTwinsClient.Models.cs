@@ -925,10 +925,7 @@ RETURN COUNT(m) AS deletedCount";
         }
 
         string cypher;
-        var parameters = new Dictionary<string, object?>
-        {
-            { "limit", limit },
-        };
+        var parameters = new Dictionary<string, object?>();
 
         if (vector != null)
         {
@@ -943,7 +940,7 @@ RETURN COUNT(m) AS deletedCount";
                 {whereClause}
                 RETURN m
                 ORDER BY l2_distance(m.embedding, {vectorString}::vector) ASC
-                LIMIT $limit";
+                LIMIT {limit}";
         }
         else
         {
@@ -954,7 +951,7 @@ RETURN COUNT(m) AS deletedCount";
                    OR toLower(toString(m.description)) CONTAINS toLower($query)
                    OR toLower(m.id) CONTAINS toLower($query)
                 RETURN m
-                LIMIT $limit";
+                LIMIT {limit}";
         }
 
         if (!string.IsNullOrWhiteSpace(query))

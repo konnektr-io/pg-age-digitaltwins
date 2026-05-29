@@ -1273,12 +1273,9 @@ SET t = twin";
             {whereClause}
             RETURN t
             ORDER BY l2_distance(t.{embeddingProperty}, {vectorString}::vector) ASC
-            LIMIT $limit";
+            LIMIT {limit}";
 
-        var parameters = new Dictionary<string, object?>
-        {
-            { "limit", limit },
-        };
+        var parameters = new Dictionary<string, object?>();
         if (!string.IsNullOrEmpty(modelFilter))
         {
             parameters["modelFilter"] = modelFilter;
