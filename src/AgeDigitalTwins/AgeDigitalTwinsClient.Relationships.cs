@@ -706,26 +706,26 @@ SET rel = relationship";
 
                 // Extract and validate required properties
                 var sourceId =
-                    jsonObject.TryGetPropertyValue("$sourceId", out var sourceIdNode)
+                    jsonObject.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.RelationshipSourceId, out var sourceIdNode)
                     && sourceIdNode is JsonValue sourceIdValue
                         ? sourceIdValue.GetValue<string>()
                         : null;
 
                 var targetId =
-                    jsonObject.TryGetPropertyValue("$targetId", out var targetIdNode)
+                    jsonObject.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.RelationshipTargetId, out var targetIdNode)
                     && targetIdNode is JsonValue targetIdValue
                         ? targetIdValue.GetValue<string>()
                         : null;
 
                 var relationshipId =
-                    jsonObject.TryGetPropertyValue("$relationshipId", out var relationshipIdNode)
+                    jsonObject.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.RelationshipId, out var relationshipIdNode)
                     && relationshipIdNode is JsonValue relationshipIdValue
                         ? relationshipIdValue.GetValue<string>()
                         : null;
 
                 var relationshipName =
                     jsonObject.TryGetPropertyValue(
-                        "$relationshipName",
+                        DigitalTwinsJsonPropertyNames.RelationshipName,
                         out var relationshipNameNode
                     ) && relationshipNameNode is JsonValue relationshipNameValue
                         ? relationshipNameValue.GetValue<string>()
@@ -790,10 +790,10 @@ SET rel = relationship";
                 }
 
                 // Ensure all required properties are set in the JSON
-                jsonObject["$sourceId"] = sourceId;
-                jsonObject["$targetId"] = targetId;
-                jsonObject["$relationshipId"] = relationshipId;
-                jsonObject["$relationshipName"] = relationshipName;
+                jsonObject[DigitalTwinsJsonPropertyNames.RelationshipSourceId] = sourceId;
+                jsonObject[DigitalTwinsJsonPropertyNames.RelationshipTargetId] = targetId;
+                jsonObject[DigitalTwinsJsonPropertyNames.RelationshipId] = relationshipId;
+                jsonObject[DigitalTwinsJsonPropertyNames.RelationshipName] = relationshipName;
 
                 validRelationships.Add((jsonObject, relationshipName));
             }
@@ -854,9 +854,9 @@ RETURN t.`$dtId` AS twinId";
         // Validate each relationship against existing twins
         foreach (var item in validRelationships)
         {
-            var sourceId = item.jsonObject["$sourceId"]?.GetValue<string>();
-            var targetId = item.jsonObject["$targetId"]?.GetValue<string>();
-            var relationshipId = item.jsonObject["$relationshipId"]?.GetValue<string>();
+            var sourceId = item.jsonObject[DigitalTwinsJsonPropertyNames.RelationshipSourceId]?.GetValue<string>();
+            var targetId = item.jsonObject[DigitalTwinsJsonPropertyNames.RelationshipTargetId]?.GetValue<string>();
+            var relationshipId = item.jsonObject[DigitalTwinsJsonPropertyNames.RelationshipId]?.GetValue<string>();
 
             // Check if source twin exists
             if (string.IsNullOrEmpty(sourceId) || !existingTwins.Contains(sourceId))
