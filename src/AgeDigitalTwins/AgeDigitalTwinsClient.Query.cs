@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -25,6 +26,25 @@ public partial class AgeDigitalTwinsClient
         CancellationToken cancellationToken = default
     )
     {
+        return QueryAsync<T>(query, null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Executes a parameterized query asynchronously and returns the results as an asynchronous enumerable.
+    /// </summary>
+    /// <typeparam name="T">The type to which the query results will be deserialized.</typeparam>
+    /// <param name="query">The query to execute.</param>
+    /// <param name="parameters">Optional parameters for parameterized Cypher queries.
+    /// Keys correspond to <c>$param</c> placeholders in the query string.
+    /// Values can be primitives, objects, or arrays.</param>
+    /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
+    /// <returns>An asynchronous enumerable of query results.</returns>
+    public virtual AsyncPageable<T?> QueryAsync<T>(
+        string query,
+        IReadOnlyDictionary<string, object?>? parameters,
+        CancellationToken cancellationToken = default
+    )
+    {
         return new AsyncPageable<T?>(
             async (continuationToken, maxItemsPerPage, ct) =>
             {
@@ -36,6 +56,12 @@ public partial class AgeDigitalTwinsClient
                 activity?.SetTag("graphName", _graphName);
                 try
                 {
+                    // Determine parameters: use those from continuation token (pagination),
+                    // otherwise use the ones passed from the initial call
+                    var normalizedParams = NormalizeParameters(
+                        continuationToken?.Parameters ?? parameters
+                    );
+
                     string cypher;
                     if (continuationToken != null)
                     {
@@ -127,7 +153,9 @@ public partial class AgeDigitalTwinsClient
                             : Npgsql.TargetSessionAttributes.PreferStandby,
                         ct
                     );
-                    await using var command = connection.CreateCypherCommand(_graphName, cypher);
+                    await using var command = normalizedParams != null
+                        ? connection.CreateCypherCommand(_graphName, cypher, normalizedParams)
+                        : connection.CreateCypherCommand(_graphName, cypher);
 
                     await using var reader =
                         await command.ExecuteReaderAsync(ct)
@@ -183,6 +211,7 @@ public partial class AgeDigitalTwinsClient
                             {
                                 RowNumber = rowNumber,
                                 Query = nextContinuationQuery,
+                                Parameters = normalizedParams,
                             };
 
                     int charge = results.Count;
@@ -340,5 +369,53 @@ public partial class AgeDigitalTwinsClient
             default:
                 return (null, 0);
         }
+    }
+
+    /// <summary>
+    /// Normalizes query parameters: converts any <see cref="JsonElement"/> values to proper CLR types
+    /// (string, int, double, bool, Dictionary&lt;string, object?&gt;, List&lt;object?&gt;)
+    /// so they can be safely passed to Npgsql.Age's <c>CreateCypherCommand</c>.
+    /// Non-JsonElement values (e.g. primitives, lists, dictionaries already in CLR form) are passed through.
+    /// </summary>
+    internal static Dictionary<string, object?>? NormalizeParameters(
+        IReadOnlyDictionary<string, object?>? parameters
+    )
+    {
+        if (parameters == null)
+            return null;
+
+        var dict = new Dictionary<string, object?>(parameters.Count);
+        foreach (var kvp in parameters)
+        {
+            dict[kvp.Key] = NormalizeParameterValue(kvp.Value);
+        }
+        return dict;
+    }
+
+    private static object? NormalizeParameterValue(object? value)
+    {
+        if (value is JsonElement je)
+            return JsonElementToClrValue(je);
+        return value;
+    }
+
+    private static object? JsonElementToClrValue(JsonElement element)
+    {
+        return element.ValueKind switch
+        {
+            JsonValueKind.String => element.GetString(),
+            JsonValueKind.Number => element.TryGetInt32(out int i) ? i : element.GetDouble(),
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            JsonValueKind.Null => null,
+            JsonValueKind.Object => element
+                .EnumerateObject()
+                .ToDictionary(p => p.Name, p => JsonElementToClrValue(p.Value)),
+            JsonValueKind.Array => element
+                .EnumerateArray()
+                .Select(JsonElementToClrValue)
+                .ToList(),
+            _ => null,
+        };
     }
 }

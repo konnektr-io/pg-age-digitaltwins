@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -21,6 +22,13 @@ public class ContinuationToken
     /// </summary>
     [JsonPropertyName("_q")]
     public required string Query { get; set; }
+
+    /// <summary>
+    /// The cypher query parameters.
+    /// </summary>
+    [JsonPropertyName("_p")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Dictionary<string, object?>? Parameters { get; set; }
 
     public static string Serialize(ContinuationToken token)
     {

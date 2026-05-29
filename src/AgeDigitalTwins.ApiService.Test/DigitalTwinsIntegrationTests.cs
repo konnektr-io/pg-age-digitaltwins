@@ -313,4 +313,153 @@ public class DigitalTwinsIntegrationTests : IAsyncLifetime
         Assert.Contains("paginationAllCrater2", allTwinIds);
         Assert.Contains("paginationAllCrater3", allTwinIds);
     }
+
+    [Fact]
+    public async Task Query_WithParameters_ReturnsFilteredTwin()
+    {
+        // Arrange
+        var twinResponse = await _httpClient!.PutAsync(
+            "/digitaltwins/queryParamTwin1",
+            new StringContent(
+                """{"$dtId": "queryParamTwin1", "$metadata": {"$model": "dtmi:com:adt:dtsample:room;1"}, "name": "Param Room"}""",
+                Encoding.UTF8,
+                "application/json"
+            )
+        );
+        twinResponse.EnsureSuccessStatusCode();
+
+        // Act
+        var queryBody = new JsonObject
+        {
+            ["query"] = "MATCH (t:Twin { `$dtId`: $id }) RETURN t",
+            ["parameters"] = new JsonObject { ["id"] = "queryParamTwin1" },
+        };
+        var request = new HttpRequestMessage(HttpMethod.Post, "/query");
+        request.Content = new StringContent(
+            queryBody.ToJsonString(),
+            Encoding.UTF8,
+            "application/json"
+        );
+        var response = await _httpClient!.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+
+        string content = await response.Content.ReadAsStringAsync();
+        JsonDocument json = JsonDocument.Parse(content);
+        var results = json.RootElement.GetProperty("value").EnumerateArray().ToList();
+
+        // Assert
+        Assert.Single(results);
+        Assert.Equal(
+            "queryParamTwin1",
+            results[0].GetProperty("t").GetProperty("$dtId").GetString()
+        );
+    }
+
+    [Fact]
+    public async Task Query_WithParameters_NumericParam_ReturnsFilteredTwin()
+    {
+        // Arrange
+        var twinResponse = await _httpClient!.PutAsync(
+            "/digitaltwins/numParamTwin1",
+            new StringContent(
+                """{"$dtId": "numParamTwin1", "$metadata": {"$model": "dtmi:com:adt:dtsample:tempsensor;1"}, "name": "Temp Sensor", "temperature": 37.5}""",
+                Encoding.UTF8,
+                "application/json"
+            )
+        );
+        twinResponse.EnsureSuccessStatusCode();
+
+        // Act — use a numeric parameter bound to a Cypher placeholder
+        var queryBody = new JsonObject
+        {
+            ["query"] = "MATCH (t:Twin) WHERE t.temperature > $minTemp RETURN t",
+            ["parameters"] = new JsonObject { ["minTemp"] = 30.0 },
+        };
+        var request = new HttpRequestMessage(HttpMethod.Post, "/query");
+        request.Content = new StringContent(
+            queryBody.ToJsonString(),
+            Encoding.UTF8,
+            "application/json"
+        );
+        var response = await _httpClient!.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+
+        string content = await response.Content.ReadAsStringAsync();
+        JsonDocument json = JsonDocument.Parse(content);
+        var results = json.RootElement.GetProperty("value").EnumerateArray().ToList();
+
+        Assert.Single(results);
+        Assert.Equal(
+            "numParamTwin1",
+            results[0].GetProperty("t").GetProperty("$dtId").GetString()
+        );
+    }
+
+    [Fact]
+    public async Task Query_WithParameters_ContinuationToken_CarriesParameters()
+    {
+        // Arrange — create twins that can be filtered by a parameter
+        for (int i = 1; i <= 3; i++)
+        {
+            var twinResponse = await _httpClient!.PutAsync(
+                $"/digitaltwins/ctParamTwin{i}",
+                new StringContent(
+                    $$"""{"$dtId": "ctParamTwin{{i}}", "$metadata": {"$model": "dtmi:com:adt:dtsample:room;1"}, "name": "CT Twin {{i}}"}""",
+                    Encoding.UTF8,
+                    "application/json"
+                )
+            );
+            twinResponse.EnsureSuccessStatusCode();
+        }
+
+        string prefix = "ctParamTwin";
+
+        // Act — first page with parameter
+        var queryBody = new JsonObject
+        {
+            ["query"] = "MATCH (t:Twin) WHERE t.`$dtId` STARTS WITH $prefix RETURN t ORDER BY t.`$dtId`",
+            ["parameters"] = new JsonObject { ["prefix"] = prefix },
+        };
+        var request = new HttpRequestMessage(HttpMethod.Post, "/query");
+        request.Headers.Add("max-items-per-page", "2");
+        request.Content = new StringContent(
+            queryBody.ToJsonString(),
+            Encoding.UTF8,
+            "application/json"
+        );
+        var response = await _httpClient!.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+
+        string content = await response.Content.ReadAsStringAsync();
+        JsonDocument firstPage = JsonDocument.Parse(content);
+
+        var firstResults = firstPage.RootElement.GetProperty("value").EnumerateArray().ToList();
+        Assert.Equal(2, firstResults.Count);
+        Assert.True(
+            firstPage.RootElement.TryGetProperty("continuationToken", out var ctEl),
+            "Expected continuationToken"
+        );
+
+        // Second page — only supply continuationToken, no parameters
+        var queryBody2 = new JsonObject
+        {
+            ["continuationToken"] = ctEl.GetString()!,
+        };
+        var request2 = new HttpRequestMessage(HttpMethod.Post, "/query");
+        request2.Headers.Add("max-items-per-page", "2");
+        request2.Content = new StringContent(
+            queryBody2.ToJsonString(),
+            Encoding.UTF8,
+            "application/json"
+        );
+        var response2 = await _httpClient!.SendAsync(request2);
+        response2.EnsureSuccessStatusCode();
+
+        string content2 = await response2.Content.ReadAsStringAsync();
+        JsonDocument secondPage = JsonDocument.Parse(content2);
+
+        var secondResults = secondPage.RootElement.GetProperty("value").EnumerateArray().ToList();
+        Assert.Single(secondResults);
+        Assert.Equal("ctParamTwin3", secondResults[0].GetProperty("t").GetProperty("$dtId").GetString());
+    }
 }

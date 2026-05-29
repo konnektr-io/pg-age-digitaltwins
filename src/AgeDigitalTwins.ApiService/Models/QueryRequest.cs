@@ -22,4 +22,14 @@ public class QueryRequest
     [JsonPropertyName("continuationToken")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ContinuationToken { get; set; }
+
+    /// <summary>
+    /// Optional parameters for parameterized Cypher queries.
+    /// Keys correspond to $param placeholders in the query string.
+    /// Values can be primitives, objects, or arrays.
+    /// Only used for the initial query; continuation tokens carry parameters forward.
+    /// </summary>
+    [JsonPropertyName("parameters")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Dictionary<string, object?>? Parameters { get; set; }
 }
