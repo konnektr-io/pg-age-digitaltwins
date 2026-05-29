@@ -494,7 +494,9 @@ SET m = model";
                             {
                                 foreach (var desc in descendantsAgtype.Value.GetList())
                                 {
-                                    if (desc is Agtype descAgtype)
+                                    if (desc is string descString)
+                                        existingDescendants.Add(descString);
+                                    else if (desc is Agtype descAgtype)
                                         existingDescendants.Add(descAgtype.GetString());
                                 }
                             }

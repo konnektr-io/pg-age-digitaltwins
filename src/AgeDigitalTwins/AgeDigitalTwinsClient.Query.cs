@@ -261,6 +261,33 @@ public partial class AgeDigitalTwinsClient
     /// A tuple of the converted value and the total number of properties encountered
     /// (used for query-charge accounting).
     /// </returns>
+    private static (object? Value, int PropertiesCount) ConvertAgtypeListElementToObject(
+        object? element
+    )
+    {
+        if (element is Agtype agElement)
+            return ConvertAgtypeToObject(agElement);
+        if (element is Vertex vertex)
+            return (vertex.Properties, vertex.Properties.Count);
+        if (element is Edge edge)
+            return (edge.Properties, edge.Properties.Count);
+        if (element is Dictionary<string, object?> dict)
+            return (dict, dict.Count);
+        if (element is List<object?> nestedList)
+        {
+            var list = new List<object?>();
+            int count = 0;
+            foreach (var nested in nestedList)
+            {
+                var (val, c) = ConvertAgtypeListElementToObject(nested);
+                list.Add(val);
+                count += c;
+            }
+            return (list, count);
+        }
+        return (element, 0);
+    }
+
     private static (object? Value, int PropertiesCount) ConvertAgtypeToObject(Agtype agtype)
     {
         if (agtype.IsVertex)
@@ -279,9 +306,7 @@ public partial class AgeDigitalTwinsClient
             int count = 0;
             foreach (var element in agtype.GetList())
             {
-                if (element is not Agtype agElement)
-                    continue;
-                var (val, c) = ConvertAgtypeToObject(agElement);
+                var (val, c) = ConvertAgtypeListElementToObject(element);
                 list.Add(val);
                 count += c;
             }
