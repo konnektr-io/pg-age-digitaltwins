@@ -6,7 +6,7 @@ namespace AgeDigitalTwins;
 /// <summary>
 /// String constants for use in diagnostics and telemetry (ActivitySource, OpenTelemetry).
 /// </summary>
-internal static class DiagnosticConstants
+public static class DiagnosticConstants
 {
     /// <summary>
     /// The name of the exception event in Activity tracing.

@@ -3,6 +3,7 @@ using System.Net.Sockets;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using AgeDigitalTwins;
 using AgeDigitalTwins.Events.Abstractions;
 using AgeDigitalTwins.Events.Core.Events;
 using Npgsql;
@@ -541,13 +542,13 @@ public class AgeDigitalTwinsReplication(
                     transactionActivity?.SetStatus(ActivityStatusCode.Error, ex.Message);
                     transactionActivity?.AddEvent(
                         new ActivityEvent(
-                            "Exception",
+                            DiagnosticConstants.ActivityEventException,
                             default,
                             new ActivityTagsCollection
                             {
-                                { "exception.type", ex.GetType().FullName },
-                                { "exception.message", ex.Message },
-                                { "exception.stacktrace", ex.StackTrace },
+                                { DiagnosticConstants.ActivityTagExceptionType, ex.GetType().FullName },
+                                { DiagnosticConstants.ActivityTagExceptionMessage, ex.Message },
+                                { DiagnosticConstants.ActivityTagExceptionStackTrace, ex.StackTrace },
                             }
                         )
                     );
