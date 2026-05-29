@@ -30,13 +30,19 @@ public partial class AgeDigitalTwinsClient
         CancellationToken cancellationToken = default
     )
     {
-        string cypher =
-            $"MATCH (:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})-[rel {{`$relationshipId`: '{relationshipId.Replace("'", "\\'")}'}}]->(:Twin) RETURN rel";
+        string cypher = "MATCH (:Twin {`$dtId`: $sourceId})-[rel {`$relationshipId`: $relId}]->(:Twin) RETURN rel";
         await using var connection = await _dataSource.OpenConnectionAsync(
             TargetSessionAttributes.PreferStandby,
             cancellationToken
         );
-        await using var command = connection.CreateCypherCommand(_graphName, cypher);
+        await using var command = connection.CreateCypherCommand(
+            _graphName, cypher,
+            new Dictionary<string, object?>
+            {
+                { "sourceId", digitalTwinId },
+                { "relId", relationshipId },
+            }
+        );
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         return await reader.ReadAsync(cancellationToken);
     }
@@ -64,19 +70,25 @@ public partial class AgeDigitalTwinsClient
 
         try
         {
-            string cypher =
-                $"MATCH (:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})-[rel {{`$relationshipId`: '{relationshipId.Replace("'", "\\'")}'}}]->(:Twin) RETURN rel";
+            string cypher = "MATCH (:Twin {`$dtId`: $sourceId})-[rel {`$relationshipId`: $relId}]->(:Twin) RETURN rel";
             await using var connection = await _dataSource.OpenConnectionAsync(
                 Npgsql.TargetSessionAttributes.PreferStandby,
                 cancellationToken
             );
-            await using var command = connection.CreateCypherCommand(_graphName, cypher);
+            await using var command = connection.CreateCypherCommand(
+                _graphName, cypher,
+                new Dictionary<string, object?>
+                {
+                    { "sourceId", digitalTwinId },
+                    { "relId", relationshipId },
+                }
+            );
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
             if (await reader.ReadAsync(cancellationToken))
             {
                 var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
-                var edge = (Edge)agResult;
+                var edge = (Edge)agResult!;
                 return JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(edge.Properties));
             }
             else
@@ -91,13 +103,13 @@ public partial class AgeDigitalTwinsClient
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             activity?.AddEvent(
                 new ActivityEvent(
-                    "Exception",
+                    DiagnosticConstants.ActivityEventException,
                     default,
                     new ActivityTagsCollection
                     {
-                        { "exception.type", ex.GetType().FullName },
-                        { "exception.message", ex.Message },
-                        { "exception.stacktrace", ex.StackTrace },
+                        { DiagnosticConstants.ActivityTagExceptionType, ex.GetType().FullName },
+                        { DiagnosticConstants.ActivityTagExceptionMessage, ex.Message },
+                        { DiagnosticConstants.ActivityTagExceptionStackTrace, ex.StackTrace },
                     }
                 )
             );
@@ -140,13 +152,13 @@ public partial class AgeDigitalTwinsClient
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             activity?.AddEvent(
                 new ActivityEvent(
-                    "Exception",
+                    DiagnosticConstants.ActivityEventException,
                     default,
                     new ActivityTagsCollection
                     {
-                        { "exception.type", ex.GetType().FullName },
-                        { "exception.message", ex.Message },
-                        { "exception.stacktrace", ex.StackTrace },
+                        { DiagnosticConstants.ActivityTagExceptionType, ex.GetType().FullName },
+                        { DiagnosticConstants.ActivityTagExceptionMessage, ex.Message },
+                        { DiagnosticConstants.ActivityTagExceptionStackTrace, ex.StackTrace },
                     }
                 )
             );
@@ -176,6 +188,7 @@ public partial class AgeDigitalTwinsClient
         {
             string cypher =
                 $@"MATCH (:Twin)-[rel]->(:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}}) RETURN *";
+
             return QueryAsync<T>(cypher, cancellationToken);
         }
         catch (Exception ex)
@@ -183,13 +196,13 @@ public partial class AgeDigitalTwinsClient
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             activity?.AddEvent(
                 new ActivityEvent(
-                    "Exception",
+                    DiagnosticConstants.ActivityEventException,
                     default,
                     new ActivityTagsCollection
                     {
-                        { "exception.type", ex.GetType().FullName },
-                        { "exception.message", ex.Message },
-                        { "exception.stacktrace", ex.StackTrace },
+                        { DiagnosticConstants.ActivityTagExceptionType, ex.GetType().FullName },
+                        { DiagnosticConstants.ActivityTagExceptionMessage, ex.Message },
+                        { DiagnosticConstants.ActivityTagExceptionStackTrace, ex.StackTrace },
                     }
                 )
             );
@@ -243,13 +256,13 @@ public partial class AgeDigitalTwinsClient
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             activity?.AddEvent(
                 new ActivityEvent(
-                    "Exception",
+                    DiagnosticConstants.ActivityEventException,
                     default,
                     new ActivityTagsCollection
                     {
-                        { "exception.type", ex.GetType().FullName },
-                        { "exception.message", ex.Message },
-                        { "exception.stacktrace", ex.StackTrace },
+                        { DiagnosticConstants.ActivityTagExceptionType, ex.GetType().FullName },
+                        { DiagnosticConstants.ActivityTagExceptionMessage, ex.Message },
+                        { DiagnosticConstants.ActivityTagExceptionStackTrace, ex.StackTrace },
                     }
                 )
             );
@@ -374,20 +387,26 @@ public partial class AgeDigitalTwinsClient
         relationshipObject["$relationshipId"] = relationshipId;
         // Set new etag
         string newEtag = ETagGenerator.GenerateEtag($"{digitalTwinId}-{relationshipId}", now);
-        relationshipObject["$etag"] = newEtag;
+        relationshipObject[DigitalTwinsJsonPropertyNames.DigitalTwinETag] = newEtag;
 
-        string updatedRelationshipJson = JsonSerializer.Serialize(
-            relationshipObject,
-            serializerOptions
-        );
+        string updatedRelJson = JsonSerializer.Serialize(relationshipObject);
 
         string cypher =
-            $@"WITH '{updatedRelationshipJson}'::cstring::agtype as relationship
-MATCH (source:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}}),(target:Twin {{`$dtId`: '{targetId.Replace("'", "\\'")}'}})
-MERGE (source)-[rel:{relationshipName} {{`$relationshipId`: '{relationshipId.Replace("'", "\\'")}'}}]->(target)
+            @"WITH $relJson::cstring::agtype as relationship
+MATCH (source:Twin {`$dtId`: $sourceId}),(target:Twin {`$dtId`: $targetId})
+MERGE (source)-[rel:" + relationshipName + @" {`$relationshipId`: $relId}]->(target)
 SET rel = relationship
 RETURN rel";
-        await using var command = connection.CreateCypherCommand(_graphName, cypher);
+        await using var command = connection.CreateCypherCommand(
+            _graphName, cypher,
+            new Dictionary<string, object?>
+            {
+                { "sourceId", digitalTwinId },
+                { "targetId", targetId },
+                { "relId", relationshipId },
+                { "relJson", updatedRelJson },
+            }
+        );
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
         if (await reader.ReadAsync(cancellationToken))
@@ -453,7 +472,7 @@ RETURN rel";
             if (!string.IsNullOrEmpty(ifMatch) && !ifMatch.Equals("*"))
             {
                 if (
-                    currentRel.TryGetPropertyValue("$etag", out var etagNode)
+                    currentRel.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.DigitalTwinETag, out var etagNode)
                     && etagNode is JsonValue etagValue
                     && etagValue.GetValueKind() == JsonValueKind.String
                     && !etagValue.ToString().Equals(ifMatch, StringComparison.OrdinalIgnoreCase)
@@ -489,24 +508,30 @@ RETURN rel";
             // TODO: Add validation logic
 
             // Update $etag
-            patchedRel["$etag"] = ETagGenerator.GenerateEtag(
+            patchedRel[DigitalTwinsJsonPropertyNames.DigitalTwinETag] = ETagGenerator.GenerateEtag(
                 $"{digitalTwinId}-{relationshipId}",
                 now
             );
 
-            // Replace the entire relationship in the database
-            string updatedRelJson = JsonSerializer
-                .Serialize(patchedRel, serializerOptions)
-                .Replace("'", "\\'");
+            string updatedRelJson = JsonSerializer.Serialize(patchedRel);
+
             string cypher =
-                $@"WITH '{updatedRelJson}'::cstring::agtype AS relationship
-MATCH (:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})-[rel {{`$relationshipId`: '{relationshipId.Replace("'", "\\'")}'}}]->(:Twin)
+                @"WITH $relJson::cstring::agtype as relationship
+MATCH (:Twin {`$dtId`: $sourceId})-[rel {`$relationshipId`: $relId}]->(:Twin)
 SET rel = relationship";
             await using var connection = await _dataSource.OpenConnectionAsync(
                 Npgsql.TargetSessionAttributes.ReadWrite,
                 cancellationToken
             );
-            await using var command = connection.CreateCypherCommand(_graphName, cypher);
+            await using var command = connection.CreateCypherCommand(
+                _graphName, cypher,
+                new Dictionary<string, object?>
+                {
+                    { "sourceId", digitalTwinId },
+                    { "relId", relationshipId },
+                    { "relJson", updatedRelJson },
+                }
+            );
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
         catch (Exception ex)
@@ -514,13 +539,13 @@ SET rel = relationship";
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             activity?.AddEvent(
                 new ActivityEvent(
-                    "Exception",
+                    DiagnosticConstants.ActivityEventException,
                     default,
                     new ActivityTagsCollection
                     {
-                        { "exception.type", ex.GetType().FullName },
-                        { "exception.message", ex.Message },
-                        { "exception.stacktrace", ex.StackTrace },
+                        { DiagnosticConstants.ActivityTagExceptionType, ex.GetType().FullName },
+                        { DiagnosticConstants.ActivityTagExceptionMessage, ex.Message },
+                        { DiagnosticConstants.ActivityTagExceptionStackTrace, ex.StackTrace },
                     }
                 )
             );
@@ -550,19 +575,25 @@ SET rel = relationship";
 
         try
         {
-            string cypher =
-                $"MATCH (:Twin {{`$dtId`: '{digitalTwinId.Replace("'", "\\'")}'}})-[rel {{`$relationshipId`: '{relationshipId.Replace("'", "\\'")}'}}]->(:Twin) DELETE rel RETURN COUNT(rel) AS deletedCount";
+            string cypher = "MATCH (:Twin {`$dtId`: $sourceId})-[rel {`$relationshipId`: $relId}]->(:Twin) DELETE rel RETURN COUNT(rel) AS deletedCount";
             await using var connection = await _dataSource.OpenConnectionAsync(
                 TargetSessionAttributes.ReadWrite,
                 cancellationToken
             );
-            await using var command = connection.CreateCypherCommand(_graphName, cypher);
+            await using var command = connection.CreateCypherCommand(
+                _graphName, cypher,
+                new Dictionary<string, object?>
+                {
+                    { "sourceId", digitalTwinId },
+                    { "relId", relationshipId },
+                }
+            );
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
             int rowsAffected = 0;
             if (await reader.ReadAsync(cancellationToken))
             {
                 var agResult = await reader.GetFieldValueAsync<Agtype?>(0).ConfigureAwait(false);
-                rowsAffected = (int)agResult;
+                rowsAffected = (int)agResult!;
             }
             if (rowsAffected <= 0)
             {
@@ -576,13 +607,13 @@ SET rel = relationship";
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             activity?.AddEvent(
                 new ActivityEvent(
-                    "Exception",
+                    DiagnosticConstants.ActivityEventException,
                     default,
                     new ActivityTagsCollection
                     {
-                        { "exception.type", ex.GetType().FullName },
-                        { "exception.message", ex.Message },
-                        { "exception.stacktrace", ex.StackTrace },
+                        { DiagnosticConstants.ActivityTagExceptionType, ex.GetType().FullName },
+                        { DiagnosticConstants.ActivityTagExceptionMessage, ex.Message },
+                        { DiagnosticConstants.ActivityTagExceptionStackTrace, ex.StackTrace },
                     }
                 )
             );
@@ -785,14 +816,16 @@ SET rel = relationship";
 
         // Batch check if all required twins exist
         var existingTwins = new HashSet<string>();
-        var twinIdsString = string.Join("','", allTwinIds.Select(id => id!.Replace("'", "\\'")));
         string existenceCheckCypher =
-            $@"MATCH (t:Twin) 
-WHERE t.`$dtId` IN ['{twinIdsString}']
+            @"MATCH (t:Twin) 
+WHERE t.`$dtId` IN $twinIds
 RETURN t.`$dtId` AS twinId";
 
         await using (
-            var existenceCommand = connection.CreateCypherCommand(_graphName, existenceCheckCypher)
+            var existenceCommand = connection.CreateCypherCommand(
+                _graphName, existenceCheckCypher,
+                new Dictionary<string, object?> { { "twinIds", allTwinIds.Where(id => id != null).Cast<string>().ToList() } }
+            )
         )
         {
             await using (
@@ -802,7 +835,7 @@ RETURN t.`$dtId` AS twinId";
                 while (await existenceReader.ReadAsync(cancellationToken))
                 {
                     var agTwinId = await existenceReader.GetFieldValueAsync<Agtype?>(0);
-                    string twinId = ((Agtype)agTwinId).GetString();
+                    string twinId = ((Agtype)agTwinId!).GetString();
                     if (twinId.StartsWith('"') && twinId.EndsWith('"'))
                     {
                         twinId = twinId[1..^1]; // Remove surrounding quotes
@@ -864,7 +897,7 @@ RETURN t.`$dtId` AS twinId";
             {
                 var relationshipId = item.jsonObject["$relationshipId"]?.GetValue<string>();
                 var etag = ETagGenerator.GenerateEtag(relationshipId ?? string.Empty, now);
-                item.jsonObject["$etag"] = etag;
+                item.jsonObject[DigitalTwinsJsonPropertyNames.DigitalTwinETag] = etag;
             }
 
             // Group relationships by relationship name since we need separate queries for each relationship type
@@ -878,19 +911,22 @@ RETURN t.`$dtId` AS twinId";
                 var relationshipName = group.Key;
                 var groupData = group.Select(x => x.jsonObject).ToList();
 
-                // Convert to JSON strings for the UNWIND operation - construct full query like models
-                string relationshipsString =
-                    $"['{string.Join("','", groupData.Select(r => JsonSerializer.Serialize(r, serializerOptions).Replace("'", "\\'")))}']";
+                var relJsonStrings = groupData
+                    .Select(r => JsonSerializer.Serialize(r))
+                    .ToList();
 
                 string cypher =
-                    $@"UNWIND {relationshipsString} as relationshipJson
-                    WITH relationshipJson::cstring::agtype as relationship
-                    MATCH (source:Twin {{`$dtId`: relationship['$sourceId']}})
-                    MATCH (target:Twin {{`$dtId`: relationship['$targetId']}})
-                    MERGE (source)-[r:{relationshipName} {{`$relationshipId`: relationship['$relationshipId']}}]->(target)
+                    @"UNWIND $relJsonStrings as relJson
+                    WITH relJson::cstring::agtype as relationship
+                    MATCH (source:Twin {`$dtId`: relationship['$sourceId']})
+                    MATCH (target:Twin {`$dtId`: relationship['$targetId']})
+                    MERGE (source)-[r:" + relationshipName + @" {`$relationshipId`: relationship['$relationshipId']}]->(target)
                     SET r = relationship";
 
-                await using var command = connection.CreateCypherCommand(_graphName, cypher);
+                await using var command = connection.CreateCypherCommand(
+                    _graphName, cypher,
+                    new Dictionary<string, object?> { { "relJsonStrings", relJsonStrings } }
+                );
                 await command.ExecuteNonQueryAsync(cancellationToken);
             }
 

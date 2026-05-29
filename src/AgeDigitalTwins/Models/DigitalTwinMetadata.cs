@@ -14,7 +14,7 @@ public class DigitalTwinMetadata
     /// <summary>
     /// The Id of the model that the digital twin conforms to.
     /// </summary>
-    [JsonPropertyName("$model")]
+    [JsonPropertyName(DigitalTwinsJsonPropertyNames.MetadataModel)]
     public string ModelId { get; set; } = string.Empty;
 
     /// <summary>
@@ -35,21 +35,21 @@ public class DigitalTwinPropertyMetadata
     /// <summary>
     /// The date and time the property was last updated.
     /// </summary>
-    [JsonPropertyName("lastUpdateTime")]
+    [JsonPropertyName(DigitalTwinsJsonPropertyNames.MetadataPropertyLastUpdateTime)]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public DateTimeOffset? LastUpdatedOn { get; set; }
 
     /// <summary>
     /// The source time when the property was updated (optional, user-provided).
     /// </summary>
-    [JsonPropertyName("sourceTime")]
+    [JsonPropertyName(DigitalTwinsJsonPropertyNames.MetadataPropertySourceTime)]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public DateTimeOffset? SourceTime { get; set; }
 
     /// <summary>
     /// The ID of the user who last updated the property (optional).
     /// </summary>
-    [JsonPropertyName("lastUpdatedBy")]
+    [JsonPropertyName(DigitalTwinsJsonPropertyNames.MetadataPropertyLastUpdatedBy)]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? LastUpdatedBy { get; set; }
 }

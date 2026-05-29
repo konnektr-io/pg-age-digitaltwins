@@ -21,20 +21,20 @@ public class BasicDigitalTwin
     /// The unique Id of the digital twin in a digital twins instance.
     /// This field is present on every digital twin.
     /// </summary>
-    [JsonPropertyName("$dtId")]
+    [JsonPropertyName(DigitalTwinsJsonPropertyNames.DigitalTwinId)]
     public string Id { get; set; } = string.Empty;
 
     /// <summary>
     /// A string representing a weak ETag for the entity.
     /// </summary>
-    [JsonPropertyName("$etag")]
+    [JsonPropertyName(DigitalTwinsJsonPropertyNames.DigitalTwinETag)]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ETag { get; set; }
 
     /// <summary>
     /// The date and time the twin was last updated.
     /// </summary>
-    [JsonPropertyName("$lastUpdateTime")]
+    [JsonPropertyName(DigitalTwinsJsonPropertyNames.MetadataLastUpdateTime)]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public DateTimeOffset? LastUpdatedOn { get; set; }
 
@@ -42,7 +42,7 @@ public class BasicDigitalTwin
     /// Information about the model a digital twin conforms to.
     /// This field is present on every digital twin.
     /// </summary>
-    [JsonPropertyName("$metadata")]
+    [JsonPropertyName(DigitalTwinsJsonPropertyNames.DigitalTwinMetadata)]
     public DigitalTwinMetadata Metadata { get; set; } = new();
 
     /// <summary>

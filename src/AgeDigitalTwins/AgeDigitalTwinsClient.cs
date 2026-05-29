@@ -26,9 +26,6 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
 
     private readonly bool _trackLastUpdatedBy;
 
-    private readonly JsonSerializerOptions serializerOptions =
-        new() { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
-
     private static readonly ActivitySource ActivitySource = new("AgeDigitalTwins.SDK", "1.0.0");
 
     /// <summary>

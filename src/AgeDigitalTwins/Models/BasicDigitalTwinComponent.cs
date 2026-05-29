@@ -14,14 +14,14 @@ public class BasicDigitalTwinComponent
     /// <summary>
     /// The date and time the component was last updated.
     /// </summary>
-    [JsonPropertyName("$lastUpdateTime")]
+    [JsonPropertyName(DigitalTwinsJsonPropertyNames.MetadataLastUpdateTime)]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public DateTimeOffset? LastUpdatedOn { get; set; }
 
     /// <summary>
     /// Model-defined writable properties' metadata for the component.
     /// </summary>
-    [JsonPropertyName("$metadata")]
+    [JsonPropertyName(DigitalTwinsJsonPropertyNames.DigitalTwinMetadata)]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Dictionary<string, DigitalTwinPropertyMetadata>? Metadata { get; set; }
 

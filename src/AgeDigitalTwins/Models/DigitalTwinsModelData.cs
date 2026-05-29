@@ -119,7 +119,7 @@ namespace AgeDigitalTwins.Models
             Embedding = embedding;
         }
 
-        public DigitalTwinsModelData(Dictionary<string, object?> modelData)
+        public DigitalTwinsModelData(Dictionary<string, object> modelData)
         {
             Id =
                 modelData.TryGetValue("id", out var idValue) && idValue is string idString
@@ -136,6 +136,11 @@ namespace AgeDigitalTwins.Models
                 {
                     // Parse the string to a JsonElement
                     DtdlModel = modelString;
+                }
+                else if (modelValue is Dictionary<string, object> modelDict)
+                {
+                    var serialized = JsonSerializer.Serialize(modelDict);
+                    DtdlModel = serialized;
                 }
             }
 
