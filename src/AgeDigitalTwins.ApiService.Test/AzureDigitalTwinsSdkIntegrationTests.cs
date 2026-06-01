@@ -377,4 +377,49 @@ public class AzureDigitalTwinsSdkIntegrationTests : IAsyncLifetime
         DateTimeOffset actualLastUpdate = DateTimeOffset.Parse(lastUpdateProp.GetString()!);
         Assert.Equal(createdTwin.LastUpdatedOn.Value, actualLastUpdate);
     }
+
+    [Fact]
+    public async Task CreateRelationship_WithValidData_ReturnsRelationship()
+    {
+        // Arrange
+        Assert.NotNull(_digitalTwinsClient);
+        await _digitalTwinsClient.CreateModelsAsync(
+            new List<string>
+            {
+                SampleData.DtdlCelestialBody,
+                SampleData.DtdlPlanet,
+                SampleData.DtdlMoon,
+            }
+        );
+        var earth = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinPlanetEarth)!;
+        await _digitalTwinsClient.CreateOrReplaceDigitalTwinAsync(earth.Id, earth);
+        var moon = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinMoonLuna)!;
+        await _digitalTwinsClient.CreateOrReplaceDigitalTwinAsync(moon.Id, moon);
+
+        string relationshipId = "earth-satellites-luna";
+        var relationship = new BasicRelationship()
+        {
+            Id = relationshipId,
+            SourceId = earth.Id,
+            TargetId = moon.Id,
+            Name = "satellites",
+            Properties = { { "Distance", 384400.0 } },
+        };
+
+        // Act
+        BasicRelationship createdRelationship =
+            await _digitalTwinsClient.CreateOrReplaceRelationshipAsync(
+                earth.Id,
+                relationshipId,
+                relationship
+            );
+
+        // Assert
+        Assert.NotNull(createdRelationship);
+        Assert.Equal(relationshipId, createdRelationship.Id);
+        Assert.Equal(earth.Id, createdRelationship.SourceId);
+        Assert.Equal(moon.Id, createdRelationship.TargetId);
+        Assert.Equal("satellites", createdRelationship.Name);
+        Assert.Equal(384400.0, ((JsonElement)createdRelationship.Properties["Distance"]).GetDouble());
+    }
 }
