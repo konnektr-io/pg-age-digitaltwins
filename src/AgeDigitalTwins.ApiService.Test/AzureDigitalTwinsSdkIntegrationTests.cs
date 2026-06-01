@@ -389,6 +389,7 @@ public class AzureDigitalTwinsSdkIntegrationTests : IAsyncLifetime
                 SampleData.DtdlCelestialBody,
                 SampleData.DtdlPlanet,
                 SampleData.DtdlMoon,
+                SampleData.DtdlCrater,
             }
         );
         var earth = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinPlanetEarth)!;
