@@ -423,4 +423,47 @@ public class AzureDigitalTwinsSdkIntegrationTests : IAsyncLifetime
         Assert.Equal("satellites", createdRelationship.Name);
         Assert.Equal(384400.0, ((JsonElement)createdRelationship.Properties["Distance"]).GetDouble());
     }
+
+    [Fact]
+    public async Task CreateRelationship_WithNonExistentSource_ReturnsNotFound()
+    {
+        // Arrange
+        Assert.NotNull(_digitalTwinsClient);
+        await _digitalTwinsClient.CreateModelsAsync(
+            new List<string>
+            {
+                SampleData.DtdlCelestialBody,
+                SampleData.DtdlPlanet,
+                SampleData.DtdlMoon,
+                SampleData.DtdlCrater,
+            }
+        );
+        var moon = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinMoonLuna)!;
+        await _digitalTwinsClient.CreateOrReplaceDigitalTwinAsync(moon.Id, moon);
+
+        string relationshipId = "nonexistent-satellites-luna";
+        var relationship = new BasicRelationship()
+        {
+            Id = relationshipId,
+            SourceId = "nonexistentSource",
+            TargetId = moon.Id,
+            Name = "satellites",
+        };
+
+        // Act
+        try
+        {
+            await _digitalTwinsClient.CreateOrReplaceRelationshipAsync(
+                "nonexistentSource",
+                relationshipId,
+                relationship
+            );
+            Assert.Fail("Expected RequestFailedException was not thrown.");
+        }
+        catch (RequestFailedException ex)
+        {
+            // Assert
+            Assert.Equal(404, ex.Status);
+        }
+    }
 }

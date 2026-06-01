@@ -462,4 +462,24 @@ public class DigitalTwinsIntegrationTests : IAsyncLifetime
         Assert.Single(secondResults);
         Assert.Equal("ctParamTwin3", secondResults[0].GetProperty("t").GetProperty("$dtId").GetString());
     }
+
+    [Fact]
+    public async Task CreateRelationship_SourceTwinNotFound_ReturnsNotFound()
+    {
+        // Arrange
+        var relationship = new JsonObject
+        {
+            ["$targetId"] = "luna",
+            ["$relationshipName"] = "satellites",
+        };
+
+        // Act
+        var response = await _httpClient!.PutAsync(
+            "/digitaltwins/nonexistent/relationships/rel1",
+            new StringContent(relationship.ToJsonString(), Encoding.UTF8, "application/json")
+        );
+
+        // Assert
+        Assert.Equal(System.Net.HttpStatusCode.NotFound, response.StatusCode);
+    }
 }
