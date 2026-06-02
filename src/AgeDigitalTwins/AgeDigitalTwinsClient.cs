@@ -20,7 +20,11 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
 
     private readonly MemoryCache _modelCache = new MemoryCache(new MemoryCacheOptions());
 
+    private readonly MemoryCache _twinCache = new MemoryCache(new MemoryCacheOptions());
+
     private readonly TimeSpan _modelCacheExpiration;
+
+    private readonly TimeSpan _twinCacheExpiration;
 
     private readonly ModelParser _modelParser;
 
@@ -58,6 +62,7 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
         options ??= new AgeDigitalTwinsClientOptions();
         _graphName = options.GraphName;
         _modelCacheExpiration = options.ModelCacheExpiration;
+        _twinCacheExpiration = options.TwinCacheExpiration;
         DefaultBatchSize = options.DefaultBatchSize;
         DefaultCheckpointInterval = options.DefaultCheckpointInterval;
         DefaultHeartbeatInterval = options.DefaultHeartbeatInterval;
@@ -91,6 +96,7 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
         _dataSource = dataSource;
         _graphName = graphName;
         _modelCacheExpiration = TimeSpan.FromSeconds(10); // Default to 10 seconds if not set
+        _twinCacheExpiration = TimeSpan.FromSeconds(10); // Default to 10 seconds if not set
         DefaultBatchSize = 50; // Default batch size
         DefaultCheckpointInterval = 50; // Default checkpoint interval
         DefaultHeartbeatInterval = TimeSpan.FromSeconds(30); // Default heartbeat interval
@@ -157,6 +163,11 @@ public class AgeDigitalTwinsClientOptions
     /// Gets or sets the expiration time for the model cache.
     /// </summary>
     public TimeSpan ModelCacheExpiration { get; set; } = TimeSpan.FromSeconds(10); // Default to 10 seconds if not set
+
+    /// <summary>
+    /// Gets or sets the expiration time for the digital twin existence cache.
+    /// </summary>
+    public TimeSpan TwinCacheExpiration { get; set; } = TimeSpan.FromSeconds(10); // Default to 10 seconds if not set
 
     /// <summary>
     /// Gets or sets the default batch size for import operations.

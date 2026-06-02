@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using AgeDigitalTwins.Exceptions;
 using AgeDigitalTwins.Models;
 using Json.Patch;
+using Microsoft.Extensions.Caching.Memory;
 using Npgsql;
 using Npgsql.Age;
 using Npgsql.Age.Types;
@@ -381,6 +382,17 @@ public partial class AgeDigitalTwinsClient
             throw new PreconditionFailedException(
                 $"If-None-Match: * header was specified but a relationship with the id {relationshipId} on twin with id {digitalTwinId} was found. Please specify a different twin and relationship id."
             );
+        }
+
+        // Check if source and target twins exist
+        if (!await DigitalTwinExistsAsync(connection, digitalTwinId, cancellationToken))
+        {
+            throw new DigitalTwinNotFoundException($"Source twin with ID {digitalTwinId} not found");
+        }
+
+        if (!await DigitalTwinExistsAsync(connection, targetId, cancellationToken))
+        {
+            throw new TargetTwinNotFoundException($"Target twin with ID {targetId} not found");
         }
 
         // TODO: Get source and target models and check relationship validity with DTDL parser
@@ -846,7 +858,24 @@ RETURN t.`$dtId` AS twinId";
                     if (!string.IsNullOrEmpty(twinId))
                     {
                         existingTwins.Add(twinId);
+                        // Seed existence cache
+                        if (_twinCacheExpiration != TimeSpan.Zero)
+                        {
+                            _twinCache.Set(twinId, true, _twinCacheExpiration);
+                        }
                     }
+                }
+            }
+        }
+
+        // Seed existence cache with false for twins that were not found
+        if (_twinCacheExpiration != TimeSpan.Zero)
+        {
+            foreach (var twinId in allTwinIds)
+            {
+                if (twinId != null && !existingTwins.Contains(twinId))
+                {
+                    _twinCache.Set(twinId, false, _twinCacheExpiration);
                 }
             }
         }

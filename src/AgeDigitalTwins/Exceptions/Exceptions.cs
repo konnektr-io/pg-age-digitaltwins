@@ -77,6 +77,15 @@ public class DigitalTwinNotFoundException : AgeDigitalTwinsException
     }
 }
 
+public class TargetTwinNotFoundException : AgeDigitalTwinsException
+{
+    public TargetTwinNotFoundException(string message)
+        : base(message)
+    {
+        StatusCode = HttpStatusCode.NotFound;
+    }
+}
+
 public class RelationshipNotFoundException : AgeDigitalTwinsException
 {
     public RelationshipNotFoundException(string message)

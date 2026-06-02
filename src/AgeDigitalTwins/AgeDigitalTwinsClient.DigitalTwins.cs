@@ -13,6 +13,7 @@ using DTDLParser;
 using DTDLParser.Models;
 using Json.More;
 using Json.Patch;
+using Microsoft.Extensions.Caching.Memory;
 using Npgsql;
 using Npgsql.Age;
 using Npgsql.Age.Types;
@@ -33,13 +34,25 @@ public partial class AgeDigitalTwinsClient
         CancellationToken cancellationToken = default
     )
     {
+        if (_twinCacheExpiration != TimeSpan.Zero && _twinCache.TryGetValue(digitalTwinId, out object? cachedExists))
+        {
+            return (bool)cachedExists!;
+        }
+
         string cypher = "MATCH (t:Twin {`$dtId`: $twinId}) RETURN t";
         await using var command = connection.CreateCypherCommand(
             _graphName, cypher,
             new Dictionary<string, object?> { { DigitalTwinsJsonPropertyNames.TwinIdParameter, digitalTwinId } }
         );
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        return await reader.ReadAsync(cancellationToken);
+        bool exists = await reader.ReadAsync(cancellationToken);
+
+        if (_twinCacheExpiration != TimeSpan.Zero)
+        {
+            _twinCache.Set(digitalTwinId, exists, _twinCacheExpiration);
+        }
+
+        return exists;
     }
 
     /// <summary>
@@ -465,6 +478,9 @@ public partial class AgeDigitalTwinsClient
 
         string updatedTwinJson = JsonSerializer.Serialize(digitalTwinObject);
 
+        // Invalidate cache
+        _twinCache.Remove(digitalTwinId);
+
         string cypher =
             @"WITH $twinJson::cstring::agtype as twin
 MERGE (t: Twin {`$dtId`: $twinId})
@@ -815,6 +831,9 @@ SET t = twin";
         CancellationToken cancellationToken = default
     )
     {
+        // Invalidate cache
+        _twinCache.Remove(digitalTwinId);
+
         string cypher =
             @"MATCH (t:Twin {`$dtId`: $twinId}) 
 DELETE t
@@ -1146,6 +1165,12 @@ RETURN COUNT(t) AS deletedCount";
 WITH twinJson::cstring::agtype as twin
 MERGE (t:Twin {`$dtId`: twin['$dtId']})
 SET t = twin";
+
+                // Invalidate cache for all twins in the batch
+                foreach (var (twinId, _) in finalValidTwins)
+                {
+                    _twinCache.Remove(twinId);
+                }
 
                 await using var command = connection.CreateCypherCommand(
                     _graphName, cypher,
