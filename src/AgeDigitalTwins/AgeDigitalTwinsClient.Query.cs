@@ -306,10 +306,7 @@ public partial class AgeDigitalTwinsClient
 
             case JsonValueKind.String:
             {
-                var s = element.GetString()!;
-                if (bool.TryParse(s, out bool boolVal))
-                    return (boolVal, 0);
-                return (s, 0);
+                return (element.GetString()!, 0);
             }
 
             case JsonValueKind.Number:

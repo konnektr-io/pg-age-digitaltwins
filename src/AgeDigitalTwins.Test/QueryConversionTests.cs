@@ -130,21 +130,51 @@ public class QueryConversionTests
     }
 
     [Fact]
-    public void ConvertAgtypeToObject_StringBoolean_ReturnsBool()
+    public void ConvertAgtypeToObject_StringTrue_RemainsString()
     {
         var agtype = new Agtype("\"true\"");
         var (value, count) = AgeDigitalTwinsClient.ConvertAgtypeToObject(agtype);
-        Assert.Equal(true, value);
+        Assert.Equal("true", value);
         Assert.Equal(0, count);
     }
 
     [Fact]
-    public void ConvertAgtypeToObject_StringFalseBoolean_ReturnsBool()
+    public void ConvertAgtypeToObject_StringFalse_RemainsString()
     {
         var agtype = new Agtype("\"false\"");
         var (value, count) = AgeDigitalTwinsClient.ConvertAgtypeToObject(agtype);
-        Assert.Equal(false, value);
+        Assert.Equal("false", value);
         Assert.Equal(0, count);
+    }
+
+    [Fact]
+    public void ConvertJsonElement_StringWithBooleanContent_RemainsString()
+    {
+        var json = "\"true\"";
+        var element = JsonDocument.Parse(json).RootElement;
+        var (value, count) = AgeDigitalTwinsClient.ConvertAgtypeToObject(new Agtype(json));
+        Assert.IsType<string>(value);
+        Assert.Equal("true", value);
+    }
+
+    [Fact]
+    public void ConvertJsonElement_ActualBoolean_ReturnsBool()
+    {
+        var json = "true";
+        var element = JsonDocument.Parse(json).RootElement;
+        var (value, count) = AgeDigitalTwinsClient.ConvertAgtypeToObject(new Agtype(json));
+        Assert.IsType<bool>(value);
+        Assert.Equal(true, value);
+    }
+
+    [Fact]
+    public void ConvertJsonElement_ActualBooleanFalse_ReturnsBool()
+    {
+        var json = "false";
+        var element = JsonDocument.Parse(json).RootElement;
+        var (value, count) = AgeDigitalTwinsClient.ConvertAgtypeToObject(new Agtype(json));
+        Assert.IsType<bool>(value);
+        Assert.Equal(false, value);
     }
 
     [Fact]
