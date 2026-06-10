@@ -59,6 +59,10 @@ internal class BasicDigitalTwinComponentJsonConverter : JsonConverter<BasicDigit
                             ? lastUpdateTimeValue
                             : null;
                     }
+                    else if (p.Name == DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy)
+                    {
+                        continue;
+                    }
                     else
                     {
                         var propertyMetadata =

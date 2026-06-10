@@ -54,11 +54,13 @@ public static class ComponentsEndpoints
                 ) =>
                 {
                     string? etag = RequestHelper.ParseETag(httpContext, "If-Match");
+                    string? userId = RequestHelper.ParseUserId(httpContext);
                     await client.UpdateComponentAsync(
                         twinId,
                         componentName,
                         patch,
                         etag,
+                        userId,
                         cancellationToken
                     );
                     return Results.NoContent();

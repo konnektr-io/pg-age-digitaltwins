@@ -161,6 +161,7 @@ public partial class AgeDigitalTwinsClient
         string componentName,
         JsonPatch patch,
         string? ifMatch = null,
+        string? userId = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -184,6 +185,7 @@ public partial class AgeDigitalTwinsClient
                 componentName,
                 patch,
                 ifMatch,
+                userId,
                 cancellationToken
             );
         }
@@ -212,6 +214,7 @@ public partial class AgeDigitalTwinsClient
         string componentName,
         JsonPatch patch,
         string? ifMatch = null,
+        string? userId = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -295,6 +298,10 @@ public partial class AgeDigitalTwinsClient
         {
             // Update global last update time
             metadataObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdateTime] = now.ToString("o");
+            if (_trackLastUpdatedBy && userId != null)
+            {
+                metadataObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy] = userId;
+            }
 
             // Update component metadata
             if (
@@ -305,13 +312,22 @@ public partial class AgeDigitalTwinsClient
             )
             {
                 componentMetadataObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdateTime] = now.ToString("o");
+                if (_trackLastUpdatedBy && userId != null)
+                {
+                    componentMetadataObject[DigitalTwinsJsonPropertyNames.MetadataPropertyLastUpdatedBy] = userId;
+                }
             }
             else
             {
-                patchedComponent[DigitalTwinsJsonPropertyNames.DigitalTwinMetadata] = new JsonObject
+                var componentMetadata = new JsonObject
                 {
                     [DigitalTwinsJsonPropertyNames.MetadataLastUpdateTime] = now.ToString("o"),
                 };
+                if (_trackLastUpdatedBy && userId != null)
+                {
+                    componentMetadata[DigitalTwinsJsonPropertyNames.MetadataPropertyLastUpdatedBy] = userId;
+                }
+                patchedComponent[DigitalTwinsJsonPropertyNames.DigitalTwinMetadata] = componentMetadata;
             }
 
             // Update twin-level metadata for the component
@@ -323,13 +339,22 @@ public partial class AgeDigitalTwinsClient
             )
             {
                 twinComponentMetadataObject[DigitalTwinsJsonPropertyNames.MetadataPropertyLastUpdateTime] = now.ToString("o");
+                if (_trackLastUpdatedBy && userId != null)
+                {
+                    twinComponentMetadataObject[DigitalTwinsJsonPropertyNames.MetadataPropertyLastUpdatedBy] = userId;
+                }
             }
             else
             {
-                metadataObject[componentName] = new JsonObject
+                var twinComponentMetadata = new JsonObject
                 {
                     [DigitalTwinsJsonPropertyNames.MetadataPropertyLastUpdateTime] = now.ToString("o"),
                 };
+                if (_trackLastUpdatedBy && userId != null)
+                {
+                    twinComponentMetadata[DigitalTwinsJsonPropertyNames.MetadataPropertyLastUpdatedBy] = userId;
+                }
+                metadataObject[componentName] = twinComponentMetadata;
             }
         }
 

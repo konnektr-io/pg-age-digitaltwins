@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using AgeDigitalTwins.Events.Abstractions;
+using AgeDigitalTwins.Models;
 using CloudNative.CloudEvents;
 using Json.More;
 using Json.Patch;
@@ -401,6 +402,15 @@ public static class CloudEventFactory
                     eventData.NewValue?["$metadata"]?["$model"]?.ToString()
                     ?? eventData.OldValue?["$metadata"]?["$model"]?.ToString(),
             };
+        if (trackLastUpdatedBy)
+        {
+            var lastUpdatedBy = eventData.NewValue?["$metadata"]?[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy]?.ToString()
+                ?? eventData.OldValue?["$metadata"]?[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy]?.ToString();
+            if (lastUpdatedBy != null)
+            {
+                body["updatedBy"] = lastUpdatedBy;
+            }
+        }
         var type = typeMapping.TryGetValue(SinkEventType.TwinLifecycle, out var t)
             ? t
             : DefaultDataHistoryTypeMapping[SinkEventType.TwinLifecycle];
@@ -509,6 +519,14 @@ public static class CloudEventFactory
                     ["serviceId"] = source.ToString(),
                     ["modelId"] = eventData.NewValue?["$metadata"]?["$model"]?.ToString(),
                 };
+            if (trackLastUpdatedBy)
+            {
+                var lastUpdatedBy = eventData.NewValue?["$metadata"]?[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy]?.ToString();
+                if (lastUpdatedBy != null)
+                {
+                    body["updatedBy"] = lastUpdatedBy;
+                }
+            }
             var type = typeMapping.TryGetValue(SinkEventType.TwinLifecycle, out var t)
                 ? t
                 : DefaultDataHistoryTypeMapping[SinkEventType.TwinLifecycle];

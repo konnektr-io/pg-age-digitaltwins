@@ -866,6 +866,7 @@ public static class StreamingImportJob
             var batchResult = await client.CreateOrReplaceDigitalTwinsInternalAsync(
                 connection,
                 twinsBatch,
+                null,
                 cancellationToken
             );
 

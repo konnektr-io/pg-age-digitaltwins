@@ -472,6 +472,10 @@ public partial class AgeDigitalTwinsClient
 
         // Set global last update time
         metadataObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdateTime] = now.ToString("o");
+        if (_trackLastUpdatedBy && userId != null)
+        {
+            metadataObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy] = userId;
+        }
         // Set new etag
         string newEtag = ETagGenerator.GenerateEtag(digitalTwinId, now);
         digitalTwinObject[DigitalTwinsJsonPropertyNames.DigitalTwinETag] = newEtag;
@@ -760,6 +764,10 @@ RETURN t";
         }
         // Set global last update time
         metadataObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdateTime] = now.ToString("o");
+        if (_trackLastUpdatedBy && userId != null)
+        {
+            metadataObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy] = userId;
+        }
         // Set new etag
         string newEtag = ETagGenerator.GenerateEtag(digitalTwinId, now);
         patchedTwin[DigitalTwinsJsonPropertyNames.DigitalTwinETag] = newEtag;
@@ -867,6 +875,7 @@ RETURN COUNT(t) AS deletedCount";
     /// <exception cref="ArgumentException">Thrown when the batch size exceeds the maximum allowed size (100).</exception>
     public virtual async Task<BatchDigitalTwinResult> CreateOrReplaceDigitalTwinsAsync<T>(
         IEnumerable<T> digitalTwins,
+        string? userId = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -902,6 +911,7 @@ RETURN COUNT(t) AS deletedCount";
             return await CreateOrReplaceDigitalTwinsInternalAsync(
                 connection,
                 digitalTwinsList,
+                userId,
                 cancellationToken
             );
         }
@@ -927,6 +937,7 @@ RETURN COUNT(t) AS deletedCount";
     internal async Task<BatchDigitalTwinResult> CreateOrReplaceDigitalTwinsInternalAsync<T>(
         NpgsqlConnection connection,
         IList<T> digitalTwins,
+        string? userId = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -1140,6 +1151,10 @@ RETURN COUNT(t) AS deletedCount";
 
                 // Set global metadata
                 metadataObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdateTime] = now.ToString("o");
+                if (_trackLastUpdatedBy && userId != null)
+                {
+                    metadataObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy] = userId;
+                }
                 string newEtag = ETagGenerator.GenerateEtag(digitalTwinId, now);
                 digitalTwinObject[DigitalTwinsJsonPropertyNames.DigitalTwinETag] = newEtag;
 
