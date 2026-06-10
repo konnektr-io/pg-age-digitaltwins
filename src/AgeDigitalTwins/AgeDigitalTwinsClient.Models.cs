@@ -988,7 +988,7 @@ RETURN COUNT(m) AS deletedCount";
         {
             string vectorString = JsonSerializer.Serialize(vector);
             string whereClause = !string.IsNullOrWhiteSpace(query)
-                ? " WHERE (toLower(toString(m.displayName)) CONTAINS toLower($query) OR toLower(toString(m.description)) CONTAINS toLower($query) OR toLower(m.id) CONTAINS toLower($query)) "
+                ? " WHERE (toLower(m.displayName::text) CONTAINS toLower($query) OR toLower(m.description::text) CONTAINS toLower($query) OR toLower(m.id) CONTAINS toLower($query)) "
                 : "";
 
             cypher =
@@ -996,20 +996,24 @@ RETURN COUNT(m) AS deletedCount";
                 MATCH (m:Model)
                 {whereClause}
                 RETURN m
-                ORDER BY l2_distance(m.embedding, {vectorString}::vector) ASC
-                LIMIT {limit}";
+                ORDER BY l2_distance(m.embedding, $vector::cstring::agtype) ASC
+                LIMIT $limit";
+
+            parameters["vector"] = vectorString;
         }
         else
         {
             cypher =
                 $@"
                 MATCH (m:Model)
-                WHERE toLower(toString(m.displayName)) CONTAINS toLower($query) 
-                   OR toLower(toString(m.description)) CONTAINS toLower($query)
+                WHERE toLower(m.displayName::text) CONTAINS toLower($query) 
+                   OR toLower(m.description::text) CONTAINS toLower($query)
                    OR toLower(m.id) CONTAINS toLower($query)
                 RETURN m
-                LIMIT {limit}";
+                LIMIT $limit";
         }
+
+        parameters["limit"] = limit;
 
         if (!string.IsNullOrWhiteSpace(query))
         {
