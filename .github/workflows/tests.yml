@@ -39,12 +39,15 @@ jobs:
           - age_image: 16-1.6.0-standard-trixie
             type: cnpg
             pg_version: 16
+            container_repo: ghcr.io/konnektr-io/age-pgvector
           - age_image: 17-1.6.0-standard-trixie
             type: cnpg
             pg_version: 17
+            container_repo: ghcr.io/konnektr-io/age-pgvector
           - age_image: 18-1.7.0-standard-trixie
             type: cnpg
             pg_version: 18
+            container_repo: ghcr.io/konnektr-io/age-pgvector
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -56,7 +59,7 @@ jobs:
               -e POSTGRES_PASSWORD=app \
               -p 5432:5432 \
               --shm-size=512mb \
-              ghcr.io/konnektr-io/age:${{ matrix.age_image }} \
+              ${{ matrix.container_repo }}:${{ matrix.age_image }} \
               bash -c "initdb -D /var/lib/postgresql/data --username=app --pwfile=<(echo app) && \
                        echo 'host all all 0.0.0.0/0 trust' >> /var/lib/postgresql/data/pg_hba.conf && \
                        echo 'local all all trust' >> /var/lib/postgresql/data/pg_hba.conf && \

@@ -3,6 +3,7 @@ using AgeDigitalTwins.Exceptions;
 using DTDLParser;
 using Json.Patch;
 using Json.Pointer;
+using Npgsql;
 
 namespace AgeDigitalTwins.Test;
 
@@ -612,7 +613,7 @@ public class ModelsTests : TestBase
         Assert.False(model.IsDecommissioned);
     }
 
-    [Fact]
+    [CnpgOnlyFact]
     public async Task UpdateModel_Embedding_Success()
     {
         try
@@ -702,5 +703,164 @@ public class ModelsTests : TestBase
             .Relationships.Select(r => r.GetProperty("name").GetString())
             .ToList();
         Assert.Contains("orbits", relNames2);
+    }
+
+    [CnpgOnlyFact]
+    public async Task SearchModels_VectorSimilarity_ReturnsOrderedResults()
+    {
+        await Client.DeleteAllModelsAsync();
+
+        await Client.CreateModelsAsync(
+            [SampleData.DtdlRoom, SampleData.DtdlTemperatureSensor, SampleData.DtdlCrater]
+        );
+
+        double[] roomEmbedding = [1.0, 0.0, 0.0];
+        double[] sensorEmbedding = [0.0, 1.0, 0.0];
+        double[] craterEmbedding = [0.0, 0.0, 1.0];
+
+        var roomPatch = new JsonPatch(
+            PatchOperation.Replace(JsonPointer.Parse("/embedding"), JsonSerializer.SerializeToNode(roomEmbedding))
+        );
+        await Client.UpdateModelAsync("dtmi:com:adt:dtsample:room;1", roomPatch);
+
+        var sensorPatch = new JsonPatch(
+            PatchOperation.Replace(JsonPointer.Parse("/embedding"), JsonSerializer.SerializeToNode(sensorEmbedding))
+        );
+        await Client.UpdateModelAsync("dtmi:com:adt:dtsample:tempsensor;1", sensorPatch);
+
+        var craterPatch = new JsonPatch(
+            PatchOperation.Replace(JsonPointer.Parse("/embedding"), JsonSerializer.SerializeToNode(craterEmbedding))
+        );
+        await Client.UpdateModelAsync("dtmi:com:contoso:Crater;1", craterPatch);
+
+        double[] queryVector = [1.1, 0.0, 0.0];
+        var results = await Client.SearchModelsAsync(
+            query: null,
+            vector: queryVector,
+            limit: 3
+        );
+
+        var resultList = results.ToList();
+        Assert.Equal(3, resultList.Count);
+        Assert.Equal("dtmi:com:adt:dtsample:room;1", resultList[0].Id);
+    }
+
+    [CnpgOnlyFact]
+    public async Task SearchModels_VectorSimilarityWithTextFilter_ReturnsFilteredResults()
+    {
+        await Client.DeleteAllModelsAsync();
+
+        await Client.CreateModelsAsync(
+            [SampleData.DtdlRoom, SampleData.DtdlTemperatureSensor, SampleData.DtdlCrater]
+        );
+
+        double[] roomEmbedding = [1.0, 0.0, 0.0];
+        double[] sensorEmbedding = [0.0, 1.0, 0.0];
+        double[] craterEmbedding = [0.0, 0.0, 1.0];
+
+        var roomPatch = new JsonPatch(
+            PatchOperation.Replace(JsonPointer.Parse("/embedding"), JsonSerializer.SerializeToNode(roomEmbedding))
+        );
+        await Client.UpdateModelAsync("dtmi:com:adt:dtsample:room;1", roomPatch);
+
+        var sensorPatch = new JsonPatch(
+            PatchOperation.Replace(JsonPointer.Parse("/embedding"), JsonSerializer.SerializeToNode(sensorEmbedding))
+        );
+        await Client.UpdateModelAsync("dtmi:com:adt:dtsample:tempsensor;1", sensorPatch);
+
+        var craterPatch = new JsonPatch(
+            PatchOperation.Replace(JsonPointer.Parse("/embedding"), JsonSerializer.SerializeToNode(craterEmbedding))
+        );
+        await Client.UpdateModelAsync("dtmi:com:contoso:Crater;1", craterPatch);
+
+        double[] queryVector = [1.1, 0.0, 0.0];
+        var results = await Client.SearchModelsAsync(
+            query: "Temperature",
+            vector: queryVector,
+            limit: 3
+        );
+
+        var resultList = results.ToList();
+        Assert.Single(resultList);
+        Assert.Equal("dtmi:com:adt:dtsample:tempsensor;1", resultList[0].Id);
+    }
+
+    [CnpgOnlyFact]
+    public async Task SearchModels_HnswIndex_VectorSearchWorksWithIndex()
+    {
+        await Client.DeleteAllModelsAsync();
+
+        await Client.CreateModelsAsync(
+            [SampleData.DtdlRoom, SampleData.DtdlTemperatureSensor, SampleData.DtdlCrater]
+        );
+
+        double[] embedding = [0.5, 0.5, 0.5];
+        var patch = new JsonPatch(
+            PatchOperation.Replace(JsonPointer.Parse("/embedding"), JsonSerializer.SerializeToNode(embedding))
+        );
+        await Client.UpdateModelAsync("dtmi:com:adt:dtsample:room;1", patch);
+
+        double[] queryVector = [0.5, 0.5, 0.5];
+        var resultsBefore = await Client.SearchModelsAsync(
+            query: null,
+            vector: queryVector,
+            limit: 1
+        );
+        Assert.Single(resultsBefore);
+
+        string graphName = Client.GetGraphName();
+        await using var connection = await Client.GetDataSource().OpenConnectionAsync();
+
+        var createIndexCmd = new NpgsqlCommand(
+            $"""
+            DO $$
+            DECLARE
+                graph_oid oid;
+            BEGIN
+                SELECT graphid INTO graph_oid
+                FROM ag_catalog.ag_graph
+                WHERE name = '{graphName}';
+
+                EXECUTE format(
+                    'CREATE INDEX CONCURRENTLY model_embedding_idx ON %I."Model" USING hnsw ((agtype_access_operator(VARIADIC ARRAY[properties, ''"embedding"''::agtype])::text)::vector(3) vector_l2_ops)',
+                    graph_oid
+                );
+            END;
+            $$;
+            """,
+            connection
+        );
+        await createIndexCmd.ExecuteNonQueryAsync();
+
+        try
+        {
+            var resultsAfter = await Client.SearchModelsAsync(
+                query: null,
+                vector: queryVector,
+                limit: 1
+            );
+            Assert.Single(resultsAfter);
+            Assert.Equal("dtmi:com:adt:dtsample:room;1", resultsAfter.First().Id);
+        }
+        finally
+        {
+            await using var dropIndexCmd = new NpgsqlCommand(
+                $"""
+                DO $$
+                DECLARE
+                    graph_oid oid;
+                BEGIN
+                    SELECT graphid INTO graph_oid
+                    FROM ag_catalog.ag_graph
+                    WHERE name = '{graphName}';
+
+                    EXECUTE format('DROP INDEX IF EXISTS %I.model_embedding_idx', graph_oid);
+                END;
+                $$;
+                """,
+                connection
+            );
+            await dropIndexCmd.ExecuteNonQueryAsync();
+        }
     }
 }
