@@ -61,6 +61,10 @@ internal class DigitalTwinMetadataJsonConverter : JsonConverter<DigitalTwinMetad
                     metadata.PropertyMetadata[propertyName] = propertyMetadata;
                 }
             }
+            else if (propertyName == DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy)
+            {
+                metadata.LastUpdatedBy = reader.GetString();
+            }
             else if (propertyName != DigitalTwinsJsonPropertyNames.MetadataLastUpdateTime)
             {
                 // Unexpected property
@@ -82,6 +86,11 @@ internal class DigitalTwinMetadataJsonConverter : JsonConverter<DigitalTwinMetad
     {
         writer.WriteStartObject();
         writer.WriteString(DigitalTwinsJsonPropertyNames.MetadataModel, value.ModelId);
+
+        if (value.LastUpdatedBy != null)
+        {
+            writer.WriteString(DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy, value.LastUpdatedBy);
+        }
 
         if (value.PropertyMetadata != null)
         {

@@ -18,6 +18,13 @@ public class DigitalTwinMetadata
     public string ModelId { get; set; } = string.Empty;
 
     /// <summary>
+    /// The ID of the user who last updated the digital twin.
+    /// </summary>
+    [JsonPropertyName(DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? LastUpdatedBy { get; set; }
+
+    /// <summary>
     /// Model-defined writable properties' metadata.
     /// For each property in the Contents of the digital twin that was defined in the model,
     /// this dictionary contains the metadata about that property.

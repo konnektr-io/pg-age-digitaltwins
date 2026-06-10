@@ -117,6 +117,7 @@ public static class DigitalTwinsEndpoints
                 {
                     var result = await client.CreateOrReplaceDigitalTwinsAsync(
                         digitalTwins,
+                        userId: null,
                         cancellationToken
                     );
                     return Results.Ok(result);

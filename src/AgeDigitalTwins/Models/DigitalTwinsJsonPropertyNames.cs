@@ -54,6 +54,11 @@ public static class DigitalTwinsJsonPropertyNames
     public const string MetadataPropertyLastUpdatedBy = "lastUpdatedBy";
 
     /// <summary>
+    /// The last update time of a digital twin, used in the $metadata object on a digital twin.
+    /// </summary>
+    public const string MetadataLastUpdatedBy = "$lastUpdatedBy";
+
+    /// <summary>
     /// The JSON property name for the Id field on a relationship.
     /// </summary>
     public const string RelationshipId = "$relationshipId";

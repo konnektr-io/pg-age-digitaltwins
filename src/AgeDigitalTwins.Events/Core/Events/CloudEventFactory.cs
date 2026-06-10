@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using AgeDigitalTwins.Events.Abstractions;
+using AgeDigitalTwins.Models;
 using CloudNative.CloudEvents;
 using Json.More;
 using Json.Patch;
@@ -94,7 +95,7 @@ public static class CloudEventFactory
             throw new ArgumentNullException(nameof(eventData));
         }
         if (
-            !eventData.NewValue.TryGetPropertyValue("$dtId", out JsonNode? twinIdNode)
+            !eventData.NewValue.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.DigitalTwinId, out JsonNode? twinIdNode)
             || twinIdNode == null
         )
         {
@@ -108,7 +109,7 @@ public static class CloudEventFactory
         JsonObject body =
             new()
             {
-                ["modelId"] = eventData.NewValue["$metadata"]?["$model"]?.DeepClone(),
+                ["modelId"] = eventData.NewValue[DigitalTwinsJsonPropertyNames.DigitalTwinMetadata]?[DigitalTwinsJsonPropertyNames.MetadataModel]?.DeepClone(),
                 ["patch"] = JsonNode.Parse(enhancedPatch.ToJsonDocument().RootElement.GetRawText()),
             };
         CloudEvent cloudEvent =
@@ -173,7 +174,7 @@ public static class CloudEventFactory
             );
         }
 
-        if (!body.TryGetPropertyValue("$dtId", out JsonNode? twinIdNode) || twinIdNode == null)
+        if (!body.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.DigitalTwinId, out JsonNode? twinIdNode) || twinIdNode == null)
         {
             throw new ArgumentException(
                 "NewValue must contain a $dtId property",
@@ -213,7 +214,7 @@ public static class CloudEventFactory
         }
         if (
             !eventData.NewValue.TryGetPropertyValue(
-                "$relationshipId",
+                DigitalTwinsJsonPropertyNames.RelationshipId,
                 out JsonNode? relationshipIdNode
             )
             || relationshipIdNode == null
@@ -226,7 +227,7 @@ public static class CloudEventFactory
         }
 
         if (
-            !eventData.NewValue.TryGetPropertyValue("$sourceId", out JsonNode? twinIdNode)
+            !eventData.NewValue.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.RelationshipSourceId, out JsonNode? twinIdNode)
             || twinIdNode == null
         )
         {
@@ -239,7 +240,7 @@ public static class CloudEventFactory
         JsonObject body =
             new()
             {
-                ["modelId"] = eventData.NewValue["$metadata"]?["$model"]?.DeepClone(),
+                ["modelId"] = eventData.NewValue[DigitalTwinsJsonPropertyNames.DigitalTwinMetadata]?[DigitalTwinsJsonPropertyNames.MetadataModel]?.DeepClone(),
                 ["patch"] = JsonNode.Parse(jsonPatch.ToJsonDocument().RootElement.GetRawText()),
             };
         CloudEvent cloudEvent =
@@ -306,7 +307,7 @@ public static class CloudEventFactory
         }
 
         if (
-            !body.TryGetPropertyValue("$relationshipId", out JsonNode? relationshipIdNode)
+            !body.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.RelationshipId, out JsonNode? relationshipIdNode)
             || relationshipIdNode == null
         )
         {
@@ -316,7 +317,7 @@ public static class CloudEventFactory
             );
         }
 
-        if (!body.TryGetPropertyValue("$sourceId", out JsonNode? twinIdNode) || twinIdNode == null)
+        if (!body.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.RelationshipSourceId, out JsonNode? twinIdNode) || twinIdNode == null)
         {
             throw new ArgumentException(
                 "NewValue must contain a $sourceId property",
@@ -387,8 +388,8 @@ public static class CloudEventFactory
             new()
             {
                 ["twinId"] =
-                    eventData.NewValue?["$dtId"]?.ToString()
-                    ?? eventData.OldValue?["$dtId"]?.ToString(),
+                    eventData.NewValue?[DigitalTwinsJsonPropertyNames.DigitalTwinId]?.ToString()
+                    ?? eventData.OldValue?[DigitalTwinsJsonPropertyNames.DigitalTwinId]?.ToString(),
                 ["action"] = eventData.EventType switch
                 {
                     EventType.TwinCreate => "Create",
@@ -398,9 +399,18 @@ public static class CloudEventFactory
                 ["timeStamp"] = eventData.Timestamp,
                 ["serviceId"] = source.ToString(),
                 ["modelId"] =
-                    eventData.NewValue?["$metadata"]?["$model"]?.ToString()
-                    ?? eventData.OldValue?["$metadata"]?["$model"]?.ToString(),
+                    eventData.NewValue?[DigitalTwinsJsonPropertyNames.DigitalTwinMetadata]?[DigitalTwinsJsonPropertyNames.MetadataModel]?.ToString()
+                    ?? eventData.OldValue?[DigitalTwinsJsonPropertyNames.DigitalTwinMetadata]?[DigitalTwinsJsonPropertyNames.MetadataModel]?.ToString(),
             };
+        if (trackLastUpdatedBy)
+        {
+            var lastUpdatedBy = eventData.NewValue?[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy]?.ToString()
+                ?? eventData.OldValue?[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy]?.ToString();
+            if (lastUpdatedBy != null)
+            {
+                body["updatedBy"] = lastUpdatedBy;
+            }
+        }
         var type = typeMapping.TryGetValue(SinkEventType.TwinLifecycle, out var t)
             ? t
             : DefaultDataHistoryTypeMapping[SinkEventType.TwinLifecycle];
@@ -433,8 +443,8 @@ public static class CloudEventFactory
             new()
             {
                 ["relationshipId"] =
-                    eventData.NewValue?["$relationshipId"]?.ToString()
-                    ?? eventData.OldValue?["$relationshipId"]?.ToString(),
+                    eventData.NewValue?[DigitalTwinsJsonPropertyNames.RelationshipId]?.ToString()
+                    ?? eventData.OldValue?[DigitalTwinsJsonPropertyNames.RelationshipId]?.ToString(),
                 ["action"] = eventData.EventType switch
                 {
                     EventType.RelationshipCreate => "Create",
@@ -444,14 +454,14 @@ public static class CloudEventFactory
                 ["timeStamp"] = eventData.Timestamp,
                 ["serviceId"] = source.ToString(),
                 ["name"] =
-                    eventData.NewValue?["$relationshipName"]?.ToString()
-                    ?? eventData.OldValue?["$relationshipName"]?.ToString(),
+                    eventData.NewValue?[DigitalTwinsJsonPropertyNames.RelationshipName]?.ToString()
+                    ?? eventData.OldValue?[DigitalTwinsJsonPropertyNames.RelationshipName]?.ToString(),
                 ["source"] =
-                    eventData.NewValue?["$sourceId"]?.ToString()
-                    ?? eventData.OldValue?["$sourceId"]?.ToString(),
+                    eventData.NewValue?[DigitalTwinsJsonPropertyNames.RelationshipSourceId]?.ToString()
+                    ?? eventData.OldValue?[DigitalTwinsJsonPropertyNames.RelationshipSourceId]?.ToString(),
                 ["target"] =
-                    eventData.NewValue?["$targetId"]?.ToString()
-                    ?? eventData.OldValue?["$targetId"]?.ToString(),
+                    eventData.NewValue?[DigitalTwinsJsonPropertyNames.RelationshipTargetId]?.ToString()
+                    ?? eventData.OldValue?[DigitalTwinsJsonPropertyNames.RelationshipTargetId]?.ToString(),
             };
         var type = typeMapping.TryGetValue(SinkEventType.RelationshipLifecycle, out var t)
             ? t
@@ -496,19 +506,27 @@ public static class CloudEventFactory
         // Data model changes should also generate lifecycle events, not only property events.
         // Generate this additional lifecycle event here if the model changed.
         if (
-            eventData.NewValue?["$metadata"]?["$model"]?.ToString()
-            != eventData.OldValue?["$metadata"]?["$model"]?.ToString()
+            eventData.NewValue?[DigitalTwinsJsonPropertyNames.DigitalTwinMetadata]?[DigitalTwinsJsonPropertyNames.MetadataModel]?.ToString()
+            != eventData.OldValue?[DigitalTwinsJsonPropertyNames.DigitalTwinMetadata]?[DigitalTwinsJsonPropertyNames.MetadataModel]?.ToString()
         )
         {
             JsonObject body =
                 new()
                 {
-                    ["twinId"] = eventData.NewValue?["$dtId"]?.ToString(),
+                    ["twinId"] = eventData.NewValue?[DigitalTwinsJsonPropertyNames.DigitalTwinId]?.ToString(),
                     ["action"] = "Update",
                     ["timeStamp"] = eventData.Timestamp,
                     ["serviceId"] = source.ToString(),
-                    ["modelId"] = eventData.NewValue?["$metadata"]?["$model"]?.ToString(),
+                    ["modelId"] = eventData.NewValue?[DigitalTwinsJsonPropertyNames.DigitalTwinMetadata]?[DigitalTwinsJsonPropertyNames.MetadataModel]?.ToString(),
                 };
+            if (trackLastUpdatedBy)
+            {
+                var lastUpdatedBy = eventData.NewValue?[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy]?.ToString();
+                if (lastUpdatedBy != null)
+                {
+                    body["updatedBy"] = lastUpdatedBy;
+                }
+            }
             var type = typeMapping.TryGetValue(SinkEventType.TwinLifecycle, out var t)
                 ? t
                 : DefaultDataHistoryTypeMapping[SinkEventType.TwinLifecycle];
@@ -592,13 +610,13 @@ public static class CloudEventFactory
                 ["timeStamp"] = eventData.Timestamp,
                 ["serviceId"] = source.ToString(),
                 ["id"] =
-                    eventData.NewValue?["$dtId"]?.ToString()
-                    ?? eventData.NewValue?["$sourceId"]?.ToString(),
-                ["modelId"] = eventData.NewValue?["$metadata"]?["$model"]?.ToString(),
+                    eventData.NewValue?[DigitalTwinsJsonPropertyNames.DigitalTwinId]?.ToString()
+                    ?? eventData.NewValue?[DigitalTwinsJsonPropertyNames.RelationshipSourceId]?.ToString(),
+                ["modelId"] = eventData.NewValue?[DigitalTwinsJsonPropertyNames.DigitalTwinMetadata]?[DigitalTwinsJsonPropertyNames.MetadataModel]?.ToString(),
                 ["key"] = key.Replace("/", "_"),
                 ["value"] = value?.DeepClone(),
-                ["relationshipTarget"] = eventData.NewValue?["$targetId"]?.ToString(),
-                ["relationshipId"] = eventData.NewValue?["$relationshipId"]?.ToString(),
+                ["relationshipTarget"] = eventData.NewValue?[DigitalTwinsJsonPropertyNames.RelationshipTargetId]?.ToString(),
+                ["relationshipId"] = eventData.NewValue?[DigitalTwinsJsonPropertyNames.RelationshipId]?.ToString(),
                 ["action"] = operationType switch
                 {
                     OperationType.Add => "Create",
@@ -608,10 +626,10 @@ public static class CloudEventFactory
                 },
             };
 
-        string metadataKeyPath = $"/$metadata/{key.Replace("_", "/")}/";
+        string metadataKeyPath = $"/{DigitalTwinsJsonPropertyNames.DigitalTwinMetadata}/{key.Replace("_", "/")}/";
 
         PatchOperation? sourceTimeOperation = jsonPatch.Operations.FirstOrDefault(o =>
-            o.Path.ToString() == $"{metadataKeyPath}sourceTime"
+            o.Path.ToString() == $"{metadataKeyPath}{DigitalTwinsJsonPropertyNames.MetadataPropertySourceTime}"
         );
         if (sourceTimeOperation != null)
         {
@@ -621,7 +639,7 @@ public static class CloudEventFactory
         if (trackLastUpdatedBy)
         {
             PatchOperation? lastUpdatedByOperation = jsonPatch.Operations.FirstOrDefault(o =>
-                o.Path.ToString() == $"{metadataKeyPath}lastUpdatedBy"
+                o.Path.ToString() == $"{metadataKeyPath}{DigitalTwinsJsonPropertyNames.MetadataPropertyLastUpdatedBy}"
             );
             if (lastUpdatedByOperation != null)
             {
@@ -663,7 +681,7 @@ public static class CloudEventFactory
         // Collect all non-metadata operations
         foreach (PatchOperation op in originalPatch.Operations)
         {
-            if (op.Path.SegmentCount > 0 && op.Path[0] == "$metadata")
+            if (op.Path.SegmentCount > 0 && op.Path[0] == DigitalTwinsJsonPropertyNames.DigitalTwinMetadata)
             {
                 continue;
             }
@@ -677,10 +695,10 @@ public static class CloudEventFactory
         List<PatchOperation> additionalOperations = new();
         foreach (PatchOperation op in originalPatch.Operations)
         {
-            if (op.Path.SegmentCount > 0 && op.Path[0] == "$metadata")
+            if (op.Path.SegmentCount > 0 && op.Path[0] == DigitalTwinsJsonPropertyNames.DigitalTwinMetadata)
             {
                 // Check if this is a lastUpdateTime change for a property that doesn't have an explicit operation
-                if (op.Path.SegmentCount >= 3 && op.Path[2] == "lastUpdateTime")
+                if (op.Path.SegmentCount >= 3 && op.Path[2] == DigitalTwinsJsonPropertyNames.MetadataPropertyLastUpdateTime)
                 {
                     var propertyName = op.Path[1].ToString();
                     if (!propertiesWithOperations.Contains(propertyName))
@@ -705,7 +723,7 @@ public static class CloudEventFactory
         if (additionalOperations.Count > 0)
         {
             var allOperations = originalPatch
-                .Operations.Where(op => op.Path[0] != "$etag" && op.Path[0] != "$dtId")
+                .Operations.Where(op => op.Path[0] != DigitalTwinsJsonPropertyNames.DigitalTwinETag && op.Path[0] != DigitalTwinsJsonPropertyNames.DigitalTwinId)
                 .Concat(additionalOperations);
             return new JsonPatch(allOperations);
         }
