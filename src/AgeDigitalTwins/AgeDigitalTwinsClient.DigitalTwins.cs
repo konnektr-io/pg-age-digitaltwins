@@ -472,13 +472,13 @@ public partial class AgeDigitalTwinsClient
 
         // Set global last update time
         metadataObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdateTime] = now.ToString("o");
-        if (_trackLastUpdatedBy && userId != null)
-        {
-            metadataObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy] = userId;
-        }
         // Set new etag
         string newEtag = ETagGenerator.GenerateEtag(digitalTwinId, now);
         digitalTwinObject[DigitalTwinsJsonPropertyNames.DigitalTwinETag] = newEtag;
+        if (_trackLastUpdatedBy && userId != null)
+        {
+            digitalTwinObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy] = userId;
+        }
 
         string updatedTwinJson = JsonSerializer.Serialize(digitalTwinObject);
 
@@ -764,13 +764,13 @@ RETURN t";
         }
         // Set global last update time
         metadataObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdateTime] = now.ToString("o");
-        if (_trackLastUpdatedBy && userId != null)
-        {
-            metadataObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy] = userId;
-        }
         // Set new etag
         string newEtag = ETagGenerator.GenerateEtag(digitalTwinId, now);
         patchedTwin[DigitalTwinsJsonPropertyNames.DigitalTwinETag] = newEtag;
+        if (_trackLastUpdatedBy && userId != null)
+        {
+            patchedTwin[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy] = userId;
+        }
         string updatedTwinJson = JsonSerializer.Serialize(patchedTwin);
 
         string cypher =
@@ -1151,12 +1151,12 @@ RETURN COUNT(t) AS deletedCount";
 
                 // Set global metadata
                 metadataObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdateTime] = now.ToString("o");
-                if (_trackLastUpdatedBy && userId != null)
-                {
-                    metadataObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy] = userId;
-                }
                 string newEtag = ETagGenerator.GenerateEtag(digitalTwinId, now);
                 digitalTwinObject[DigitalTwinsJsonPropertyNames.DigitalTwinETag] = newEtag;
+                if (_trackLastUpdatedBy && userId != null)
+                {
+                    digitalTwinObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy] = userId;
+                }
 
                 finalValidTwins.Add((digitalTwinId, digitalTwinObject));
             }
