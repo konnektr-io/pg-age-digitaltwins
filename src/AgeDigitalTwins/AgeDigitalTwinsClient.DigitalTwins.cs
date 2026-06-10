@@ -475,6 +475,10 @@ public partial class AgeDigitalTwinsClient
         // Set new etag
         string newEtag = ETagGenerator.GenerateEtag(digitalTwinId, now);
         digitalTwinObject[DigitalTwinsJsonPropertyNames.DigitalTwinETag] = newEtag;
+        if (_trackLastUpdatedBy && userId != null)
+        {
+            digitalTwinObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy] = userId;
+        }
 
         string updatedTwinJson = JsonSerializer.Serialize(digitalTwinObject);
 
@@ -763,6 +767,10 @@ RETURN t";
         // Set new etag
         string newEtag = ETagGenerator.GenerateEtag(digitalTwinId, now);
         patchedTwin[DigitalTwinsJsonPropertyNames.DigitalTwinETag] = newEtag;
+        if (_trackLastUpdatedBy && userId != null)
+        {
+            patchedTwin[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy] = userId;
+        }
         string updatedTwinJson = JsonSerializer.Serialize(patchedTwin);
 
         string cypher =
@@ -867,6 +875,7 @@ RETURN COUNT(t) AS deletedCount";
     /// <exception cref="ArgumentException">Thrown when the batch size exceeds the maximum allowed size (100).</exception>
     public virtual async Task<BatchDigitalTwinResult> CreateOrReplaceDigitalTwinsAsync<T>(
         IEnumerable<T> digitalTwins,
+        string? userId = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -902,6 +911,7 @@ RETURN COUNT(t) AS deletedCount";
             return await CreateOrReplaceDigitalTwinsInternalAsync(
                 connection,
                 digitalTwinsList,
+                userId,
                 cancellationToken
             );
         }
@@ -927,6 +937,7 @@ RETURN COUNT(t) AS deletedCount";
     internal async Task<BatchDigitalTwinResult> CreateOrReplaceDigitalTwinsInternalAsync<T>(
         NpgsqlConnection connection,
         IList<T> digitalTwins,
+        string? userId = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -1142,6 +1153,10 @@ RETURN COUNT(t) AS deletedCount";
                 metadataObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdateTime] = now.ToString("o");
                 string newEtag = ETagGenerator.GenerateEtag(digitalTwinId, now);
                 digitalTwinObject[DigitalTwinsJsonPropertyNames.DigitalTwinETag] = newEtag;
+                if (_trackLastUpdatedBy && userId != null)
+                {
+                    digitalTwinObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy] = userId;
+                }
 
                 finalValidTwins.Add((digitalTwinId, digitalTwinObject));
             }
