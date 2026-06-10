@@ -427,15 +427,16 @@ RETURN rel";
         if (await reader.ReadAsync(cancellationToken))
         {
             var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
-            var edge = (Edge)agResult;
+            var edge = (Edge)agResult!;
+            var properties = edge.Properties;
 
             if (typeof(T) == typeof(string))
             {
-                return (T)(object)JsonSerializer.Serialize(edge.Properties);
+                return (T)(object)JsonSerializer.Serialize(properties);
             }
             else
             {
-                return JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(edge.Properties));
+                return JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(properties));
             }
         }
         else
