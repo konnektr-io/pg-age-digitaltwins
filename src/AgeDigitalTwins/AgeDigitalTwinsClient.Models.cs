@@ -884,7 +884,7 @@ RETURN COUNT(m) AS deletedCount";
     {
         string vectorString = JsonSerializer.Serialize(embedding);
         string cypher =
-            @"MATCH (m:Model {id: $modelId}) SET m.embedding = " + vectorString + "::vector";
+            @"MATCH (m:Model {id: $modelId}) SET m.embedding = " + vectorString;
 
         await using var connection = await _dataSource.OpenConnectionAsync(
             TargetSessionAttributes.ReadWrite,
