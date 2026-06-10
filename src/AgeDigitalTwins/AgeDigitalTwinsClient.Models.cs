@@ -884,7 +884,7 @@ RETURN COUNT(m) AS deletedCount";
     {
         string vectorString = JsonSerializer.Serialize(embedding);
         string cypher =
-            @"MATCH (m:Model {id: $modelId}) SET m.embedding = " + vectorString;
+            @"MATCH (m:Model {id: $modelId}) SET m.embedding = $embedding::cstring::agtype";
 
         await using var connection = await _dataSource.OpenConnectionAsync(
             TargetSessionAttributes.ReadWrite,
@@ -892,7 +892,11 @@ RETURN COUNT(m) AS deletedCount";
         );
         await using var command = connection.CreateCypherCommand(
             _graphName, cypher,
-            new Dictionary<string, object?> { { "modelId", modelId } }
+            new Dictionary<string, object?>
+            {
+                { "modelId", modelId },
+                { "embedding", vectorString },
+            }
         );
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
