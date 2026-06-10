@@ -1,6 +1,8 @@
 using System.Text.Json;
 using AgeDigitalTwins.Exceptions;
 using DTDLParser;
+using Json.Patch;
+using Json.Pointer;
 
 namespace AgeDigitalTwins.Test;
 
@@ -575,6 +577,71 @@ public class ModelsTests : TestBase
         Assert.NotNull(planetFinal.Descendants);
         Assert.Single(planetFinal.Descendants!);
         Assert.Contains("dtmi:com:contoso:HabitablePlanet;1", planetFinal.Descendants);
+    }
+
+    [Fact]
+    public async Task UpdateModel_Decommissioned_Success()
+    {
+        try
+        {
+            await Client.DeleteModelAsync("dtmi:com:adt:dtsample:room;1");
+        }
+        catch (ModelNotFoundException)
+        {
+        }
+
+        await Client.CreateModelsAsync([SampleData.DtdlRoom]);
+
+        var model = await Client.GetModelAsync("dtmi:com:adt:dtsample:room;1");
+        Assert.False(model.IsDecommissioned);
+
+        JsonPatch decommissionPatch = JsonSerializer.Deserialize<JsonPatch>(
+            @"[{""op"": ""replace"", ""path"": ""/decommissioned"", ""value"": true}]"
+        )!;
+        await Client.UpdateModelAsync("dtmi:com:adt:dtsample:room;1", decommissionPatch);
+
+        model = await Client.GetModelAsync("dtmi:com:adt:dtsample:room;1");
+        Assert.True(model.IsDecommissioned);
+
+        JsonPatch recommissionPatch = JsonSerializer.Deserialize<JsonPatch>(
+            @"[{""op"": ""replace"", ""path"": ""/decommissioned"", ""value"": false}]"
+        )!;
+        await Client.UpdateModelAsync("dtmi:com:adt:dtsample:room;1", recommissionPatch);
+
+        model = await Client.GetModelAsync("dtmi:com:adt:dtsample:room;1");
+        Assert.False(model.IsDecommissioned);
+    }
+
+    [Fact]
+    public async Task UpdateModel_Embedding_Success()
+    {
+        try
+        {
+            await Client.DeleteModelAsync("dtmi:com:adt:dtsample:room;1");
+        }
+        catch (ModelNotFoundException)
+        {
+        }
+
+        await Client.CreateModelsAsync([SampleData.DtdlRoom]);
+
+        var model = await Client.GetModelAsync("dtmi:com:adt:dtsample:room;1");
+        Assert.Null(model.Embedding);
+
+        double[] expectedEmbedding = [0.1, 0.2, 0.3];
+        var embeddingNode = JsonSerializer.SerializeToNode(expectedEmbedding);
+        JsonPatch embeddingPatch = new(
+            PatchOperation.Replace(JsonPointer.Parse("/embedding"), embeddingNode)
+        );
+        await Client.UpdateModelAsync("dtmi:com:adt:dtsample:room;1", embeddingPatch);
+
+        model = await Client.GetModelAsync("dtmi:com:adt:dtsample:room;1");
+        Assert.NotNull(model.Embedding);
+        Assert.Equal(expectedEmbedding.Length, model.Embedding.Length);
+        for (int i = 0; i < expectedEmbedding.Length; i++)
+        {
+            Assert.Equal(expectedEmbedding[i], model.Embedding[i]);
+        }
     }
 
     [Fact]
