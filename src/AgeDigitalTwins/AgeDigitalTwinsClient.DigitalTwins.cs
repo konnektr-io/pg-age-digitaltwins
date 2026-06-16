@@ -288,6 +288,7 @@ public partial class AgeDigitalTwinsClient
                 || property == DigitalTwinsJsonPropertyNames.DigitalTwinId
                 || property == DigitalTwinsJsonPropertyNames.DigitalTwinETag
                 || property == DigitalTwinsJsonPropertyNames.MetadataLastUpdateTime
+                || property == DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy
             )
             {
                 continue;
@@ -477,7 +478,8 @@ public partial class AgeDigitalTwinsClient
         digitalTwinObject[DigitalTwinsJsonPropertyNames.DigitalTwinETag] = newEtag;
         if (_trackLastUpdatedBy && userId != null)
         {
-            digitalTwinObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy] = userId;
+            digitalTwinObject.Remove(DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy);
+            metadataObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy] = userId;
         }
 
         string updatedTwinJson = JsonSerializer.Serialize(digitalTwinObject);
@@ -698,6 +700,7 @@ RETURN t";
                 || property == DigitalTwinsJsonPropertyNames.DigitalTwinId
                 || property == DigitalTwinsJsonPropertyNames.DigitalTwinETag
                 || property == DigitalTwinsJsonPropertyNames.MetadataLastUpdateTime
+                || property == DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy
             )
             {
                 continue;
@@ -769,7 +772,8 @@ RETURN t";
         patchedTwin[DigitalTwinsJsonPropertyNames.DigitalTwinETag] = newEtag;
         if (_trackLastUpdatedBy && userId != null)
         {
-            patchedTwin[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy] = userId;
+            patchedTwin.Remove(DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy);
+            metadataObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy] = userId;
         }
         string updatedTwinJson = JsonSerializer.Serialize(patchedTwin);
 
@@ -1088,6 +1092,7 @@ RETURN COUNT(t) AS deletedCount";
                         || property == DigitalTwinsJsonPropertyNames.DigitalTwinId
                         || property == DigitalTwinsJsonPropertyNames.DigitalTwinETag
                         || property == DigitalTwinsJsonPropertyNames.MetadataLastUpdateTime
+                        || property == DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy
                     )
                     {
                         continue;
@@ -1155,7 +1160,8 @@ RETURN COUNT(t) AS deletedCount";
                 digitalTwinObject[DigitalTwinsJsonPropertyNames.DigitalTwinETag] = newEtag;
                 if (_trackLastUpdatedBy && userId != null)
                 {
-                    digitalTwinObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy] = userId;
+                    digitalTwinObject.Remove(DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy);
+                    metadataObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy] = userId;
                 }
 
                 finalValidTwins.Add((digitalTwinId, digitalTwinObject));

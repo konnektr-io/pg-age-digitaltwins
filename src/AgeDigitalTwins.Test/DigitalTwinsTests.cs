@@ -1,9 +1,12 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using AgeDigitalTwins.Exceptions;
 using Azure.DigitalTwins.Core;
 using Json.More;
 using Json.Patch;
 using Json.Pointer;
+using Npgsql;
+using Npgsql.Age;
 using Xunit.Abstractions;
 
 namespace AgeDigitalTwins.Test;
@@ -528,6 +531,121 @@ public class DigitalTwinsTests : TestBase
         Assert.Contains("'$dtId'", actualQuery);
         Assert.Contains("'@_selectedAssessementGroupId'", actualQuery);
         Assert.Contains("'dtmi:com:konnektr:Asset;1'", actualQuery);
+    }
+
+    [Fact]
+    public async Task TrackLastUpdatedBy_CreateTwinWithUserId_StoresLastUpdatedByInMetadata()
+    {
+        var trackedClient = new AgeDigitalTwinsClient(
+            Client.GetDataSource(),
+            new AgeDigitalTwinsClientOptions
+            {
+                GraphName = Client.GetGraphName(),
+                ModelCacheExpiration = TimeSpan.Zero,
+                TrackLastUpdatedBy = true,
+            }
+        );
+
+        string[] models = [SampleData.DtdlCrater];
+        await Client.CreateModelsAsync(models);
+
+        var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinCrater);
+        var createdTwin = await trackedClient.CreateOrReplaceDigitalTwinAsync(
+            digitalTwin!.Id,
+            digitalTwin,
+            userId: "test-user-id"
+        );
+
+        Assert.NotNull(createdTwin);
+
+        var rawTwin = await trackedClient.GetDigitalTwinAsync<JsonObject>(digitalTwin.Id);
+        Assert.NotNull(rawTwin);
+
+        Assert.False(rawTwin.ContainsKey("$lastUpdatedBy"), "$lastUpdatedBy should not be at the root level");
+
+        Assert.True(rawTwin.TryGetPropertyValue("$metadata", out JsonNode? metadataNode));
+        var metadata = metadataNode!.AsObject();
+        Assert.True(metadata.ContainsKey("$lastUpdatedBy"), "$lastUpdatedBy should be inside $metadata");
+        Assert.Equal("test-user-id", metadata["$lastUpdatedBy"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task TrackLastUpdatedBy_PatchTwinWithUserId_ShouldNotFailOnMetadataField()
+    {
+        var trackedClient = new AgeDigitalTwinsClient(
+            Client.GetDataSource(),
+            new AgeDigitalTwinsClientOptions
+            {
+                GraphName = Client.GetGraphName(),
+                ModelCacheExpiration = TimeSpan.Zero,
+                TrackLastUpdatedBy = true,
+            }
+        );
+
+        string[] models = [SampleData.DtdlCrater];
+        await Client.CreateModelsAsync(models);
+
+        var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinCrater);
+        var createdTwin = await trackedClient.CreateOrReplaceDigitalTwinAsync(
+            digitalTwin!.Id,
+            digitalTwin,
+            userId: "test-user-id"
+        );
+
+        Assert.NotNull(createdTwin);
+
+        JsonPatch jsonPatch = JsonSerializer.Deserialize<JsonPatch>(
+            @"[{""op"": ""replace"", ""path"": ""/diameter"", ""value"": 200}]"
+        )!;
+
+        await trackedClient.UpdateDigitalTwinAsync(digitalTwin!.Id, jsonPatch, userId: "test-user-id");
+
+        var readTwin = await trackedClient.GetDigitalTwinAsync<BasicDigitalTwin>(digitalTwin.Id);
+        Assert.NotNull(readTwin);
+        Assert.Equal(200, ((JsonElement)readTwin.Contents["diameter"]).GetDouble());
+    }
+
+    [Fact]
+    public async Task TrackLastUpdatedBy_PollutedTwin_PatchShouldSucceed()
+    {
+        string[] models = [SampleData.DtdlCrater];
+        await Client.CreateModelsAsync(models);
+
+        // Create a twin with $lastUpdatedBy at root (simulating pre-fix pollution)
+        var digitalTwin = JsonSerializer.Deserialize<BasicDigitalTwin>(SampleData.TwinCrater);
+        var createdTwin = await Client.CreateOrReplaceDigitalTwinAsync(
+            digitalTwin!.Id,
+            digitalTwin
+        );
+        Assert.NotNull(createdTwin);
+
+        // Manually inject $lastUpdatedBy at root level using raw Cypher
+        string graphName = Client.GetGraphName();
+        await using var conn = await Client.GetDataSource().OpenConnectionAsync();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = $@"
+SELECT * FROM cypher('{graphName}', $$
+    MATCH (t:Twin {{`$dtId`: '{digitalTwin.Id}'}})
+    SET t.`$lastUpdatedBy` = 'polluted-user'
+    RETURN t
+$$) AS (result agtype);";
+        await cmd.ExecuteNonQueryAsync();
+
+        // Now verify the polluted state
+        var pollutedTwin = await Client.GetDigitalTwinAsync<JsonObject>(digitalTwin.Id);
+        Assert.NotNull(pollutedTwin);
+        Assert.True(pollutedTwin.ContainsKey("$lastUpdatedBy"), "Precondition: $lastUpdatedBy should be at root");
+
+        // Patch should succeed despite the polluting field
+        JsonPatch jsonPatch = JsonSerializer.Deserialize<JsonPatch>(
+            @"[{""op"": ""replace"", ""path"": ""/diameter"", ""value"": 300}]"
+        )!;
+
+        await Client.UpdateDigitalTwinAsync(digitalTwin!.Id, jsonPatch);
+
+        var readTwin = await Client.GetDigitalTwinAsync<BasicDigitalTwin>(digitalTwin.Id);
+        Assert.NotNull(readTwin);
+        Assert.Equal(300, ((JsonElement)readTwin.Contents["diameter"]).GetDouble());
     }
 
     [Fact]

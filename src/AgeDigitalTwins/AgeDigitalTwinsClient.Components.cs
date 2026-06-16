@@ -300,7 +300,8 @@ public partial class AgeDigitalTwinsClient
             metadataObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdateTime] = now.ToString("o");
             if (_trackLastUpdatedBy && userId != null)
             {
-                digitalTwin[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy] = userId;
+                digitalTwin.Remove(DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy);
+                metadataObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy] = userId;
             }
 
             // Update component metadata
