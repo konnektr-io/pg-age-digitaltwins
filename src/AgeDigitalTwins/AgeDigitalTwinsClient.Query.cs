@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using System.Threading;
 using AgeDigitalTwins.Exceptions;
@@ -201,22 +200,7 @@ public partial class AgeDigitalTwinsClient
                                 json = JsonSerializer.Serialize(row);
                             }
 
-                            try
-                            {
-                                results.Add(JsonSerializer.Deserialize<T>(json));
-                            }
-                            catch (JsonException) when (_trackLastUpdatedBy)
-                            {
-                                var responseObj = JsonNode.Parse(json)!.AsObject();
-                                if (responseObj.TryGetPropertyValue(
-                                        DigitalTwinsJsonPropertyNames.DigitalTwinMetadata,
-                                        out var metaNode)
-                                    && metaNode is JsonObject metaObj)
-                                {
-                                    metaObj.Remove(DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy);
-                                }
-                                results.Add(JsonSerializer.Deserialize<T>(responseObj.ToJsonString()));
-                            }
+                            results.Add(JsonSerializer.Deserialize<T>(json));
                         }
                     }
 

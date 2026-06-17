@@ -121,28 +121,10 @@ public partial class AgeDigitalTwinsClient
         {
             var agResult = await reader.GetFieldValueAsync<Agtype?>(0).ConfigureAwait(false);
             var vertex = (Vertex)agResult!;
-
-            try
-            {
-                return JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(vertex!.Properties))
-                    ?? throw new SerializationException(
-                        $"Digital Twin with ID {digitalTwinId} could not be deserialized"
-                    );
-            }
-            catch (JsonException) when (_trackLastUpdatedBy)
-            {
-                var responseJson = JsonSerializer.Serialize(vertex!.Properties);
-                var responseObj = JsonNode.Parse(responseJson)!.AsObject();
-                if (responseObj.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.DigitalTwinMetadata, out var metaNode)
-                    && metaNode is JsonObject metaObj)
-                {
-                    metaObj.Remove(DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy);
-                }
-                return JsonSerializer.Deserialize<T>(responseObj.ToJsonString())
-                    ?? throw new SerializationException(
-                        $"Digital Twin with ID {digitalTwinId} could not be deserialized"
-                    );
-            }
+            return JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(vertex!.Properties))
+                ?? throw new SerializationException(
+                    $"Digital Twin with ID {digitalTwinId} could not be deserialized"
+                );
         }
         else
         {
