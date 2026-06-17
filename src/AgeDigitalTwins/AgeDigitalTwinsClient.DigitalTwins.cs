@@ -121,7 +121,12 @@ public partial class AgeDigitalTwinsClient
         {
             var agResult = await reader.GetFieldValueAsync<Agtype?>(0).ConfigureAwait(false);
             var vertex = (Vertex)agResult!;
-            return JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(vertex!.Properties))
+            var responseJson = JsonSerializer.Serialize(vertex!.Properties);
+            if (!_returnTwinLevelLastUpdatedBy)
+            {
+                responseJson = StripTwinLevelLastUpdatedBy(responseJson);
+            }
+            return JsonSerializer.Deserialize<T>(responseJson)
                 ?? throw new SerializationException(
                     $"Digital Twin with ID {digitalTwinId} could not be deserialized"
                 );
@@ -509,31 +514,17 @@ RETURN t";
 
             if (typeof(T) == typeof(string))
             {
-                return (T)(object)JsonSerializer.Serialize(vertex!.Properties);
+                var json = JsonSerializer.Serialize(vertex!.Properties);
+                return (T)(object)(!_returnTwinLevelLastUpdatedBy ? StripTwinLevelLastUpdatedBy(json) : json);
             }
             else
             {
-                try
+                var responseJson = JsonSerializer.Serialize(vertex!.Properties);
+                if (!_returnTwinLevelLastUpdatedBy)
                 {
-                    return JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(vertex!.Properties));
+                    responseJson = StripTwinLevelLastUpdatedBy(responseJson);
                 }
-                catch (JsonException) when (_trackLastUpdatedBy)
-                {
-                    // Some types (e.g. Azure SDK's BasicDigitalTwin) don't recognize
-                    // $lastUpdatedBy in $metadata and throw during deserialization.
-                    // Strip the twin-level $lastUpdatedBy and retry once.
-                    var responseJson = JsonSerializer.Serialize(vertex!.Properties);
-                    var responseObj = JsonNode.Parse(responseJson)!.AsObject();
-                    if (responseObj.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.DigitalTwinMetadata, out var metaNode)
-                        && metaNode is JsonObject metaObj)
-                    {
-                        metaObj.Remove(DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy);
-                    }
-                    return JsonSerializer.Deserialize<T>(responseObj.ToJsonString())
-                        ?? throw new SerializationException(
-                            $"Digital Twin with ID {digitalTwinId} could not be deserialized"
-                        );
-                }
+                return JsonSerializer.Deserialize<T>(responseJson);
             }
         }
         else

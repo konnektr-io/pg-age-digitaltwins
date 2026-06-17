@@ -200,6 +200,11 @@ public partial class AgeDigitalTwinsClient
                                 json = JsonSerializer.Serialize(row);
                             }
 
+                            if (!_returnTwinLevelLastUpdatedBy)
+                            {
+                                json = StripTwinLevelLastUpdatedBy(json);
+                            }
+
                             results.Add(JsonSerializer.Deserialize<T>(json));
                         }
                     }
