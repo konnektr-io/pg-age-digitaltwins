@@ -15,15 +15,8 @@ public class TrackLastUpdatedByAppHostForHttp : DistributedApplicationFactory
 
     protected override void OnBuilderCreated(DistributedApplicationBuilder applicationBuilder)
     {
-        var apiService = applicationBuilder.Resources.FirstOrDefault(r => r.Name == "apiservice");
-        if (apiService is IResourceWithEnvironment resource)
-        {
-            resource.Annotations.Add(new EnvironmentCallbackAnnotation(context =>
-            {
-                context.EnvironmentVariables["Parameters:TrackLastUpdatedBy"] = "true";
-                context.EnvironmentVariables["Parameters:UserIdHeaderName"] = "X-User-Id";
-            }));
-        }
+        Environment.SetEnvironmentVariable("Parameters__TrackLastUpdatedBy", "true");
+        Environment.SetEnvironmentVariable("Parameters__UserIdHeaderName", "X-User-Id");
 
         applicationBuilder.Services.ConfigureHttpClientDefaults(clientBuilder =>
         {
