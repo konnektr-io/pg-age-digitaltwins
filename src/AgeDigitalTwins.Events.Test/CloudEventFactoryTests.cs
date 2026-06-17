@@ -1032,4 +1032,209 @@ public class CloudEventFactoryTests
         Assert.NotNull(data);
         Assert.False(data.ContainsKey("updatedBy"), "updatedBy should be absent when trackLastUpdatedBy is false");
     }
+
+    [Fact]
+    public void CreateDataHistoryEvents_TrackLastUpdatedBy_BundledMetadata_IncludesUpdatedBy()
+    {
+        // Arrange - Property 'label' first write, CreatePatch produces bundled $metadata/label operation
+        var eventData = new EventData(Guid.NewGuid().ToString(), "digitaltwins", "Twin")
+        {
+            EventType = EventType.TwinUpdate,
+            OldValue = JsonNode
+                .Parse(
+                    @"{
+                    ""$dtId"": ""twin1"",
+                    ""$metadata"": { ""$model"": ""model1"" }
+                }"
+                )!
+                .AsObject(),
+            NewValue = JsonNode
+                .Parse(
+                    @"{
+                    ""$dtId"": ""twin1"",
+                    ""$metadata"": {
+                        ""$model"": ""model1"",
+                        ""label"": {
+                            ""lastUpdateTime"": ""2024-06-17T11:32:39.4410855Z"",
+                            ""lastUpdatedBy"": ""9c00982e-6218-42c1-bf77-fb5e5d339d8e""
+                        }
+                    },
+                    ""label"": ""qsdqsdqsdqsdd""
+                }"
+                )!
+                .AsObject(),
+            Timestamp = DateTime.UtcNow,
+        };
+        var source = new Uri("http://example.com");
+
+        // Act
+        var result = CloudEventFactory.CreateDataHistoryEvents(
+            eventData,
+            source,
+            [],
+            trackLastUpdatedBy: true
+        );
+
+        // Assert
+        var propertyEvent = result.First(e => e.Type == "Konnektr.Graph.Property.Event");
+        var data = propertyEvent.Data as JsonObject;
+        Assert.NotNull(data);
+        Assert.Equal("label", data["key"]?.ToString());
+        Assert.Equal("qsdqsdqsdqsdd", data["value"]?.ToString());
+        Assert.Equal("9c00982e-6218-42c1-bf77-fb5e5d339d8e", data["updatedBy"]?.ToString());
+    }
+
+    [Fact]
+    public void CreateDataHistoryEvents_TrackLastUpdatedByFalse_BundledMetadata_OmitsUpdatedBy()
+    {
+        // Arrange - Property 'label' first write, bundled metadata, but trackLastUpdatedBy=false
+        var eventData = new EventData(Guid.NewGuid().ToString(), "digitaltwins", "Twin")
+        {
+            EventType = EventType.TwinUpdate,
+            OldValue = JsonNode
+                .Parse(
+                    @"{
+                    ""$dtId"": ""twin1"",
+                    ""$metadata"": { ""$model"": ""model1"" }
+                }"
+                )!
+                .AsObject(),
+            NewValue = JsonNode
+                .Parse(
+                    @"{
+                    ""$dtId"": ""twin1"",
+                    ""$metadata"": {
+                        ""$model"": ""model1"",
+                        ""label"": {
+                            ""lastUpdateTime"": ""2024-06-17T11:32:39.4410855Z"",
+                            ""lastUpdatedBy"": ""9c00982e-6218-42c1-bf77-fb5e5d339d8e""
+                        }
+                    },
+                    ""label"": ""qsdqsdqsdqsdd""
+                }"
+                )!
+                .AsObject(),
+            Timestamp = DateTime.UtcNow,
+        };
+        var source = new Uri("http://example.com");
+
+        // Act - default trackLastUpdatedBy=false
+        var result = CloudEventFactory.CreateDataHistoryEvents(eventData, source, []);
+
+        // Assert
+        var propertyEvent = result.First(e => e.Type == "Konnektr.Graph.Property.Event");
+        var data = propertyEvent.Data as JsonObject;
+        Assert.NotNull(data);
+        Assert.Equal("label", data["key"]?.ToString());
+        Assert.False(data.ContainsKey("updatedBy"), "updatedBy should be absent when trackLastUpdatedBy is false");
+    }
+
+    [Fact]
+    public void CreateDataHistoryEvents_TrackLastUpdatedBy_BundledMetadataWithSourceTime_IncludesSourceTime()
+    {
+        // Arrange - Property 'label' first write, bundled metadata includes sourceTime
+        var eventData = new EventData(Guid.NewGuid().ToString(), "digitaltwins", "Twin")
+        {
+            EventType = EventType.TwinUpdate,
+            OldValue = JsonNode
+                .Parse(
+                    @"{
+                    ""$dtId"": ""twin1"",
+                    ""$metadata"": { ""$model"": ""model1"" }
+                }"
+                )!
+                .AsObject(),
+            NewValue = JsonNode
+                .Parse(
+                    @"{
+                    ""$dtId"": ""twin1"",
+                    ""$metadata"": {
+                        ""$model"": ""model1"",
+                        ""label"": {
+                            ""lastUpdateTime"": ""2024-06-17T11:32:39.4410855Z"",
+                            ""sourceTime"": ""2024-06-17T11:30:00Z"",
+                            ""lastUpdatedBy"": ""9c00982e-6218-42c1-bf77-fb5e5d339d8e""
+                        }
+                    },
+                    ""label"": ""qsdqsdqsdqsdd""
+                }"
+                )!
+                .AsObject(),
+            Timestamp = DateTime.UtcNow,
+        };
+        var source = new Uri("http://example.com");
+
+        // Act
+        var result = CloudEventFactory.CreateDataHistoryEvents(
+            eventData,
+            source,
+            [],
+            trackLastUpdatedBy: true
+        );
+
+        // Assert
+        var propertyEvent = result.First(e => e.Type == "Konnektr.Graph.Property.Event");
+        var data = propertyEvent.Data as JsonObject;
+        Assert.NotNull(data);
+        Assert.Equal("label", data["key"]?.ToString());
+        Assert.Equal("2024-06-17T11:30:00Z", data["sourceTimeStamp"]?.ToString());
+        Assert.Equal("9c00982e-6218-42c1-bf77-fb5e5d339d8e", data["updatedBy"]?.ToString());
+    }
+
+    [Fact]
+    public void CreateDataHistoryEvents_TrackLastUpdatedBy_BundledMetadata_SubsequentWriteStillWorks()
+    {
+        // Arrange - Property 'temperature' updated (subsequent write), separate metadata operations
+        var eventData = new EventData(Guid.NewGuid().ToString(), "digitaltwins", "Twin")
+        {
+            EventType = EventType.TwinUpdate,
+            NewValue = JsonNode
+                .Parse(
+                    @"{
+                    ""$dtId"": ""twin1"",
+                    ""$metadata"": {
+                        ""$model"": ""model1"",
+                        ""temperature"": {
+                            ""lastUpdateTime"": ""2024-01-15T10:30:00Z"",
+                            ""lastUpdatedBy"": ""user-123""
+                        }
+                    },
+                    ""temperature"": 22.5
+                }"
+                )!
+                .AsObject(),
+            OldValue = JsonNode
+                .Parse(
+                    @"{
+                    ""$dtId"": ""twin1"",
+                    ""$metadata"": {
+                        ""$model"": ""model1"",
+                        ""temperature"": {
+                            ""lastUpdateTime"": ""2024-01-15T10:00:00Z""
+                        }
+                    },
+                    ""temperature"": 20.0
+                }"
+                )!
+                .AsObject(),
+            Timestamp = DateTime.UtcNow,
+        };
+        var source = new Uri("http://example.com");
+
+        // Act
+        var result = CloudEventFactory.CreateDataHistoryEvents(
+            eventData,
+            source,
+            [],
+            trackLastUpdatedBy: true
+        );
+
+        // Assert - the existing behavior still works
+        Assert.Single(result);
+        var data = result[0].Data as JsonObject;
+        Assert.NotNull(data);
+        Assert.Equal("temperature", data["key"]?.ToString());
+        Assert.Equal("22.5", data["value"]?.ToString());
+        Assert.Equal("user-123", data["updatedBy"]?.ToString());
+    }
 }

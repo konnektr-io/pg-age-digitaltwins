@@ -571,7 +571,7 @@ public static class CloudEventFactory
             string key = op.Path.ToString().Trim('/').Replace("/", "_");
 
             // Skip system properties that start with $
-            if (key.StartsWith("$"))
+            if (key.StartsWith('$'))
             {
                 continue;
             }
@@ -628,22 +628,18 @@ public static class CloudEventFactory
 
         string metadataKeyPath = $"/{DigitalTwinsJsonPropertyNames.DigitalTwinMetadata}/{key.Replace("_", "/")}/";
 
-        PatchOperation? sourceTimeOperation = jsonPatch.Operations.FirstOrDefault(o =>
-            o.Path.ToString() == $"{metadataKeyPath}{DigitalTwinsJsonPropertyNames.MetadataPropertySourceTime}"
-        );
-        if (sourceTimeOperation != null)
+        var sourceTimeValue = GetPatchMetadataValue(jsonPatch, metadataKeyPath, DigitalTwinsJsonPropertyNames.MetadataPropertySourceTime);
+        if (sourceTimeValue != null)
         {
-            body["sourceTimeStamp"] = sourceTimeOperation.Value?.DeepClone();
+            body["sourceTimeStamp"] = sourceTimeValue;
         }
 
         if (trackLastUpdatedBy)
         {
-            PatchOperation? lastUpdatedByOperation = jsonPatch.Operations.FirstOrDefault(o =>
-                o.Path.ToString() == $"{metadataKeyPath}{DigitalTwinsJsonPropertyNames.MetadataPropertyLastUpdatedBy}"
-            );
-            if (lastUpdatedByOperation != null)
+            var lastUpdatedByValue = GetPatchMetadataValue(jsonPatch, metadataKeyPath, DigitalTwinsJsonPropertyNames.MetadataPropertyLastUpdatedBy);
+            if (lastUpdatedByValue != null)
             {
-                body["updatedBy"] = lastUpdatedByOperation.Value?.DeepClone();
+                body["updatedBy"] = lastUpdatedByValue;
             }
         }
 
@@ -729,6 +725,29 @@ public static class CloudEventFactory
         }
 
         return originalPatch;
+    }
+
+    private static JsonNode? GetPatchMetadataValue(JsonPatch jsonPatch, string basePath, string propertyName)
+    {
+        var exactPath = $"{basePath}{propertyName}";
+        PatchOperation? operation = jsonPatch.Operations.FirstOrDefault(o =>
+            o.Path.ToString() == exactPath
+        );
+        if (operation != null)
+        {
+            return operation.Value?.DeepClone();
+        }
+
+        var parentPath = basePath.TrimEnd('/');
+        operation = jsonPatch.Operations.FirstOrDefault(o =>
+            o.Path.ToString() == parentPath
+        );
+        if (operation?.Value is JsonObject obj && obj.TryGetPropertyValue(propertyName, out var val))
+        {
+            return val?.DeepClone();
+        }
+
+        return null;
     }
 
     #endregion
