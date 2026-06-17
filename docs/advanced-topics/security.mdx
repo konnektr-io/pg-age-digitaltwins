@@ -12,16 +12,49 @@ This guide covers the security features available in Konnektr Graph, including u
 
 ## TrackLastUpdatedBy
 
-The `TrackLastUpdatedBy` feature records which user last modified each property on a digital twin. When enabled, the user ID is stored in each updated property's metadata as `lastUpdatedBy`.
+The `TrackLastUpdatedBy` feature records which user last modified a digital twin. When enabled, the user ID is stored at two levels in the twin's `$metadata`, analogous to `$lastUpdateTime` / `lastUpdateTime`.
 
 ### How It Works
 
 When `TrackLastUpdatedBy` is enabled:
 
 1. **Write operations** (`CreateOrReplaceDigitalTwin`, `UpdateDigitalTwin`) accept a `userId` parameter
-2. For each property being written or patched, the SDK injects a `lastUpdatedBy` field into that property's `$metadata`
-3. The metadata is stored as part of the twin's JSON document in the AGE graph
-4. When reading the twin via the REST API, the `$metadata` includes `lastUpdatedBy` on each property
+2. The SDK sets `$metadata.$lastUpdatedBy` to the user who last updated any property on the twin
+3. For each property being written or patched, the SDK also sets `$metadata.<propertyName>.lastUpdatedBy` to the user who last updated that specific property
+4. The metadata is stored as part of the twin's JSON document in the AGE graph
+
+For example, a twin with `Temperature` and `Humidity` properties would have:
+
+```json
+{
+  "$dtId": "room-001",
+  "$metadata": {
+    "$model": "dtmi:example:Room;1",
+    "$lastUpdateTime": "2026-06-17T12:00:00Z",
+    "$lastUpdatedBy": "user-abc",
+    "Temperature": {
+      "lastUpdateTime": "2026-06-17T12:00:00Z",
+      "lastUpdatedBy": "user-abc"
+    },
+    "Humidity": {
+      "lastUpdateTime": "2026-06-17T12:00:00Z",
+      "lastUpdatedBy": "user-abc"
+    }
+  },
+  "Temperature": 22.5,
+  "Humidity": 45
+}
+```
+
+### Azure SDK Compatibility
+
+When `TrackLastUpdatedBy` is enabled, the Azure Digital Twins SDK's `BasicDigitalTwin` and `DigitalTwinMetadata` types **cannot** deserialize twin responses. The Azure SDK's `DigitalTwinMetadataJsonConverter` throws on any unrecognized property within `$metadata`.
+
+If you use the Azure SDK with `TrackLastUpdatedBy` enabled, use one of these workarounds:
+
+- Use `JsonDocument` or `JsonObject` as the response type (e.g., `GetDigitalTwinAsync<JsonDocument>`) to access the raw JSON
+- Use custom DTOs that don't parse the `$metadata` block
+- The native `AgeDigitalTwinsClient` SDK has full support for `$lastUpdatedBy` in `$metadata`
 
 ### Configuration
 
@@ -51,8 +84,7 @@ Returns `null` if the user is unauthenticated or no suitable claim exists (in wh
 In the **Events Service**, when `TrackLastUpdatedBy` is enabled:
 
 - The `SharedEventConsumer` passes `trackLastUpdatedBy: true` to `CloudEventFactory.CreateDataHistoryEvents()`
-- When building DataHistory property events, the factory inspects the JSON patch for `/$metadata/{key}/lastUpdatedBy` operations
-- If found, an `updatedBy` field is added to the CloudEvent body
+- The factory reads `$metadata.$lastUpdatedBy` from the twin's new value and adds an `updatedBy` field to the CloudEvent body
 
 **Kusto Sink**: When `TrackLastUpdatedBy` is enabled, the `KustoEventSink` adds an `UpdatedBy` column mapping to the `AdtPropertyEvents` table. This ensures `updatedBy` values are ingested into Kusto for historical querying.
 
@@ -64,9 +96,13 @@ To enable end-to-end tracking:
 2. **Events Service**: Set `Parameters:TrackLastUpdatedBy: true` (so `updatedBy` fields appear in CloudEvents)
 3. **Ensure authentication is enabled** so the JWT contains a user identifier claim
 
+### Azure SDK Note
+
+When `TrackLastUpdatedBy` is enabled, the Azure Digital Twins SDK's `BasicDigitalTwin` and `DigitalTwinMetadata` types cannot deserialize twin responses because they don't recognize `$lastUpdatedBy` inside `$metadata`. Use `JsonDocument`, `JsonObject`, or custom DTOs as workarounds. See [Using Azure Digital Twins SDKs](/docs/graph/how-to-guides/using-azure-digital-twins-sdks) for details.
+
 ### Privacy Considerations
 
-- The `lastUpdatedBy` value comes from the JWT `sub` or `nameidentifier` claim — typically an opaque user or service account ID
+- The `$lastUpdatedBy` value comes from the JWT `sub` or `nameidentifier` claim — typically an opaque user or service account ID
 - Consider whether your use case requires storing user identifiers in twin metadata for compliance or auditing purposes
 - This feature is opt-in and disabled by default
 
@@ -298,10 +334,10 @@ JSON Patch operations for twin and component updates are validated before applic
 
 ### TrackLastUpdatedBy for Audit
 
-With `TrackLastUpdatedBy` enabled, you can trace every property change to the user or service account that made it. Combined with DataHistory event routing to Kusto, this provides a complete audit trail:
+With `TrackLastUpdatedBy` enabled, you can trace every twin change to the user or service account that made it. Combined with DataHistory event routing to Kusto, this provides a complete audit trail:
 
 ```
-Which user changed what property, on which twin, at what time
+Which user changed which twin, at what time
 ```
 
 ### Dead Letter Queue

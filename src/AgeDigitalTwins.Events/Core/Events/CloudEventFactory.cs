@@ -404,8 +404,8 @@ public static class CloudEventFactory
             };
         if (trackLastUpdatedBy)
         {
-            var lastUpdatedBy = eventData.NewValue?[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy]?.ToString()
-                ?? eventData.OldValue?[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy]?.ToString();
+            var lastUpdatedBy = eventData.NewValue?[DigitalTwinsJsonPropertyNames.DigitalTwinMetadata]?[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy]?.ToString()
+                ?? eventData.OldValue?[DigitalTwinsJsonPropertyNames.DigitalTwinMetadata]?[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy]?.ToString();
             if (lastUpdatedBy != null)
             {
                 body["updatedBy"] = lastUpdatedBy;
@@ -521,7 +521,7 @@ public static class CloudEventFactory
                 };
             if (trackLastUpdatedBy)
             {
-                var lastUpdatedBy = eventData.NewValue?[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy]?.ToString();
+                var lastUpdatedBy = eventData.NewValue?[DigitalTwinsJsonPropertyNames.DigitalTwinMetadata]?[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy]?.ToString();
                 if (lastUpdatedBy != null)
                 {
                     body["updatedBy"] = lastUpdatedBy;

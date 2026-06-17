@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Azure;
 using Azure.Core;
 using Azure.Core.Pipeline;
@@ -508,5 +509,142 @@ public class AzureDigitalTwinsSdkIntegrationTests : IAsyncLifetime
             // Assert
             Assert.Equal(404, ex.Status);
         }
+    }
+
+    [Fact]
+    public async Task GetDigitalTwinAsJsonDocument_LastUpdateTimeInMetadata()
+    {
+        // Arrange
+        Assert.NotNull(_digitalTwinsClient);
+        await _digitalTwinsClient.CreateModelsAsync(
+            [SampleData.DtdlTemperatureSensor]
+        );
+
+        string twinId = "metadata-test-twin";
+        var twin = new BasicDigitalTwin
+        {
+            Id = twinId,
+            Metadata = new DigitalTwinMetadata { ModelId = "dtmi:com:adt:dtsample:tempsensor;1" },
+            Contents = new Dictionary<string, object> { { "temperature", 25 } },
+        };
+        await _digitalTwinsClient.CreateOrReplaceDigitalTwinAsync(twinId, twin);
+
+        // Act
+        Response<JsonDocument> response =
+            await _digitalTwinsClient.GetDigitalTwinAsync<JsonDocument>(twinId);
+        JsonElement root = response.Value.RootElement;
+
+        // Assert
+        Assert.True(root.TryGetProperty("$dtId", out JsonElement dtId));
+        Assert.Equal(twinId, dtId.GetString());
+
+        // $lastUpdateTime should be inside $metadata, not at root
+        Assert.False(root.TryGetProperty("$lastUpdateTime", out _), "$lastUpdateTime should not be at root level");
+        Assert.True(root.TryGetProperty("$metadata", out JsonElement metadata));
+        Assert.True(metadata.TryGetProperty("$lastUpdateTime", out JsonElement lastUpdateProp));
+        Assert.NotNull(lastUpdateProp.GetString());
+        Assert.True(DateTimeOffset.TryParse(lastUpdateProp.GetString(), out _));
+
+        // $model should also be in $metadata
+        Assert.True(metadata.TryGetProperty("$model", out JsonElement modelProp));
+        Assert.Equal("dtmi:com:adt:dtsample:tempsensor;1", modelProp.GetString());
+    }
+
+    public class CustomTwinDto
+    {
+        [JsonPropertyName("$dtId")]
+        public string? Id { get; set; }
+
+        [JsonPropertyName("$etag")]
+        public string? ETag { get; set; }
+
+        [JsonPropertyName("temperature")]
+        public int Temperature { get; set; }
+    }
+
+    [Fact]
+    public async Task GetDigitalTwin_WithCustomDto_WorksCorrectly()
+    {
+        // Arrange
+        Assert.NotNull(_digitalTwinsClient);
+        await _digitalTwinsClient.CreateModelsAsync(
+            [SampleData.DtdlTemperatureSensor]
+        );
+
+        string twinId = "custom-dto-twin";
+        var twin = new BasicDigitalTwin
+        {
+            Id = twinId,
+            Metadata = new DigitalTwinMetadata { ModelId = "dtmi:com:adt:dtsample:tempsensor;1" },
+            Contents = new Dictionary<string, object> { { "temperature", 30 } },
+        };
+        await _digitalTwinsClient.CreateOrReplaceDigitalTwinAsync(twinId, twin);
+
+        // Act - use a custom DTO to fetch
+        CustomTwinDto fetched =
+            await _digitalTwinsClient.GetDigitalTwinAsync<CustomTwinDto>(twinId);
+
+        // Assert
+        Assert.NotNull(fetched);
+        Assert.Equal(twinId, fetched.Id);
+        Assert.NotNull(fetched.ETag);
+        Assert.Equal(30, fetched.Temperature);
+
+        // Verify the same works with CreateOrReplace
+        var updatedTwin = new BasicDigitalTwin
+        {
+            Id = twinId,
+            Metadata = new DigitalTwinMetadata { ModelId = "dtmi:com:adt:dtsample:tempsensor;1" },
+            Contents = new Dictionary<string, object> { { "temperature", 35 } },
+        };
+        await _digitalTwinsClient.CreateOrReplaceDigitalTwinAsync(twinId, updatedTwin);
+
+        CustomTwinDto reFetched =
+            await _digitalTwinsClient.GetDigitalTwinAsync<CustomTwinDto>(twinId);
+        Assert.NotNull(reFetched);
+        Assert.Equal(twinId, reFetched.Id);
+        Assert.Equal(35, reFetched.Temperature);
+        Assert.NotEqual(fetched.ETag, reFetched.ETag);
+    }
+
+    [Fact]
+    public async Task UpdateDigitalTwin_WithBasicDigitalTwin_UpdatesPropertyAndMetadata()
+    {
+        // Arrange
+        Assert.NotNull(_digitalTwinsClient);
+        await _digitalTwinsClient.CreateModelsAsync(
+            [SampleData.DtdlTemperatureSensor]
+        );
+
+        string twinId = "patch-test-twin";
+        var twin = new BasicDigitalTwin
+        {
+            Id = twinId,
+            Metadata = new DigitalTwinMetadata { ModelId = "dtmi:com:adt:dtsample:tempsensor;1" },
+            Contents = new Dictionary<string, object> { { "temperature", 22 } },
+        };
+        await _digitalTwinsClient.CreateOrReplaceDigitalTwinAsync(twinId, twin);
+
+        // Act - patch the temperature
+        var patch = new JsonPatchDocument();
+        patch.AppendReplace("/temperature", 28);
+        await _digitalTwinsClient.UpdateDigitalTwinAsync(twinId, patch);
+
+        // Assert - verify the patch via get
+        BasicDigitalTwin updated =
+            await _digitalTwinsClient.GetDigitalTwinAsync<BasicDigitalTwin>(twinId);
+        Assert.NotNull(updated);
+        Assert.Equal(twinId, updated.Id);
+        Assert.NotNull(updated.LastUpdatedOn);
+        Assert.Equal(28, ((JsonElement)updated.Contents["temperature"]).GetInt32());
+
+        // Verify $lastUpdateTime updated through raw JSON
+        Response<JsonDocument> rawResponse =
+            await _digitalTwinsClient.GetDigitalTwinAsync<JsonDocument>(twinId);
+        JsonElement root = rawResponse.Value.RootElement;
+        Assert.True(root.TryGetProperty("$metadata", out JsonElement metadata));
+        Assert.True(metadata.TryGetProperty("$lastUpdateTime", out JsonElement lastUpdateProp));
+        DateTimeOffset metadataTime = DateTimeOffset.Parse(lastUpdateProp.GetString()!);
+        Assert.True(metadataTime >= updated.LastUpdatedOn.Value - TimeSpan.FromSeconds(1));
     }
 }
