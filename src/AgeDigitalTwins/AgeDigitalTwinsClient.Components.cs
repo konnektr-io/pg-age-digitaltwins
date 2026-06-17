@@ -280,11 +280,10 @@ public partial class AgeDigitalTwinsClient
         }
 
         // Validate the updated component against its schema
-        await ValidateComponentAgainstSchema(
+        ValidateComponentAgainstSchema(
             componentSchema,
             patchedComponent,
-            componentName,
-            cancellationToken
+            componentName
         );
 
         // Update the component in the digital twin
@@ -480,14 +479,13 @@ RETURN t";
     /// <summary>
     /// Validates a component against its DTDL schema.
     /// </summary>
-    private Task ValidateComponentAgainstSchema(
+    private static void ValidateComponentAgainstSchema(
         DTInterfaceInfo componentSchema,
         JsonObject component,
-        string componentName,
-        CancellationToken cancellationToken = default
+        string componentName
     )
     {
-        var violations = new System.Collections.Generic.List<string>();
+        var violations = new List<string>();
 
         foreach (var kv in component)
         {
@@ -529,7 +527,5 @@ RETURN t";
         {
             throw new ValidationFailedException(string.Join(" AND ", violations));
         }
-
-        return Task.CompletedTask;
     }
 }
