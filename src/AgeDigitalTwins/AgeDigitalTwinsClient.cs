@@ -1,5 +1,7 @@
 using System;
 using System.Diagnostics;
+using System.Linq;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using AgeDigitalTwins.Jobs;
@@ -158,16 +160,43 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
     /// Strips the twin-level <c>$lastUpdatedBy</c> field from a response JSON string
     /// when <see cref="ReturnTwinLevelLastUpdatedBy"/> is <c>false</c>.
     /// Per-property <c>lastUpdatedBy</c> in property metadata is preserved.
+    /// Handles nested twins (e.g. in multi-column query results like <c>SELECT Q, R FROM ...</c>)
+    /// by recursively traversing the JSON tree.
     /// </summary>
     internal static string StripTwinLevelLastUpdatedBy(string responseJson)
     {
-        var obj = JsonNode.Parse(responseJson)!.AsObject();
-        if (obj.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.DigitalTwinMetadata, out var metaNode)
-            && metaNode is JsonObject metaObj)
+        var node = JsonNode.Parse(responseJson)!;
+        StripMetadataLastUpdatedByRecursive(node);
+        return node.ToJsonString();
+    }
+
+    private static void StripMetadataLastUpdatedByRecursive(JsonNode node)
+    {
+        if (node is JsonObject obj)
         {
-            metaObj.Remove(DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy);
+            if (obj.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.DigitalTwinMetadata, out var metaNode)
+                && metaNode is JsonObject metaObj)
+            {
+                metaObj.Remove(DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy);
+            }
+            foreach (var kvp in obj.ToList())
+            {
+                if (kvp.Value != null)
+                {
+                    StripMetadataLastUpdatedByRecursive(kvp.Value);
+                }
+            }
         }
-        return obj.ToJsonString();
+        else if (node is JsonArray arr)
+        {
+            foreach (var item in arr)
+            {
+                if (item != null)
+                {
+                    StripMetadataLastUpdatedByRecursive(item);
+                }
+            }
+        }
     }
 }
 
