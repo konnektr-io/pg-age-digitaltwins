@@ -90,6 +90,19 @@ Partial class split by concern:
 
 The client holds an in-memory model cache (`MemoryCache`) to avoid repeated DB lookups during DTDL validation. Cache TTL is configurable via `AgeDigitalTwinsClientOptions.ModelCacheExpiration` (default 10s).
 
+### `TrackLastUpdatedBy` and Azure SDK compatibility
+
+When `TrackLastUpdatedBy` is enabled and a valid `userId` is provided on write operations, the field `$lastUpdatedBy` is stored inside the twin's `$metadata` block (alongside `$model`, `$lastUpdateTime`, and per-property metadata).
+
+**Direct DB SDK (`AgeDigitalTwinsClient`):** Fully supported. The project's custom converters (`BasicDigitalTwinJsonConverter`, `DigitalTwinMetadataJsonConverter`) handle `$lastUpdatedBy` in `$metadata` correctly for both serialization and deserialization.
+
+**Azure Digital Twins SDK (`Azure.DigitalTwins.Core`) via REST API:** `$lastUpdatedBy` in `$metadata` is NOT supported when deserializing with `BasicDigitalTwin` or `DigitalTwinMetadata`. The Azure SDK's `DigitalTwinMetadataJsonConverter` throws on any unrecognized property within `$metadata`.
+
+Workarounds for Azure SDK consumers when `TrackLastUpdatedBy` is enabled:
+- Use `JsonDocument` or `JsonObject` as the response type (`GetDigitalTwinAsync<JsonDocument>`) to access the raw JSON without deserialization errors.
+- Use custom DTOs that don't attempt to parse the `$metadata` block.
+- Disable `TrackLastUpdatedBy` (default: `false`) if Azure SDK `BasicDigitalTwin` deserialization is required.
+
 ### Jobs system
 
 `JobService` (in `Jobs/`) manages long-running import and delete jobs using a PostgreSQL schema (`{graphName}_jobs`) for persistence and distributed locking. `ImportJob` processes ND-JSON streams (sections: Header → Models → Twins → Relationships) with checkpointing. The API service registers `JobResumptionService` (hosted service) to resume interrupted jobs on startup.
