@@ -3,9 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using AgeDigitalTwins.Jobs;
 using AgeDigitalTwins.Test;
-using Azure.DigitalTwins.Core;
 using Xunit.Abstractions;
-// using AgeDigitalTwins.Models;
 using SdkBasicDigitalTwin = Azure.DigitalTwins.Core.BasicDigitalTwin;
 using SdkBasicRelationship = Azure.DigitalTwins.Core.BasicRelationship;
 
@@ -1531,7 +1529,7 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         }
 
         var uniqueTwinId = $"crater_{Guid.NewGuid():N}";
-        var digitalTwin = JsonSerializer.Deserialize<SdkBasicDigitalTwin>(SampleData.TwinCrater);
+        var digitalTwin = JsonSerializer.Deserialize<AgeDigitalTwins.Models.BasicDigitalTwin>(SampleData.TwinCrater);
         digitalTwin!.Id = uniqueTwinId;
         digitalTwin.Contents["diameter"] = 100.0;
 

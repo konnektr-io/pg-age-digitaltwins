@@ -121,7 +121,12 @@ public partial class AgeDigitalTwinsClient
         {
             var agResult = await reader.GetFieldValueAsync<Agtype?>(0).ConfigureAwait(false);
             var vertex = (Vertex)agResult!;
-            return JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(vertex!.Properties))
+            var responseJson = JsonSerializer.Serialize(vertex!.Properties);
+            if (!_returnTwinLevelLastUpdatedBy)
+            {
+                responseJson = StripTwinLevelLastUpdatedBy(responseJson);
+            }
+            return JsonSerializer.Deserialize<T>(responseJson)
                 ?? throw new SerializationException(
                     $"Digital Twin with ID {digitalTwinId} could not be deserialized"
                 );
@@ -288,6 +293,7 @@ public partial class AgeDigitalTwinsClient
                 || property == DigitalTwinsJsonPropertyNames.DigitalTwinId
                 || property == DigitalTwinsJsonPropertyNames.DigitalTwinETag
                 || property == DigitalTwinsJsonPropertyNames.MetadataLastUpdateTime
+                || property == DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy
             )
             {
                 continue;
@@ -477,7 +483,8 @@ public partial class AgeDigitalTwinsClient
         digitalTwinObject[DigitalTwinsJsonPropertyNames.DigitalTwinETag] = newEtag;
         if (_trackLastUpdatedBy && userId != null)
         {
-            digitalTwinObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy] = userId;
+            digitalTwinObject.Remove(DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy);
+            metadataObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy] = userId;
         }
 
         string updatedTwinJson = JsonSerializer.Serialize(digitalTwinObject);
@@ -507,11 +514,17 @@ RETURN t";
 
             if (typeof(T) == typeof(string))
             {
-                return (T)(object)JsonSerializer.Serialize(vertex!.Properties);
+                var json = JsonSerializer.Serialize(vertex!.Properties);
+                return (T)(object)(!_returnTwinLevelLastUpdatedBy ? StripTwinLevelLastUpdatedBy(json) : json);
             }
             else
             {
-                return JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(vertex!.Properties));
+                var responseJson = JsonSerializer.Serialize(vertex!.Properties);
+                if (!_returnTwinLevelLastUpdatedBy)
+                {
+                    responseJson = StripTwinLevelLastUpdatedBy(responseJson);
+                }
+                return JsonSerializer.Deserialize<T>(responseJson);
             }
         }
         else
@@ -698,6 +711,7 @@ RETURN t";
                 || property == DigitalTwinsJsonPropertyNames.DigitalTwinId
                 || property == DigitalTwinsJsonPropertyNames.DigitalTwinETag
                 || property == DigitalTwinsJsonPropertyNames.MetadataLastUpdateTime
+                || property == DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy
             )
             {
                 continue;
@@ -769,7 +783,8 @@ RETURN t";
         patchedTwin[DigitalTwinsJsonPropertyNames.DigitalTwinETag] = newEtag;
         if (_trackLastUpdatedBy && userId != null)
         {
-            patchedTwin[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy] = userId;
+            patchedTwin.Remove(DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy);
+            metadataObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy] = userId;
         }
         string updatedTwinJson = JsonSerializer.Serialize(patchedTwin);
 
@@ -1088,6 +1103,7 @@ RETURN COUNT(t) AS deletedCount";
                         || property == DigitalTwinsJsonPropertyNames.DigitalTwinId
                         || property == DigitalTwinsJsonPropertyNames.DigitalTwinETag
                         || property == DigitalTwinsJsonPropertyNames.MetadataLastUpdateTime
+                        || property == DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy
                     )
                     {
                         continue;
@@ -1126,13 +1142,22 @@ RETURN COUNT(t) AS deletedCount";
                             )
                             {
                                 metadataPropertyObject[DigitalTwinsJsonPropertyNames.MetadataPropertyLastUpdateTime] = now.ToString("o");
+                                if (_trackLastUpdatedBy && userId != null)
+                                {
+                                    metadataPropertyObject[DigitalTwinsJsonPropertyNames.MetadataPropertyLastUpdatedBy] = userId;
+                                }
                             }
                             else
                             {
-                                metadataObject[property] = new JsonObject
+                                var newPropertyMetadata = new JsonObject
                                 {
                                     [DigitalTwinsJsonPropertyNames.MetadataPropertyLastUpdateTime] = now.ToString("o"),
                                 };
+                                if (_trackLastUpdatedBy && userId != null)
+                                {
+                                    newPropertyMetadata[DigitalTwinsJsonPropertyNames.MetadataPropertyLastUpdatedBy] = userId;
+                                }
+                                metadataObject[property] = newPropertyMetadata;
                             }
                         }
                     }
@@ -1155,7 +1180,8 @@ RETURN COUNT(t) AS deletedCount";
                 digitalTwinObject[DigitalTwinsJsonPropertyNames.DigitalTwinETag] = newEtag;
                 if (_trackLastUpdatedBy && userId != null)
                 {
-                    digitalTwinObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy] = userId;
+                    digitalTwinObject.Remove(DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy);
+                    metadataObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy] = userId;
                 }
 
                 finalValidTwins.Add((digitalTwinId, digitalTwinObject));

@@ -47,7 +47,7 @@ These configure the `AgeDigitalTwinsClient` instance used internally.
 | `Parameters:ModelCacheExpirationSeconds` | `10` | How long DTDL model definitions are cached in memory |
 | `Parameters:DefaultBatchSize` | `50` | Default batch size for import jobs |
 | `Parameters:DefaultCheckpointInterval` | `50` | Checkpoint interval for import jobs |
-| `Parameters:TrackLastUpdatedBy` | `false` | When `true`, stores the user ID in each property's `$metadata.lastUpdatedBy` field. See [Security](/docs/graph/advanced-topics/security) for details. |
+| `Parameters:TrackLastUpdatedBy` | `false` | When `true`, stores the user ID at both the twin-level (`$metadata.$lastUpdatedBy`) and per-property (`$metadata.<property>.lastUpdatedBy`) metadata. See [Security](/docs/graph/advanced-topics/security) for details. |
 
 ### Authentication
 
@@ -248,7 +248,7 @@ Falls back through this chain: `GetConnectionString("agedb")` → `ConnectionStr
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `Parameters:TrackLastUpdatedBy` | `false` | When `true`, includes `updatedBy` fields in DataHistory CloudEvents from the metadata `lastUpdatedBy` values |
+| `Parameters:TrackLastUpdatedBy` | `false` | When `true`, includes `updatedBy` fields in DataHistory CloudEvents from the `$metadata.$lastUpdatedBy` value |
 
 ### Event Sinks
 

@@ -188,6 +188,7 @@ catch (NpgsqlException ex)
 - **Async/Await**: All operations are asynchronous
 - **PostgreSQL 13+**: Requires Apache AGE extension
 - **Connection Pooling**: Built-in Npgsql connection pooling
+- **TrackLastUpdatedBy**: Fully supported. The native SDK's custom JSON converters handle `$lastUpdatedBy` at both the twin-level (`$metadata.$lastUpdatedBy`) and per-property (`$metadata.<property>.lastUpdatedBy`) metadata. See [Security](/docs/graph/advanced-topics/security) for details.
 
 ## Migration Considerations
 
