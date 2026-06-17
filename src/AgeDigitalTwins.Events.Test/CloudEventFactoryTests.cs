@@ -878,4 +878,158 @@ public class CloudEventFactoryTests
         Assert.Equal("humidity", data["key"]?.ToString());
         Assert.Equal("user-456", data["updatedBy"]?.ToString());
     }
+
+    [Fact]
+    public void CreateDataHistoryEvents_TrackLastUpdatedBy_IncludesUpdatedByInTwinLifecycleCreateEvent()
+    {
+        // Arrange - Twin created with $lastUpdatedBy in twin-level metadata
+        var eventData = new EventData(Guid.NewGuid().ToString(), "digitaltwins", "Twin")
+        {
+            EventType = EventType.TwinCreate,
+            NewValue = JsonNode
+                .Parse(
+                    @"{
+                    ""$dtId"": ""twin1"",
+                    ""$metadata"": {
+                        ""$model"": ""model1"",
+                        ""$lastUpdateTime"": ""2024-01-15T10:30:00Z"",
+                        ""$lastUpdatedBy"": ""twin-creator""
+                    },
+                    ""temperature"": 22.5
+                }"
+                )!
+                .AsObject(),
+            Timestamp = DateTime.UtcNow,
+        };
+        var source = new Uri("http://example.com");
+
+        // Act
+        var result = CloudEventFactory.CreateDataHistoryEvents(
+            eventData,
+            source,
+            [],
+            trackLastUpdatedBy: true
+        );
+
+        // Assert - includes lifecycle event + property events from patch
+        var lifecycleEvent = result.First(e => e.Type == "Konnektr.Graph.Twin.Lifecycle");
+        var data = lifecycleEvent.Data as JsonObject;
+        Assert.NotNull(data);
+        Assert.Equal("twin1", data["twinId"]?.ToString());
+        Assert.Equal("Create", data["action"]?.ToString());
+        Assert.Equal("twin-creator", data["updatedBy"]?.ToString());
+    }
+
+    [Fact]
+    public void CreateDataHistoryEvents_TrackLastUpdatedBy_IncludesUpdatedByInTwinLifecycleDeleteEvent()
+    {
+        // Arrange - Twin deleted, $lastUpdatedBy in OldValue's twin-level metadata
+        var eventData = new EventData(Guid.NewGuid().ToString(), "digitaltwins", "Twin")
+        {
+            EventType = EventType.TwinDelete,
+            OldValue = JsonNode
+                .Parse(
+                    @"{
+                    ""$dtId"": ""twin1"",
+                    ""$metadata"": {
+                        ""$model"": ""model1"",
+                        ""$lastUpdateTime"": ""2024-01-15T10:30:00Z"",
+                        ""$lastUpdatedBy"": ""twin-deleter""
+                    },
+                    ""temperature"": 22.5
+                }"
+                )!
+                .AsObject(),
+            Timestamp = DateTime.UtcNow,
+        };
+        var source = new Uri("http://example.com");
+
+        // Act
+        var result = CloudEventFactory.CreateDataHistoryEvents(
+            eventData,
+            source,
+            [],
+            trackLastUpdatedBy: true
+        );
+
+        // Assert - includes lifecycle event + property events from patch
+        var lifecycleEvent = result.First(e => e.Type == "Konnektr.Graph.Twin.Lifecycle");
+        var data = lifecycleEvent.Data as JsonObject;
+        Assert.NotNull(data);
+        Assert.Equal("twin1", data["twinId"]?.ToString());
+        Assert.Equal("Delete", data["action"]?.ToString());
+        Assert.Equal("twin-deleter", data["updatedBy"]?.ToString());
+    }
+
+    [Fact]
+    public void CreateDataHistoryEvents_TrackLastUpdatedByTrue_NoLastUpdatedByInMetadata_OmitsUpdatedByInTwinLifecycle()
+    {
+        // Arrange - Twin created, no $lastUpdatedBy in metadata
+        var eventData = new EventData(Guid.NewGuid().ToString(), "digitaltwins", "Twin")
+        {
+            EventType = EventType.TwinCreate,
+            NewValue = JsonNode
+                .Parse(
+                    @"{
+                    ""$dtId"": ""twin1"",
+                    ""$metadata"": {
+                        ""$model"": ""model1"",
+                        ""$lastUpdateTime"": ""2024-01-15T10:30:00Z""
+                    },
+                    ""temperature"": 22.5
+                }"
+                )!
+                .AsObject(),
+            Timestamp = DateTime.UtcNow,
+        };
+        var source = new Uri("http://example.com");
+
+        // Act
+        var result = CloudEventFactory.CreateDataHistoryEvents(
+            eventData,
+            source,
+            [],
+            trackLastUpdatedBy: true
+        );
+
+        // Assert - includes lifecycle event + property events from patch
+        var lifecycleEvent = result.First(e => e.Type == "Konnektr.Graph.Twin.Lifecycle");
+        var data = lifecycleEvent.Data as JsonObject;
+        Assert.NotNull(data);
+        Assert.False(data.ContainsKey("updatedBy"), "updatedBy should be absent when not present in twin metadata");
+    }
+
+    [Fact]
+    public void CreateDataHistoryEvents_TrackLastUpdatedByFalse_OmitsUpdatedByInTwinLifecycle()
+    {
+        // Arrange - Twin created with $lastUpdatedBy but trackLastUpdatedBy=false
+        var eventData = new EventData(Guid.NewGuid().ToString(), "digitaltwins", "Twin")
+        {
+            EventType = EventType.TwinCreate,
+            NewValue = JsonNode
+                .Parse(
+                    @"{
+                    ""$dtId"": ""twin1"",
+                    ""$metadata"": {
+                        ""$model"": ""model1"",
+                        ""$lastUpdateTime"": ""2024-01-15T10:30:00Z"",
+                        ""$lastUpdatedBy"": ""twin-creator""
+                    },
+                    ""temperature"": 22.5
+                }"
+                )!
+                .AsObject(),
+            Timestamp = DateTime.UtcNow,
+        };
+        var source = new Uri("http://example.com");
+
+        // Act - default trackLastUpdatedBy=false
+        var result = CloudEventFactory.CreateDataHistoryEvents(eventData, source, []);
+
+        // Assert - includes lifecycle event + property events from patch
+        var lifecycleEvent = result.First(e => e.Type == "Konnektr.Graph.Twin.Lifecycle");
+        var data = lifecycleEvent.Data as JsonObject;
+        Assert.NotNull(data);
+        Assert.False(data.ContainsKey("updatedBy"), "updatedBy should be absent when trackLastUpdatedBy is false");
+    }
 }
