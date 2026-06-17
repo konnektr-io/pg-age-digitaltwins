@@ -111,6 +111,16 @@ When `TrackLastUpdatedBy` is enabled and a valid `userId` is provided on write o
 
 `AgeDigitalTwinsReplication` opens a PostgreSQL logical replication connection, reads WAL changes from the `Twin` and `Model` tables, and pushes `EventData` objects into an `IEventQueue`. `SharedEventConsumer` batches and routes events to registered `IEventSink` implementations. Each sink is wrapped in `ResilientEventSinkWrapper` for retry/DLQ behavior. Requires `wal_level=logical`, a replication publication, and a replication slot on the database.
 
+### UpdatedBy in DataHistory events
+
+When `TrackLastUpdatedBy` is enabled in the Events service (`Parameters:TrackLastUpdatedBy=true`), DataHistory CloudEvents include `updatedBy` in the event body:
+
+- **Property events** (`AdtPropertyEvents`): `updatedBy` is the **per-property** `lastUpdatedBy` value from the twin's metadata at `$metadata.<property>.lastUpdatedBy`. Mapped to the `UpdatedBy` column in the Kusto table.
+- **Twin lifecycle events** (`AdtTwinLifeCycleEvents`): `updatedBy` is the **twin-level** `$lastUpdatedBy` value from `$metadata.$lastUpdatedBy`. Mapped to the `UpdatedBy` column in the Kusto table (requires the column to exist in the table schema).
+- **Relationship lifecycle events** (`AdtRelationshipLifeCycleEvents`): `updatedBy` is included when the event data contains it.
+
+The `TrackLastUpdatedBy` flag must be set in **both** the API service (for writing `lastUpdatedBy` to twins) and the Events service (for reading it into events and Kusto column mappings).
+
 ### Configuration keys (ApiService)
 
 Key `Parameters:` prefixed values in configuration:

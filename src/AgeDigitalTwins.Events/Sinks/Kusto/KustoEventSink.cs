@@ -66,22 +66,7 @@ public class KustoEventSink : IEventSink, IDisposable
                     IngestionMapping = new IngestionMapping
                     {
                         IngestionMappingKind = IngestionMappingKind.Json,
-                        IngestionMappings =
-                        [
-                            new(
-                                "TimeStamp",
-                                "datetime",
-                                new() { { MappingConsts.Path, "$.timeStamp" } }
-                            ),
-                            new(
-                                "ServiceId",
-                                "string",
-                                new() { { MappingConsts.Path, "$.serviceId" } }
-                            ),
-                            new("TwinId", "string", new() { { MappingConsts.Path, "$.twinId" } }),
-                            new("Action", "string", new() { { MappingConsts.Path, "$.action" } }),
-                            new("ModelId", "string", new() { { MappingConsts.Path, "$.modelId" } }),
-                        ],
+                        IngestionMappings = BuildTwinLifecycleEventMappings(options.TrackLastUpdatedBy),
                     },
                 }
             },
@@ -98,28 +83,7 @@ public class KustoEventSink : IEventSink, IDisposable
                     IngestionMapping = new IngestionMapping
                     {
                         IngestionMappingKind = IngestionMappingKind.Json,
-                        IngestionMappings =
-                        [
-                            new(
-                                "TimeStamp",
-                                "datetime",
-                                new() { { MappingConsts.Path, "$.timeStamp" } }
-                            ),
-                            new(
-                                "ServiceId",
-                                "string",
-                                new() { { MappingConsts.Path, "$.serviceId" } }
-                            ),
-                            new(
-                                "RelationshipId",
-                                "string",
-                                new() { { MappingConsts.Path, "$.relationshipId" } }
-                            ),
-                            new("Action", "string", new() { { MappingConsts.Path, "$.action" } }),
-                            new("Name", "string", new() { { MappingConsts.Path, "$.name" } }),
-                            new("Source", "string", new() { { MappingConsts.Path, "$.source" } }),
-                            new("Target", "string", new() { { MappingConsts.Path, "$.target" } }),
-                        ],
+                        IngestionMappings = BuildRelationshipLifecycleEventMappings(options.TrackLastUpdatedBy),
                     },
                 }
             },
@@ -247,7 +211,7 @@ public class KustoEventSink : IEventSink, IDisposable
         }
     }
 
-    private static List<ColumnMapping> BuildPropertyEventMappings(bool trackLastUpdatedBy)
+    internal static List<ColumnMapping> BuildPropertyEventMappings(bool trackLastUpdatedBy)
     {
         var mappings = new List<ColumnMapping>
         {
@@ -269,6 +233,46 @@ public class KustoEventSink : IEventSink, IDisposable
             ),
             new("RelationshipId", "string", new() { { MappingConsts.Path, "$.relationshipId" } }),
             new("Action", "string", new() { { MappingConsts.Path, "$.action" } }),
+        };
+        if (trackLastUpdatedBy)
+        {
+            mappings.Add(
+                new("UpdatedBy", "string", new() { { MappingConsts.Path, "$.updatedBy" } })
+            );
+        }
+        return mappings;
+    }
+
+    internal static List<ColumnMapping> BuildTwinLifecycleEventMappings(bool trackLastUpdatedBy)
+    {
+        var mappings = new List<ColumnMapping>
+        {
+            new("TimeStamp", "datetime", new() { { MappingConsts.Path, "$.timeStamp" } }),
+            new("ServiceId", "string", new() { { MappingConsts.Path, "$.serviceId" } }),
+            new("TwinId", "string", new() { { MappingConsts.Path, "$.twinId" } }),
+            new("Action", "string", new() { { MappingConsts.Path, "$.action" } }),
+            new("ModelId", "string", new() { { MappingConsts.Path, "$.modelId" } }),
+        };
+        if (trackLastUpdatedBy)
+        {
+            mappings.Add(
+                new("UpdatedBy", "string", new() { { MappingConsts.Path, "$.updatedBy" } })
+            );
+        }
+        return mappings;
+    }
+
+    internal static List<ColumnMapping> BuildRelationshipLifecycleEventMappings(bool trackLastUpdatedBy)
+    {
+        var mappings = new List<ColumnMapping>
+        {
+            new("TimeStamp", "datetime", new() { { MappingConsts.Path, "$.timeStamp" } }),
+            new("ServiceId", "string", new() { { MappingConsts.Path, "$.serviceId" } }),
+            new("RelationshipId", "string", new() { { MappingConsts.Path, "$.relationshipId" } }),
+            new("Action", "string", new() { { MappingConsts.Path, "$.action" } }),
+            new("Name", "string", new() { { MappingConsts.Path, "$.name" } }),
+            new("Source", "string", new() { { MappingConsts.Path, "$.source" } }),
+            new("Target", "string", new() { { MappingConsts.Path, "$.target" } }),
         };
         if (trackLastUpdatedBy)
         {
