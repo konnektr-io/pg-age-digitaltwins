@@ -1,14 +1,13 @@
 using System;
 using System.Diagnostics;
-using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using AgeDigitalTwins.Jobs;
+using AgeDigitalTwins.Models;
 using AgeDigitalTwins.Validation;
 using DTDLParser;
 using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Extensions.Logging;
 using Npgsql;
-using Npgsql.Age;
 
 namespace AgeDigitalTwins;
 
@@ -29,6 +28,7 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
     private readonly ModelParser _modelParser;
 
     private readonly bool _trackLastUpdatedBy;
+    private readonly bool _returnTwinLevelLastUpdatedBy;
 
     private static readonly ActivitySource ActivitySource = new("AgeDigitalTwins.SDK", "1.0.0");
 
@@ -67,6 +67,8 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
         DefaultCheckpointInterval = options.DefaultCheckpointInterval;
         DefaultHeartbeatInterval = options.DefaultHeartbeatInterval;
         _trackLastUpdatedBy = options.TrackLastUpdatedBy;
+        _returnTwinLevelLastUpdatedBy = options.ReturnTwinLevelLastUpdatedBy;
+        _returnTwinLevelLastUpdatedBy = options.ReturnTwinLevelLastUpdatedBy;
         _modelParser = new(
             new ParsingOptions()
             {
@@ -100,6 +102,7 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
         DefaultBatchSize = 50; // Default batch size
         DefaultCheckpointInterval = 50; // Default checkpoint interval
         DefaultHeartbeatInterval = TimeSpan.FromSeconds(30); // Default heartbeat interval
+        _returnTwinLevelLastUpdatedBy = true; // Default
         _modelParser = new(
             new ParsingOptions()
             {
@@ -150,6 +153,22 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
     /// Gets the job service for managing import and other jobs.
     /// </summary>
     public JobService JobService { get; }
+
+    /// <summary>
+    /// Strips the twin-level <c>$lastUpdatedBy</c> field from a response JSON string
+    /// when <see cref="ReturnTwinLevelLastUpdatedBy"/> is <c>false</c>.
+    /// Per-property <c>lastUpdatedBy</c> in property metadata is preserved.
+    /// </summary>
+    internal static string StripTwinLevelLastUpdatedBy(string responseJson)
+    {
+        var obj = JsonNode.Parse(responseJson)!.AsObject();
+        if (obj.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.DigitalTwinMetadata, out var metaNode)
+            && metaNode is JsonObject metaObj)
+        {
+            metaObj.Remove(DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy);
+        }
+        return obj.ToJsonString();
+    }
 }
 
 public class AgeDigitalTwinsClientOptions
@@ -191,4 +210,16 @@ public class AgeDigitalTwinsClientOptions
     /// Defaults to <c>false</c>.
     /// </summary>
     public bool TrackLastUpdatedBy { get; set; } = false;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether twin-level <c>$lastUpdatedBy</c> is included
+    /// in <c>$metadata</c> of response objects. When <c>false</c>, the twin-level
+    /// <c>$lastUpdatedBy</c> field is stripped from responses in
+    /// <c>GetDigitalTwinAsync</c>, <c>CreateOrReplaceDigitalTwinAsync</c>, and
+    /// <c>QueryAsync</c>. Per-property <c>lastUpdatedBy</c> in property metadata is
+    /// always preserved. Set to <c>false</c> for compatibility with Azure SDK clients
+    /// that cannot deserialize <c>$lastUpdatedBy</c> in <c>$metadata</c>.
+    /// Defaults to <c>true</c>.
+    /// </summary>
+    public bool ReturnTwinLevelLastUpdatedBy { get; set; } = true;
 }
