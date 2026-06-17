@@ -121,10 +121,28 @@ public partial class AgeDigitalTwinsClient
         {
             var agResult = await reader.GetFieldValueAsync<Agtype?>(0).ConfigureAwait(false);
             var vertex = (Vertex)agResult!;
-            return JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(vertex!.Properties))
-                ?? throw new SerializationException(
-                    $"Digital Twin with ID {digitalTwinId} could not be deserialized"
-                );
+
+            try
+            {
+                return JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(vertex!.Properties))
+                    ?? throw new SerializationException(
+                        $"Digital Twin with ID {digitalTwinId} could not be deserialized"
+                    );
+            }
+            catch (JsonException) when (_trackLastUpdatedBy)
+            {
+                var responseJson = JsonSerializer.Serialize(vertex!.Properties);
+                var responseObj = JsonNode.Parse(responseJson)!.AsObject();
+                if (responseObj.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.DigitalTwinMetadata, out var metaNode)
+                    && metaNode is JsonObject metaObj)
+                {
+                    metaObj.Remove(DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy);
+                }
+                return JsonSerializer.Deserialize<T>(responseObj.ToJsonString())
+                    ?? throw new SerializationException(
+                        $"Digital Twin with ID {digitalTwinId} could not be deserialized"
+                    );
+            }
         }
         else
         {
@@ -513,7 +531,27 @@ RETURN t";
             }
             else
             {
-                return JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(vertex!.Properties));
+                try
+                {
+                    return JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(vertex!.Properties));
+                }
+                catch (JsonException) when (_trackLastUpdatedBy)
+                {
+                    // Some types (e.g. Azure SDK's BasicDigitalTwin) don't recognize
+                    // $lastUpdatedBy in $metadata and throw during deserialization.
+                    // Strip the twin-level $lastUpdatedBy and retry once.
+                    var responseJson = JsonSerializer.Serialize(vertex!.Properties);
+                    var responseObj = JsonNode.Parse(responseJson)!.AsObject();
+                    if (responseObj.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.DigitalTwinMetadata, out var metaNode)
+                        && metaNode is JsonObject metaObj)
+                    {
+                        metaObj.Remove(DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy);
+                    }
+                    return JsonSerializer.Deserialize<T>(responseObj.ToJsonString())
+                        ?? throw new SerializationException(
+                            $"Digital Twin with ID {digitalTwinId} could not be deserialized"
+                        );
+                }
             }
         }
         else

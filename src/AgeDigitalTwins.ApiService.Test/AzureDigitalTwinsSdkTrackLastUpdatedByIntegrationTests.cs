@@ -157,6 +157,22 @@ public class AzureDigitalTwinsSdkTrackLastUpdatedByIntegrationTests : IAsyncLife
         Assert.True(metadata.TryGetProperty("$lastUpdateTime", out JsonElement lastUpdateProp));
         Assert.NotNull(lastUpdateProp.GetString());
         Assert.True(DateTimeOffset.TryParse(lastUpdateProp.GetString(), out _));
+
+        // Per-property lastUpdatedBy should be in $metadata.temperature
+        Assert.True(
+            metadata.TryGetProperty("temperature", out JsonElement tempMetadata),
+            "per-property metadata for temperature should exist"
+        );
+        Assert.True(
+            tempMetadata.TryGetProperty("lastUpdatedBy", out JsonElement tempLastUpdatedBy),
+            "temperature.lastUpdatedBy should exist"
+        );
+        Assert.Equal(TestUserId, tempLastUpdatedBy.GetString());
+        Assert.True(
+            tempMetadata.TryGetProperty("lastUpdateTime", out JsonElement tempLastUpdateTime),
+            "temperature.lastUpdateTime should exist"
+        );
+        Assert.True(DateTimeOffset.TryParse(tempLastUpdateTime.GetString(), out _));
     }
 
     [Fact]
@@ -214,10 +230,17 @@ public class AzureDigitalTwinsSdkTrackLastUpdatedByIntegrationTests : IAsyncLife
         Assert.NotNull(fetched["$metadata"]);
         Assert.Equal("25", fetched["temperature"]?.ToString());
 
-        // Verify $lastUpdatedBy is in $metadata (ensuring TrackLastUpdatedBy is active)
+        // Verify $lastUpdatedBy is in $metadata (twin-level)
         var metadata = fetched["$metadata"]!.AsObject();
         Assert.True(metadata.ContainsKey("$lastUpdatedBy"));
         Assert.Equal(TestUserId, metadata["$lastUpdatedBy"]!.GetValue<string>());
+
+        // Verify per-property lastUpdatedBy is in $metadata.temperature
+        Assert.True(metadata.ContainsKey("temperature"), "per-property metadata for temperature should exist");
+        var tempMetadata = metadata["temperature"]!.AsObject();
+        Assert.True(tempMetadata.ContainsKey("lastUpdatedBy"), "temperature.lastUpdatedBy should exist");
+        Assert.Equal(TestUserId, tempMetadata["lastUpdatedBy"]!.GetValue<string>());
+        Assert.True(tempMetadata.ContainsKey("lastUpdateTime"), "temperature.lastUpdateTime should exist");
     }
 
     [Fact]
@@ -250,10 +273,23 @@ public class AzureDigitalTwinsSdkTrackLastUpdatedByIntegrationTests : IAsyncLife
             await _digitalTwinsClient.GetDigitalTwinAsync<JsonDocument>(twinId);
         JsonElement root = response.Value.RootElement;
         Assert.True(root.TryGetProperty("$metadata", out JsonElement metadata));
+
+        // Twin-level $lastUpdatedBy
         Assert.True(metadata.TryGetProperty("$lastUpdatedBy", out JsonElement lastUpdatedByProp));
         Assert.Equal(TestUserId, lastUpdatedByProp.GetString());
 
-        // temperature should be updated
+        // Per-property lastUpdatedBy
+        Assert.True(
+            metadata.TryGetProperty("temperature", out JsonElement tempMetadata),
+            "per-property metadata for temperature should exist"
+        );
+        Assert.True(
+            tempMetadata.TryGetProperty("lastUpdatedBy", out JsonElement tempLastUpdatedBy),
+            "temperature.lastUpdatedBy should exist"
+        );
+        Assert.Equal(TestUserId, tempLastUpdatedBy.GetString());
+
+        // temperature value should be updated
         Assert.True(root.TryGetProperty("temperature", out JsonElement tempProp));
         Assert.Equal(26, tempProp.GetInt32());
     }

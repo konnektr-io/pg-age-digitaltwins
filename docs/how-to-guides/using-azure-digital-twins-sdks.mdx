@@ -343,6 +343,62 @@ credential = KonnektrTokenCredential(
 client = DigitalTwinsClient(os.getenv('KONNEKTR_ENDPOINT'), credential)
 ```
 
+## TrackLastUpdatedBy Compatibility
+
+Konnektr Graph supports a `TrackLastUpdatedBy` feature that records the user ID at two levels in each twin's `$metadata`:
+- `$metadata.$lastUpdatedBy` — the user who last updated any property on the twin (twin-level)
+- `$metadata.<property>.lastUpdatedBy` — the user who last updated that specific property (per-property)
+
+However, the Azure SDK's `BasicDigitalTwin` / `DigitalTwinMetadata` deserializers **do not recognize** `$lastUpdatedBy` or `lastUpdatedBy` within `$metadata` and will throw when trying to deserialize a twin response.
+
+### Workarounds
+
+**Option 1: Use `JsonDocument` or `JsonObject` as the response type**
+
+When `TrackLastUpdatedBy` is enabled, always use raw JSON types instead of `BasicDigitalTwin`:
+
+```csharp
+// Use JsonElement instead of BasicDigitalTwin
+Response<JsonElement> response = await client.GetDigitalTwinAsync<JsonElement>("twin-id");
+JsonElement twin = response.Value;
+string dtId = twin.GetProperty("$dtId").GetString();
+JsonElement metadata = twin.GetProperty("$metadata");
+string lastUpdatedBy = metadata.GetProperty("$lastUpdatedBy").GetString();
+```
+
+```python
+# Use dict instead of BasicDigitalTwin
+twin = client.get_digital_twin("twin-id")
+# twin is a dict
+metadata = twin["$metadata"]
+last_updated_by = metadata["$lastUpdatedBy"]
+```
+
+```javascript
+// Response is already a plain object
+const twin = await client.getDigitalTwin('twin-id');
+const lastUpdatedBy = twin.$metadata.$lastUpdatedBy;
+```
+
+**Option 2: Use custom DTOs**
+
+Define your own response types that don't attempt to parse the `$metadata` block:
+
+```csharp
+public class MyTwin
+{
+    public string Id { get; set; }
+    public double Temperature { get; set; }
+    // Skip $metadata entirely
+}
+
+var twin = await client.GetDigitalTwinAsync<MyTwin>("twin-id");
+```
+
+**Option 3: Disable `TrackLastUpdatedBy`**
+
+If you need Azure SDK `BasicDigitalTwin` deserialization and don't require user tracking, set `Parameters:TrackLastUpdatedBy: false` (the default).
+
 ## Error Handling
 
 Common authentication errors and solutions:

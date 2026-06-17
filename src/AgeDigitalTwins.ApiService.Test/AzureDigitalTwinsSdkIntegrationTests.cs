@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Azure;
 using Azure.Core;
 using Azure.Core.Pipeline;
@@ -551,10 +552,14 @@ public class AzureDigitalTwinsSdkIntegrationTests : IAsyncLifetime
 
     public class CustomTwinDto
     {
+        [JsonPropertyName("$dtId")]
         public string? Id { get; set; }
+
+        [JsonPropertyName("$etag")]
         public string? ETag { get; set; }
-        public string? ModelId { get; set; }
-        public Dictionary<string, object>? Contents { get; set; }
+
+        [JsonPropertyName("temperature")]
+        public int Temperature { get; set; }
     }
 
     [Fact]
@@ -583,9 +588,7 @@ public class AzureDigitalTwinsSdkIntegrationTests : IAsyncLifetime
         Assert.NotNull(fetched);
         Assert.Equal(twinId, fetched.Id);
         Assert.NotNull(fetched.ETag);
-        Assert.NotNull(fetched.Contents);
-        Assert.True(fetched.Contents.ContainsKey("temperature"));
-        Assert.Equal(30, ((JsonElement)fetched.Contents["temperature"]).GetInt32());
+        Assert.Equal(30, fetched.Temperature);
 
         // Verify the same works with CreateOrReplace
         var updatedTwin = new BasicDigitalTwin
@@ -600,7 +603,7 @@ public class AzureDigitalTwinsSdkIntegrationTests : IAsyncLifetime
             await _digitalTwinsClient.GetDigitalTwinAsync<CustomTwinDto>(twinId);
         Assert.NotNull(reFetched);
         Assert.Equal(twinId, reFetched.Id);
-        Assert.Equal(35, ((JsonElement)reFetched.Contents["temperature"]).GetInt32());
+        Assert.Equal(35, reFetched.Temperature);
         Assert.NotEqual(fetched.ETag, reFetched.ETag);
     }
 
