@@ -10,14 +10,15 @@ public class TrackLastUpdatedByAppHostForHttp : DistributedApplicationFactory
     public TrackLastUpdatedByAppHostForHttp()
         : base(
             typeof(Projects.AgeDigitalTwins_AppHost),
-            ["temp_graph_" + Guid.NewGuid().ToString("N")]
+            [
+                "temp_graph_" + Guid.NewGuid().ToString("N"),
+                "--Parameters:TrackLastUpdatedBy", "true",
+                "--Parameters:UserIdHeaderName", "X-User-Id",
+            ]
         ) { }
 
     protected override void OnBuilderCreated(DistributedApplicationBuilder applicationBuilder)
     {
-        Environment.SetEnvironmentVariable("Parameters__TrackLastUpdatedBy", "true");
-        Environment.SetEnvironmentVariable("Parameters__UserIdHeaderName", "X-User-Id");
-
         applicationBuilder.Services.ConfigureHttpClientDefaults(clientBuilder =>
         {
             clientBuilder.AddStandardResilienceHandler();
@@ -290,15 +291,16 @@ public class TrackLastUpdatedByNoReturnAppHost : DistributedApplicationFactory
     public TrackLastUpdatedByNoReturnAppHost()
         : base(
             typeof(Projects.AgeDigitalTwins_AppHost),
-            ["temp_graph_" + Guid.NewGuid().ToString("N")]
+            [
+                "temp_graph_" + Guid.NewGuid().ToString("N"),
+                "--Parameters:TrackLastUpdatedBy", "true",
+                "--Parameters:UserIdHeaderName", "X-User-Id",
+                "--Parameters:ReturnTwinLevelLastUpdatedBy", "false",
+            ]
         ) { }
 
     protected override void OnBuilderCreated(DistributedApplicationBuilder applicationBuilder)
     {
-        Environment.SetEnvironmentVariable("Parameters__TrackLastUpdatedBy", "true");
-        Environment.SetEnvironmentVariable("Parameters__UserIdHeaderName", "X-User-Id");
-        Environment.SetEnvironmentVariable("Parameters__ReturnTwinLevelLastUpdatedBy", "false");
-
         applicationBuilder.Services.ConfigureHttpClientDefaults(clientBuilder =>
         {
             clientBuilder.AddStandardResilienceHandler();
