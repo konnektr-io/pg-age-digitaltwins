@@ -1142,13 +1142,22 @@ RETURN COUNT(t) AS deletedCount";
                             )
                             {
                                 metadataPropertyObject[DigitalTwinsJsonPropertyNames.MetadataPropertyLastUpdateTime] = now.ToString("o");
+                                if (_trackLastUpdatedBy && userId != null)
+                                {
+                                    metadataPropertyObject[DigitalTwinsJsonPropertyNames.MetadataPropertyLastUpdatedBy] = userId;
+                                }
                             }
                             else
                             {
-                                metadataObject[property] = new JsonObject
+                                var newPropertyMetadata = new JsonObject
                                 {
                                     [DigitalTwinsJsonPropertyNames.MetadataPropertyLastUpdateTime] = now.ToString("o"),
                                 };
+                                if (_trackLastUpdatedBy && userId != null)
+                                {
+                                    newPropertyMetadata[DigitalTwinsJsonPropertyNames.MetadataPropertyLastUpdatedBy] = userId;
+                                }
+                                metadataObject[property] = newPropertyMetadata;
                             }
                         }
                     }
