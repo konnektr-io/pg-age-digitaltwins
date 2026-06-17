@@ -747,6 +747,23 @@ public static class CloudEventFactory
             return val?.DeepClone();
         }
 
+        var metadataPath = $"/{DigitalTwinsJsonPropertyNames.DigitalTwinMetadata}";
+        operation = jsonPatch.Operations.FirstOrDefault(o =>
+            o.Path.ToString() == metadataPath
+        );
+        if (operation?.Value is JsonObject metadataObj)
+        {
+            var propertyKey = basePath.TrimEnd('/').Split('/').Last();
+            if (
+                metadataObj.TryGetPropertyValue(propertyKey, out var propNode)
+                && propNode is JsonObject propObj
+                && propObj.TryGetPropertyValue(propertyName, out val)
+            )
+            {
+                return val?.DeepClone();
+            }
+        }
+
         return null;
     }
 

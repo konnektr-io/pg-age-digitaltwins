@@ -1237,4 +1237,298 @@ public class CloudEventFactoryTests
         Assert.Equal("22.5", data["value"]?.ToString());
         Assert.Equal("user-123", data["updatedBy"]?.ToString());
     }
+
+    [Fact]
+    public void CreateDataHistoryEvents_TwinCreate_TrackLastUpdatedBy_IncludesUpdatedByInPropertyEvents()
+    {
+        // Arrange - Twin created with per-property lastUpdatedBy (not twin-level)
+        var eventData = new EventData(Guid.NewGuid().ToString(), "digitaltwins", "Twin")
+        {
+            EventType = EventType.TwinCreate,
+            NewValue = JsonNode
+                .Parse(
+                    @"{
+                    ""$dtId"": ""twin1"",
+                    ""$metadata"": {
+                        ""$model"": ""model1"",
+                        ""label"": {
+                            ""lastUpdateTime"": ""2024-06-17T11:32:39.4410855Z"",
+                            ""lastUpdatedBy"": ""9c00982e-6218-42c1-bf77-fb5e5d339d8e""
+                        }
+                    },
+                    ""label"": ""qsdqsdqsdqsdd""
+                }"
+                )!
+                .AsObject(),
+            OldValue = new JsonObject(),
+            Timestamp = DateTime.UtcNow,
+        };
+        var source = new Uri("http://example.com");
+
+        // Act
+        var result = CloudEventFactory.CreateDataHistoryEvents(
+            eventData,
+            source,
+            [],
+            trackLastUpdatedBy: true
+        );
+
+        // Assert - includes lifecycle event (no twin-level $lastUpdatedBy) + property events
+        var lifecycleEvent = result.First(e => e.Type == "Konnektr.Graph.Twin.Lifecycle");
+        var lifecycleData = lifecycleEvent.Data as JsonObject;
+        Assert.NotNull(lifecycleData);
+        Assert.Equal("twin1", lifecycleData["twinId"]?.ToString());
+        Assert.Equal("Create", lifecycleData["action"]?.ToString());
+        Assert.Null(lifecycleData["updatedBy"]?.ToString());
+
+        // Property event should have per-property updatedBy
+        var propertyEvent = result.First(e => e.Type == "Konnektr.Graph.Property.Event");
+        var propertyData = propertyEvent.Data as JsonObject;
+        Assert.NotNull(propertyData);
+        Assert.Equal("label", propertyData["key"]?.ToString());
+        Assert.Equal("qsdqsdqsdqsdd", propertyData["value"]?.ToString());
+        Assert.Equal("9c00982e-6218-42c1-bf77-fb5e5d339d8e", propertyData["updatedBy"]?.ToString());
+    }
+
+    [Fact]
+    public void CreateDataHistoryEvents_TwinCreate_TrackLastUpdatedBy_BothLevels_IncludesUpdatedByInBoth()
+    {
+        // Arrange - Twin created with both twin-level $lastUpdatedBy and per-property lastUpdatedBy
+        var eventData = new EventData(Guid.NewGuid().ToString(), "digitaltwins", "Twin")
+        {
+            EventType = EventType.TwinCreate,
+            NewValue = JsonNode
+                .Parse(
+                    @"{
+                    ""$dtId"": ""twin1"",
+                    ""$metadata"": {
+                        ""$model"": ""model1"",
+                        ""$lastUpdatedBy"": ""twin-creator"",
+                        ""label"": {
+                            ""lastUpdateTime"": ""2024-06-17T11:32:39.4410855Z"",
+                            ""lastUpdatedBy"": ""9c00982e-6218-42c1-bf77-fb5e5d339d8e""
+                        }
+                    },
+                    ""label"": ""qsdqsdqsdqsdd""
+                }"
+                )!
+                .AsObject(),
+            OldValue = new JsonObject(),
+            Timestamp = DateTime.UtcNow,
+        };
+        var source = new Uri("http://example.com");
+
+        // Act
+        var result = CloudEventFactory.CreateDataHistoryEvents(
+            eventData,
+            source,
+            [],
+            trackLastUpdatedBy: true
+        );
+
+        // Assert
+        var lifecycleEvent = result.First(e => e.Type == "Konnektr.Graph.Twin.Lifecycle");
+        var lifecycleData = lifecycleEvent.Data as JsonObject;
+        Assert.NotNull(lifecycleData);
+        Assert.Equal("twin-creator", lifecycleData["updatedBy"]?.ToString());
+
+        var propertyEvent = result.First(e => e.Type == "Konnektr.Graph.Property.Event");
+        var propertyData = propertyEvent.Data as JsonObject;
+        Assert.NotNull(propertyData);
+        Assert.Equal("9c00982e-6218-42c1-bf77-fb5e5d339d8e", propertyData["updatedBy"]?.ToString());
+    }
+
+    [Fact]
+    public void CreateDataHistoryEvents_TwinCreate_TrackLastUpdatedByFalse_OmitsUpdatedByInPropertyEvents()
+    {
+        // Arrange - Twin created with per-property lastUpdatedBy but trackLastUpdatedBy=false
+        var eventData = new EventData(Guid.NewGuid().ToString(), "digitaltwins", "Twin")
+        {
+            EventType = EventType.TwinCreate,
+            NewValue = JsonNode
+                .Parse(
+                    @"{
+                    ""$dtId"": ""twin1"",
+                    ""$metadata"": {
+                        ""$model"": ""model1"",
+                        ""label"": {
+                            ""lastUpdateTime"": ""2024-06-17T11:32:39.4410855Z"",
+                            ""lastUpdatedBy"": ""9c00982e-6218-42c1-bf77-fb5e5d339d8e""
+                        }
+                    },
+                    ""label"": ""qsdqsdqsdqsdd""
+                }"
+                )!
+                .AsObject(),
+            OldValue = new JsonObject(),
+            Timestamp = DateTime.UtcNow,
+        };
+        var source = new Uri("http://example.com");
+
+        // Act - default trackLastUpdatedBy=false
+        var result = CloudEventFactory.CreateDataHistoryEvents(eventData, source, []);
+
+        // Assert
+        var propertyEvent = result.First(e => e.Type == "Konnektr.Graph.Property.Event");
+        var propertyData = propertyEvent.Data as JsonObject;
+        Assert.NotNull(propertyData);
+        Assert.False(propertyData.ContainsKey("updatedBy"), "updatedBy should be absent when trackLastUpdatedBy is false");
+    }
+
+    [Fact]
+    public void CreateDataHistoryEvents_Update_BundledMetadataWithSourceTime_IncludesSourceTime()
+    {
+        // Arrange - Property first added on existing twin, sourceTime in bundled $metadata/<prop>
+        var eventData = new EventData(Guid.NewGuid().ToString(), "digitaltwins", "Twin")
+        {
+            EventType = EventType.TwinUpdate,
+            OldValue = JsonNode
+                .Parse(
+                    @"{
+                    ""$dtId"": ""twin1"",
+                    ""$metadata"": {
+                        ""$model"": ""model1""
+                    }
+                }"
+                )!
+                .AsObject(),
+            NewValue = JsonNode
+                .Parse(
+                    @"{
+                    ""$dtId"": ""twin1"",
+                    ""$metadata"": {
+                        ""$model"": ""model1"",
+                        ""label"": {
+                            ""lastUpdateTime"": ""2024-06-17T11:32:39.4410855Z"",
+                            ""sourceTime"": ""2024-06-17T11:30:00Z"",
+                            ""lastUpdatedBy"": ""9c00982e-6218-42c1-bf77-fb5e5d339d8e""
+                        }
+                    },
+                    ""label"": ""qsdqsdqsdqsdd""
+                }"
+                )!
+                .AsObject(),
+            Timestamp = DateTime.UtcNow,
+        };
+        var source = new Uri("http://example.com");
+
+        // Act
+        var result = CloudEventFactory.CreateDataHistoryEvents(
+            eventData,
+            source,
+            [],
+            trackLastUpdatedBy: true
+        );
+
+        // Assert
+        var propertyEvent = result.First(e => e.Type == "Konnektr.Graph.Property.Event");
+        var data = propertyEvent.Data as JsonObject;
+        Assert.NotNull(data);
+        Assert.Equal("label", data["key"]?.ToString());
+        Assert.Equal("2024-06-17T11:30:00Z", data["sourceTimeStamp"]?.ToString());
+        Assert.Equal("9c00982e-6218-42c1-bf77-fb5e5d339d8e", data["updatedBy"]?.ToString());
+    }
+
+    [Fact]
+    public void CreateDataHistoryEvents_TwinCreate_BundledMetadataWithSourceTime_IncludesSourceTime()
+    {
+        // Arrange - Twin created with sourceTime in per-property metadata (top-level bundle)
+        var eventData = new EventData(Guid.NewGuid().ToString(), "digitaltwins", "Twin")
+        {
+            EventType = EventType.TwinCreate,
+            NewValue = JsonNode
+                .Parse(
+                    @"{
+                    ""$dtId"": ""twin1"",
+                    ""$metadata"": {
+                        ""$model"": ""model1"",
+                        ""label"": {
+                            ""lastUpdateTime"": ""2024-06-17T11:32:39.4410855Z"",
+                            ""sourceTime"": ""2024-06-17T11:30:00Z"",
+                            ""lastUpdatedBy"": ""9c00982e-6218-42c1-bf77-fb5e5d339d8e""
+                        }
+                    },
+                    ""label"": ""qsdqsdqsdqsdd""
+                }"
+                )!
+                .AsObject(),
+            OldValue = new JsonObject(),
+            Timestamp = DateTime.UtcNow,
+        };
+        var source = new Uri("http://example.com");
+
+        // Act
+        var result = CloudEventFactory.CreateDataHistoryEvents(
+            eventData,
+            source,
+            [],
+            trackLastUpdatedBy: true
+        );
+
+        // Assert
+        var propertyEvent = result.First(e => e.Type == "Konnektr.Graph.Property.Event");
+        var data = propertyEvent.Data as JsonObject;
+        Assert.NotNull(data);
+        Assert.Equal("label", data["key"]?.ToString());
+        Assert.Equal("2024-06-17T11:30:00Z", data["sourceTimeStamp"]?.ToString());
+        Assert.Equal("9c00982e-6218-42c1-bf77-fb5e5d339d8e", data["updatedBy"]?.ToString());
+    }
+
+    [Fact]
+    public void CreateDataHistoryEvents_SubsequentWrite_SeparateSourceTimeOperation_IncludesSourceTime()
+    {
+        // Arrange - Property value change on existing twin, sourceTime as separate metadata op
+        var eventData = new EventData(Guid.NewGuid().ToString(), "digitaltwins", "Twin")
+        {
+            EventType = EventType.TwinUpdate,
+            NewValue = JsonNode
+                .Parse(
+                    @"{
+                    ""$dtId"": ""twin1"",
+                    ""$metadata"": {
+                        ""$model"": ""model1"",
+                        ""temperature"": {
+                            ""lastUpdateTime"": ""2024-01-15T10:30:00Z"",
+                            ""sourceTime"": ""2024-01-15T10:25:00Z"",
+                            ""lastUpdatedBy"": ""user-123""
+                        }
+                    },
+                    ""temperature"": 22.5
+                }"
+                )!
+                .AsObject(),
+            OldValue = JsonNode
+                .Parse(
+                    @"{
+                    ""$dtId"": ""twin1"",
+                    ""$metadata"": {
+                        ""$model"": ""model1"",
+                        ""temperature"": {
+                            ""lastUpdateTime"": ""2024-01-15T10:00:00Z""
+                        }
+                    },
+                    ""temperature"": 20.0
+                }"
+                )!
+                .AsObject(),
+            Timestamp = DateTime.UtcNow,
+        };
+        var source = new Uri("http://example.com");
+
+        // Act
+        var result = CloudEventFactory.CreateDataHistoryEvents(
+            eventData,
+            source,
+            [],
+            trackLastUpdatedBy: true
+        );
+
+        // Assert - separate operations: /$metadata/temperature/sourceTime
+        Assert.Single(result);
+        var data = result[0].Data as JsonObject;
+        Assert.NotNull(data);
+        Assert.Equal("temperature", data["key"]?.ToString());
+        Assert.Equal("2024-01-15T10:25:00Z", data["sourceTimeStamp"]?.ToString());
+        Assert.Equal("user-123", data["updatedBy"]?.ToString());
+    }
 }
