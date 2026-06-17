@@ -98,7 +98,7 @@ When `TrackLastUpdatedBy` is enabled and a valid `userId` is provided on write o
 
 **Azure Digital Twins SDK (`Azure.DigitalTwins.Core`) via REST API:** `$lastUpdatedBy` in `$metadata` is NOT supported when deserializing with `BasicDigitalTwin` or `DigitalTwinMetadata`. The Azure SDK's `DigitalTwinMetadataJsonConverter` throws on any unrecognized property within `$metadata`.
 
-**Recommended workaround for Azure SDK consumers:** Set `ReturnTwinLevelLastUpdatedBy` to `false` (via `Parameters:ReturnTwinLevelLastUpdatedBy` in API service config or `AgeDigitalTwinsClientOptions.ReturnTwinLevelLastUpdatedBy` in the SDK). This strips the twin-level `$lastUpdatedBy` from all responses while preserving per-property `lastUpdatedBy`. Other workarounds when `ReturnTwinLevelLastUpdatedBy` is left as `true`:
+**Recommended workaround for Azure SDK consumers:** Set `ReturnTwinLevelLastUpdatedBy` to `false` (via `Parameters:ReturnTwinLevelLastUpdatedBy` in API service config or `AgeDigitalTwinsClientOptions.ReturnTwinLevelLastUpdatedBy` in the SDK). This strips the twin-level `$lastUpdatedBy` from `$metadata` in all responses — including nested twins in multi-column MATCH query results — while preserving per-property `lastUpdatedBy`. The stripping is recursive: it walks the entire response tree and removes `$lastUpdatedBy` from every `$metadata` block found. Other workarounds when `ReturnTwinLevelLastUpdatedBy` is left as `true`:
 - Use `JsonDocument` or `JsonObject` as the response type (`GetDigitalTwinAsync<JsonDocument>`) to access the raw JSON without deserialization errors.
 - Use custom DTOs that don't attempt to parse the `$metadata` block.
 - Disable `TrackLastUpdatedBy` (default: `false`) if Azure SDK `BasicDigitalTwin` deserialization is required.
@@ -137,7 +137,8 @@ The middleware (`UserIdHeaderMiddleware`) runs after `UseAuthentication()` and b
 
 ## Key conventions
 
-- All tests inherit from `TestBase`, which creates an isolated temporary graph per test run and tears it down in `DisposeAsync`. This means integration tests are safe to run in parallel.
+- Integration tests that test end-to-end HTTP use `DistributedApplicationFactory` directly (e.g., `AppHostForHttp`) rather than `TestBase`, since they need Aspire orchestration. The database graph is created implicitly by the API service startup. Tests clean up by calling `DELETE /graph/delete` in `DisposeAsync`.
+- Integration tests using `TestBase` call the SDK client directly and create an isolated temporary graph per test run, tearing it down in `DisposeAsync`. These are safe to run in parallel.
 - Integration tests are tagged `Category=Integration` (or lack of the opposite filter). Unit tests pass with `--filter 'Category!=Integration'`.
 - The `CNPG_TEST=true` environment variable switches the Npgsql AGE driver mode for CNPG-flavor images.
 - Public API methods on `AgeDigitalTwinsClient` are `virtual` to support mocking/subclassing.
