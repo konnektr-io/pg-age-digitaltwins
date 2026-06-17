@@ -822,7 +822,7 @@ public class ModelsTests : TestBase
                 WHERE name = '{graphName}';
 
                 EXECUTE format(
-                    'CREATE INDEX model_embedding_idx ON %I."Model" USING hnsw ((agtype_access_operator(VARIADIC ARRAY[properties, ''"embedding"''::agtype])::text)::vector(3) vector_l2_ops)',
+                    'CREATE INDEX model_embedding_idx ON %I."Model" USING hnsw ((ag_catalog.agtype_access_operator(properties, ''"embedding"''::agtype)::text)::vector(3) vector_l2_ops)',
                     graph_oid
                 );
             END;
