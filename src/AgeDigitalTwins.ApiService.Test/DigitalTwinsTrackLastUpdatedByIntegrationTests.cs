@@ -15,12 +15,6 @@ public class TrackLastUpdatedByAppHostForHttp : DistributedApplicationFactory
 
     protected override void OnBuilderCreated(DistributedApplicationBuilder applicationBuilder)
     {
-        // Set parameters using process-level env vars AND the builder's configuration
-        Environment.SetEnvironmentVariable("Parameters__TrackLastUpdatedBy", "true");
-        Environment.SetEnvironmentVariable("Parameters__UserIdHeaderName", "X-User-Id");
-        applicationBuilder.Configuration["Parameters:TrackLastUpdatedBy"] = "true";
-        applicationBuilder.Configuration["Parameters:UserIdHeaderName"] = "X-User-Id";
-
         applicationBuilder.Services.ConfigureHttpClientDefaults(clientBuilder =>
         {
             clientBuilder.AddStandardResilienceHandler();
@@ -319,14 +313,6 @@ public class TrackLastUpdatedByNoReturnAppHost : DistributedApplicationFactory
 
     protected override void OnBuilderCreated(DistributedApplicationBuilder applicationBuilder)
     {
-        // Set parameters using process-level env vars AND the builder's configuration
-        Environment.SetEnvironmentVariable("Parameters__TrackLastUpdatedBy", "true");
-        Environment.SetEnvironmentVariable("Parameters__UserIdHeaderName", "X-User-Id");
-        Environment.SetEnvironmentVariable("Parameters__ReturnTwinLevelLastUpdatedBy", "false");
-        applicationBuilder.Configuration["Parameters:TrackLastUpdatedBy"] = "true";
-        applicationBuilder.Configuration["Parameters:UserIdHeaderName"] = "X-User-Id";
-        applicationBuilder.Configuration["Parameters:ReturnTwinLevelLastUpdatedBy"] = "false";
-
         applicationBuilder.Services.ConfigureHttpClientDefaults(clientBuilder =>
         {
             clientBuilder.AddStandardResilienceHandler();

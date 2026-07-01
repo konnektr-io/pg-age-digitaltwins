@@ -49,8 +49,6 @@ public static class DigitalTwinsEndpoints
                 {
                     string? etag = RequestHelper.ParseETag(httpContext, "If-None-Match");
                     string? userId = RequestHelper.ParseUserId(httpContext);
-                    var logger = httpContext.RequestServices.GetRequiredService<ILogger<Program>>();
-                    logger.LogInformation("[HERMES-DIAG] PUT /digitaltwins/{Id}: userId='{UserId}'", id, userId ?? "null");
                     return client.CreateOrReplaceDigitalTwinAsync(
                         id,
                         digitalTwin,
