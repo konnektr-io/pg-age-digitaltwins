@@ -35,6 +35,12 @@ public class TrackLastUpdatedByAppHostForHttp : DistributedApplicationFactory
     }
 }
 
+[CollectionDefinition("TrackLastUpdatedBy", DisableParallelization = true)]
+public class TrackLastUpdatedByTestCollection
+{
+}
+
+[Collection("TrackLastUpdatedBy")]
 [Trait("Category", "Integration")]
 public class DigitalTwinsTrackLastUpdatedByIntegrationTests : IAsyncLifetime
 {
@@ -121,15 +127,8 @@ public class DigitalTwinsTrackLastUpdatedByIntegrationTests : IAsyncLifetime
 
         Assert.True(root.TryGetProperty("$metadata", out JsonElement metadata), "$metadata should exist");
 
-        // Diagnostic: log what's in $metadata when assertion fails
-        if (!metadata.TryGetProperty("$lastUpdatedBy", out JsonElement lastUpdatedByTwin))
-        {
-            Console.WriteLine($"[HERMES-DIAG-CREATE] $metadata content: {metadata.GetRawText()}");
-            Console.WriteLine($"[HERMES-DIAG-CREATE] Full response: {content}");
-        }
-
         Assert.True(
-            metadata.TryGetProperty("$lastUpdatedBy", out lastUpdatedByTwin),
+            metadata.TryGetProperty("$lastUpdatedBy", out JsonElement lastUpdatedByTwin),
             "$lastUpdatedBy should be inside $metadata"
         );
         Assert.Equal(TestUserId, lastUpdatedByTwin.GetString());
@@ -168,15 +167,8 @@ public class DigitalTwinsTrackLastUpdatedByIntegrationTests : IAsyncLifetime
 
         Assert.True(root.TryGetProperty("$metadata", out JsonElement metadata), "$metadata should exist");
 
-        // Diagnostic: log what's in $metadata when assertion fails
-        if (!metadata.TryGetProperty("$lastUpdatedBy", out JsonElement lastUpdatedByTwin2))
-        {
-            Console.WriteLine($"[HERMES-DIAG-GET] $metadata content: {metadata.GetRawText()}");
-            Console.WriteLine($"[HERMES-DIAG-GET] Full response: {content}");
-        }
-
         Assert.True(
-            metadata.TryGetProperty("$lastUpdatedBy", out lastUpdatedByTwin2),
+            metadata.TryGetProperty("$lastUpdatedBy", out JsonElement lastUpdatedByTwin2),
             "$lastUpdatedBy should be inside $metadata"
         );
         Assert.Equal(TestUserId, lastUpdatedByTwin2.GetString());
@@ -343,6 +335,7 @@ public class TrackLastUpdatedByNoReturnAppHost : DistributedApplicationFactory
     }
 }
 
+[Collection("TrackLastUpdatedBy")]
 [Trait("Category", "Integration")]
 public class DigitalTwinsTrackLastUpdatedByStrippedIntegrationTests : IAsyncLifetime
 {
