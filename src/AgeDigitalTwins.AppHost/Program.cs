@@ -2,9 +2,10 @@ var builder = DistributedApplication.CreateBuilder(args);
 
 var ageConnectionString = builder.AddConnectionString("agedb");
 var ageGraphName = builder.AddParameter("AgeGraphName", args.Length > 0 ? args[0] : "digitaltwins");
-var trackLastUpdatedBy = builder.AddParameter("TrackLastUpdatedBy", "false");
-var userIdHeaderName = builder.AddParameter("UserIdHeaderName", "");
-var returnTwinLevelLastUpdatedBy = builder.AddParameter("ReturnTwinLevelLastUpdatedBy", "true");
+// Allow test hosts to override via environment variables (set by DistributedApplicationFactory.OnBuilderCreated)
+var trackLastUpdatedBy = builder.AddParameter("TrackLastUpdatedBy", Environment.GetEnvironmentVariable("Parameters__TrackLastUpdatedBy") ?? "false");
+var userIdHeaderName = builder.AddParameter("UserIdHeaderName", Environment.GetEnvironmentVariable("Parameters__UserIdHeaderName") ?? "");
+var returnTwinLevelLastUpdatedBy = builder.AddParameter("ReturnTwinLevelLastUpdatedBy", Environment.GetEnvironmentVariable("Parameters__ReturnTwinLevelLastUpdatedBy") ?? "true");
 
 // Check if CNPG_TEST environment variable is set (for testing with CNPG images)
 var cnpgTest = Environment.GetEnvironmentVariable("CNPG_TEST");

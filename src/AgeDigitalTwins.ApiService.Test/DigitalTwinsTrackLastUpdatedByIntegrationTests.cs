@@ -42,6 +42,9 @@ public class DigitalTwinsTrackLastUpdatedByIntegrationTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
+        // Set env vars BEFORE creating the AppHost so Program.cs reads them as defaults
+        Environment.SetEnvironmentVariable("Parameters__TrackLastUpdatedBy", "true");
+        Environment.SetEnvironmentVariable("Parameters__UserIdHeaderName", "X-User-Id");
         _app = new TrackLastUpdatedByAppHostForHttp();
         await _app.StartAsync();
         _httpClient = _app.CreateHttpClient("apiservice");
@@ -331,6 +334,10 @@ public class DigitalTwinsTrackLastUpdatedByStrippedIntegrationTests : IAsyncLife
 
     public async Task InitializeAsync()
     {
+        // Set env vars BEFORE creating the AppHost so Program.cs reads them as defaults
+        Environment.SetEnvironmentVariable("Parameters__TrackLastUpdatedBy", "true");
+        Environment.SetEnvironmentVariable("Parameters__UserIdHeaderName", "X-User-Id");
+        Environment.SetEnvironmentVariable("Parameters__ReturnTwinLevelLastUpdatedBy", "false");
         _app = new TrackLastUpdatedByNoReturnAppHost();
         await _app.StartAsync();
         _httpClient = _app.CreateHttpClient("apiservice");
