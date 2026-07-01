@@ -117,11 +117,18 @@ public class DigitalTwinsTrackLastUpdatedByIntegrationTests : IAsyncLifetime
 
         Assert.True(root.TryGetProperty("$metadata", out JsonElement metadata), "$metadata should exist");
 
+        // Diagnostic: log what's in $metadata when assertion fails
+        if (!metadata.TryGetProperty("$lastUpdatedBy", out JsonElement lastUpdatedByTwin))
+        {
+            Console.WriteLine($"[HERMES-DIAG-CREATE] $metadata content: {metadata.GetRawText()}");
+            Console.WriteLine($"[HERMES-DIAG-CREATE] Full response: {content}");
+        }
+
         Assert.True(
-            metadata.TryGetProperty("$lastUpdatedBy", out JsonElement lastUpdatedBy),
+            metadata.TryGetProperty("$lastUpdatedBy", out lastUpdatedByTwin),
             "$lastUpdatedBy should be inside $metadata"
         );
-        Assert.Equal(TestUserId, lastUpdatedBy.GetString());
+        Assert.Equal(TestUserId, lastUpdatedByTwin.GetString());
 
         Assert.True(
             metadata.TryGetProperty("$lastUpdateTime", out JsonElement lastUpdateTime),
@@ -157,11 +164,18 @@ public class DigitalTwinsTrackLastUpdatedByIntegrationTests : IAsyncLifetime
 
         Assert.True(root.TryGetProperty("$metadata", out JsonElement metadata), "$metadata should exist");
 
+        // Diagnostic: log what's in $metadata when assertion fails
+        if (!metadata.TryGetProperty("$lastUpdatedBy", out JsonElement lastUpdatedByTwin2))
+        {
+            Console.WriteLine($"[HERMES-DIAG-GET] $metadata content: {metadata.GetRawText()}");
+            Console.WriteLine($"[HERMES-DIAG-GET] Full response: {content}");
+        }
+
         Assert.True(
-            metadata.TryGetProperty("$lastUpdatedBy", out JsonElement lastUpdatedBy),
+            metadata.TryGetProperty("$lastUpdatedBy", out lastUpdatedByTwin2),
             "$lastUpdatedBy should be inside $metadata"
         );
-        Assert.Equal(TestUserId, lastUpdatedBy.GetString());
+        Assert.Equal(TestUserId, lastUpdatedByTwin2.GetString());
 
         Assert.True(
             metadata.TryGetProperty("$lastUpdateTime", out _),
