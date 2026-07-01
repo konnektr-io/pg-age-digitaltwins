@@ -15,9 +15,10 @@ public class TrackLastUpdatedByAppHostForHttp : DistributedApplicationFactory
 
     protected override void OnBuilderCreated(DistributedApplicationBuilder applicationBuilder)
     {
-        // Set parameters via environment variables that flow to the API service process
-        Environment.SetEnvironmentVariable("Parameters__TrackLastUpdatedBy", "true");
-        Environment.SetEnvironmentVariable("Parameters__UserIdHeaderName", "X-User-Id");
+        // Set parameters directly in the AppHost's configuration so that
+        // AddParameter resolves them correctly and WithEnvironment forwards them.
+        applicationBuilder.Configuration["Parameters:TrackLastUpdatedBy"] = "true";
+        applicationBuilder.Configuration["Parameters:UserIdHeaderName"] = "X-User-Id";
 
         applicationBuilder.Services.ConfigureHttpClientDefaults(clientBuilder =>
         {
@@ -300,10 +301,11 @@ public class TrackLastUpdatedByNoReturnAppHost : DistributedApplicationFactory
 
     protected override void OnBuilderCreated(DistributedApplicationBuilder applicationBuilder)
     {
-        // Set parameters via environment variables that flow to the API service process
-        Environment.SetEnvironmentVariable("Parameters__TrackLastUpdatedBy", "true");
-        Environment.SetEnvironmentVariable("Parameters__UserIdHeaderName", "X-User-Id");
-        Environment.SetEnvironmentVariable("Parameters__ReturnTwinLevelLastUpdatedBy", "false");
+        // Set parameters directly in the AppHost's configuration so that
+        // AddParameter resolves them correctly and WithEnvironment forwards them.
+        applicationBuilder.Configuration["Parameters:TrackLastUpdatedBy"] = "true";
+        applicationBuilder.Configuration["Parameters:UserIdHeaderName"] = "X-User-Id";
+        applicationBuilder.Configuration["Parameters:ReturnTwinLevelLastUpdatedBy"] = "false";
 
         applicationBuilder.Services.ConfigureHttpClientDefaults(clientBuilder =>
         {
