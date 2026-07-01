@@ -123,15 +123,15 @@ builder.Services.AddSingleton(sp =>
         50
     );
     var options = new AgeDigitalTwinsClientOptions
-    {
-        GraphName = graphName,
-        ModelCacheExpiration = TimeSpan.FromSeconds(modelCacheExpiration),
-        DefaultBatchSize = defaultBatchSize,
-        DefaultCheckpointInterval = defaultCheckpointInterval,
-        TrackLastUpdatedBy = builder.Configuration.GetValue("Parameters:TrackLastUpdatedBy", false),
-        ReturnTwinLevelLastUpdatedBy = builder.Configuration.GetValue("Parameters:ReturnTwinLevelLastUpdatedBy", true),
-    };
-    var client = new AgeDigitalTwinsClient(dataSource, options);
+        {
+            GraphName = graphName,
+            ModelCacheExpiration = TimeSpan.FromSeconds(modelCacheExpiration),
+            DefaultBatchSize = defaultBatchSize,
+            DefaultCheckpointInterval = defaultCheckpointInterval,
+            TrackLastUpdatedBy = builder.Configuration.GetValue("Parameters:TrackLastUpdatedBy", false),
+            ReturnTwinLevelLastUpdatedBy = builder.Configuration.GetValue("Parameters:ReturnTwinLevelLastUpdatedBy", true),
+        };
+        var client = new AgeDigitalTwinsClient(dataSource, options);
 
     return client;
 });

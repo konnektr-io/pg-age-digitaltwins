@@ -4,6 +4,7 @@ using AgeDigitalTwins.ApiService.Models;
 using AgeDigitalTwins.Models;
 using AgeDigitalTwins.ServiceDefaults.Authorization;
 using AgeDigitalTwins.ServiceDefaults.Authorization.Models;
+using Json.Patch;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -150,6 +151,26 @@ public static class ModelsEndpoints
             .RequireRateLimiting("AdminOperations")
             .WithName("DeleteModel")
             .WithSummary("Deletes a specific model by its ID.");
+
+        modelsGroup
+            .MapPatch(
+                "/{id}",
+                [Authorize]
+                async (
+                    string id,
+                    JsonPatch patch,
+                    [FromServices] AgeDigitalTwinsClient client,
+                    CancellationToken cancellationToken
+                ) =>
+                {
+                    await client.UpdateModelAsync(id, patch, cancellationToken);
+                    return Results.NoContent();
+                }
+            )
+            .RequirePermission(ResourceType.Models, PermissionAction.Write)
+            .RequireRateLimiting("AdminOperations")
+            .WithName("UpdateModel")
+            .WithSummary("Updates a model by its ID using JSON Patch.");
 
         modelsGroup
             .MapPost(
