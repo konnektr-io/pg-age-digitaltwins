@@ -19,10 +19,13 @@ public class UserIdHeaderMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
+        Console.WriteLine($"[HERMES-DIAG] UserIdHeaderMiddleware invoked. Header '{_headerName}' present: {context.Request.Headers.ContainsKey(_headerName)}");
+
         if (context.Request.Headers.TryGetValue(_headerName, out var headerValue)
             && !string.IsNullOrEmpty(headerValue))
         {
             var userId = headerValue.ToString();
+            Console.WriteLine($"[HERMES-DIAG] UserIdHeaderMiddleware: found userId='{userId}'");
 
             var syntheticIdentity = new ClaimsIdentity(
             [

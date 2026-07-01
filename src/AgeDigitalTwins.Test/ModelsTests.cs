@@ -813,20 +813,8 @@ public class ModelsTests : TestBase
 
         var createIndexCmd = new NpgsqlCommand(
             $"""
-            DO $$
-            DECLARE
-                graph_oid oid;
-            BEGIN
-                SELECT graphid INTO graph_oid
-                FROM ag_catalog.ag_graph
-                WHERE name = '{graphName}';
-
-                EXECUTE format(
-                    'CREATE INDEX model_embedding_idx ON %I."Model" USING hnsw ((ag_catalog.agtype_access_operator(properties, ''"embedding"''::agtype)::text::vector(3)) vector_l2_ops)',
-                    graph_oid
-                );
-            END;
-            $$;
+            CREATE INDEX IF NOT EXISTS model_embedding_idx ON "{graphName}"."Model"
+            USING hnsw ((ag_catalog.agtype_access_operator(properties, '"embedding"'::agtype)::text::vector(3)) vector_l2_ops)
             """,
             connection
         );
@@ -846,17 +834,7 @@ public class ModelsTests : TestBase
         {
             await using var dropIndexCmd = new NpgsqlCommand(
                 $"""
-                DO $$
-                DECLARE
-                    graph_oid oid;
-                BEGIN
-                    SELECT graphid INTO graph_oid
-                    FROM ag_catalog.ag_graph
-                    WHERE name = '{graphName}';
-
-                    EXECUTE format('DROP INDEX IF EXISTS %I.model_embedding_idx', graph_oid);
-                END;
-                $$;
+                DROP INDEX IF EXISTS "{graphName}".model_embedding_idx
                 """,
                 connection
             );

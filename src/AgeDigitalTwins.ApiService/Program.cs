@@ -131,6 +131,11 @@ builder.Services.AddSingleton(sp =>
         TrackLastUpdatedBy = builder.Configuration.GetValue("Parameters:TrackLastUpdatedBy", false),
         ReturnTwinLevelLastUpdatedBy = builder.Configuration.GetValue("Parameters:ReturnTwinLevelLastUpdatedBy", true),
     };
+    logger.LogInformation(
+        "TrackLastUpdatedBy={TrackLastUpdatedBy}, ReturnTwinLevelLastUpdatedBy={ReturnTwinLevelLastUpdatedBy}",
+        options.TrackLastUpdatedBy,
+        options.ReturnTwinLevelLastUpdatedBy
+    );
     var client = new AgeDigitalTwinsClient(dataSource, options);
 
     return client;
@@ -326,10 +331,16 @@ if (enableRateLimiting)
 app.UseAuthentication();
 
 var userIdHeaderName = builder.Configuration.GetValue("Parameters:UserIdHeaderName", "");
+Console.WriteLine($"[HERMES-DIAG] UserIdHeaderName='{userIdHeaderName}' TrackLastUpdatedBy config value={builder.Configuration.GetValue<bool?>($"Parameters:TrackLastUpdatedBy")?.ToString() ?? "null"}");
 if (!string.IsNullOrEmpty(userIdHeaderName))
 {
     var userIdHeaderRequired = builder.Configuration.GetValue("Parameters:UserIdHeaderRequired", false);
+    Console.WriteLine($"[HERMES-DIAG] Registering UserIdHeaderMiddleware with header='{userIdHeaderName}' required={userIdHeaderRequired}");
     app.UseMiddleware<UserIdHeaderMiddleware>(userIdHeaderName, userIdHeaderRequired);
+}
+else
+{
+    Console.WriteLine("[HERMES-DIAG] UserIdHeaderName is empty - middleware NOT registered");
 }
 
 app.UseAuthorization();
