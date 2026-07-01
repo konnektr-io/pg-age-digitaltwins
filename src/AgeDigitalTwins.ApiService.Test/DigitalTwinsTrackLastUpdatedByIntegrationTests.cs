@@ -15,6 +15,15 @@ public class TrackLastUpdatedByAppHostForHttp : DistributedApplicationFactory
 
     protected override void OnBuilderCreated(DistributedApplicationBuilder applicationBuilder)
     {
+        // Belt-and-suspenders: also set env vars and config in OnBuilderCreated
+        // as fallback for parallel test class env var contention
+        Environment.SetEnvironmentVariable("Parameters__TrackLastUpdatedBy", "true");
+        Environment.SetEnvironmentVariable("Parameters__UserIdHeaderName", "X-User-Id");
+        Environment.SetEnvironmentVariable("Parameters__ReturnTwinLevelLastUpdatedBy", "true");
+        applicationBuilder.Configuration["Parameters:TrackLastUpdatedBy"] = "true";
+        applicationBuilder.Configuration["Parameters:UserIdHeaderName"] = "X-User-Id";
+        applicationBuilder.Configuration["Parameters:ReturnTwinLevelLastUpdatedBy"] = "true";
+
         applicationBuilder.Services.ConfigureHttpClientDefaults(clientBuilder =>
         {
             clientBuilder.AddStandardResilienceHandler();
@@ -39,6 +48,7 @@ public class DigitalTwinsTrackLastUpdatedByIntegrationTests : IAsyncLifetime
         // Set env vars BEFORE creating the AppHost so Program.cs reads them as defaults
         Environment.SetEnvironmentVariable("Parameters__TrackLastUpdatedBy", "true");
         Environment.SetEnvironmentVariable("Parameters__UserIdHeaderName", "X-User-Id");
+        Environment.SetEnvironmentVariable("Parameters__ReturnTwinLevelLastUpdatedBy", "true");
         _app = new TrackLastUpdatedByAppHostForHttp();
         await _app.StartAsync();
         _httpClient = _app.CreateHttpClient("apiservice");
@@ -313,6 +323,15 @@ public class TrackLastUpdatedByNoReturnAppHost : DistributedApplicationFactory
 
     protected override void OnBuilderCreated(DistributedApplicationBuilder applicationBuilder)
     {
+        // Belt-and-suspenders: also set env vars and config in OnBuilderCreated
+        // as fallback for parallel test class env var contention
+        Environment.SetEnvironmentVariable("Parameters__TrackLastUpdatedBy", "true");
+        Environment.SetEnvironmentVariable("Parameters__UserIdHeaderName", "X-User-Id");
+        Environment.SetEnvironmentVariable("Parameters__ReturnTwinLevelLastUpdatedBy", "false");
+        applicationBuilder.Configuration["Parameters:TrackLastUpdatedBy"] = "true";
+        applicationBuilder.Configuration["Parameters:UserIdHeaderName"] = "X-User-Id";
+        applicationBuilder.Configuration["Parameters:ReturnTwinLevelLastUpdatedBy"] = "false";
+
         applicationBuilder.Services.ConfigureHttpClientDefaults(clientBuilder =>
         {
             clientBuilder.AddStandardResilienceHandler();
