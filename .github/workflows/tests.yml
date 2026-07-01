@@ -164,6 +164,12 @@ jobs:
             8.0.x
             9.0.x
 
+      - name: Trust ASP.NET Core HTTPS development certificate
+        run: |
+          dotnet dev-certs https --clean
+          dotnet dev-certs https --trust
+        continue-on-error: true
+
       - name: Verify parallel execution is enabled
         run: |
           echo "Verifying PostgreSQL parallel execution settings:"
