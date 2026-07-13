@@ -4,12 +4,14 @@ using System.Diagnostics;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using AgeDigitalTwins.Exceptions;
 using AgeDigitalTwins.Models;
 using DTDLParser;
 using DTDLParser.Models;
+using Json.Patch;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Npgsql;
@@ -882,7 +884,7 @@ RETURN COUNT(m) AS deletedCount";
     {
         string vectorString = JsonSerializer.Serialize(embedding);
         string cypher =
-            @"MATCH (m:Model {id: $modelId}) SET m.embedding = " + vectorString + "::vector";
+            @"MATCH (m:Model {id: $modelId}) SET m.embedding = $embedding::cstring::agtype";
 
         await using var connection = await _dataSource.OpenConnectionAsync(
             TargetSessionAttributes.ReadWrite,
@@ -890,9 +892,64 @@ RETURN COUNT(m) AS deletedCount";
         );
         await using var command = connection.CreateCypherCommand(
             _graphName, cypher,
-            new Dictionary<string, object?> { { "modelId", modelId } }
+            new Dictionary<string, object?>
+            {
+                { "modelId", modelId },
+                { "embedding", vectorString },
+            }
         );
         await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Updates a model by applying a JSON Patch document.
+    /// </summary>
+    /// <param name="modelId">The ID of the model to update.</param>
+    /// <param name="patch">The JSON Patch document.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    public virtual async Task UpdateModelAsync(
+        string modelId,
+        JsonPatch patch,
+        CancellationToken cancellationToken = default
+    )
+    {
+        foreach (var operation in patch.Operations)
+        {
+            switch (operation.Path.ToString().TrimStart('/'))
+            {
+                case "embedding":
+                    var embedding = JsonSerializer.Deserialize<double[]>(operation.Value);
+                    await UpdateModelEmbeddingAsync(modelId, embedding!, cancellationToken);
+                    break;
+
+                case "decommissioned":
+                {
+                    bool decommissioned = operation.Value!.GetValue<bool>();
+                    string cypher =
+                        @"MATCH (m:Model {id: $modelId}) SET m.decommissioned = $value";
+                    await using var connection = await _dataSource.OpenConnectionAsync(
+                        TargetSessionAttributes.ReadWrite,
+                        cancellationToken
+                    );
+                    await using var command = connection.CreateCypherCommand(
+                        _graphName,
+                        cypher,
+                        new Dictionary<string, object?>
+                        {
+                            { "modelId", modelId },
+                            { "value", decommissioned },
+                        }
+                    );
+                    await command.ExecuteNonQueryAsync(cancellationToken);
+                    break;
+                }
+
+                default:
+                    throw new ValidationFailedException(
+                        $"Operation on path '{operation.Path}' is not supported for models."
+                    );
+            }
+        }
     }
 
     /// <summary>
@@ -931,7 +988,7 @@ RETURN COUNT(m) AS deletedCount";
         {
             string vectorString = JsonSerializer.Serialize(vector);
             string whereClause = !string.IsNullOrWhiteSpace(query)
-                ? " WHERE (toLower(toString(m.displayName)) CONTAINS toLower($query) OR toLower(toString(m.description)) CONTAINS toLower($query) OR toLower(m.id) CONTAINS toLower($query)) "
+                ? " WHERE (toLower(m.displayName::text) CONTAINS toLower($query) OR toLower(m.description::text) CONTAINS toLower($query) OR toLower(m.id) CONTAINS toLower($query)) "
                 : "";
 
             cypher =
@@ -939,20 +996,24 @@ RETURN COUNT(m) AS deletedCount";
                 MATCH (m:Model)
                 {whereClause}
                 RETURN m
-                ORDER BY l2_distance(m.embedding, {vectorString}::vector) ASC
-                LIMIT {limit}";
+                ORDER BY l2_distance(m.embedding, $vector::cstring::agtype) ASC
+                LIMIT $limit";
+
+            parameters["vector"] = vectorString;
         }
         else
         {
             cypher =
                 $@"
                 MATCH (m:Model)
-                WHERE toLower(toString(m.displayName)) CONTAINS toLower($query) 
-                   OR toLower(toString(m.description)) CONTAINS toLower($query)
+                WHERE toLower(m.displayName::text) CONTAINS toLower($query) 
+                   OR toLower(m.description::text) CONTAINS toLower($query)
                    OR toLower(m.id) CONTAINS toLower($query)
                 RETURN m
-                LIMIT {limit}";
+                LIMIT $limit";
         }
+
+        parameters["limit"] = limit;
 
         if (!string.IsNullOrWhiteSpace(query))
         {

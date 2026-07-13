@@ -10,22 +10,37 @@ public class TrackLastUpdatedByAppHostForHttp : DistributedApplicationFactory
     public TrackLastUpdatedByAppHostForHttp()
         : base(
             typeof(Projects.AgeDigitalTwins_AppHost),
-            [
-                "temp_graph_" + Guid.NewGuid().ToString("N"),
-                "--Parameters:TrackLastUpdatedBy", "true",
-                "--Parameters:UserIdHeaderName", "X-User-Id",
-            ]
+            ["temp_graph_" + Guid.NewGuid().ToString("N")]
         ) { }
 
     protected override void OnBuilderCreated(DistributedApplicationBuilder applicationBuilder)
     {
+        // Belt-and-suspenders: also set env vars and config in OnBuilderCreated
+        // as fallback for parallel test class env var contention
+        Environment.SetEnvironmentVariable("Parameters__TrackLastUpdatedBy", "true");
+        Environment.SetEnvironmentVariable("Parameters__UserIdHeaderName", "X-User-Id");
+        Environment.SetEnvironmentVariable("Parameters__ReturnTwinLevelLastUpdatedBy", "true");
+        applicationBuilder.Configuration["Parameters:TrackLastUpdatedBy"] = "true";
+        applicationBuilder.Configuration["Parameters:UserIdHeaderName"] = "X-User-Id";
+        applicationBuilder.Configuration["Parameters:ReturnTwinLevelLastUpdatedBy"] = "true";
+
         applicationBuilder.Services.ConfigureHttpClientDefaults(clientBuilder =>
         {
             clientBuilder.AddStandardResilienceHandler();
+            clientBuilder.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+            {
+                ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+            });
         });
     }
 }
 
+[CollectionDefinition("TrackLastUpdatedBy", DisableParallelization = true)]
+public class TrackLastUpdatedByTestCollection
+{
+}
+
+[Collection("TrackLastUpdatedBy")]
 [Trait("Category", "Integration")]
 public class DigitalTwinsTrackLastUpdatedByIntegrationTests : IAsyncLifetime
 {
@@ -36,6 +51,10 @@ public class DigitalTwinsTrackLastUpdatedByIntegrationTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
+        // Set env vars BEFORE creating the AppHost so Program.cs reads them as defaults
+        Environment.SetEnvironmentVariable("Parameters__TrackLastUpdatedBy", "true");
+        Environment.SetEnvironmentVariable("Parameters__UserIdHeaderName", "X-User-Id");
+        Environment.SetEnvironmentVariable("Parameters__ReturnTwinLevelLastUpdatedBy", "true");
         _app = new TrackLastUpdatedByAppHostForHttp();
         await _app.StartAsync();
         _httpClient = _app.CreateHttpClient("apiservice");
@@ -109,10 +128,10 @@ public class DigitalTwinsTrackLastUpdatedByIntegrationTests : IAsyncLifetime
         Assert.True(root.TryGetProperty("$metadata", out JsonElement metadata), "$metadata should exist");
 
         Assert.True(
-            metadata.TryGetProperty("$lastUpdatedBy", out JsonElement lastUpdatedBy),
+            metadata.TryGetProperty("$lastUpdatedBy", out JsonElement lastUpdatedByTwin),
             "$lastUpdatedBy should be inside $metadata"
         );
-        Assert.Equal(TestUserId, lastUpdatedBy.GetString());
+        Assert.Equal(TestUserId, lastUpdatedByTwin.GetString());
 
         Assert.True(
             metadata.TryGetProperty("$lastUpdateTime", out JsonElement lastUpdateTime),
@@ -149,10 +168,10 @@ public class DigitalTwinsTrackLastUpdatedByIntegrationTests : IAsyncLifetime
         Assert.True(root.TryGetProperty("$metadata", out JsonElement metadata), "$metadata should exist");
 
         Assert.True(
-            metadata.TryGetProperty("$lastUpdatedBy", out JsonElement lastUpdatedBy),
+            metadata.TryGetProperty("$lastUpdatedBy", out JsonElement lastUpdatedByTwin2),
             "$lastUpdatedBy should be inside $metadata"
         );
-        Assert.Equal(TestUserId, lastUpdatedBy.GetString());
+        Assert.Equal(TestUserId, lastUpdatedByTwin2.GetString());
 
         Assert.True(
             metadata.TryGetProperty("$lastUpdateTime", out _),
@@ -291,23 +310,32 @@ public class TrackLastUpdatedByNoReturnAppHost : DistributedApplicationFactory
     public TrackLastUpdatedByNoReturnAppHost()
         : base(
             typeof(Projects.AgeDigitalTwins_AppHost),
-            [
-                "temp_graph_" + Guid.NewGuid().ToString("N"),
-                "--Parameters:TrackLastUpdatedBy", "true",
-                "--Parameters:UserIdHeaderName", "X-User-Id",
-                "--Parameters:ReturnTwinLevelLastUpdatedBy", "false",
-            ]
+            ["temp_graph_" + Guid.NewGuid().ToString("N")]
         ) { }
 
     protected override void OnBuilderCreated(DistributedApplicationBuilder applicationBuilder)
     {
+        // Belt-and-suspenders: also set env vars and config in OnBuilderCreated
+        // as fallback for parallel test class env var contention
+        Environment.SetEnvironmentVariable("Parameters__TrackLastUpdatedBy", "true");
+        Environment.SetEnvironmentVariable("Parameters__UserIdHeaderName", "X-User-Id");
+        Environment.SetEnvironmentVariable("Parameters__ReturnTwinLevelLastUpdatedBy", "false");
+        applicationBuilder.Configuration["Parameters:TrackLastUpdatedBy"] = "true";
+        applicationBuilder.Configuration["Parameters:UserIdHeaderName"] = "X-User-Id";
+        applicationBuilder.Configuration["Parameters:ReturnTwinLevelLastUpdatedBy"] = "false";
+
         applicationBuilder.Services.ConfigureHttpClientDefaults(clientBuilder =>
         {
             clientBuilder.AddStandardResilienceHandler();
+            clientBuilder.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+            {
+                ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+            });
         });
     }
 }
 
+[Collection("TrackLastUpdatedBy")]
 [Trait("Category", "Integration")]
 public class DigitalTwinsTrackLastUpdatedByStrippedIntegrationTests : IAsyncLifetime
 {
@@ -318,6 +346,10 @@ public class DigitalTwinsTrackLastUpdatedByStrippedIntegrationTests : IAsyncLife
 
     public async Task InitializeAsync()
     {
+        // Set env vars BEFORE creating the AppHost so Program.cs reads them as defaults
+        Environment.SetEnvironmentVariable("Parameters__TrackLastUpdatedBy", "true");
+        Environment.SetEnvironmentVariable("Parameters__UserIdHeaderName", "X-User-Id");
+        Environment.SetEnvironmentVariable("Parameters__ReturnTwinLevelLastUpdatedBy", "false");
         _app = new TrackLastUpdatedByNoReturnAppHost();
         await _app.StartAsync();
         _httpClient = _app.CreateHttpClient("apiservice");

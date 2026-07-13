@@ -9,6 +9,9 @@ public static class GraphInitialization
     {
         return
         [
+            new(
+                @$"DO $$ BEGIN CREATE EXTENSION IF NOT EXISTS vector; EXCEPTION WHEN OTHERS THEN END; $$;"
+            ),
             new(@$"SELECT create_vlabel('{graphName}', 'Twin');"),
             new(
                 @$"CREATE UNIQUE INDEX twin_id_idx ON {graphName}.""Twin"" (ag_catalog.agtype_access_operator(properties, '""$dtId""'::agtype));"

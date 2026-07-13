@@ -46,6 +46,19 @@ public class TestBase : IAsyncDisposable
                 ,
             }
         );
+
+        EnsurePgVectorExtension();
+    }
+
+    private void EnsurePgVectorExtension()
+    {
+        using var connection = _dataSource.CreateConnection();
+        connection.Open();
+        using var cmd = new NpgsqlCommand(
+            "DO $$ BEGIN CREATE EXTENSION IF NOT EXISTS vector; EXCEPTION WHEN OTHERS THEN END; $$;",
+            connection
+        );
+        cmd.ExecuteNonQuery();
     }
 
     public AgeDigitalTwinsClient Client => _client!;
