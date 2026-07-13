@@ -1,0 +1,308 @@
+---
+title: Import Jobs
+description: How the ND-JSON import job system works — streaming ingestion with checkpoint-based resumption, distributed locking, and automatic recovery.
+---
+
+# Import Jobs
+
+The import job system ingests graph data (models, twins, relationships) from ND-JSON streams into Apache AGE. It supports checkpoint-based resumption, distributed locking, graceful cancellation, and automatic recovery.
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────┐
+│  API Endpoints (ImportJobEndpoints.cs)          │
+│  PUT /jobs/imports/{id}                         │
+│  GET /jobs/imports/{id}                         │
+│  POST /jobs/imports/{id}/cancel                 │
+│  POST /jobs/imports/{id}/resume                 │
+└──────────────┬──────────────────────────────────┘
+               │
+┌──────────────▼──────────────────────────────────┐
+│  AgeDigitalTwinsClient.Jobs.cs                  │
+│  ImportGraphAsync / ResumeImportJobAsync        │
+└──────────────┬──────────────────────────────────┘
+               │
+┌──────────────▼──────────────────────────────────┐
+│  StreamingImportJob (ImportJob.cs)              │
+│  ExecuteWithCheckpointAsync                     │
+│  ┌────────────┐ ┌──────────┐ ┌───────────────┐  │
+│  │ Models     │ │ Twins    │ │ Relationships │  │
+│  │ (all at    │ │ (batched │ │ (batched      │  │
+│  │  once)     │ │  50)     │ │  50)          │  │
+│  └────────────┘ └──────────┘ └───────────────┘  │
+└──────────────┬──────────────────────────────────┘
+               │
+┌──────────────▼──────────────────────────────────┐
+│  JobService (JobService.cs)                     │
+│  - Distributed locking                          │
+│  - Checkpoint save/load/clear                   │
+│  - CRUD on {graphName}_jobs.jobs table          │
+└──────────────┬──────────────────────────────────┘
+               │
+┌──────────────▼──────────────────────────────────┐
+│  JobResumptionService (BackgroundService)       │
+│  - Polls every 2 min for interrupted jobs       │
+│  - Acquires lock, opens blob streams, resumes   │
+└─────────────────────────────────────────────────┘
+```
+
+## File Map
+
+| File                                                              | Role                                                                                                   |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `src/AgeDigitalTwins/Jobs/ImportJob.cs`                           | Core streaming engine: `StreamingImportJob.ExecuteWithCheckpointAsync()`                               |
+| `src/AgeDigitalTwins/Jobs/ImportJobCheckpoint.cs`                 | `ImportJobCheckpoint` model, `CurrentSection` enum                                                     |
+| `src/AgeDigitalTwins/Jobs/ImportJobOptions.cs`                    | Config: batch size, checkpoint interval, heartbeat interval                                            |
+| `src/AgeDigitalTwins/Jobs/JobService.cs`                          | `JobService` — persistence, distributed locking, checkpoint CRUD                                       |
+| `src/AgeDigitalTwins/Jobs/JobLockInfo.cs`                         | Lock state model                                                                                       |
+| `src/AgeDigitalTwins/Jobs/PositionTrackingStreamReader.cs`        | Stream reader tracking 1-based line numbers for checkpoint seeks                                       |
+| `src/AgeDigitalTwins/AgeDigitalTwinsClient.Jobs.cs`               | Public API surface on the SDK client                                                                   |
+| `src/AgeDigitalTwins/Models/JobRecord.cs`                         | Job record model with smart properties (reads from checkpoint during execution, results on completion) |
+| `src/AgeDigitalTwins/Models/JobStatus.cs`                         | Enum: `Notstarted`, `Running`, `Succeeded`, `PartiallySucceeded`, `Failed`, `Cancelled`, `Cancelling`  |
+| `src/AgeDigitalTwins/Models/JobError.cs`                          | Error model with `Code`, `Message`, `InnerError`, `Details`                                            |
+| `src/AgeDigitalTwins.ApiService/Extensions/ImportJobEndpoints.cs` | REST API endpoint mappings                                                                             |
+| `src/AgeDigitalTwins.ApiService/Services/JobResumptionService.cs` | `BackgroundService` for automatic job recovery                                                         |
+| `src/AgeDigitalTwins.ApiService/Models/ImportJob.cs`              | API response DTO                                                                                       |
+| `src/AgeDigitalTwins.ApiService/Models/ImportJobRequest.cs`       | API request DTO (`inputBlobUri`, `outputBlobUri`)                                                      |
+
+## Job Lifecycle (State Machine)
+
+```
+Notstarted ──► Running ──► Succeeded
+                  │           ├── PartiallySucceeded (errors > 0, but some items succeeded)
+                  │           └── Failed (errors > 0, nothing succeeded)
+                  │
+                  ├──► Cancelling ──► Cancelled
+                  │     (heartbeat timer detects
+                  │      DB status == Cancelling,
+                  │      triggers CancellationTokenSource.Cancel())
+                  │
+                  └──► Running (keeps Running on DB
+                        connectivity loss — resumed later)
+```
+
+Key transitions:
+
+- **Notstarted → Running**: When background `Task.Run` starts, or immediately for synchronous execution
+- **Running → Cancelling**: Set by `CancelImportJobAsync()` via `UpdateJobStatusAsync(jobId, Cancelling)`
+- **Cancelling → Cancelled**: Heartbeat timer (30s) polls DB, sees `Cancelling`, calls `combinedCts.Cancel()`
+- **Running → Running** (stays): On `DatabaseConnectivityException` — keeps status, allows resumption
+- **Running → Succeeded/PartiallySucceeded/Failed**: `DetermineFinalJobStatus()` after stream is fully consumed
+
+## ND-JSON Input Format
+
+Strictly ordered section markers, one JSON object per line:
+
+```jsonl
+{"Section": "Header"}
+{"fileVersion": "1.0.0"}
+{"Section": "Models"}
+<DTDL model JSON, one per line>
+{"Section": "Twins"}
+<twin JSON, one per line>
+{"Section": "Relationships"}
+<relationship JSON, one per line>
+```
+
+Rules:
+
+- `Header` section is required and must be the first section
+- `fileVersion` must be `"1.0.0"`
+- Models, Twins, Relationships sections are optional but must appear in order
+- All objects must be valid JSON on a single line (no embedded newlines)
+
+## Stream Processing Engine (ImportJob.cs)
+
+`StreamingImportJob.ExecuteWithCheckpointAsync()` is the core method.
+
+### Processing Flow
+
+1. **Header validation** — first call to `ValidateStreamHeaderAsync()` reads first two lines, resets stream
+2. **Section dispatch** — line-by-line reading via `PositionTrackingStreamReader`
+3. **Batch processing**:
+   - **Models**: All models are collected in a `List<string>`, then processed in a single `CreateModelsAsync()` call (models may have interdependencies)
+   - **Twins**: Collected in batches (default 50), each batch sent to `CreateOrReplaceDigitalTwinsInternalAsync()`
+   - **Relationships**: Collected in batches (default 50), each batch sent to `CreateOrReplaceRelationshipsInternalAsync()`
+4. **Connection health monitoring** — `EnsureConnectionHealthyAsync()` checks before processing each line, waits 60s and retries on broken/closed connections
+5. **Heartbeat timer** — renews distributed lock every 30s and polls DB for `Cancelling` status
+
+### Connection Health
+
+`EnsureConnectionHealthyAsync()` handles:
+
+- **Closed**: Waits 60s, opens connection. If still not open, throws `DatabaseConnectivityException`
+- **Broken**: Closes, waits 60s, reopens. If still broken, throws `DatabaseConnectivityException`
+- **Connecting/Executing**: Waits 5s, checks again
+- Healthy connections pass through immediately
+
+On `DatabaseConnectivityException`, the job stays in `Running` status with `FinishedDateTime = null` for automatic resumption.
+
+### Error Handling
+
+- Individual item errors are counted but don't stop processing
+- Batch failures are logged and counted; the job continues
+- `OperationCanceledException` from `combinedCts.Token` → `Cancelled` (DB-initiated cancel)
+- `OperationCanceledException` from original token → `Cancelled` (caller-initiated cancel)
+- `DatabaseConnectivityException` → return with `Running` status (resumable)
+- `ArgumentException` → always re-thrown (validation failure)
+- All other exceptions → `DetermineFinalJobStatus()` decides `Succeeded`/`PartiallySucceeded`/`Failed`
+
+## Checkpointing and Resumption
+
+### Checkpoint Model
+
+`ImportJobCheckpoint` tracks:
+
+- `CurrentSection` — `None`, `Header`, `Models`, `Twins`, `Relationships`
+- `LineNumber` — 1-based position in the ND-JSON stream
+- `ModelsProcessed`, `TwinsProcessed`, `RelationshipsProcessed`, `ErrorCount` — counters
+- `PendingModels` — models collected but not yet batch-processed
+- `ModelsCompleted`, `TwinsCompleted`, `RelationshipsCompleted` — section completion flags
+
+### When Checkpoints Are Saved
+
+1. **At section boundaries** — when a `{"Section": "..."}` line is encountered
+2. **Periodically within sections** — every `CheckpointInterval` items (default: 50)
+3. **On DB connectivity loss** — progress is captured before re-throwing (though not saved to DB since connectivity is down)
+4. **On final completion** — final checkpoint saved, then cleared on success
+
+### Resumption Flow
+
+1. `SeekToLineAsync(targetLineNumber)` resets the stream to beginning, fast-forwards by reading lines until target line
+2. Section completion flags (`ModelsCompleted`, `TwinsCompleted`, `RelationshipsCompleted`) allow fully skipping already-processed sections
+3. `PendingModels` reconstructs models that were collected but not yet batch-processed
+
+### PositionTrackingStreamReader
+
+Wraps a `StreamReader`, tracks 1-based `LineNumber`:
+
+- `SeekToLineAsync(n)`: `Seek(0, Begin)`, `DiscardBufferedData()`, read lines until line N
+- `SkipLinesAsync(n)`: Read and discard N lines from current position
+- `Reset()`: Seek to 0, reset counter
+
+## Distributed Locking (JobService.cs)
+
+Locks prevent duplicate processing when multiple instances could resume the same job.
+
+### Lock Columns on `jobs` Table
+
+| Column                | Type           | Description                                            |
+| --------------------- | -------------- | ------------------------------------------------------ |
+| `lock_acquired_at`    | `TIMESTAMPTZ`  | When lock was acquired                                 |
+| `lock_acquired_by`    | `VARCHAR(255)` | Instance ID: `{MachineName}-{ProcessId}-{8-char-guid}` |
+| `lock_lease_duration` | `INTERVAL`     | Default: 5 minutes                                     |
+| `lock_heartbeat_at`   | `TIMESTAMPTZ`  | Last heartbeat timestamp                               |
+
+### Lock Operations
+
+```sql
+-- Acquire (atomic update only if null or expired):
+UPDATE {schema}.jobs SET lock_acquired_at = NOW(), lock_acquired_by = @instanceId, ...
+WHERE id = @jobId AND (lock_acquired_at IS NULL OR lock_acquired_at + lock_lease_duration < NOW())
+
+-- Renew (must own valid lock):
+UPDATE {schema}.jobs SET lock_heartbeat_at = NOW()
+WHERE id = @jobId AND lock_acquired_by = @instanceId AND lock_acquired_at + lock_lease_duration > NOW()
+
+-- Release:
+UPDATE {schema}.jobs SET lock_acquired_at = NULL, lock_acquired_by = NULL, ...
+WHERE id = @jobId AND lock_acquired_by = @instanceId
+```
+
+The heartbeat timer (every 30s) renews the lock and checks for DB-initiated cancellation.
+
+## API Endpoints
+
+All under `/jobs/imports`, require `AdminOperations` rate limiting.
+
+| Method   | Route                       | Description                                                                                                        |
+| -------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `PUT`    | `/jobs/imports/{id}`        | Create & start import job. Returns `201` immediately (background execution). Body: `{inputBlobUri, outputBlobUri}` |
+| `GET`    | `/jobs/imports/{id}`        | Get job status and results                                                                                         |
+| `GET`    | `/jobs/imports/`            | List all import jobs                                                                                               |
+| `POST`   | `/jobs/imports/{id}/cancel` | Set status to `Cancelling`. Validates job is `Running` or `Notstarted`                                             |
+| `DELETE` | `/jobs/imports/{id}`        | Remove job record from DB                                                                                          |
+| `POST`   | `/jobs/imports/{id}/resume` | Resume from checkpoint. Validates job is `Running` or `Failed` and not locked by another instance                  |
+
+## Automatic Resumption (JobResumptionService)
+
+Registered only when `Parameters:JobsEnabled` is `true`:
+
+- Waits 10s on startup for app initialization
+- Polls every 2 minutes for jobs with `status = 'running'` AND (lock is null OR lock has expired)
+- For each import job found:
+  1. Validates required blob URIs exist in request data
+  2. Acquires distributed lock
+  3. Opens input stream (read) and output stream (append mode)
+  4. Calls `ResumeImportJobAsync()` with the checkpoint
+  5. On failure, marks job as `Failed`, releases lock
+- Purges expired jobs once per hour (when `DateTime.UtcNow.Minute == 0`)
+
+## Database Schema
+
+Schema: `{graphName}_jobs` (default: `digitaltwins_jobs`)
+
+```sql
+CREATE TABLE {graphName}_jobs.jobs (
+    id VARCHAR(255) PRIMARY KEY,
+    job_type VARCHAR(100) NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'notstarted',
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    finished_at TIMESTAMP WITH TIME ZONE NULL,
+    purge_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    request_data JSONB NULL,
+    result_data JSONB NULL,
+    error_data JSONB NULL,
+    checkpoint_data JSONB NULL,
+    lock_acquired_at TIMESTAMP WITH TIME ZONE NULL,
+    lock_acquired_by VARCHAR(255) NULL,
+    lock_lease_duration INTERVAL NOT NULL DEFAULT '5 minutes',
+    lock_heartbeat_at TIMESTAMP WITH TIME ZONE NULL
+);
+```
+
+Created automatically in `JobService` constructor via `InitializeSchemaAsync()`.
+
+## Configuration
+
+| Key                                    | Default        | Description                                                |
+| -------------------------------------- | -------------- | ---------------------------------------------------------- |
+| `Parameters:JobsEnabled`               | `true`         | Enables blob storage services and `JobResumptionService`   |
+| `Parameters:DefaultBatchSize`          | `50`           | Items per batch for import/delete jobs                     |
+| `Parameters:DefaultCheckpointInterval` | `50`           | Items between checkpoint saves                             |
+| `Parameters:AgeGraphName`              | `digitaltwins` | Graph name (used for schema isolation: `{graphName}_jobs`) |
+
+`ImportJobOptions`:
+
+- `ContinueOnFailure` (default: `true`)
+- `BatchSize` (default: `50`)
+- `CheckpointInterval` (default: `50`)
+- `OperationTimeout` (default: 30 min)
+- `HeartbeatInterval` (default: 30s)
+- `LeaveOpen` (default: `false`)
+
+## SDK Usage
+
+```csharp
+// Synchronous import from streams
+var result = await client.ImportGraphAsync(
+    "my-job-id",
+    inputStream,
+    outputStream,
+    options: new ImportJobOptions { BatchSize = 100 },
+    cancellationToken
+);
+
+// Background import via REST API (handled by ImportJobEndpoints)
+// PUT /jobs/imports/{id} with body { "inputBlobUri": "...", "outputBlobUri": "..." }
+
+// Resume from checkpoint
+var result = await client.ResumeImportJobAsync(
+    "my-job-id",
+    inputStream,
+    outputStream,
+    cancellationToken
+);
+```
