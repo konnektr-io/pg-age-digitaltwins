@@ -30,7 +30,12 @@ public static partial class AdtQueryHelpers
                 projections = "*";
             }
             returnClause = ProcessWhereClause(projections, graphName);
-            if (returnClause.Contains("COUNT()", StringComparison.OrdinalIgnoreCase))
+            var countAsAliasMatch = CountAsAliasRegex().Match(returnClause);
+            if (countAsAliasMatch.Success)
+            {
+                returnClause = $"COUNT(*) AS {countAsAliasMatch.Groups[1].Value}";
+            }
+            else if (CountCallRegex().IsMatch(returnClause))
             {
                 returnClause = "COUNT(*)";
             }
@@ -63,16 +68,7 @@ public static partial class AdtQueryHelpers
                 // Process RETURN clause to add alias (in case return does not contain *)
                 if (!returnClause.Contains('*'))
                 {
-                    returnClause = PropertyAccessWhereClauseRegex()
-                        .Replace(
-                            returnClause,
-                            m =>
-                            {
-                                return $"R.{m.Value}";
-                            }
-                        );
-                    returnClause = DollarSignPropertyRegex()
-                        .Replace(returnClause, m => $"['{m.Value[1..]}']");
+                    returnClause = PrependAliasToProjections(returnClause, "R");
                 }
             }
         }
@@ -172,16 +168,7 @@ public static partial class AdtQueryHelpers
                     // Process RETURN clause to add alias (in case return does not contain *)
                     if (!returnClause.Contains('*'))
                     {
-                        returnClause = PropertyAccessWhereClauseRegex()
-                            .Replace(
-                                returnClause,
-                                m =>
-                                {
-                                    return $"T.{m.Value}";
-                                }
-                            );
-                        returnClause = DollarSignPropertyRegex()
-                            .Replace(returnClause, m => $"['{m.Value[1..]}']");
+                        returnClause = PrependAliasToProjections(returnClause, "T");
                     }
                 }
             }
@@ -550,4 +537,50 @@ public static partial class AdtQueryHelpers
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
     )]
     private static partial Regex IsObjectFunctionRegex();
+
+    private static string PrependAliasToProjections(string projections, string alias)
+    {
+        if (string.IsNullOrEmpty(projections))
+            return projections;
+
+        var parts = projections.Split(',');
+        for (int i = 0; i < parts.Length; i++)
+        {
+            var part = parts[i].Trim();
+            if (string.IsNullOrEmpty(part))
+                continue;
+
+            string? columnAlias = null;
+            var asMatch = AsAliasRegex().Match(part);
+            if (asMatch.Success)
+            {
+                part = asMatch.Groups[1].Value.Trim();
+                columnAlias = asMatch.Groups[2].Value;
+            }
+
+            part = PropertyAccessWhereClauseRegex().Replace(part, m => $"{alias}.{m.Value}");
+            part = DollarSignPropertyRegex().Replace(part, m => $"['{m.Value[1..]}']");
+
+            parts[i] = columnAlias != null ? $"{part} AS {columnAlias}" : part;
+        }
+        return string.Join(", ", parts);
+    }
+
+    [GeneratedRegex(
+        @"^(.+?)\s+AS\s+(\w+)$",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+    )]
+    private static partial Regex AsAliasRegex();
+
+    [GeneratedRegex(
+        @"COUNT\s*\(\s*\)\s+AS\s+(\w+)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+    )]
+    private static partial Regex CountAsAliasRegex();
+
+    [GeneratedRegex(
+        @"COUNT\s*\(\s*\)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+    )]
+    private static partial Regex CountCallRegex();
 }
