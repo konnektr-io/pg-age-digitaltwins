@@ -183,6 +183,46 @@ public class AdtQueryToCypherTests
         "SELECT TOP(1) FROM digitaltwins WHERE ($dtId IN ['00000-0000-0000-00000','test@example.com'] OR email = 'test@example.com') AND $metadata.$model = 'dtmi:com:konnektr:identity:Invite;1'",
         "MATCH (T:Twin) WHERE (T['$dtId'] IN ['00000-0000-0000-00000','test@example.com'] OR T.email = 'test@example.com') AND T['$metadata']['$model'] = 'dtmi:com:konnektr:identity:Invite;1' RETURN * LIMIT 1"
     )]
+    [InlineData(
+        "SELECT $dtId AS id FROM DIGITALTWINS",
+        "MATCH (T:Twin) RETURN T['$dtId'] AS id"
+    )]
+    [InlineData(
+        "SELECT TOP(5) $dtId AS id FROM DIGITALTWINS",
+        "MATCH (T:Twin) RETURN T['$dtId'] AS id LIMIT 5"
+    )]
+    [InlineData(
+        "SELECT COUNT() AS cnt FROM DIGITALTWINS",
+        "MATCH (T:Twin) RETURN COUNT(*) AS cnt"
+    )]
+    [InlineData(
+        "SELECT TOP(3) COUNT() AS cnt FROM DIGITALTWINS",
+        "MATCH (T:Twin) RETURN COUNT(*) AS cnt LIMIT 3"
+    )]
+    [InlineData(
+        "SELECT name AS n, $dtId AS id FROM DIGITALTWINS",
+        "MATCH (T:Twin) RETURN T.name AS n, T['$dtId'] AS id"
+    )]
+    [InlineData(
+        "SELECT $dtId AS id, name FROM DIGITALTWINS",
+        "MATCH (T:Twin) RETURN T['$dtId'] AS id, T.name"
+    )]
+    [InlineData(
+        "SELECT $dtId AS id FROM DIGITALTWINS WHERE name = 'test'",
+        "MATCH (T:Twin) WHERE T.name = 'test' RETURN T['$dtId'] AS id"
+    )]
+    [InlineData(
+        "SELECT TOP(10) $dtId AS id, name AS n FROM DIGITALTWINS WHERE $metadata.$model = 'dtmi:test;1'",
+        "MATCH (T:Twin) WHERE T['$metadata']['$model'] = 'dtmi:test;1' RETURN T['$dtId'] AS id, T.name AS n LIMIT 10"
+    )]
+    [InlineData(
+        "SELECT R.$sourceId AS src, R.$targetId AS tgt FROM RELATIONSHIPS R",
+        "MATCH (:Twin)-[R]->(:Twin) RETURN R['$sourceId'] AS src, R['$targetId'] AS tgt"
+    )]
+    [InlineData(
+        "SELECT $sourceId AS src FROM RELATIONSHIPS WHERE $sourceId = 'root'",
+        "MATCH (:Twin)-[R]->(:Twin) WHERE R['$sourceId'] = 'root' RETURN R['$sourceId'] AS src"
+    )]
     public void ConvertAdtQueryToCypher_ReturnsExpectedCypher(
         string adtQuery,
         string expectedCypher
