@@ -165,11 +165,17 @@ jobs:
             9.0.x
 
       - name: Trust ASP.NET Core HTTPS development certificate
-        if: runner.os != 'Linux'
         run: |
           dotnet dev-certs https --clean
-          dotnet dev-certs https --trust
-        continue-on-error: true
+          dotnet dev-certs https
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            # On Linux, export the dev cert to the OpenSSL CA trust store
+            # so HttpClient validates it during integration tests
+            sudo dotnet dev-certs https --export-path /usr/local/share/ca-certificates/aspnet-dev.crt --format PEM
+            sudo update-ca-certificates
+          else
+            dotnet dev-certs https --trust
+          fi
 
       - name: Verify parallel execution is enabled
         run: |
