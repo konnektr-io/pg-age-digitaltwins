@@ -16,6 +16,8 @@ public class NatsSinkOptions : SinkOptions
     public int StreamReplicas { get; set; } = 1;
     public string StreamMaxAge { get; set; } = "72h";
 
+    public bool UseBinaryMode { get; set; } = true;
+
     // OAuth
     public string? TokenEndpoint { get; set; }
     public string? TenantId { get; set; }

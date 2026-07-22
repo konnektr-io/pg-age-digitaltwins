@@ -145,8 +145,11 @@ public class NatsEventSinkTests
             c => c.PublishAsync<byte[]>(
                 "test.subject",
                 It.IsAny<byte[]?>(),
-                It.IsAny<CancellationToken>(),
-                It.IsAny<NatsPubOpts?>()),
+                It.IsAny<NatsHeaders?>(),
+                It.IsAny<string?>(),
+                It.IsAny<INatsSerialize<byte[]>?>(),
+                It.IsAny<NatsPubOpts?>(),
+                It.IsAny<CancellationToken>()),
             Times.Once);
 
         Assert.True(sink.IsHealthy);
@@ -177,8 +180,11 @@ public class NatsEventSinkTests
             c => c.PublishAsync<byte[]>(
                 "test.subject",
                 It.IsAny<byte[]?>(),
-                It.IsAny<CancellationToken>(),
-                It.IsAny<NatsPubOpts?>()),
+                It.IsAny<NatsHeaders?>(),
+                It.IsAny<string?>(),
+                It.IsAny<INatsSerialize<byte[]>?>(),
+                It.IsAny<NatsPubOpts?>(),
+                It.IsAny<CancellationToken>()),
             Times.Exactly(3));
     }
 
@@ -187,17 +193,15 @@ public class NatsEventSinkTests
     {
         var jetStreamMock = new Mock<INatsJSContext>();
 
-        _natsConnectionMock
-            .Setup(c => c.CreateJetStreamContext())
-            .Returns(jetStreamMock.Object);
-
         // Setup JetStream publish to return a successful PubAckResponse
         jetStreamMock
             .Setup(js => js.PublishAsync<byte[]>(
                 It.IsAny<string>(),
                 It.IsAny<byte[]?>(),
-                It.IsAny<CancellationToken>(),
-                It.IsAny<NatsJSPubOpts?>()))
+                It.IsAny<INatsSerialize<byte[]>?>(),
+                It.IsAny<NatsJSPubOpts?>(),
+                It.IsAny<NatsHeaders?>(),
+                It.IsAny<CancellationToken>()))
             .ReturnsAsync(new PubAckResponse { Error = null });
 
         var options = new NatsSinkOptions
@@ -209,7 +213,7 @@ public class NatsEventSinkTests
             StreamName = "test-stream"
         };
 
-        using var sink = new NatsEventSink(options, null, _loggerMock.Object, _natsClientMock.Object);
+        using var sink = new NatsEventSink(options, null, _loggerMock.Object, _natsClientMock.Object, jetStreamMock.Object);
 
         var cloudEvent = new CloudEvent
         {
@@ -225,8 +229,10 @@ public class NatsEventSinkTests
             js => js.PublishAsync<byte[]>(
                 "test.subject",
                 It.IsAny<byte[]?>(),
-                It.IsAny<CancellationToken>(),
-                It.IsAny<NatsJSPubOpts?>()),
+                It.IsAny<INatsSerialize<byte[]>?>(),
+                It.IsAny<NatsJSPubOpts?>(),
+                It.IsAny<NatsHeaders?>(),
+                It.IsAny<CancellationToken>()),
             Times.Once);
 
         Assert.True(sink.IsHealthy);
@@ -239,8 +245,11 @@ public class NatsEventSinkTests
             .Setup(c => c.PublishAsync<byte[]>(
                 It.IsAny<string>(),
                 It.IsAny<byte[]?>(),
-                It.IsAny<CancellationToken>(),
-                It.IsAny<NatsPubOpts?>()))
+                It.IsAny<NatsHeaders?>(),
+                It.IsAny<string?>(),
+                It.IsAny<INatsSerialize<byte[]>?>(),
+                It.IsAny<NatsPubOpts?>(),
+                It.IsAny<CancellationToken>()))
             .ThrowsAsync(new NatsException("Connection lost"));
 
         var options = new NatsSinkOptions

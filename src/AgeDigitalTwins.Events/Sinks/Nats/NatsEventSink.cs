@@ -1,3 +1,5 @@
+using System.Text;
+using System.Text.Json;
 using AgeDigitalTwins.Events.Abstractions;
 using Azure.Core;
 using CloudNative.CloudEvents;
@@ -19,6 +21,7 @@ public class NatsEventSink : IEventSink, IDisposable
     private readonly string _subject;
     private readonly NatsSinkOptions _options;
     private readonly CloudEventFormatter _formatter = new JsonEventFormatter();
+    private readonly bool _ownsNatsClient;
     private bool _isHealthy = true;
     private bool _disposed;
 
@@ -26,7 +29,8 @@ public class NatsEventSink : IEventSink, IDisposable
         NatsSinkOptions options,
         TokenCredential? credential,
         ILogger logger,
-        INatsClient? natsClient = null
+        INatsClient? natsClient = null,
+        INatsJSContext? jetStreamContext = null
     )
     {
         Name = options.Name;
@@ -36,15 +40,24 @@ public class NatsEventSink : IEventSink, IDisposable
 
         try
         {
-            var natsOpts = BuildNatsOpts(options, credential);
-            _natsClient = natsClient ?? new NatsClient(natsOpts);
+            _ownsNatsClient = natsClient is null;
+            if (_ownsNatsClient)
+            {
+                var natsOpts = BuildNatsOpts(options, credential);
+                _natsClient = new NatsClient(natsOpts);
+            }
+            else
+            {
+                _natsClient = natsClient!;
+            }
+
             _natsConnection = _natsClient.Connection;
             _natsConnection.ConnectionDisconnected += OnDisconnected;
             _natsConnection.ConnectionOpened += OnReconnected;
 
             if (options.JetStream)
             {
-                _jetStreamContext = _natsConnection.CreateJetStreamContext();
+                _jetStreamContext = jetStreamContext ?? new NatsJSContextFactory().CreateContext(_natsConnection);
             }
 
             _logger.LogInformation(
@@ -163,14 +176,44 @@ public class NatsEventSink : IEventSink, IDisposable
         {
             try
             {
-                var bytes = _formatter.EncodeStructuredModeMessage(cloudEvent, out _);
-                var data = bytes.ToArray();
+                byte[] data;
+                NatsHeaders? headers = null;
+
+                if (_options.UseBinaryMode)
+                {
+                    headers = new NatsHeaders();
+                    headers.Add("ce-specversion", cloudEvent.SpecVersion.VersionId);
+                    headers.Add("ce-type", cloudEvent.Type!);
+                    headers.Add("ce-source", cloudEvent.Source!.ToString());
+                    headers.Add("ce-id", cloudEvent.Id!);
+                    if (cloudEvent.Time is DateTimeOffset time)
+                        headers.Add("ce-time", time.ToString("o"));
+                    if (cloudEvent.DataContentType is string contentType)
+                        headers.Add("ce-datacontenttype", contentType);
+
+                    if (cloudEvent.Data is byte[] byteData)
+                        data = byteData;
+                    else if (cloudEvent.Data is string strData)
+                        data = Encoding.UTF8.GetBytes(strData);
+                    else if (cloudEvent.Data is not null)
+                        data = JsonSerializer.SerializeToUtf8Bytes(cloudEvent.Data);
+                    else
+                        data = [];
+                }
+                else
+                {
+                    headers = new NatsHeaders();
+                    headers.Add("Content-Type", "application/cloudevents");
+                    var bytes = _formatter.EncodeStructuredModeMessage(cloudEvent, out _);
+                    data = bytes.ToArray();
+                }
 
                 if (_jetStreamContext != null)
                 {
                     var ack = await _jetStreamContext.PublishAsync<byte[]>(
                         _subject,
                         data,
+                        headers: headers,
                         cancellationToken: cancellationToken
                     );
 
@@ -186,6 +229,7 @@ public class NatsEventSink : IEventSink, IDisposable
                     await _natsClient.PublishAsync<byte[]>(
                         _subject,
                         data,
+                        headers,
                         cancellationToken: cancellationToken
                     );
                 }
@@ -220,6 +264,9 @@ public class NatsEventSink : IEventSink, IDisposable
             return;
 
         _disposed = true;
+
+        if (!_ownsNatsClient)
+            return;
 
         try
         {
