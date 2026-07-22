@@ -169,9 +169,11 @@ jobs:
           dotnet dev-certs https --clean
           dotnet dev-certs https
           if [ "$RUNNER_OS" == "Linux" ]; then
-            # On Linux, export the dev cert to the OpenSSL CA trust store
-            # so HttpClient validates it during integration tests
-            sudo dotnet dev-certs https --export-path /usr/local/share/ca-certificates/aspnet-dev.crt --format PEM
+            # On Linux, export the dev cert to the OpenSSL CA trust store.
+            # Export to a temp path first (sudo changes $HOME, which would
+            # prevent finding the cert in the runner's .dotnet store)
+            dotnet dev-certs https --export-path /tmp/aspnet-dev.crt --format PEM
+            sudo cp /tmp/aspnet-dev.crt /usr/local/share/ca-certificates/aspnet-dev.crt
             sudo update-ca-certificates
           else
             dotnet dev-certs https --trust
