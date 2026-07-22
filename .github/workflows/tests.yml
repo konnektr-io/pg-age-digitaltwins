@@ -165,6 +165,7 @@ jobs:
             9.0.x
 
       - name: Trust ASP.NET Core HTTPS development certificate
+        if: runner.os != 'Linux'
         run: |
           dotnet dev-certs https --clean
           dotnet dev-certs https --trust
