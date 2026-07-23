@@ -54,7 +54,7 @@ For CI, the database is provisioned automatically via Docker in GitHub Actions (
 
 - **`AgeDigitalTwins.ApiService`** — ASP.NET Core Minimal API exposing the ADT-compatible REST surface. Endpoints are registered via extension methods in `Extensions/` (one file per resource: `DigitalTwinsEndpoints`, `RelationshipsEndpoints`, `ModelsEndpoints`, `ComponentsEndpoints`, `QueryEndpoints`, `TelemetryEndpoints`, `ImportJobEndpoints`, `GraphEndpoints`). Authentication (JWT Bearer) and authorization are optional and toggled via configuration.
 
-- **`AgeDigitalTwins.Events`** — Standalone ASP.NET Core web service for real-time event streaming. Uses PostgreSQL logical replication (`AgeDigitalTwinsReplication`) to capture WAL changes and routes them as CloudEvents to pluggable sinks: Kafka, MQTT, Azure Data Explorer (Kusto), and Webhook. Sink implementations live in `Sinks/` and implement `IEventSink`.
+- **`AgeDigitalTwins.Events`** — Standalone ASP.NET Core web service for real-time event streaming. Uses PostgreSQL logical replication (`AgeDigitalTwinsReplication`) to capture WAL changes and routes them as CloudEvents to pluggable sinks: Kafka, NATS (with JetStream support), MQTT, Azure Data Explorer (Kusto), and Webhook. Sink implementations live in `Sinks/` and implement `IEventSink`.
 
 - **`AgeDigitalTwins.AppHost`** — .NET Aspire orchestrator for local development.
 

@@ -316,6 +316,33 @@ Configured under `EventSinks:Webhook` as an array.
 | `Scope` | No | Event scope filter |
 | `EventTypeMappings` | No | Maps `SinkEventType` to custom topics |
 
+#### NATS
+
+Configured under `EventSinks:NATS` as an array.
+
+| Key | Required | Default | Description |
+|-----|----------|---------|-------------|
+| `Name` | Yes | — | Sink name (referenced by `EventRoutes`) |
+| `Url` | Yes | — | NATS server URL (e.g., `nats://nats-cluster:4222`) |
+| `Subject` | Yes | — | NATS subject to publish events to |
+| `Username` | No | — | NATS username (basic auth) |
+| `Password` | No | — | NATS password (basic auth) |
+| `Token` | No | — | Static token for NATS token authentication |
+| `AuthenticationType` | No | — | Set to `OAuth` to use OAuth 2.0 token exchange (requires `TokenEndpoint` + `ClientId` + `ClientSecret`) |
+| `Scope` | If OAuth | — | OAuth scope for token request |
+| `TlsEnabled` | No | `false` | Enable TLS for NATS connection |
+| `TlsSkipVerify` | No | `false` | Skip TLS certificate verification (dev only) |
+| `JetStream` | No | `false` | Enable JetStream for durable, at-least-once delivery |
+| `StreamName` | If JetStream | — | JetStream stream name (must exist if `JetStream` is `true`) |
+| `StreamReplicas` | No | `1` | JetStream stream replication factor |
+| `StreamMaxAge` | No | `72h` | JetStream stream max age (e.g., `72h`, `7d`) |
+| `UseBinaryMode` | No | `true` | When `true` (default), publishes CloudEvents in binary content mode with CE headers as NATS headers. When `false`, uses structured content mode with full CloudEvents JSON envelope |
+| `TokenEndpoint` | If OAuth | — | OAuth token endpoint URL |
+| `TenantId` | No | — | Azure AD tenant ID (for `ClientSecretCredential`) |
+| `ClientId` | If OAuth | — | OAuth client ID |
+| `ClientSecret` | If OAuth | — | OAuth client secret |
+| `EventTypeMappings` | No | — | Maps `SinkEventType` to custom subjects |
+
 #### Azure Data Explorer (Kusto)
 
 Configured under `EventSinks:Kusto` as an array.
@@ -479,7 +506,7 @@ Standard ASP.NET Core logging configuration applies. Key namespaces for debuggin
 }
 ```
 
-### Full Events Service with Kafka and Kusto Sinks
+### Full Events Service with Kafka, Kusto, and NATS Sinks
 
 ```json
 {
@@ -505,6 +532,17 @@ Standard ASP.NET Core logging configuration applies. Key namespaces for debuggin
         "SecurityProtocol": "SaslSsl"
       }
     ],
+    "NATS": [
+      {
+        "Name": "realtime-nats",
+        "Url": "nats://nats-cluster:4222",
+        "Subject": "graph.events",
+        "JetStream": true,
+        "StreamName": "graph-events",
+        "UseBinaryMode": true,
+        "Token": "my-nats-token"
+      }
+    ],
     "Kusto": [
       {
         "Name": "archive-kusto",
@@ -526,6 +564,10 @@ Standard ASP.NET Core logging configuration applies. Key namespaces for debuggin
         "TwinDelete": "twin-deleted",
         "Telemetry": "twin-telemetry"
       }
+    },
+    {
+      "SinkName": "realtime-nats",
+      "EventFormat": "EventNotification"
     },
     {
       "SinkName": "archive-kusto",

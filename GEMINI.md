@@ -10,7 +10,7 @@ The core purpose of this project is to provide a powerful, self-hostable alterna
 
 The solution is structured as a .NET application with several key projects:
 -   **AgeDigitalTwins.ApiService**: The main ASP.NET Core web API that exposes the ADT-compatible endpoints.
--   **AgeDigitalTwins.Events**: A project for handling real-time event streaming and routing.
+-   **AgeDigitalTwins.Events**: A project for handling real-time event streaming and routing to multiple sink types (Kafka, NATS, MQTT, Webhook, Azure Data Explorer).
 -   **AgeDigitalTwins**: The core class library containing the client logic and data models.
 -   **AgeDigitalTwins.AppHost**: A .NET Aspire project used to orchestrate and run the various services during local development.
 -   **Test Projects**: Several projects dedicated to unit and integration tests.

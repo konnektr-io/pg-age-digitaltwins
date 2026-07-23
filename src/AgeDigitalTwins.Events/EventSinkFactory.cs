@@ -6,6 +6,7 @@ using AgeDigitalTwins.Events.Sinks.Base;
 using AgeDigitalTwins.Events.Sinks.Kafka;
 using AgeDigitalTwins.Events.Sinks.Kusto;
 using AgeDigitalTwins.Events.Sinks.Mqtt;
+using AgeDigitalTwins.Events.Sinks.Nats;
 using AgeDigitalTwins.Events.Sinks.Webhook;
 using Azure.Identity;
 
@@ -111,6 +112,35 @@ public class EventSinkFactory(
                     logger.LogError(
                         ex,
                         "Failed to create Webhook event sink. Check the configuration for errors."
+                    );
+                }
+            }
+        }
+
+        var natsSinks = _configuration
+            .GetSection("EventSinks:NATS")
+            .Get<List<NatsSinkOptions>>();
+        if (natsSinks != null && natsSinks.Count > 0)
+        {
+            var logger = _loggerFactory.CreateLogger<NatsEventSink>();
+            foreach (var natsSink in natsSinks)
+            {
+                try
+                {
+                    var credential = CredentialFactory.CreateCredential(
+                        null,
+                        natsSink.ClientId,
+                        natsSink.ClientSecret,
+                        natsSink.TokenEndpoint
+                    );
+                    var sink = new NatsEventSink(natsSink, credential, logger);
+                    sinks.Add(new ResilientEventSinkWrapper(sink, wrapperLogger, _dlqService));
+                }
+                catch (ArgumentException ex)
+                {
+                    logger.LogError(
+                        ex,
+                        "Failed to create NATS event sink. Check the configuration for errors."
                     );
                 }
             }
