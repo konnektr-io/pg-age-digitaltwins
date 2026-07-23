@@ -18,7 +18,7 @@ Event Routing in Konnektr Graph captures every change to your digital twin graph
 
 ### Key Concepts
 
-**Event Sinks** define *where* events should be sent (Kafka broker, MQTT broker, webhook endpoint, Azure Data Explorer cluster, etc.). You configure connection details and authentication for each sink.
+**Event Sinks** define *where* events should be sent (Kafka broker, MQTT broker, webhook endpoint, NATS server, Azure Data Explorer cluster, etc.). You configure connection details and authentication for each sink.
 
 **Event Routes** define *which events* flow to *which sinks*. You can have multiple routes pointing to the same sink, allowing you to route different event types or formats to the same destination.
 
@@ -83,6 +83,20 @@ Send HTTP POST requests to any endpoint for flexible integration.
 - Custom business logic and automation
 - CI/CD pipeline triggers
 
+### NATS
+
+Publish events to [NATS](https://nats.io) — a high-performance cloud-native messaging system. Supports both core NATS pub/sub and JetStream for durable, at-least-once delivery.
+
+**Common use cases:**
+- Cloud-native microservices communication
+- Event-driven architectures requiring high throughput and low latency
+- Durable event streaming with JetStream
+- Edge and IoT deployments with lightweight footprint
+
+The NATS sink supports multiple authentication methods: token-based, username/password, and OAuth 2.0 (token exchange). Events can be published in CloudEvents binary content mode (default) or structured content mode.
+
+See the [NATS Event Sink](/docs/graph/guides/event-sinks/nats) reference for full configuration details.
+
 ## Configuration
 
 ### Managed (Konnektr Cloud)
@@ -99,6 +113,7 @@ Configure event routing through the Konnektr platform web interface.
    - **Azure Data Explorer**: Ingestion URI, database name, service principal credentials
    - **MQTT**: Broker address, port, credentials
    - **Webhook**: Endpoint URL, authentication (Basic, Bearer, API Key, OAuth)
+   - **NATS**: Server URL, subject, authentication (token, username/password, or OAuth)
 5. Save the configuration
 
 Credentials are stored securely and never exposed in logs or UI.
@@ -189,6 +204,25 @@ config:
             secretKeyRef:
               name: webhook-credentials
               key: token
+    
+    nats:
+      - name: NatsSink1
+        url: "nats://nats-cluster:4222"
+        subject: "graph.events"
+        jetStream: true
+        streamName: "graph-events"
+        useBinaryMode: true
+        # Optional: username/password or token auth
+        # username:
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: nats-credentials
+        #       key: username
+        # password:
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: nats-credentials
+        #       key: password
 
   # Define event routes
   eventRoutes:
@@ -199,6 +233,8 @@ config:
     - sinkName: MqttBroker1
       eventFormat: EventNotification
     - sinkName: WebhookEndpoint1
+      eventFormat: EventNotification
+    - sinkName: NatsSink1
       eventFormat: EventNotification
 
 Apply configuration:
