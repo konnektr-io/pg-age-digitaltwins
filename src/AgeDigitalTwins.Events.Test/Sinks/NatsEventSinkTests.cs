@@ -144,7 +144,7 @@ public class NatsEventSinkTests
         _natsClientMock.Verify(
             c => c.PublishAsync<byte[]>(
                 "test.subject",
-                It.IsAny<byte[]?>(),
+                It.IsAny<byte[]>(),
                 It.IsAny<NatsHeaders?>(),
                 It.IsAny<string?>(),
                 It.IsAny<INatsSerialize<byte[]>?>(),
@@ -179,7 +179,7 @@ public class NatsEventSinkTests
         _natsClientMock.Verify(
             c => c.PublishAsync<byte[]>(
                 "test.subject",
-                It.IsAny<byte[]?>(),
+                It.IsAny<byte[]>(),
                 It.IsAny<NatsHeaders?>(),
                 It.IsAny<string?>(),
                 It.IsAny<INatsSerialize<byte[]>?>(),
@@ -244,7 +244,7 @@ public class NatsEventSinkTests
         _natsClientMock
             .Setup(c => c.PublishAsync<byte[]>(
                 It.IsAny<string>(),
-                It.IsAny<byte[]?>(),
+                It.IsAny<byte[]>(),
                 It.IsAny<NatsHeaders?>(),
                 It.IsAny<string?>(),
                 It.IsAny<INatsSerialize<byte[]>?>(),
