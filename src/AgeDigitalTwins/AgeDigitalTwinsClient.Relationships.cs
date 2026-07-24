@@ -90,7 +90,12 @@ public partial class AgeDigitalTwinsClient
             {
                 var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
                 var edge = (Edge)agResult!;
-                return JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(edge.Properties));
+                var json = JsonSerializer.Serialize(edge.Properties);
+                if (!_returnRelationshipLevelLastUpdatedBy)
+                {
+                    json = StripRelationshipMetadata(json);
+                }
+                return JsonSerializer.Deserialize<T>(json);
             }
             else
             {
@@ -451,11 +456,21 @@ RETURN rel";
 
             if (typeof(T) == typeof(string))
             {
-                return (T)(object)JsonSerializer.Serialize(properties);
+                var json = JsonSerializer.Serialize(properties);
+                if (!_returnRelationshipLevelLastUpdatedBy)
+                {
+                    json = StripRelationshipMetadata(json);
+                }
+                return (T)(object)json;
             }
             else
             {
-                return JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(properties));
+                var json = JsonSerializer.Serialize(properties);
+                if (!_returnRelationshipLevelLastUpdatedBy)
+                {
+                    json = StripRelationshipMetadata(json);
+                }
+                return JsonSerializer.Deserialize<T>(json);
             }
         }
         else

@@ -31,6 +31,7 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
 
     private readonly bool _trackLastUpdatedBy;
     private readonly bool _returnTwinLevelLastUpdatedBy;
+    private readonly bool _returnRelationshipLevelLastUpdatedBy;
 
     private static readonly ActivitySource ActivitySource = new("AgeDigitalTwins.SDK", "1.0.0");
 
@@ -70,7 +71,7 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
         DefaultHeartbeatInterval = options.DefaultHeartbeatInterval;
         _trackLastUpdatedBy = options.TrackLastUpdatedBy;
         _returnTwinLevelLastUpdatedBy = options.ReturnTwinLevelLastUpdatedBy;
-        _returnTwinLevelLastUpdatedBy = options.ReturnTwinLevelLastUpdatedBy;
+        _returnRelationshipLevelLastUpdatedBy = options.ReturnRelationshipLevelLastUpdatedBy;
         _modelParser = new(
             new ParsingOptions()
             {
@@ -198,6 +199,22 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
             }
         }
     }
+
+    /// <summary>
+    /// Strips the entire <c>$metadata</c> block from a relationship response JSON.
+    /// Relationships in Azure Digital Twins do not have a <c>$metadata</c> block,
+    /// so this is removed for ADT compatibility when
+    /// <see cref="ReturnRelationshipLevelLastUpdatedBy"/> is <c>false</c>.
+    /// </summary>
+    internal static string StripRelationshipMetadata(string responseJson)
+    {
+        var node = JsonNode.Parse(responseJson)!;
+        if (node is JsonObject obj)
+        {
+            obj.Remove(DigitalTwinsJsonPropertyNames.DigitalTwinMetadata);
+        }
+        return node.ToJsonString();
+    }
 }
 
 public class AgeDigitalTwinsClientOptions
@@ -251,4 +268,16 @@ public class AgeDigitalTwinsClientOptions
     /// Defaults to <c>true</c>.
     /// </summary>
     public bool ReturnTwinLevelLastUpdatedBy { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether relationship-level <c>$metadata</c> with
+    /// <c>$lastUpdatedBy</c> is included in relationship API responses. When <c>false</c>
+    /// (default), the entire <c>$metadata</c> block is stripped from relationship responses
+    /// for ADT compatibility — the Azure Digital Twins API does not return <c>$metadata</c>
+    /// on relationships. The <c>$lastUpdatedBy</c> value is still stored in the database
+    /// and emitted in event/Kusto sinks. Set to <c>true</c> to include relationship
+    /// <c>$metadata</c> in API responses.
+    /// Defaults to <c>false</c>.
+    /// </summary>
+    public bool ReturnRelationshipLevelLastUpdatedBy { get; set; } = false;
 }

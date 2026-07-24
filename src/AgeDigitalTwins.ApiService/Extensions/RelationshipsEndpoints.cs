@@ -38,6 +38,15 @@ public static class RelationshipsEndpoints
                         .AsPages(continuationToken, maxItemsPerPage, cancellationToken)
                         .FirstAsync(cancellationToken);
 
+                    // Strip $metadata from relationship responses for ADT compatibility
+                    foreach (var item in page.Value)
+                    {
+                        if (item?.Properties != null)
+                        {
+                            item.Properties.Remove(DigitalTwinsJsonPropertyNames.DigitalTwinMetadata);
+                        }
+                    }
+
                     return Results.Json(
                         new PageWithNextLink<BasicRelationship?>(page, httpContext.Request)
                     );
@@ -73,6 +82,15 @@ public static class RelationshipsEndpoints
                         )
                         .AsPages(continuationToken, maxItemsPerPage, cancellationToken)
                         .FirstAsync(cancellationToken);
+
+                    // Strip $metadata from relationship responses for ADT compatibility
+                    foreach (var item in page.Value)
+                    {
+                        if (item?.Properties != null)
+                        {
+                            item.Properties.Remove(DigitalTwinsJsonPropertyNames.DigitalTwinMetadata);
+                        }
+                    }
 
                     return Results.Json(
                         new PageWithNextLink<BasicRelationship?>(page, httpContext.Request)
