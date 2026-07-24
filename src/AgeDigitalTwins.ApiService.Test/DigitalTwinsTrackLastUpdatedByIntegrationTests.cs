@@ -323,9 +323,11 @@ public class TrackLastUpdatedByNoReturnAppHost : DistributedApplicationFactory
         Environment.SetEnvironmentVariable("Parameters__TrackLastUpdatedBy", "true");
         Environment.SetEnvironmentVariable("Parameters__UserIdHeaderName", "X-User-Id");
         Environment.SetEnvironmentVariable("Parameters__ReturnTwinLevelLastUpdatedBy", "false");
+        Environment.SetEnvironmentVariable("Parameters__ReturnRelationshipLevelLastUpdatedBy", "true");
         applicationBuilder.Configuration["Parameters:TrackLastUpdatedBy"] = "true";
         applicationBuilder.Configuration["Parameters:UserIdHeaderName"] = "X-User-Id";
         applicationBuilder.Configuration["Parameters:ReturnTwinLevelLastUpdatedBy"] = "false";
+        applicationBuilder.Configuration["Parameters:ReturnRelationshipLevelLastUpdatedBy"] = "true";
 
         applicationBuilder.Services.ConfigureHttpClientDefaults(clientBuilder =>
         {
@@ -353,6 +355,7 @@ public class DigitalTwinsTrackLastUpdatedByStrippedIntegrationTests : IAsyncLife
         Environment.SetEnvironmentVariable("Parameters__TrackLastUpdatedBy", "true");
         Environment.SetEnvironmentVariable("Parameters__UserIdHeaderName", "X-User-Id");
         Environment.SetEnvironmentVariable("Parameters__ReturnTwinLevelLastUpdatedBy", "false");
+        Environment.SetEnvironmentVariable("Parameters__ReturnRelationshipLevelLastUpdatedBy", "true");
         _app = new TrackLastUpdatedByNoReturnAppHost();
         await _app.StartAsync();
         _httpClient = _app.CreateHttpClient("apiservice");
