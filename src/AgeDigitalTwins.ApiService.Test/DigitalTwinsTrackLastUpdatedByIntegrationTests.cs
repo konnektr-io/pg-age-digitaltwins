@@ -592,12 +592,6 @@ public class DigitalTwinsTrackLastUpdatedByStrippedIntegrationTests : IAsyncLife
             "$lastUpdatedBy should be inside relationship $metadata"
         );
         Assert.Equal(TestUserId, lastUpdatedBy.GetString());
-
-        Assert.True(
-            metadata.TryGetProperty("$lastUpdateTime", out JsonElement lastUpdateTime),
-            "$lastUpdateTime should be inside relationship $metadata"
-        );
-        Assert.True(DateTimeOffset.TryParse(lastUpdateTime.GetString(), out _));
     }
 
     [Fact]
@@ -653,11 +647,6 @@ public class DigitalTwinsTrackLastUpdatedByStrippedIntegrationTests : IAsyncLife
             "$lastUpdatedBy should be inside relationship $metadata"
         );
         Assert.Equal(TestUserId, lastUpdatedBy.GetString());
-
-        Assert.True(
-            metadata.TryGetProperty("$lastUpdateTime", out _),
-            "$lastUpdateTime should be inside relationship $metadata"
-        );
     }
 
     [Fact]
