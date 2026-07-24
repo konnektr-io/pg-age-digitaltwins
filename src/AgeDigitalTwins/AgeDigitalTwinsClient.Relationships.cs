@@ -91,7 +91,7 @@ public partial class AgeDigitalTwinsClient
                 var agResult = await reader.GetFieldValueAsync<Agtype?>(0);
                 var edge = (Edge)agResult!;
                 var json = JsonSerializer.Serialize(edge.Properties);
-                if (!_returnRelationshipLevelLastUpdatedBy)
+                if (!_returnRelationshipMetadata)
                 {
                     json = StripRelationshipMetadata(json);
                 }
@@ -463,7 +463,7 @@ RETURN rel";
             if (typeof(T) == typeof(string))
             {
                 var json = JsonSerializer.Serialize(properties);
-                if (!_returnRelationshipLevelLastUpdatedBy)
+                if (!_returnRelationshipMetadata)
                 {
                     json = StripRelationshipMetadata(json);
                 }
@@ -472,7 +472,7 @@ RETURN rel";
             else
             {
                 var json = JsonSerializer.Serialize(properties);
-                if (!_returnRelationshipLevelLastUpdatedBy)
+                if (!_returnRelationshipMetadata)
                 {
                     json = StripRelationshipMetadata(json);
                 }

@@ -31,7 +31,7 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
 
     private readonly bool _trackLastUpdatedBy;
     private readonly bool _returnTwinLevelLastUpdatedBy;
-    private readonly bool _returnRelationshipLevelLastUpdatedBy;
+    private readonly bool _returnRelationshipMetadata;
 
     private static readonly ActivitySource ActivitySource = new("AgeDigitalTwins.SDK", "1.0.0");
 
@@ -71,7 +71,7 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
         DefaultHeartbeatInterval = options.DefaultHeartbeatInterval;
         _trackLastUpdatedBy = options.TrackLastUpdatedBy;
         _returnTwinLevelLastUpdatedBy = options.ReturnTwinLevelLastUpdatedBy;
-        _returnRelationshipLevelLastUpdatedBy = options.ReturnRelationshipLevelLastUpdatedBy;
+        _returnRelationshipMetadata = options.ReturnRelationshipMetadata;
         _modelParser = new(
             new ParsingOptions()
             {
@@ -204,7 +204,7 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
     /// Strips the entire <c>$metadata</c> block from a relationship response JSON.
     /// Relationships in Azure Digital Twins do not have a <c>$metadata</c> block,
     /// so this is removed for ADT compatibility when
-    /// <see cref="ReturnRelationshipLevelLastUpdatedBy"/> is <c>false</c>.
+    /// <see cref="ReturnRelationshipMetadata"/> is <c>false</c>.
     /// </summary>
     internal static string StripRelationshipMetadata(string responseJson)
     {
@@ -279,5 +279,5 @@ public class AgeDigitalTwinsClientOptions
     /// <c>$metadata</c> in API responses.
     /// Defaults to <c>false</c>.
     /// </summary>
-    public bool ReturnRelationshipLevelLastUpdatedBy { get; set; } = false;
+    public bool ReturnRelationshipMetadata { get; set; } = false;
 }
