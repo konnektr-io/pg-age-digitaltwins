@@ -413,27 +413,25 @@ public partial class AgeDigitalTwinsClient
         string newEtag = ETagGenerator.GenerateEtag($"{digitalTwinId}-{relationshipId}", now);
         relationshipObject[DigitalTwinsJsonPropertyNames.DigitalTwinETag] = newEtag;
 
-        // Set $lastUpdatedBy if tracking is enabled
-        if (_trackLastUpdatedBy && userId != null)
+        // Always set $metadata on relationships (similar to twin pattern)
+        if (
+            !relationshipObject.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.DigitalTwinMetadata, out var relMetaNode)
+            || relMetaNode is not JsonObject relMetadataObject
+        )
         {
-            if (
-                !relationshipObject.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.DigitalTwinMetadata, out var relMetaNode)
-                || relMetaNode is not JsonObject relMetadataObject
-            )
-            {
-                relMetadataObject = new JsonObject();
-                relationshipObject[DigitalTwinsJsonPropertyNames.DigitalTwinMetadata] = relMetadataObject;
-            }
-            relMetadataObject.Remove(DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy);
-            relMetadataObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy] = userId;
+            relMetadataObject = new JsonObject();
+            relationshipObject[DigitalTwinsJsonPropertyNames.DigitalTwinMetadata] = relMetadataObject;
         }
 
-        // Set $lastUpdateTime on relationship metadata
-        if (relationshipObject.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.DigitalTwinMetadata, out var existingMetaNode)
-            && existingMetaNode is JsonObject existingMetaObj)
+        // Always set $lastUpdateTime — independent of TrackLastUpdatedBy
+        relMetadataObject.Remove(DigitalTwinsJsonPropertyNames.MetadataLastUpdateTime);
+        relMetadataObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdateTime] = DateTime.UtcNow.ToString("o");
+
+        // Set $lastUpdatedBy only if tracking is enabled
+        if (_trackLastUpdatedBy && userId != null)
         {
-            existingMetaObj.Remove(DigitalTwinsJsonPropertyNames.MetadataLastUpdateTime);
-            existingMetaObj[DigitalTwinsJsonPropertyNames.MetadataLastUpdateTime] = DateTime.UtcNow.ToString("o");
+            relMetadataObject.Remove(DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy);
+            relMetadataObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy] = userId;
         }
 
         string updatedRelJson = JsonSerializer.Serialize(relationshipObject);
@@ -573,27 +571,25 @@ RETURN rel";
                 now
             );
 
-            // Set $lastUpdatedBy if tracking is enabled
-            if (_trackLastUpdatedBy && userId != null)
+            // Always set $metadata on relationship updates (similar to twin pattern)
+            if (
+                !patchedRel.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.DigitalTwinMetadata, out var relMetaNode)
+                || relMetaNode is not JsonObject relMetadataObject
+            )
             {
-                if (
-                    !patchedRel.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.DigitalTwinMetadata, out var relMetaNode)
-                    || relMetaNode is not JsonObject relMetadataObject
-                )
-                {
-                    relMetadataObject = new JsonObject();
-                    patchedRel[DigitalTwinsJsonPropertyNames.DigitalTwinMetadata] = relMetadataObject;
-                }
-                relMetadataObject.Remove(DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy);
-                relMetadataObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy] = userId;
+                relMetadataObject = new JsonObject();
+                patchedRel[DigitalTwinsJsonPropertyNames.DigitalTwinMetadata] = relMetadataObject;
             }
 
-            // Set $lastUpdateTime on relationship metadata for UpdateRelationshipAsync
-            if (patchedRel.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.DigitalTwinMetadata, out var updateMetaNode)
-                && updateMetaNode is JsonObject updateMetaObj)
+            // Always set $lastUpdateTime — independent of TrackLastUpdatedBy
+            relMetadataObject.Remove(DigitalTwinsJsonPropertyNames.MetadataLastUpdateTime);
+            relMetadataObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdateTime] = DateTime.UtcNow.ToString("o");
+
+            // Set $lastUpdatedBy only if tracking is enabled
+            if (_trackLastUpdatedBy && userId != null)
             {
-                updateMetaObj.Remove(DigitalTwinsJsonPropertyNames.MetadataLastUpdateTime);
-                updateMetaObj[DigitalTwinsJsonPropertyNames.MetadataLastUpdateTime] = DateTime.UtcNow.ToString("o");
+                relMetadataObject.Remove(DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy);
+                relMetadataObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy] = userId;
             }
 
             string updatedRelJson = JsonSerializer.Serialize(patchedRel);
