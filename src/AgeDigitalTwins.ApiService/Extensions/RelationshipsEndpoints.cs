@@ -122,6 +122,7 @@ public static class RelationshipsEndpoints
                 ) =>
                 {
                     string? etag = RequestHelper.ParseETag(httpContext, "If-None-Match");
+                    string? userId = RequestHelper.ParseUserId(httpContext);
                     if (string.IsNullOrEmpty(relationship.SourceId))
                     {
                         relationship.SourceId = id;
@@ -135,6 +136,7 @@ public static class RelationshipsEndpoints
                         relationshipId,
                         relationship,
                         etag,
+                        userId,
                         cancellationToken
                     );
                 }
@@ -159,11 +161,13 @@ public static class RelationshipsEndpoints
                 ) =>
                 {
                     string? etag = RequestHelper.ParseETag(httpContext, "If-Match");
+                    string? userId = RequestHelper.ParseUserId(httpContext);
                     await client.UpdateRelationshipAsync(
                         id,
                         relationshipId,
                         patch,
                         etag,
+                        userId,
                         cancellationToken
                     );
                     return Results.NoContent();

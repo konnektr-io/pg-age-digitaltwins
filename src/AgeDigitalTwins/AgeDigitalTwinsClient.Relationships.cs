@@ -225,6 +225,7 @@ public partial class AgeDigitalTwinsClient
     /// <param name="relationshipId">The ID of the relationship to create or replace.</param>
     /// <param name="relationship">The relationship object to create or replace.</param>
     /// <param name="ifNoneMatch">The If-None-Match header value to check for conditional creation (optional).</param>
+    /// <param name="userId">The ID of the user performing the operation, stored in relationship metadata when <see cref="AgeDigitalTwinsClientOptions.TrackLastUpdatedBy"/> is enabled.</param>
     /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
     /// <returns>A task that represents the asynchronous operation. The task result contains the created or replaced relationship.</returns>
     public virtual async Task<T?> CreateOrReplaceRelationshipAsync<T>(
@@ -232,6 +233,7 @@ public partial class AgeDigitalTwinsClient
         string relationshipId,
         T relationship,
         string? ifNoneMatch = null,
+        string? userId = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -255,6 +257,7 @@ public partial class AgeDigitalTwinsClient
                 relationshipId,
                 relationship,
                 ifNoneMatch,
+                userId,
                 cancellationToken
             );
         }
@@ -283,6 +286,7 @@ public partial class AgeDigitalTwinsClient
         string relationshipId,
         T relationship,
         string? ifNoneMatch = null,
+        string? userId = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -404,6 +408,21 @@ public partial class AgeDigitalTwinsClient
         string newEtag = ETagGenerator.GenerateEtag($"{digitalTwinId}-{relationshipId}", now);
         relationshipObject[DigitalTwinsJsonPropertyNames.DigitalTwinETag] = newEtag;
 
+        // Set $lastUpdatedBy if tracking is enabled
+        if (_trackLastUpdatedBy && userId != null)
+        {
+            if (
+                !relationshipObject.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.DigitalTwinMetadata, out var relMetaNode)
+                || relMetaNode is not JsonObject relMetadataObject
+            )
+            {
+                relMetadataObject = new JsonObject();
+                relationshipObject[DigitalTwinsJsonPropertyNames.DigitalTwinMetadata] = relMetadataObject;
+            }
+            relMetadataObject.Remove(DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy);
+            relMetadataObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy] = userId;
+        }
+
         string updatedRelJson = JsonSerializer.Serialize(relationshipObject);
 
         string cypher =
@@ -450,6 +469,7 @@ RETURN rel";
     /// <param name="relationshipId">The ID of the relationship to update.</param>
     /// <param name="patch">The JSON patch document containing the updates.</param>
     /// <param name="ifMatch">The If-Match header value to check for conditional updates (optional).</param>
+    /// <param name="userId">The ID of the user performing the operation, stored in relationship metadata when <see cref="AgeDigitalTwinsClientOptions.TrackLastUpdatedBy"/> is enabled.</param>
     /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
     /// <returns>A task that represents the asynchronous operation.</returns>
     public virtual async Task UpdateRelationshipAsync(
@@ -457,6 +477,7 @@ RETURN rel";
         string relationshipId,
         JsonPatch patch,
         string? ifMatch = null,
+        string? userId = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -528,6 +549,21 @@ RETURN rel";
                 $"{digitalTwinId}-{relationshipId}",
                 now
             );
+
+            // Set $lastUpdatedBy if tracking is enabled
+            if (_trackLastUpdatedBy && userId != null)
+            {
+                if (
+                    !patchedRel.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.DigitalTwinMetadata, out var relMetaNode)
+                    || relMetaNode is not JsonObject relMetadataObject
+                )
+                {
+                    relMetadataObject = new JsonObject();
+                    patchedRel[DigitalTwinsJsonPropertyNames.DigitalTwinMetadata] = relMetadataObject;
+                }
+                relMetadataObject.Remove(DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy);
+                relMetadataObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy] = userId;
+            }
 
             string updatedRelJson = JsonSerializer.Serialize(patchedRel);
 
