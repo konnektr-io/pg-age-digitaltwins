@@ -41,8 +41,9 @@ public static class RelationshipsEndpoints
                     // Strip $metadata from relationship responses for ADT compatibility
                     foreach (var item in page.Value)
                     {
-                        if (item?.Properties != null)
+                        if (item != null)
                         {
+                            item.Metadata = null;
                             item.Properties.Remove(DigitalTwinsJsonPropertyNames.DigitalTwinMetadata);
                         }
                     }
@@ -86,8 +87,9 @@ public static class RelationshipsEndpoints
                     // Strip $metadata from relationship responses for ADT compatibility
                     foreach (var item in page.Value)
                     {
-                        if (item?.Properties != null)
+                        if (item != null)
                         {
+                            item.Metadata = null;
                             item.Properties.Remove(DigitalTwinsJsonPropertyNames.DigitalTwinMetadata);
                         }
                     }

@@ -428,6 +428,14 @@ public partial class AgeDigitalTwinsClient
             relMetadataObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy] = userId;
         }
 
+        // Set $lastUpdateTime on relationship metadata
+        if (relationshipObject.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.DigitalTwinMetadata, out var existingMetaNode)
+            && existingMetaNode is JsonObject existingMetaObj)
+        {
+            existingMetaObj.Remove(DigitalTwinsJsonPropertyNames.MetadataLastUpdateTime);
+            existingMetaObj[DigitalTwinsJsonPropertyNames.MetadataLastUpdateTime] = DateTime.UtcNow.ToString("o");
+        }
+
         string updatedRelJson = JsonSerializer.Serialize(relationshipObject);
 
         string cypher =
@@ -578,6 +586,14 @@ RETURN rel";
                 }
                 relMetadataObject.Remove(DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy);
                 relMetadataObject[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy] = userId;
+            }
+
+            // Set $lastUpdateTime on relationship metadata for UpdateRelationshipAsync
+            if (patchedRel.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.DigitalTwinMetadata, out var updateMetaNode)
+                && updateMetaNode is JsonObject updateMetaObj)
+            {
+                updateMetaObj.Remove(DigitalTwinsJsonPropertyNames.MetadataLastUpdateTime);
+                updateMetaObj[DigitalTwinsJsonPropertyNames.MetadataLastUpdateTime] = DateTime.UtcNow.ToString("o");
             }
 
             string updatedRelJson = JsonSerializer.Serialize(patchedRel);
