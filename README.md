@@ -43,7 +43,7 @@
 
 ### 🔌 Event Streaming
 
-- **Multiple sinks** - Kafka, Azure Data Explorer, MQTT, and more
+- **Multiple sinks** - Kafka, NATS, Azure Data Explorer, MQTT, Webhooks, and more
 - **CloudEvents standard** - Industry-standard event format
 - **Flexible routing** - Route events based on type and filters
 - **Durable & real-time** - Both lifecycle and telemetry events
