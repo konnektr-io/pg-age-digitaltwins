@@ -1531,4 +1531,243 @@ public class CloudEventFactoryTests
         Assert.Equal("2024-01-15T10:25:00Z", data["sourceTimeStamp"]?.ToString());
         Assert.Equal("user-123", data["updatedBy"]?.ToString());
     }
+
+    [Fact]
+    public void CreateDataHistoryEvents_TrackLastUpdatedBy_SameUserRepeatUpdate_FallsBackToNewValueMetadata()
+    {
+        // Arrange - Property updated by same user twice, lastUpdatedBy unchanged in patch,
+        // so the fallback reads it directly from NewValue.$metadata
+        var eventData = new EventData(Guid.NewGuid().ToString(), "digitaltwins", "Twin")
+        {
+            EventType = EventType.TwinUpdate,
+            OldValue = JsonNode
+                .Parse(
+                    @"{
+                    ""$dtId"": ""twin1"",
+                    ""$metadata"": {
+                        ""$model"": ""model1"",
+                        ""temperature"": {
+                            ""lastUpdateTime"": ""2024-01-15T10:00:00Z"",
+                            ""lastUpdatedBy"": ""same-user-id""
+                        }
+                    },
+                    ""temperature"": 20.0
+                }"
+                )!
+                .AsObject(),
+            NewValue = JsonNode
+                .Parse(
+                    @"{
+                    ""$dtId"": ""twin1"",
+                    ""$metadata"": {
+                        ""$model"": ""model1"",
+                        ""temperature"": {
+                            ""lastUpdateTime"": ""2024-01-15T10:30:00Z"",
+                            ""lastUpdatedBy"": ""same-user-id""
+                        }
+                    },
+                    ""temperature"": 22.5
+                }"
+                )!
+                .AsObject(),
+            Timestamp = DateTime.UtcNow,
+        };
+        var source = new Uri("http://example.com");
+
+        // Act
+        var result = CloudEventFactory.CreateDataHistoryEvents(
+            eventData,
+            source,
+            [],
+            trackLastUpdatedBy: true
+        );
+
+        // Assert - the patch does NOT contain /$metadata/temperature/lastUpdatedBy
+        // because the value didn't change, but the fallback still picks it up from NewValue
+        Assert.Single(result);
+        var data = result[0].Data as JsonObject;
+        Assert.NotNull(data);
+        Assert.Equal("temperature", data["key"]?.ToString());
+        Assert.Equal("22.5", data["value"]?.ToString());
+        Assert.Equal("same-user-id", data["updatedBy"]?.ToString());
+    }
+
+    [Fact]
+    public void CreateDataHistoryEvents_TrackLastUpdatedBy_PropertyUpdatedByDiffUser_WorksViaPatch()
+    {
+        // Arrange - Property updated by a DIFFERENT user, so lastUpdatedBy IS in the patch
+        var eventData = new EventData(Guid.NewGuid().ToString(), "digitaltwins", "Twin")
+        {
+            EventType = EventType.TwinUpdate,
+            OldValue = JsonNode
+                .Parse(
+                    @"{
+                    ""$dtId"": ""twin1"",
+                    ""$metadata"": {
+                        ""$model"": ""model1"",
+                        ""temperature"": {
+                            ""lastUpdateTime"": ""2024-01-15T10:00:00Z"",
+                            ""lastUpdatedBy"": ""old-user""
+                        }
+                    },
+                    ""temperature"": 20.0
+                }"
+                )!
+                .AsObject(),
+            NewValue = JsonNode
+                .Parse(
+                    @"{
+                    ""$dtId"": ""twin1"",
+                    ""$metadata"": {
+                        ""$model"": ""model1"",
+                        ""temperature"": {
+                            ""lastUpdateTime"": ""2024-01-15T10:30:00Z"",
+                            ""lastUpdatedBy"": ""new-user""
+                        }
+                    },
+                    ""temperature"": 22.5
+                }"
+                )!
+                .AsObject(),
+            Timestamp = DateTime.UtcNow,
+        };
+        var source = new Uri("http://example.com");
+
+        // Act
+        var result = CloudEventFactory.CreateDataHistoryEvents(
+            eventData,
+            source,
+            [],
+            trackLastUpdatedBy: true
+        );
+
+        // Assert - the patch contains /$metadata/temperature/lastUpdatedBy because the user changed
+        Assert.Single(result);
+        var data = result[0].Data as JsonObject;
+        Assert.NotNull(data);
+        Assert.Equal("temperature", data["key"]?.ToString());
+        Assert.Equal("new-user", data["updatedBy"]?.ToString());
+    }
+
+    [Fact]
+    public void CreateRelationshipLifeCycleEvents_TrackLastUpdatedBy_IncludesUpdatedBy()
+    {
+        // Arrange
+        var eventData = new EventData(Guid.NewGuid().ToString(), "digitaltwins", "Relationship")
+        {
+            EventType = EventType.RelationshipCreate,
+            NewValue = JsonNode
+                .Parse(
+                    @"{
+                    ""$relationshipId"": ""rel1"",
+                    ""$relationshipName"": ""contains"",
+                    ""$sourceId"": ""room1"",
+                    ""$targetId"": ""sensor1"",
+                    ""$metadata"": {
+                        ""$model"": ""dtmi:com:adt:dtsample:room-contains-sensor;1"",
+                        ""$lastUpdatedBy"": ""user-42""
+                    }
+                }"
+                )!
+                .AsObject(),
+            OldValue = null,
+            Timestamp = DateTime.UtcNow,
+        };
+        var source = new Uri("http://example.com");
+
+        // Act
+        var result = CloudEventFactory.CreateRelationshipLifeCycleEvents(
+            eventData,
+            source,
+            [],
+            trackLastUpdatedBy: true
+        );
+
+        // Assert
+        var lifecycleEvent = result.First(e => e.Type == "Konnektr.Graph.Relationship.Lifecycle");
+        var data = lifecycleEvent.Data as JsonObject;
+        Assert.NotNull(data);
+        Assert.Equal("rel1", data["relationshipId"]?.ToString());
+        Assert.Equal("room1", data["source"]?.ToString());
+        Assert.Equal("sensor1", data["target"]?.ToString());
+        Assert.Equal("user-42", data["updatedBy"]?.ToString());
+    }
+
+    [Fact]
+    public void CreateRelationshipLifeCycleEvents_TrackLastUpdatedByFalse_OmitsUpdatedBy()
+    {
+        // Arrange
+        var eventData = new EventData(Guid.NewGuid().ToString(), "digitaltwins", "Relationship")
+        {
+            EventType = EventType.RelationshipCreate,
+            NewValue = JsonNode
+                .Parse(
+                    @"{
+                    ""$relationshipId"": ""rel1"",
+                    ""$relationshipName"": ""contains"",
+                    ""$sourceId"": ""room1"",
+                    ""$targetId"": ""sensor1"",
+                    ""$metadata"": {
+                        ""$model"": ""dtmi:com:adt:dtsample:room-contains-sensor;1"",
+                        ""$lastUpdatedBy"": ""user-42""
+                    }
+                }"
+                )!
+                .AsObject(),
+            OldValue = null,
+            Timestamp = DateTime.UtcNow,
+        };
+        var source = new Uri("http://example.com");
+
+        // Act - default trackLastUpdatedBy=false
+        var result = CloudEventFactory.CreateRelationshipLifeCycleEvents(eventData, source, []);
+
+        // Assert
+        var lifecycleEvent = result.First(e => e.Type == "Konnektr.Graph.Relationship.Lifecycle");
+        var data = lifecycleEvent.Data as JsonObject;
+        Assert.NotNull(data);
+        Assert.False(data.ContainsKey("updatedBy"), "updatedBy should be absent when trackLastUpdatedBy is false");
+    }
+
+    [Fact]
+    public void CreateRelationshipLifeCycleEvents_Delete_TrackLastUpdatedBy_ReadsFromOldValue()
+    {
+        // Arrange - On delete, the OldValue should be used for $lastUpdatedBy
+        var eventData = new EventData(Guid.NewGuid().ToString(), "digitaltwins", "Relationship")
+        {
+            EventType = EventType.RelationshipDelete,
+            NewValue = null,
+            OldValue = JsonNode
+                .Parse(
+                    @"{
+                    ""$relationshipId"": ""rel1"",
+                    ""$relationshipName"": ""contains"",
+                    ""$sourceId"": ""room1"",
+                    ""$targetId"": ""sensor1"",
+                    ""$metadata"": {
+                        ""$model"": ""dtmi:com:adt:dtsample:room-contains-sensor;1"",
+                        ""$lastUpdatedBy"": ""deleting-user""
+                    }
+                }"
+                )!
+                .AsObject(),
+            Timestamp = DateTime.UtcNow,
+        };
+        var source = new Uri("http://example.com");
+
+        // Act
+        var result = CloudEventFactory.CreateRelationshipLifeCycleEvents(
+            eventData,
+            source,
+            [],
+            trackLastUpdatedBy: true
+        );
+
+        // Assert
+        var lifecycleEvent = result.First(e => e.Type == "Konnektr.Graph.Relationship.Lifecycle");
+        var data = lifecycleEvent.Data as JsonObject;
+        Assert.NotNull(data);
+        Assert.Equal("Delete", data["action"]?.ToString());
+        Assert.Equal("deleting-user", data["updatedBy"]?.ToString());
+    }
 }

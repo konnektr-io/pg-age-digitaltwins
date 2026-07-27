@@ -38,6 +38,16 @@ public static class RelationshipsEndpoints
                         .AsPages(continuationToken, maxItemsPerPage, cancellationToken)
                         .FirstAsync(cancellationToken);
 
+                    // Strip $metadata from relationship responses for ADT compatibility
+                    foreach (var item in page.Value)
+                    {
+                        if (item != null)
+                        {
+                            item.Metadata = null;
+                            item.Properties.Remove(DigitalTwinsJsonPropertyNames.DigitalTwinMetadata);
+                        }
+                    }
+
                     return Results.Json(
                         new PageWithNextLink<BasicRelationship?>(page, httpContext.Request)
                     );
@@ -73,6 +83,16 @@ public static class RelationshipsEndpoints
                         )
                         .AsPages(continuationToken, maxItemsPerPage, cancellationToken)
                         .FirstAsync(cancellationToken);
+
+                    // Strip $metadata from relationship responses for ADT compatibility
+                    foreach (var item in page.Value)
+                    {
+                        if (item != null)
+                        {
+                            item.Metadata = null;
+                            item.Properties.Remove(DigitalTwinsJsonPropertyNames.DigitalTwinMetadata);
+                        }
+                    }
 
                     return Results.Json(
                         new PageWithNextLink<BasicRelationship?>(page, httpContext.Request)
@@ -122,6 +142,7 @@ public static class RelationshipsEndpoints
                 ) =>
                 {
                     string? etag = RequestHelper.ParseETag(httpContext, "If-None-Match");
+                    string? userId = RequestHelper.ParseUserId(httpContext);
                     if (string.IsNullOrEmpty(relationship.SourceId))
                     {
                         relationship.SourceId = id;
@@ -135,6 +156,7 @@ public static class RelationshipsEndpoints
                         relationshipId,
                         relationship,
                         etag,
+                        userId,
                         cancellationToken
                     );
                 }
@@ -159,11 +181,13 @@ public static class RelationshipsEndpoints
                 ) =>
                 {
                     string? etag = RequestHelper.ParseETag(httpContext, "If-Match");
+                    string? userId = RequestHelper.ParseUserId(httpContext);
                     await client.UpdateRelationshipAsync(
                         id,
                         relationshipId,
                         patch,
                         etag,
+                        userId,
                         cancellationToken
                     );
                     return Results.NoContent();

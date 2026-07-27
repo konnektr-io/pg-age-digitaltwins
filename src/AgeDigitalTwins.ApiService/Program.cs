@@ -130,6 +130,7 @@ builder.Services.AddSingleton(sp =>
             DefaultCheckpointInterval = defaultCheckpointInterval,
             TrackLastUpdatedBy = builder.Configuration.GetValue("Parameters:TrackLastUpdatedBy", false),
             ReturnTwinLevelLastUpdatedBy = builder.Configuration.GetValue("Parameters:ReturnTwinLevelLastUpdatedBy", true),
+            ReturnRelationshipMetadata = builder.Configuration.GetValue("Parameters:ReturnRelationshipMetadata", false),
         };
         var client = new AgeDigitalTwinsClient(dataSource, options);
 
