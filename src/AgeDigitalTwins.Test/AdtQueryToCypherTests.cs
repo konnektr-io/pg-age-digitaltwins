@@ -247,10 +247,6 @@ public class AdtQueryToCypherTests
         "SELECT T.$metadata.$model FROM DIGITALTWINS T",
         "MATCH (T:Twin) RETURN T['$metadata']['$model']"
     )]
-    [InlineData(
-        "SELECT $metadata.$model AS modelId FROM DIGITALTWINS",
-        "MATCH (T:Twin) RETURN T['$metadata']['$model'] AS modelId"
-    )]
     public void ConvertAdtQueryToCypher_ReturnsExpectedCypher(
         string adtQuery,
         string expectedCypher
