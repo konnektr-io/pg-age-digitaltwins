@@ -5,7 +5,27 @@ public class AdtQueryToCypherTests
     [Theory]
     [InlineData("SELECT T FROM DIGITALTWINS T", "MATCH (T:Twin) RETURN T")]
     [InlineData("SELECT * FROM DIGITALTWINS", "MATCH (T:Twin) RETURN *")]
-    [InlineData("SELECT * FROM RELATIONSHIPS", "MATCH (:Twin)-[R]->(:Twin) RETURN *")]
+    [InlineData(
+        "SELECT $metadata.$model FROM DIGITALTWINS",
+        "MATCH (T:Twin) RETURN T['$metadata']['$model']"
+    )]
+    [InlineData(
+        "SELECT $metadata.$model AS modelId FROM DIGITALTWINS",
+        "MATCH (T:Twin) RETURN T['$metadata']['$model'] AS modelId"
+    )]
+    [InlineData(
+        "SELECT $metadata.$model, $dtId FROM DIGITALTWINS",
+        "MATCH (T:Twin) RETURN T['$metadata']['$model'], T['$dtId']"
+    )]
+    [InlineData(
+        "SELECT $metadata FROM DIGITALTWINS",
+        "MATCH (T:Twin) RETURN T['$metadata']"
+    )]
+    [InlineData("SELECT $dtId FROM DIGITALTWINS", "MATCH (T:Twin) RETURN T['$dtId']")]
+    [InlineData(
+        "SELECT * FROM RELATIONSHIPS",
+        "MATCH (:Twin)-[R]->(:Twin) RETURN *"
+    )]
     [InlineData(
         "SELECT T.name FROM DIGITALTWINS T WHERE T.$metadata.$model = 'dtmi:com:adt:dtsample:room;1'",
         "MATCH (T:Twin) WHERE T['$metadata']['$model'] = 'dtmi:com:adt:dtsample:room;1' RETURN T.name"

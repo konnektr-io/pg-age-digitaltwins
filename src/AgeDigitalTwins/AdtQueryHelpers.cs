@@ -398,7 +398,14 @@ public static partial class AdtQueryHelpers
             .Replace(whereClause, m => $"{graphName}.is_string({m.Groups[1].Value})");
 
         // Replace property access with $ character
-        whereClause = DollarSignPropertyRegex().Replace(whereClause, m => $"['{m.Value[1..]}']");
+        whereClause = DollarSignPropertyRegex()
+            .Replace(
+                whereClause,
+                m =>
+                    m.Value.StartsWith('.')
+                        ? $"['{m.Value[1..]}']"
+                        : $"['{m.Value}']"
+            );
 
         // Process != operator
         whereClause = InequalityOperatorRegex()
@@ -511,7 +518,10 @@ public static partial class AdtQueryHelpers
     [GeneratedRegex(@"IS_BOOL\(([^)]+)\)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex IsBoolFunctionRegex();
 
-    [GeneratedRegex(@"(\.\$[\w]+)")]
+    [GeneratedRegex(
+        @"(\.\$[\w]+|(?<![\w.\['])\$[\w]+)",
+        RegexOptions.CultureInvariant
+    )]
     private static partial Regex DollarSignPropertyRegex();
 
     [GeneratedRegex(@"\((\w+)\)")]
@@ -559,7 +569,22 @@ public static partial class AdtQueryHelpers
             }
 
             part = PropertyAccessWhereClauseRegex().Replace(part, m => $"{alias}.{m.Value}");
-            part = DollarSignPropertyRegex().Replace(part, m => $"['{m.Value[1..]}']");
+            part = DollarSignPropertyRegex()
+                .Replace(
+                    part,
+                    m =>
+                        m.Value.StartsWith('.')
+                            ? $"['{m.Value[1..]}']"
+                            : $"['{m.Value}']"
+                );
+
+            // Projections that start with a $-prefixed system property chain
+            // (e.g. ['$metadata']['$model']) were already converted to bracket
+            // notation above and still need the collection alias prefix.
+            if (part.StartsWith("[", StringComparison.Ordinal))
+            {
+                part = $"{alias}{part}";
+            }
 
             parts[i] = columnAlias != null ? $"{part} AS {columnAlias}" : part;
         }
