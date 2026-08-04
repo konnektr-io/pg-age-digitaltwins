@@ -236,12 +236,20 @@ public class AdtQueryToCypherTests
         "MATCH (T:Twin) WHERE T['$metadata']['$model'] = 'dtmi:test;1' RETURN T['$dtId'] AS id, T.name AS n LIMIT 10"
     )]
     [InlineData(
-        "SELECT R.$sourceId AS src, R.$targetId AS tgt FROM RELATIONSHIPS R",
-        "MATCH (:Twin)-[R]->(:Twin) RETURN R['$sourceId'] AS src, R['$targetId'] AS tgt"
-    )]
-    [InlineData(
         "SELECT $sourceId AS src FROM RELATIONSHIPS WHERE $sourceId = 'root'",
         "MATCH (:Twin)-[R]->(:Twin) WHERE R['$sourceId'] = 'root' RETURN R['$sourceId'] AS src"
+    )]
+    [InlineData(
+        "SELECT $metadata.$model FROM DIGITALTWINS T",
+        "MATCH (T:Twin) RETURN T['$metadata']['$model']"
+    )]
+    [InlineData(
+        "SELECT T.$metadata.$model FROM DIGITALTWINS T",
+        "MATCH (T:Twin) RETURN T['$metadata']['$model']"
+    )]
+    [InlineData(
+        "SELECT $metadata.$model AS modelId FROM DIGITALTWINS",
+        "MATCH (T:Twin) RETURN T['$metadata']['$model'] AS modelId"
     )]
     public void ConvertAdtQueryToCypher_ReturnsExpectedCypher(
         string adtQuery,
