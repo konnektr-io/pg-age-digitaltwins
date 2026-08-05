@@ -132,6 +132,14 @@ public class AdtQueryToCypherTests
         "MATCH (E:Twin)-[]->(T:Twin) WHERE NOT (T.size = 1) AND NOT (E['$dtId'] = 'def') RETURN T"
     )]
     [InlineData(
+        "SELECT T,R FROM DIGITALTWINS MATCH (current)-[R]->(T) WHERE current.$dtId='09a11073-409c-41fb-8f2e-a5c96991c608'AND T.$metadata.$model = 'dtmi:com:arcadis:climaterisk:AssessmentGroupAssetsFile;1'",
+        "MATCH (current:Twin)-[R]->(T:Twin) WHERE current['$dtId']='09a11073-409c-41fb-8f2e-a5c96991c608'AND T['$metadata']['$model'] = 'dtmi:com:arcadis:climaterisk:AssessmentGroupAssetsFile;1' RETURN T,R"
+    )]
+    [InlineData(
+        "SELECT T,R FROM DIGITALTWINS MATCH (current)-[R]->(T) WHERE current.$dtId='x' AND T.$metadata.$model = 'dtmi:test;1'",
+        "MATCH (current:Twin)-[R]->(T:Twin) WHERE current['$dtId']='x' AND T['$metadata']['$model'] = 'dtmi:test;1' RETURN T,R"
+    )]
+    [InlineData(
         "SELECT B, R FROM DIGITALTWINS DT JOIN B RELATED DT.has R WHERE DT.$dtId = 'root2'",
         "MATCH (DT:Twin)-[R:has]->(B:Twin) WHERE DT['$dtId'] = 'root2' RETURN B, R"
     )]
