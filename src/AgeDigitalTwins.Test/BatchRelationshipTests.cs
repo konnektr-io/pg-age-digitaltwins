@@ -131,8 +131,8 @@ public class BatchRelationshipTests : TestBase
     [Fact]
     public async Task CreateOrReplaceRelationshipsAsync_WithBatchLargerThanChunkSize_ShouldChunkAndSucceed()
     {
-        // Arrange - Load required model and create source + target twins
-        string[] models = [SampleData.DtdlRoom];
+        // Arrange - Load required models and create source + target twins
+        string[] models = [SampleData.DtdlRoom, SampleData.DtdlTemperatureSensor];
         await Client.CreateModelsAsync(models);
         await Client.CreateOrReplaceDigitalTwinAsync("room1", SampleData.TwinRoom1);
         await Client.CreateOrReplaceDigitalTwinAsync("sensor1", SampleData.TwinTemperatureSensor1);
