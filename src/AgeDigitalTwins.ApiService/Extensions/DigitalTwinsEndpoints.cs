@@ -126,7 +126,12 @@ public static class DigitalTwinsEndpoints
             .RequirePermission(ResourceType.DigitalTwins, PermissionAction.Write)
             .RequireRateLimiting("HeavyOperations")
             .WithName("CreateOrReplaceDigitalTwinsBatch")
-            .WithSummary("Creates or replaces multiple digital twins in a single batch operation.")
+            .WithSummary(
+                "Creates or replaces digital twins in a batch operation. Payloads larger than "
+                + "100 items are split internally into chunks; batches above the configurable "
+                + "ceiling (Parameters:MaxBatchSize, default 2000) are rejected with a 400. "
+                + "Larger imports must use an import job."
+            )
             .Produces<BatchDigitalTwinResult>();
 
         // POST /digitaltwins/search - Hybrid search endpoint

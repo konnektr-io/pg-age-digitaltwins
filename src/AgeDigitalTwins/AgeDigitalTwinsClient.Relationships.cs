@@ -702,13 +702,20 @@ SET rel = relationship";
 
     /// <summary>
     /// Creates or replaces multiple relationships in a single batch operation.
+    /// Batches larger than <see cref="MaxBatchSize"/> are rejected; smaller batches are
+    /// split internally into <see cref="BatchChunkSize"/>-sized chunks and the per-item
+    /// results aggregated into one batch result.
     /// </summary>
     /// <typeparam name="T">The type of the relationships to create or replace.</typeparam>
     /// <param name="relationships">The relationships to create or replace.</param>
     /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
     /// <returns>A task that represents the asynchronous operation. The task result contains the batch result.</returns>
     /// <exception cref="ArgumentNullException">Thrown when relationships is null.</exception>
-    /// <exception cref="ArgumentException">Thrown when relationships is empty or contains more than 100 items.</exception>
+    /// <exception cref="ArgumentException">Thrown when relationships is empty.</exception>
+    /// <exception cref="DigitalTwinBatchLimitExceededException">
+    /// Thrown when the batch size exceeds <see cref="MaxBatchSize"/> (default 2000). Larger
+    /// imports must use an import job.
+    /// </exception>
     public async Task<BatchRelationshipResult> CreateOrReplaceRelationshipsAsync<T>(
         IEnumerable<T> relationships,
         CancellationToken cancellationToken = default
@@ -722,11 +729,12 @@ SET rel = relationship";
             throw new ArgumentException("Relationships cannot be empty", nameof(relationships));
         }
 
-        if (relationshipList.Count > 100)
+        // Reject batches exceeding the configured ceiling. Large imports must use an import job.
+        if (relationshipList.Count > MaxBatchSize)
         {
-            throw new ArgumentException(
-                "Cannot process more than 100 relationships in a single batch",
-                nameof(relationships)
+            throw new DigitalTwinBatchLimitExceededException(
+                relationshipList.Count,
+                MaxBatchSize
             );
         }
 
@@ -734,11 +742,23 @@ SET rel = relationship";
             TargetSessionAttributes.ReadWrite,
             cancellationToken
         );
-        return await CreateOrReplaceRelationshipsInternalAsync(
-            connection,
-            relationshipList,
-            cancellationToken
-        );
+
+        // Split oversized batches into chunks so a single DB operation never exceeds
+        // BatchChunkSize. Per-item outcomes are aggregated in request order, matching
+        // the single-batch contract. This mirrors the chunking used by import jobs.
+        var results = new List<RelationshipOperationResult>(relationshipList.Count);
+        for (int start = 0; start < relationshipList.Count; start += BatchChunkSize)
+        {
+            int size = Math.Min(BatchChunkSize, relationshipList.Count - start);
+            var chunkResult = await CreateOrReplaceRelationshipsInternalAsync(
+                connection,
+                relationshipList.GetRange(start, size),
+                cancellationToken
+            );
+            results.AddRange(chunkResult.Results);
+        }
+
+        return new BatchRelationshipResult { Results = results };
     }
 
     /// <summary>

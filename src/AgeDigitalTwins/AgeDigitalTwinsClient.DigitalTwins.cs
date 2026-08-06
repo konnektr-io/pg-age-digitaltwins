@@ -882,19 +882,24 @@ RETURN COUNT(t) AS deletedCount";
 
     /// <summary>
     /// Creates or replaces multiple digital twins asynchronously in a batch operation.
+    /// Batches larger than <see cref="MaxBatchSize"/> are rejected; smaller batches are
+    /// split internally into <see cref="BatchChunkSize"/>-sized chunks and the per-item
+    /// results aggregated into one batch result.
     /// </summary>
     /// <typeparam name="T">The type of the digital twins to create or replace.</typeparam>
     /// <param name="digitalTwins">The digital twins to create or replace.</param>
     /// <param name="cancellationToken">The cancellation token to cancel the operation.</param>
     /// <returns>A task that represents the asynchronous operation. The task result contains the batch operation results.</returns>
-    /// <exception cref="ArgumentException">Thrown when the batch size exceeds the maximum allowed size (100).</exception>
+    /// <exception cref="DigitalTwinBatchLimitExceededException">
+    /// Thrown when the batch size exceeds <see cref="MaxBatchSize"/> (default 2000). Larger
+    /// imports must use an import job.
+    /// </exception>
     public virtual async Task<BatchDigitalTwinResult> CreateOrReplaceDigitalTwinsAsync<T>(
         IEnumerable<T> digitalTwins,
         string? userId = null,
         CancellationToken cancellationToken = default
     )
     {
-        const int MaxBatchSize = 100;
         var digitalTwinsList = digitalTwins.ToList();
 
         using var activity = ActivitySource.StartActivity(
@@ -905,11 +910,12 @@ RETURN COUNT(t) AS deletedCount";
 
         try
         {
-            // Validate batch size
+            // Reject batches exceeding the configured ceiling. Large imports must use an import job.
             if (digitalTwinsList.Count > MaxBatchSize)
             {
-                throw new ArgumentException(
-                    $"Batch size ({digitalTwinsList.Count}) exceeds maximum allowed size ({MaxBatchSize})"
+                throw new DigitalTwinBatchLimitExceededException(
+                    digitalTwinsList.Count,
+                    MaxBatchSize
                 );
             }
 
@@ -923,12 +929,23 @@ RETURN COUNT(t) AS deletedCount";
                 cancellationToken
             );
 
-            return await CreateOrReplaceDigitalTwinsInternalAsync(
-                connection,
-                digitalTwinsList,
-                userId,
-                cancellationToken
-            );
+            // Split oversized batches into chunks so a single DB operation never exceeds
+            // BatchChunkSize. Per-item outcomes are aggregated in request order, matching
+            // the single-batch contract. This mirrors the chunking used by import jobs.
+            var results = new List<DigitalTwinOperationResult>(digitalTwinsList.Count);
+            for (int start = 0; start < digitalTwinsList.Count; start += BatchChunkSize)
+            {
+                int size = Math.Min(BatchChunkSize, digitalTwinsList.Count - start);
+                var chunkResult = await CreateOrReplaceDigitalTwinsInternalAsync(
+                    connection,
+                    digitalTwinsList.GetRange(start, size),
+                    userId,
+                    cancellationToken
+                );
+                results.AddRange(chunkResult.Results);
+            }
+
+            return new BatchDigitalTwinResult(results);
         }
         catch (Exception ex)
         {

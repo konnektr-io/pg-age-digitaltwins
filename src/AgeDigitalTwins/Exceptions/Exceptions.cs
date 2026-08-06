@@ -122,6 +122,21 @@ public class InvalidAdtQueryException : AgeDigitalTwinsException
     }
 }
 
+public class DigitalTwinBatchLimitExceededException : AgeDigitalTwinsException
+{
+    public int Limit { get; }
+
+    public DigitalTwinBatchLimitExceededException(int batchSize, int limit)
+        : base(
+            $"Batch size ({batchSize}) exceeds maximum allowed size ({limit}). "
+            + "Split the payload into smaller batches or use an import job for large imports."
+        )
+    {
+        Limit = limit;
+        StatusCode = HttpStatusCode.BadRequest;
+    }
+}
+
 public class DatabaseConnectivityException : Exception
 {
     public DatabaseConnectivityException(string message)

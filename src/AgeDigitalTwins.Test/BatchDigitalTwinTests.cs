@@ -1,3 +1,4 @@
+using AgeDigitalTwins.Exceptions;
 using Xunit.Abstractions;
 
 namespace AgeDigitalTwins.Test;
@@ -119,11 +120,42 @@ public class BatchDigitalTwinTests : TestBase
     }
 
     [Fact]
-    public async Task CreateOrReplaceDigitalTwinsAsync_WithOversizedBatch_ShouldThrowException()
+    public async Task CreateOrReplaceDigitalTwinsAsync_WithBatchLargerThanChunkSize_ShouldChunkAndSucceed()
+    {
+        // Arrange - Load required model
+        string[] models = [SampleData.DtdlRoom];
+        await Client.CreateModelsAsync(models);
+
+        var digitalTwins = new List<string>();
+        for (int i = 0; i < 101; i++) // Exceeds the internal chunk size of 100
+        {
+            digitalTwins.Add(
+                $@"{{""$dtId"": ""chunkTwin{i}"", ""$metadata"": {{""$model"": ""dtmi:com:adt:dtsample:room;1""}}, ""temperature"": 25.0}}"
+            );
+        }
+
+        // Act
+        var result = await Client.CreateOrReplaceDigitalTwinsAsync(digitalTwins);
+
+        // Assert - all twins succeed across the internally chunked batches
+        Assert.NotNull(result);
+        Assert.Equal(101, result.SuccessCount);
+        Assert.Equal(0, result.FailureCount);
+        Assert.False(result.HasFailures);
+        Assert.Equal(101, result.Results.Count);
+        Assert.All(result.Results, r => Assert.True(r.IsSuccess));
+
+        _output.WriteLine(
+            $"Chunked batch operation completed successfully: {result.SuccessCount} successes"
+        );
+    }
+
+    [Fact]
+    public async Task CreateOrReplaceDigitalTwinsAsync_WithBatchExceedingMaxBatchSize_ShouldThrow()
     {
         // Arrange
         var digitalTwins = new List<string>();
-        for (int i = 0; i < 101; i++) // Exceed the limit of 100
+        for (int i = 0; i < 2001; i++) // Exceed the hard ceiling of 2000
         {
             digitalTwins.Add(
                 $@"{{""$dtId"": ""twin{i}"", ""$metadata"": {{""$model"": ""dtmi:com:adt:dtsample:room;1""}}, ""temperature"": 25.0}}"
@@ -131,11 +163,12 @@ public class BatchDigitalTwinTests : TestBase
         }
 
         // Act & Assert
-        var exception = await Assert.ThrowsAsync<ArgumentException>(
+        var exception = await Assert.ThrowsAsync<DigitalTwinBatchLimitExceededException>(
             () => Client.CreateOrReplaceDigitalTwinsAsync(digitalTwins)
         );
 
-        Assert.Contains("Batch size (101) exceeds maximum allowed size (100)", exception.Message);
+        Assert.Contains("Batch size (2001) exceeds maximum allowed size (2000)", exception.Message);
+        Assert.Contains("import job", exception.Message);
         _output.WriteLine($"Expected exception thrown: {exception.Message}");
     }
 }
