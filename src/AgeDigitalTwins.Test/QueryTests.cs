@@ -1179,7 +1179,7 @@ public class QueryTests : TestBase
         }
 
         // Bulk create twins (in batches to avoid timeouts)
-        const int batchSize = 100; // MaxBatchSize for CreateOrReplaceDigitalTwinsAsync
+        const int batchSize = 100; // Internal chunk size for CreateOrReplaceDigitalTwinsAsync
         var twinJsonObjects = twins
             .Values.Select(json => JsonNode.Parse(json)?.AsObject())
             .Where(obj => obj != null)
@@ -1719,7 +1719,7 @@ RETURN t";
         }
 
         // Bulk create twins (in batches to avoid timeouts)
-        const int batchSize = 100; // MaxBatchSize for CreateOrReplaceDigitalTwinsAsync
+        const int batchSize = 100; // Internal chunk size for CreateOrReplaceDigitalTwinsAsync
         var twinJsonObjects = twins
             .Values.Select(json => JsonNode.Parse(json)?.AsObject())
             .Where(obj => obj != null)

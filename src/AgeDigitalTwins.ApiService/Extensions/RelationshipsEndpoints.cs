@@ -240,7 +240,12 @@ public static class RelationshipsEndpoints
             .RequirePermission(ResourceType.Relationships, PermissionAction.Write)
             .RequireRateLimiting("HeavyOperations")
             .WithName("CreateOrReplaceRelationshipsBatch")
-            .WithSummary("Creates or replaces multiple relationships in a single batch operation.")
+            .WithSummary(
+                "Creates or replaces relationships in a batch operation. Payloads larger than "
+                + "100 items are split internally into chunks; batches above the configurable "
+                + "ceiling (Parameters:MaxBatchSize, default 2000) are rejected with a 400. "
+                + "Larger imports must use an import job."
+            )
             .Produces<BatchRelationshipResult>();
 
         return app;

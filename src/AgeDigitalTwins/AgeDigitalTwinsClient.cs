@@ -41,6 +41,19 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
     public int DefaultBatchSize { get; }
 
     /// <summary>
+    /// Gets the maximum number of items accepted by a single batch
+    /// create/replace call. Batches larger than this are rejected with a
+    /// <see cref="DigitalTwinBatchLimitExceededException"/> (400).
+    /// </summary>
+    public int MaxBatchSize { get; }
+
+    /// <summary>
+    /// Gets the internal chunk size used to split oversized batch
+    /// create/replace calls before they are written to the database.
+    /// </summary>
+    public int BatchChunkSize { get; }
+
+    /// <summary>
     /// Gets the default checkpoint interval for import operations.
     /// </summary>
     public int DefaultCheckpointInterval { get; }
@@ -69,6 +82,8 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
         DefaultBatchSize = options.DefaultBatchSize;
         DefaultCheckpointInterval = options.DefaultCheckpointInterval;
         DefaultHeartbeatInterval = options.DefaultHeartbeatInterval;
+        MaxBatchSize = options.MaxBatchSize;
+        BatchChunkSize = options.BatchChunkSize;
         _trackLastUpdatedBy = options.TrackLastUpdatedBy;
         _returnTwinLevelLastUpdatedBy = options.ReturnTwinLevelLastUpdatedBy;
         _returnRelationshipMetadata = options.ReturnRelationshipMetadata;
@@ -105,6 +120,8 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
         DefaultBatchSize = 50; // Default batch size
         DefaultCheckpointInterval = 50; // Default checkpoint interval
         DefaultHeartbeatInterval = TimeSpan.FromSeconds(30); // Default heartbeat interval
+        MaxBatchSize = 2000; // Maximum batch create/replace size
+        BatchChunkSize = 100; // Internal chunk size for oversized batches
         _returnTwinLevelLastUpdatedBy = true; // Default
         _modelParser = new(
             new ParsingOptions()
@@ -238,6 +255,25 @@ public class AgeDigitalTwinsClientOptions
     /// Gets or sets the default batch size for import operations.
     /// </summary>
     public int DefaultBatchSize { get; set; } = 50;
+
+    /// <summary>
+    /// Gets or sets the maximum number of items accepted by a single batch
+    /// create/replace call (<c>CreateOrReplaceDigitalTwinsAsync</c> and
+    /// <c>CreateOrReplaceRelationshipsAsync</c>). Batches larger than this
+    /// are rejected with a <c>400 Bad Request</c> (problem details stating
+    /// the limit); large imports must use an import job. Defaults to
+    /// <c>2000</c>.
+    /// </summary>
+    public int MaxBatchSize { get; set; } = 2000;
+
+    /// <summary>
+    /// Gets or sets the internal chunk size used to split an oversized batch
+    /// create/replace call into smaller batches before it is written to the
+    /// database. The SDK never writes more than this many items in a single
+    /// database operation, but still returns an aggregated result for the
+    /// whole request. Defaults to <c>100</c>.
+    /// </summary>
+    public int BatchChunkSize { get; set; } = 100;
 
     /// <summary>
     /// Gets or sets the default checkpoint interval for import operations.
