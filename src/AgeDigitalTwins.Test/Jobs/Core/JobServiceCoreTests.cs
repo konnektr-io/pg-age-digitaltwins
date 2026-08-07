@@ -323,11 +323,20 @@ public class JobServiceCoreTests : JobTestBase
                 cancellationToken: default
             );
 
-            // Wait for the job to start
-            await Task.Delay(100);
+            // Wait for the job to actually start (the factory delays ~1s, so it
+            // stays Notstarted until the stream delay elapses and it transitions to Running)
+            var maxWait = TimeSpan.FromSeconds(10);
+            var waitStart = DateTime.UtcNow;
+            JobRecord? runningJob = null;
+            while (DateTime.UtcNow - waitStart < maxWait)
+            {
+                runningJob = await Client.GetImportJobAsync(jobId);
+                if (runningJob?.Status == JobStatus.Running)
+                    break;
+                await Task.Delay(100);
+            }
 
             // Verify job is running
-            var runningJob = await Client.GetImportJobAsync(jobId);
             Assert.NotNull(runningJob);
             Assert.Equal(JobStatus.Running, runningJob.Status);
 
