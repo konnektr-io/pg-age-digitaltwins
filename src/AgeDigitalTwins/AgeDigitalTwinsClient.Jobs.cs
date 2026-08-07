@@ -161,14 +161,15 @@ public partial class AgeDigitalTwinsClient
 
             if (executeInBackground)
             {
-                // For background execution, update job status to Running and start the job
-                await JobService.UpdateJobStatusAsync(
-                    jobId,
-                    JobStatus.Running,
-                    cancellationToken: cancellationToken
-                );
+                // For background execution, the job stays Notstarted (the state it was
+                // created in) until the background task actually begins processing.
+                // This aligns with the ADT import-jobs API, where a job that has not
+                // yet commenced is reported as "notstarted" rather than "running".
+                // Blob-access failures (e.g. a 403 on the input blob) therefore
+                // surface while the job is still Notstarted, and it transitions to
+                // Failed without ever showing a misleading "running" status.
 
-                // Update the job record to reflect the new status
+                // Update the job record to reflect the current (Notstarted) status
                 jobRecord = await JobService.GetJobAsync(jobId, cancellationToken) ?? jobRecord;
 
                 // Start the job execution in the background with proper stream lifecycle
@@ -185,6 +186,13 @@ public partial class AgeDigitalTwinsClient
                             await using (inputStream)
                             await using (outputStream)
                             {
+                                // Streams opened successfully - only now is the job Running
+                                await JobService.UpdateJobStatusAsync(
+                                    jobId,
+                                    JobStatus.Running,
+                                    cancellationToken: cancellationToken
+                                );
+
                                 // Start job execution with checkpoint support
                                 var result = await StreamingImportJob.ExecuteWithCheckpointAsync(
                                     this,
@@ -233,9 +241,36 @@ public partial class AgeDigitalTwinsClient
                         }
                         catch (Exception ex)
                         {
+                            // If the job never started (still Notstarted), the exception came
+                            // from opening the blob streams (e.g. a 403) - mark it Failed.
+                            // It never reached Running, so there is no checkpoint to resume from.
+                            var currentJob = await JobService.GetJobAsync(
+                                jobId,
+                                CancellationToken.None
+                            );
+                            if (currentJob?.Status == JobStatus.Notstarted)
+                            {
+                                await JobService.UpdateJobStatusAsync(
+                                    jobId,
+                                    JobStatus.Failed,
+                                    errorData: new JobError
+                                    {
+                                        Code = ex.GetType().Name,
+                                        Message = ex.Message,
+                                        Details = new Dictionary<string, object>
+                                        {
+                                            { "stackTrace", ex.StackTrace ?? string.Empty },
+                                            { "timestamp", DateTime.UtcNow.ToString("o") },
+                                            { "failedBeforeStart", true },
+                                            { "fatal", true },
+                                        },
+                                    },
+                                    cancellationToken: CancellationToken.None
+                                );
+                            }
                             // Only mark job as failed for truly fatal exceptions
                             // Other exceptions should be handled by the job itself and result in proper status determination
-                            if (IsFatalException(ex))
+                            else if (IsFatalException(ex))
                             {
                                 await JobService.UpdateJobStatusAsync(
                                     jobId,

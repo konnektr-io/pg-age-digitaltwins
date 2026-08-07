@@ -923,7 +923,7 @@ public class JobService
         string sql = $"""
             SELECT id, job_type, status, created_at, updated_at, finished_at, purge_at, request_data, result_data, error_data, checkpoint_data
             FROM {_schemaName}.jobs
-            WHERE status IN ('running')
+            WHERE status IN ('running', 'notstarted')
             AND (lock_acquired_at IS NULL OR lock_acquired_at + lock_lease_duration <= NOW())
             ORDER BY created_at;
             """;
