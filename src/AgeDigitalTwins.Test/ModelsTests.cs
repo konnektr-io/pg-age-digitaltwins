@@ -841,4 +841,90 @@ public class ModelsTests : TestBase
             await dropIndexCmd.ExecuteNonQueryAsync();
         }
     }
+
+    [Fact]
+    public async Task CreateModels_ReferencedNestedSchemas_ResolveViaDtdlParser()
+    {
+        // Hypothesis test for konnektr-io/pg-age-digitaltwins#98.
+        // DTDL requires non-interface schemas (Enum/Object) to be declared in the SAME
+        // Interface's `schemas` property and referenced by DTMI. This test verifies the
+        // DTDL parser resolves those references from the interface document itself — so
+        // NO code change (persisting nested schemas as separate Model vertices) is needed:
+        //   1) an Interface with nested referenced Enum/Object is creatable, and
+        //   2) a twin whose property values satisfy the referenced schemas is accepted, and
+        //   3) a twin with an invalid enum value is REJECTED (proves resolution actually ran).
+        // It deliberately does NOT assert GetModelAsync on the nested schemas, since that
+        // would test a separate (optional) capability, not the hypothesis.
+
+        string interfaceModel = """
+            {
+              "@id": "dtmi:test:Block;1",
+              "@type": "Interface",
+              "@context": "dtmi:dtdl:context;4",
+              "schemas": [
+                {
+                  "@id": "dtmi:test:BlockKind;1",
+                  "@type": "Enum",
+                  "valueSchema": "string",
+                  "enumValues": [
+                    { "name": "travel", "enumValue": "travel" },
+                    { "name": "resort", "enumValue": "resort" },
+                    { "name": "transit", "enumValue": "transit" }
+                  ]
+                },
+                {
+                  "@id": "dtmi:test:GeoPoint;1",
+                  "@type": "Object",
+                  "fields": [
+                    { "name": "lat", "schema": "double" },
+                    { "name": "lon", "schema": "double" }
+                  ]
+                }
+              ],
+              "contents": [
+                { "@type": "Property", "name": "kind", "schema": "dtmi:test:BlockKind;1" },
+                { "@type": "Property", "name": "location", "schema": "dtmi:test:GeoPoint;1" }
+              ]
+            }
+            """;
+
+        // Clean up any prior run
+        try { await Client.DeleteModelAsync("dtmi:test:Block;1"); } catch (ModelNotFoundException) { }
+
+        // Act 1: create the interface (with its nested schemas).
+        await Client.CreateModelsAsync([interfaceModel]);
+
+        // Assert 1: interface was created.
+        Assert.NotNull(await Client.GetModelAsync("dtmi:test:Block;1"));
+
+        // Act 2: create a twin whose values satisfy the referenced schemas.
+        string twinId = "test-referenced-schema-twin";
+        try { await Client.DeleteDigitalTwinAsync(twinId); } catch { }
+        var validTwin = """
+            {
+              "$dtId": "test-referenced-schema-twin",
+              "$metadata": { "model": "dtmi:test:Block;1" },
+              "kind": "travel",
+              "location": { "lat": 51.05, "lon": 3.72 }
+            }
+            """;
+        await Client.CreateOrReplaceDigitalTwinAsync(twinId, validTwin);
+
+        // Act 3: an invalid enum value must be rejected (proves the schema resolved).
+        var invalidTwin = """
+            {
+              "$dtId": "test-referenced-schema-twin-bad",
+              "$metadata": { "model": "dtmi:test:Block;1" },
+              "kind": "NOT_A_BLOCK_KIND",
+              "location": { "lat": 51.05, "lon": 3.72 }
+            }
+            """;
+        await Assert.ThrowsAsync<ValidationFailedException>(
+            () => Client.CreateOrReplaceDigitalTwinAsync("test-referenced-schema-twin-bad", invalidTwin)
+        );
+
+        // Cleanup
+        try { await Client.DeleteDigitalTwinAsync(twinId); } catch { }
+        await Client.DeleteModelAsync("dtmi:test:Block;1");
+    }
 }
