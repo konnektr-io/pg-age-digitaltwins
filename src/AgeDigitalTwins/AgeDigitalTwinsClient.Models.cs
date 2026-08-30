@@ -274,37 +274,45 @@ MATCH (m:Model {id: dependency})
             List<DigitalTwinsModelData> modelDatas = dtdlModels
                 .Select(dtdlModel =>
                 {
-                    // Prepare the bases array to store all bases (dtmis that the interface extends from)
-                    var bases = new List<string>();
                     // Parse the original json and prepare the modelData object
                     var modelData = new DigitalTwinsModelData(dtdlModel);
-                    // Find the interface from the objectModel dictionary using the modelId
-                    var interfaceInfo = (DTInterfaceInfo)objectModel[new Dtmi(modelData.Id)];
-                    // Recursively add all base interfaces to the list of bases
-                    void AddBaseInterfaces(DTInterfaceInfo currentInterface)
+
+                    // Interface-only logic: collect bases/descendants and (below) edges.
+                    // Non-interface entities (Enum, Object, Relationship, etc.) referenced by
+                    // DTMI from a property schema are still valid DTDL definitions and must be
+                    // persisted as Model vertices so DtmiResolverAsync can resolve them — but
+                    // they have no Extends/Components, so skip the interface-specific walk.
+                    if (objectModel[new Dtmi(modelData.Id)] is DTInterfaceInfo interfaceInfo)
                     {
-                        foreach (DTInterfaceInfo extendedInterface in currentInterface.Extends)
+                        // Prepare the bases array to store all bases (dtmis that the interface extends from)
+                        var bases = new List<string>();
+                        // Recursively add all base interfaces to the list of bases
+                        void AddBaseInterfaces(DTInterfaceInfo currentInterface)
                         {
-                            if (!bases.Contains(extendedInterface.Id.AbsoluteUri))
+                            foreach (DTInterfaceInfo extendedInterface in currentInterface.Extends)
                             {
-                                bases.Add(extendedInterface.Id.AbsoluteUri);
-
-                                // Track that current model is a descendant of this base
-                                if (!descendantsMap.ContainsKey(extendedInterface.Id.AbsoluteUri))
+                                if (!bases.Contains(extendedInterface.Id.AbsoluteUri))
                                 {
-                                    descendantsMap[extendedInterface.Id.AbsoluteUri] =
-                                        new HashSet<string>();
-                                }
-                                descendantsMap[extendedInterface.Id.AbsoluteUri].Add(modelData.Id);
+                                    bases.Add(extendedInterface.Id.AbsoluteUri);
 
-                                AddBaseInterfaces(extendedInterface); // Recursive call
+                                    // Track that current model is a descendant of this base
+                                    if (!descendantsMap.ContainsKey(extendedInterface.Id.AbsoluteUri))
+                                    {
+                                        descendantsMap[extendedInterface.Id.AbsoluteUri] =
+                                            new HashSet<string>();
+                                    }
+                                    descendantsMap[extendedInterface.Id.AbsoluteUri].Add(modelData.Id);
+
+                                    AddBaseInterfaces(extendedInterface); // Recursive call
+                                }
                             }
                         }
+                        // Add the base interfaces to the list of bases (recursively)
+                        AddBaseInterfaces(interfaceInfo);
+                        // Add the collected bases to the modelData
+                        modelData.Bases = bases.ToArray();
                     }
-                    // Add the base interfaces to the list of bases (recursively)
-                    AddBaseInterfaces(interfaceInfo);
-                    // Add the collected bases to the modelData
-                    modelData.Bases = bases.ToArray();
+
                     return modelData;
                 })
                 .ToList(); // Materialize to ensure descendantsMap is fully populated

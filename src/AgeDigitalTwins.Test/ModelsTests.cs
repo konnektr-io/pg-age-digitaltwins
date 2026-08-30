@@ -841,4 +841,100 @@ public class ModelsTests : TestBase
             await dropIndexCmd.ExecuteNonQueryAsync();
         }
     }
+
+    [Fact]
+    public async Task CreateModels_ReferencedNonInlineEnumObjectSchemas_ArePersistedAndResolve()
+    {
+        // Regression test for konnektr-io/pg-age-digitaltwins#98.
+        // A DTDL model whose property schema references a NON-INLINE Enum/Object
+        // (defined as its own top-level DTDL definition, referenced by DTMI) must:
+        //   1) be creatable (Enum/Object persisted as Model vertices), and
+        //   2) resolve at twin-write time so the referenced schema validates the value.
+
+        // Arrange: a referenced Enum + Object + an Interface that references them.
+        string enumModel = """
+            {
+              "@id": "dtmi:test:BlockKind;1",
+              "@type": "Enum",
+              "@context": "dtmi:dtdl:context;4",
+              "valueSchema": "string",
+              "enumValues": [
+                { "name": "travel", "enumValue": "travel" },
+                { "name": "resort", "enumValue": "resort" },
+                { "name": "transit", "enumValue": "transit" }
+              ]
+            }
+            """;
+
+        string objectModel = """
+            {
+              "@id": "dtmi:test:GeoPoint;1",
+              "@type": "Object",
+              "@context": "dtmi:dtdl:context;4",
+              "fields": [
+                { "name": "lat", "schema": "double" },
+                { "name": "lon", "schema": "double" }
+              ]
+            }
+            """;
+
+        string interfaceModel = """
+            {
+              "@id": "dtmi:test:Block;1",
+              "@type": "Interface",
+              "@context": "dtmi:dtdl:context;4",
+              "contents": [
+                { "@type": "Property", "name": "kind", "schema": "dtmi:test:BlockKind;1" },
+                { "@type": "Property", "name": "location", "schema": "dtmi:test:GeoPoint;1" }
+              ]
+            }
+            """;
+
+        // Clean up any prior run
+        foreach (var id in new[] { "dtmi:test:Block;1", "dtmi:test:BlockKind;1", "dtmi:test:GeoPoint;1" })
+        {
+            try { await Client.DeleteModelAsync(id); } catch (ModelNotFoundException) { }
+        }
+
+        // Act 1: create the referenced (non-inline) schemas together with the interface.
+        await Client.CreateModelsAsync([enumModel, objectModel, interfaceModel]);
+
+        // Assert 1: every model is retrievable (Enum/Object persisted as Model vertices).
+        Assert.NotNull(await Client.GetModelAsync("dtmi:test:BlockKind;1"));
+        Assert.NotNull(await Client.GetModelAsync("dtmi:test:GeoPoint;1"));
+        Assert.NotNull(await Client.GetModelAsync("dtmi:test:Block;1"));
+
+        // Act 2: create a twin whose property values satisfy the referenced schemas.
+        string twinId = "test-referenced-schema-twin";
+        string validTwin = $$"""
+            {
+              "$dtId": "{{twinId}}",
+              "$metadata": { "$model": "dtmi:test:Block;1" },
+              "kind": "travel",
+              "location": { "lat": 50.85, "lon": 4.35 }
+            }
+            """;
+        var created = await Client.CreateOrReplaceDigitalTwinAsync(twinId, validTwin);
+        Assert.NotNull(created);
+
+        // Assert 2: an INVALID enum value is rejected by the referenced schema validation.
+        string invalidTwinId = "test-referenced-schema-twin-invalid";
+        string invalidTwin = $$"""
+            {
+              "$dtId": "{{invalidTwinId}}",
+              "$metadata": { "$model": "dtmi:test:Block;1" },
+              "kind": "notARealKind",
+              "location": { "lat": 50.85, "lon": 4.35 }
+            }
+            """;
+        await Assert.ThrowsAsync<ValidationFailedException>(
+            () => Client.CreateOrReplaceDigitalTwinAsync(invalidTwinId, invalidTwin)
+        );
+
+        // Cleanup
+        try { await Client.DeleteDigitalTwinAsync(twinId); } catch { }
+        await Client.DeleteModelAsync("dtmi:test:Block;1");
+        await Client.DeleteModelAsync("dtmi:test:BlockKind;1");
+        await Client.DeleteModelAsync("dtmi:test:GeoPoint;1");
+    }
 }
