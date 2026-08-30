@@ -903,7 +903,7 @@ public class ModelsTests : TestBase
         var validTwin = """
             {
               "$dtId": "test-referenced-schema-twin",
-              "$metadata": { "model": "dtmi:test:Block;1" },
+              "$metadata": { "$model": "dtmi:test:Block;1" },
               "kind": "travel",
               "location": { "lat": 51.05, "lon": 3.72 }
             }
@@ -914,7 +914,7 @@ public class ModelsTests : TestBase
         var invalidTwin = """
             {
               "$dtId": "test-referenced-schema-twin-bad",
-              "$metadata": { "model": "dtmi:test:Block;1" },
+              "$metadata": { "$model": "dtmi:test:Block;1" },
               "kind": "NOT_A_BLOCK_KIND",
               "location": { "lat": 51.05, "lon": 3.72 }
             }
