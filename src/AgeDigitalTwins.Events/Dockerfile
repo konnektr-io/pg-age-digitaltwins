@@ -26,5 +26,12 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine
 EXPOSE 8080
 WORKDIR /app
 COPY --link --from=build /app .
+
+# Pull in the latest Alpine security updates at build time so the image does
+# not carry known base-OS CVEs (openssl, ...) between upstream .NET base image
+# rebuilds. The floating aspnet:10.0-alpine tag carries the patched .NET
+# runtime (10.0.11); apk upgrade refreshes the Alpine packages on top of it.
+RUN apk upgrade --no-cache
+
 USER $APP_UID
 ENTRYPOINT ["./AgeDigitalTwins.Events"]
