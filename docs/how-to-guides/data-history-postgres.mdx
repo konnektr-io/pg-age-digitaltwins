@@ -1,0 +1,443 @@
+---
+title: Data History with PostgreSQL / TimescaleDB
+icon: Database
+---
+
+Complete guide to archiving digital twin history in PostgreSQL or TimescaleDB for temporal queries, SQL analytics, and compliance — with snake_case tables and PostgreSQL-native types.
+
+## Overview
+
+This guide shows you how to use [Event Routing](../concepts/event-routing) with the `Postgres` event sink to keep a complete, queryable history of your digital twin graph inside PostgreSQL.
+
+Once configured, every change to your graph — property updates, twin lifecycle events, relationship changes — is appended to three history tables. The sink uses the same **DataHistory** event format as the [Azure Data Explorer guide](./data-history-kusto), but with PostgreSQL-appropriate defaults:
+
+- **snake_case** table and column names (`adt_property_events`, `time_stamp`, …)
+- Native PostgreSQL types (`timestamptz`, `text`, `jsonb`)
+- Written with `COPY … (FORMAT BINARY)` batches for high ingest throughput
+
+The sink works against **plain PostgreSQL** and against **TimescaleDB**. If the `timescaledb` extension is present, the history tables are converted to hypertables automatically so you can use compression, retention policies, and continuous aggregates.
+
+### What You'll Learn
+
+- Configure Data History routing to PostgreSQL or TimescaleDB
+- Understand the table schema and column types
+- Run temporal SQL queries to reconstruct historical state
+- Use TimescaleDB features for compression, retention, and rollups
+- Tune performance and troubleshoot missing data
+
+## Prerequisites
+
+**PostgreSQL:**
+
+- PostgreSQL 14 or newer (the CI-tested matrix covers PostgreSQL 16, 17 and 18)
+- A database and role with `CREATE` privileges on the target schema — the sink creates its own tables on first use
+- For TimescaleDB (optional): the `timescaledb` extension available and preloaded on the server
+
+**Konnektr Graph:**
+
+- A deployment with event routing enabled (self-hosted or managed)
+- Access to the events configuration (Helm values / `appsettings.json`) or the Konnektr Portal
+
+## Setup
+
+### Step 1 (Optional): Enable TimescaleDB
+
+Hypertables, compression and retention policies require the extension. Creating it needs elevated privileges, so it is normally done once by an operator:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS timescaledb;
+```
+
+TimescaleDB also has to be preloaded by the server (`shared_preload_libraries = 'timescaledb'`). On managed providers (Timescale Cloud, Neon, Supabase) enable the extension from the dashboard.
+
+Without the extension everything still works — the tables are created as ordinary PostgreSQL tables and the sink logs that hypertable creation was skipped.
+
+### Step 2: Configure the Event Sink
+
+Add a `Postgres` sink to the events configuration. Self-hosted (Helm values / `appsettings.json`):
+
+```json
+{
+  "EventSinks": {
+    "Postgres": [
+      {
+        "Name": "PostgresDataHistory",
+        "ConnectionString": "Host=postgres;Port=5432;Database=history;Username=graph;Password=your-password",
+        "Schema": "public"
+      }
+    ]
+  }
+}
+```
+
+With environment variables (Helm `extraEnv`, or a Kubernetes secret):
+
+```yaml
+extraEnv:
+  - name: EventSinks__Postgres__0__Name
+    value: PostgresDataHistory
+  - name: EventSinks__Postgres__0__ConnectionString
+    valueFrom:
+      secretKeyRef:
+        name: postgres-history
+        key: connection-string
+```
+
+**Same database as the graph:** point `ConnectionString` at the graph database and the history tables are created next to the graph (in `public` by default). The graph itself lives in its own AGE schema, so there is no clash. If you prefer strict separation, set `Schema` to e.g. `history` (the schema is created if missing) or use a different database entirely.
+
+**Use a dedicated role for the graph** (recommended): the sink only needs `CONNECT` on the database plus `CREATE` and `INSERT` on the history schema.
+
+### Step 3: Create an Event Route
+
+Route the events you want archived with the `DataHistory` format to the sink:
+
+```json
+{
+  "EventRoutes": [
+    {
+      "SinkName": "PostgresDataHistory",
+      "EventFormat": "DataHistory"
+    }
+  ]
+}
+```
+
+In the Konnektr Portal: **Event Routing → Add Route**, then set **Event Format** to `DataHistory` and **Destination Sink** to `PostgresDataHistory`.
+
+You can route the same source events to other sinks too — for example Kafka for real-time consumers and PostgreSQL for the archive.
+
+### Step 4: Verify the Tables
+
+Tables are created automatically the first time an event is sent. After the first graph change:
+
+```sql
+\dt public.adt_*
+
+SELECT * FROM adt_property_events ORDER BY time_stamp DESC LIMIT 10;
+```
+
+You should see:
+
+| Table | Contents |
+|-------|----------|
+| `adt_property_events` | Twin and relationship property changes |
+| `adt_twin_lifecycle_events` | Twin create/delete |
+| `adt_relationship_lifecycle_events` | Relationship create/delete |
+
+## Configuration Reference
+
+Configured under `EventSinks:Postgres` as an array (one entry per sink).
+
+| Key | Required | Default | Description |
+|-----|----------|---------|-------------|
+| `Name` | Yes | — | Sink name, referenced by `EventRoutes` |
+| `ConnectionString` | Yes | — | Npgsql connection string (`Host=…;Port=…;Database=…;Username=…;Password=…`) |
+| `Schema` | No | `public` | Schema for the history tables (created if missing, except `public`) |
+| `PropertyEventsTable` | No | `adt_property_events` | Property change table name |
+| `TwinLifeCycleEventsTable` | No | `adt_twin_lifecycle_events` | Twin lifecycle table name |
+| `RelationshipLifeCycleEventsTable` | No | `adt_relationship_lifecycle_events` | Relationship lifecycle table name |
+| `TrackLastUpdatedBy` | No | inherits `Parameters:TrackLastUpdatedBy` | Adds an `updated_by` column to every history table |
+| `EventTypeMappings` | No | DataHistory defaults | Maps `SinkEventType` to custom CloudEvent types |
+
+Table and schema names are validated as plain SQL identifiers; anything that is not a valid identifier (spaces, quotes, semicolons, leading digits) is rejected at startup.
+
+## Data Schema
+
+All timestamps are `timestamptz` (stored in UTC). `value` is `jsonb`, so scalar values are stored as JSON scalars — use `value #>> '{}'` to read them as text.
+
+### adt_property_events
+
+Stores twin and relationship property changes over time.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `time_stamp` | timestamptz | When the property was updated |
+| `source_time_stamp` | timestamptz | Source timestamp of the change (telemetry-ingested changes) |
+| `service_id` | text | Graph instance URI |
+| `id` | text | Twin ID (or source twin ID for relationship properties) |
+| `model_id` | text | DTDL model ID (DTMI) |
+| `key` | text | Property name |
+| `value` | jsonb | New property value |
+| `relationship_target` | text | Target twin ID (empty for twin properties) |
+| `relationship_id` | text | Relationship ID (empty for twin properties) |
+| `action` | text | `Create`, `Update` or `Delete` |
+| `updated_by` | text | Only when `TrackLastUpdatedBy` is enabled |
+
+**Example data:**
+
+| time_stamp | id | model_id | key | value |
+|------------|----|----------|-----|-------|
+| 2025-01-20 10:30:00+00 | sensor-temp-01 | dtmi:com:example:Sensor;1 | temperature | `72.5` |
+| 2025-01-20 10:31:00+00 | sensor-temp-01 | dtmi:com:example:Sensor;1 | temperature | `73.2` |
+
+### adt_twin_lifecycle_events
+
+Stores twin creation and deletion.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `time_stamp` | timestamptz | When the event occurred |
+| `service_id` | text | Graph instance URI |
+| `twin_id` | text | Twin ID |
+| `action` | text | `Create` or `Delete` |
+| `model_id` | text | DTDL model ID (DTMI) |
+| `updated_by` | text | Only when `TrackLastUpdatedBy` is enabled |
+
+### adt_relationship_lifecycle_events
+
+Stores relationship creation and deletion.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `time_stamp` | timestamptz | When the event occurred |
+| `service_id` | text | Graph instance URI |
+| `relationship_id` | text | Relationship ID |
+| `action` | text | `Create` or `Delete` |
+| `name` | text | Relationship name |
+| `source` | text | Source twin ID |
+| `target` | text | Target twin ID |
+| `updated_by` | text | Only when `TrackLastUpdatedBy` is enabled |
+
+### Indexes
+
+Each table gets two indexes, created with the table:
+
+- `ix_<table>_time_stamp` on `time_stamp` (time-range scans)
+- `ix_<table>_<entity column>` — `id`, `twin_id` or `relationship_id` (history per entity)
+
+## Temporal Queries
+
+### Current State Reconstruction
+
+Rebuild the latest value of every property without touching the graph:
+
+```sql
+SELECT DISTINCT ON (id, key)
+    id, key, time_stamp, value
+FROM adt_property_events
+WHERE relationship_id = ''
+ORDER BY id, key, time_stamp DESC;
+```
+
+### Historical State at a Specific Time
+
+"Where was the state at 03:00 last Tuesday?"
+
+```sql
+SELECT DISTINCT ON (id, key)
+    id, key, value
+FROM adt_property_events
+WHERE relationship_id = ''
+  AND time_stamp <= '2025-01-21 03:00:00+00'
+ORDER BY id, key, time_stamp DESC;
+```
+
+### Find Changes in a Time Range
+
+```sql
+SELECT id, key, time_stamp, value
+FROM adt_property_events
+WHERE relationship_id = ''
+  AND time_stamp BETWEEN now() - interval '24 hours' AND now()
+  AND key = 'temperature'
+ORDER BY time_stamp DESC;
+```
+
+### Property History Over Time
+
+```sql
+SELECT time_stamp, (value #>> '{}')::numeric AS temperature
+FROM adt_property_events
+WHERE id = 'sensor-temp-01'
+  AND key = 'temperature'
+ORDER BY time_stamp;
+```
+
+### Detect Anomalies
+
+```sql
+WITH ordered AS (
+    SELECT time_stamp,
+           (value #>> '{}')::numeric AS temperature,
+           lag((value #>> '{}')::numeric) OVER (ORDER BY time_stamp) AS previous
+    FROM adt_property_events
+    WHERE id = 'sensor-temp-01' AND key = 'temperature'
+)
+SELECT *
+FROM ordered
+WHERE abs(temperature - previous) > 5
+ORDER BY time_stamp DESC;
+```
+
+### Audit Trail — Who Changed What
+
+Requires `TrackLastUpdatedBy`:
+
+```sql
+SELECT time_stamp, id, key, value, updated_by
+FROM adt_property_events
+WHERE updated_by = 'user@example.com'
+ORDER BY time_stamp DESC;
+```
+
+### Incident Window — Before / After Comparison
+
+```sql
+SELECT
+    (SELECT (value #>> '{}')::numeric
+       FROM adt_property_events
+      WHERE id = 'pump-01' AND key = 'pressure'
+        AND time_stamp < '2025-01-21 03:00:00+00'
+      ORDER BY time_stamp DESC LIMIT 1) AS before_incident,
+    (SELECT (value #>> '{}')::numeric
+       FROM adt_property_events
+      WHERE id = 'pump-01' AND key = 'pressure'
+        AND time_stamp > '2025-01-21 03:00:00+00'
+      ORDER BY time_stamp ASC LIMIT 1) AS after_incident;
+```
+
+### Historical Graph Reconstruction
+
+Twin creation/deletion over time, to rebuild the set of twins that existed at a point in time:
+
+```sql
+SELECT DISTINCT ON (twin_id) twin_id, model_id, action, time_stamp
+FROM adt_twin_lifecycle_events
+WHERE time_stamp <= '2025-01-21 03:00:00+00'
+ORDER BY twin_id, time_stamp DESC
+HAVING (array_agg(action ORDER BY time_stamp DESC))[1] <> 'Delete';
+```
+
+Relationship topology at a point in time:
+
+```sql
+SELECT DISTINCT ON (relationship_id)
+       relationship_id, name, source, target, action
+FROM adt_relationship_lifecycle_events
+WHERE time_stamp <= '2025-01-21 03:00:00+00'
+ORDER BY relationship_id, time_stamp DESC
+HAVING (array_agg(action ORDER BY time_stamp DESC))[1] <> 'Delete';
+```
+
+## TimescaleDB Features
+
+When the `timescaledb` extension is present, the sink converts each history table into a hypertable partitioned on `time_stamp` (chunk interval defaults to 7 days):
+
+```sql
+SELECT * FROM timescaledb_information.hypertables;
+```
+
+### Compression
+
+Compress chunks older than 7 days — history tables are append-only, so compression is very effective:
+
+```sql
+ALTER TABLE adt_property_events SET (
+    timescaledb.compress,
+    timescaledb.compress_segmentby = 'id, key',
+    timescaledb.compress_orderby = 'time_stamp DESC'
+);
+
+SELECT add_compression_policy('adt_property_events', interval '7 days');
+```
+
+### Retention
+
+Drop raw history after 90 days:
+
+```sql
+SELECT add_retention_policy('adt_property_events', interval '90 days');
+```
+
+Or drop chunks manually:
+
+```sql
+SELECT drop_chunks('adt_property_events', older_than => interval '90 days');
+```
+
+### Continuous Aggregates
+
+Hourly rollups for dashboards (note: reading JSONB scalars works in aggregates too):
+
+```sql
+CREATE MATERIALIZED VIEW temperature_hourly
+WITH (timescaledb.continuous) AS
+SELECT time_bucket('1 hour', time_stamp) AS bucket,
+       id,
+       avg((value #>> '{}')::numeric) AS avg_temperature,
+       max((value #>> '{}')::numeric) AS max_temperature
+FROM adt_property_events
+WHERE key = 'temperature'
+GROUP BY bucket, id;
+
+SELECT add_continuous_aggregate_policy('temperature_hourly',
+    start_offset => interval '30 days',
+    end_offset   => interval '1 hour',
+    schedule_interval => interval '1 hour');
+```
+
+See the [TimescaleDB documentation](https://docs.timescale.com/) for the full feature set.
+
+## Performance
+
+- **Binary COPY batching** — events are grouped per CloudEvent type and written with `COPY … (FORMAT BINARY)` in a single statement per group, which is far faster than per-row `INSERT`.
+- **Indexes** — time-range and per-entity queries are covered by the two indexes created with each table.
+- **Chunk interval** — for very high volumes, adjust the chunk interval (`SELECT set_chunk_time_interval('adt_property_events', interval '1 day');`) so chunks stay cache-friendly.
+- **Connection pool** — each sink instance owns one Npgsql pool. A single sink handles hundreds of events per batch comfortably; keep the pool size modest (`Maximum Pool Size=20`) and scale sinks by instances, not by adding duplicate routes for the same table.
+- **Table growth** — history tables are append-only. On TimescaleDB use compression plus a retention policy; on plain PostgreSQL use `DELETE` in time-range batches (with an index on `time_stamp` that is a fast range delete) or partition by month.
+
+## Data Retention
+
+Plain PostgreSQL — trim to the last 90 days from a cron job:
+
+```sql
+DELETE FROM adt_property_events WHERE time_stamp < now() - interval '90 days';
+```
+
+For large tables, partitioning by `time_stamp` (`PARTITION BY RANGE`) and dropping old partitions is cheaper than `DELETE`. On TimescaleDB prefer `add_retention_policy` / `drop_chunks`.
+
+## Troubleshooting
+
+### No data appearing
+
+1. Confirm the route exists and uses `EventFormat: DataHistory` with the exact sink `Name`.
+2. Confirm the tables exist: `\dt public.adt_*`. If they do not, no event reached the sink.
+3. Check the events service logs for `Postgres` sink errors (connection refused, authentication failed, `CREATE` privilege denied).
+
+### permission denied for schema public
+
+PostgreSQL 15+ removed the implicit `CREATE` grant on `public`. Either grant it, or use a dedicated schema:
+
+```sql
+GRANT CREATE, USAGE ON SCHEMA public TO graph;
+-- or
+CREATE SCHEMA history AUTHORIZATION graph;
+```
+
+then set `Schema: "history"` in the sink configuration.
+
+### Hypertable not created
+
+The sink only calls `create_hypertable` when the `timescaledb` extension is installed. Check:
+
+```sql
+SELECT extname FROM pg_extension WHERE extname = 'timescaledb';
+SELECT * FROM timescaledb_information.hypertables;
+```
+
+If the extension is missing you will see an informational log line and the tables remain regular tables — everything except compression/retention policies keeps working. If the extension exists but the conversion failed, the log contains the TimescaleDB error; the usual causes are a table that already has data and a `create_hypertable` variant the server does not support (the sink tries the modern `by_range` form first and falls back to the classic time-column form).
+
+### Duplicate rows
+
+Events are retried by the resilient sink wrapper when a batch fails, so a partial failure (for example PostgreSQL restarting mid-batch) can re-deliver a small number of already-written events. History tables are treated as an append-only event log; deduplicate on `(time_stamp, id, key, value)` when a strict single-row-per-change guarantee is needed.
+
+### Slow inserts
+
+High ingest latency is almost always per-row inserts from a custom pipeline rather than the sink. If you write history yourself, use `COPY`; and make sure you are not adding extra indexes on `jsonb` columns.
+
+## Next Steps
+
+- [Event Routing](../concepts/event-routing) — all sinks, event formats, and routing patterns
+- [Data History with Azure Data Explorer](./data-history-kusto) — the Kusto equivalent of this guide
+- [Configuration Reference](../reference/configuration) — full `EventSinks` and `EventRoutes` reference
+- [Working with Telemetry](./working-with-telemetry) — ingest sensor data that feeds these history tables
