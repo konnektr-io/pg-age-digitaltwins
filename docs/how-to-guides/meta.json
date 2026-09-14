@@ -9,6 +9,8 @@
         "graph-explorer",
         "import-jobs",
         "working-with-telemetry",
-        "working-with-components"
+        "working-with-components",
+        "data-history-kusto",
+        "data-history-postgres"
     ]
 }

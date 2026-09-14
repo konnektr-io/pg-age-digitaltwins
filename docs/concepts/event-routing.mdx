@@ -64,6 +64,18 @@ Archive events to Azure Data Explorer or Microsoft Fabric Real-Time Intelligence
 
 See [Data History with Azure Data Explorer](/docs/graph/guides/data-history-kusto) for detailed guide.
 
+### PostgreSQL / TimescaleDB
+
+Archive events to PostgreSQL or TimescaleDB for time-series analytics, historical queries, and compliance using SQL you already run. History tables use snake_case names and native PostgreSQL types, and can live in the graph database itself or in a separate one.
+
+**Common use cases:**
+- Complete data history with temporal SQL queries
+- Reconstruct graph state at any point in time
+- Compliance and audit logging
+- TimescaleDB compression, retention policies, and continuous aggregates
+
+See [Data History with PostgreSQL / TimescaleDB](/docs/graph/guides/data-history-postgres) for detailed guide.
+
 ### MQTT
 
 Publish events to MQTT brokers for IoT platform integration and edge systems.
@@ -178,6 +190,17 @@ config:
             secretKeyRef:
               name: azure-sp-credentials
               key: tenantId
+
+    postgres:
+      - name: PostgresDataHistory
+        connectionString:
+          valueFrom:
+            secretKeyRef:
+              name: postgres-history
+              key: connectionString
+        # Optional: schema and table name overrides (defaults: public / adt_*_events)
+        # schema: public
+        # propertyEventsTable: adt_property_events
     
     mqtt:
       - name: MqttBroker1
@@ -230,6 +253,8 @@ config:
       eventFormat: EventNotification  # Real-time events
     - sinkName: AdxSink1
       eventFormat: DataHistory        # Historical archive
+    - sinkName: PostgresDataHistory
+      eventFormat: DataHistory        # SQL-queryable history
     - sinkName: MqttBroker1
       eventFormat: EventNotification
     - sinkName: WebhookEndpoint1
@@ -521,7 +546,7 @@ Archive complete timeline of all digital twin changes for:
 - **Root cause analysis** - Reconstruct system state during incidents
 - **Trend detection** - Identify patterns over time
 
-See [Data History with Azure Data Explorer](/docs/graph/guides/data-history-kusto) for complete guide with query examples.
+See [Data History with Azure Data Explorer](/docs/graph/guides/data-history-kusto) for complete guide with query examples, or [Data History with PostgreSQL / TimescaleDB](/docs/graph/guides/data-history-postgres) when your history lives in PostgreSQL.
 
 ### Compliance & Audit Trails
 
@@ -614,6 +639,7 @@ az kusto database principal-assignment list \
 ## Next Steps
 
 - **[Data History with Azure Data Explorer](../how-to-guides/data-history-kusto)** - Complete guide with temporal queries
+- **[Data History with PostgreSQL / TimescaleDB](../how-to-guides/data-history-postgres)** - SQL-queryable history with hypertables
 - **[Telemetry](telemetry)** - Send custom telemetry messages
 - **[Querying](querying.mdx)** - Query your graph effectively
 - **[Deployment Guide](../deployment-installation/hosted-konnektr)** - Deploy Konnektr Graph

@@ -362,6 +362,23 @@ Configured under `EventSinks:Kusto` as an array.
 | `Scope` | No | Event scope filter |
 | `EventTypeMappings` | No | Maps `SinkEventType` to custom tables |
 
+#### PostgreSQL / TimescaleDB
+
+Configured under `EventSinks:Postgres` as an array.
+
+| Key | Required | Default | Description |
+|-----|----------|---------|-------------|
+| `Name` | Yes | — | Sink name |
+| `ConnectionString` | Yes | — | Npgsql connection string (`Host=…;Port=…;Database=…;Username=…;Password=…`) |
+| `Schema` | No | `public` | Schema for the history tables (created if missing) |
+| `PropertyEventsTable` | No | `adt_property_events` | Table for property change events |
+| `TwinLifeCycleEventsTable` | No | `adt_twin_lifecycle_events` | Table for twin lifecycle events |
+| `RelationshipLifeCycleEventsTable` | No | `adt_relationship_lifecycle_events` | Table for relationship lifecycle events |
+| `TrackLastUpdatedBy` | No | Inherits from `Parameters:TrackLastUpdatedBy` | When true, adds an `updated_by` column to every history table |
+| `EventTypeMappings` | No | — | Maps `SinkEventType` to custom CloudEvent types |
+
+The sink creates its tables (and the schema, when configured) on first use and, when the `timescaledb` extension is present, converts them to hypertables partitioned on `time_stamp`. See the [PostgreSQL data history guide](../how-to-guides/data-history-postgres) for schema details and temporal query examples.
+
 ### Event Routes
 
 Configured under `EventRoutes` as an array. Routes map event types to sinks.
@@ -551,6 +568,14 @@ Standard ASP.NET Core logging configuration applies. Key namespaces for debuggin
         "TenantId": "tenant-id",
         "ClientId": "sp-client-id",
         "ClientSecret": "sp-client-secret"
+      }
+    ],
+    "Postgres": [
+      {
+        "Name": "PostgresDataHistory",
+        "ConnectionString": "Host=postgres;Port=5432;Database=history;Username=graph;Password=graph",
+        "Schema": "public",
+        "TrackLastUpdatedBy": true
       }
     ]
   },
