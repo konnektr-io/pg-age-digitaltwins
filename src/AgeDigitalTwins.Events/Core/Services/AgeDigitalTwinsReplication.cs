@@ -234,7 +234,13 @@ public class AgeDigitalTwinsReplication(
         IsHealthy = true;
         Interlocked.Exchange(ref _lastReplicationMessageAtTicks, DateTime.UtcNow.Ticks);
 
-        EventData? currentEvent = null;
+        // Per-transaction event accumulation, keyed by (table, entity id) in first-touch
+        // order. AGE versions emit multi-row writes in different intra-transaction orders
+        // (1.6.x interleaves INSERT/UPDATE per row; 1.8.0 emits all INSERTs before all
+        // UPDATEs), so messages for one entity must be merged by key — not by position —
+        // to reconstruct complete events (GH #108). Entries are enqueued at commit.
+        var transactionEvents = new Dictionary<(string TableName, string Id), EventData>();
+        var transactionEventOrder = new List<(string TableName, string Id)>();
         Activity? transactionActivity = null;
 
         // Watchdog: cancel the replication stream if no message (including server-initiated
@@ -294,6 +300,10 @@ public class AgeDigitalTwinsReplication(
                             ActivityKind.Consumer
                         );
                         transactionActivity?.SetTag("transaction.xid", beginMessage.TransactionXid);
+                        // A new transaction starts: drop any uncommitted accumulation
+                        // (e.g. from an aborted transaction that never committed).
+                        transactionEvents.Clear();
+                        transactionEventOrder.Clear();
                         continue;
                     }
                     else if (message is InsertMessage insertMessage)
@@ -322,25 +332,11 @@ public class AgeDigitalTwinsReplication(
                             newValue
                         );
 
-                        if (
-                            currentEvent != null
-                            && (
-                                currentEvent.Id != id
-                                || currentEvent.TableName != insertMessage.Relation.RelationName
-                            )
-                        )
-                        {
-                            _logger.LogDebug(
-                                "Entity transition detected in insert, enqueueing current event for {CurrentEntityId} and starting new event for {NewEntityId}",
-                                currentEvent.Id,
-                                id
-                            );
-                            // Enqueue the current event and start a new one
-                            EnqueueCurrentEventIfValid(currentEvent);
-                        }
-
-                        // Start a new event for the insert
-                        currentEvent = new EventData(
+                        // Merge into the transaction's per-entity event (an insert always
+                        // (re)starts the entity's event, mirroring the old positional logic
+                        // which overwrote the in-progress event on same-entity inserts).
+                        var insertKey = (insertMessage.Relation.RelationName, id);
+                        var currentEvent = new EventData(
                             id: id,
                             graphName: insertMessage.Relation.Namespace,
                             tableName: insertMessage.Relation.RelationName,
@@ -350,10 +346,15 @@ public class AgeDigitalTwinsReplication(
                             OldValue = [],
                             NewValue = newValue,
                         };
+                        transactionEvents[insertKey] = currentEvent;
+                        if (!transactionEventOrder.Contains(insertKey))
+                        {
+                            transactionEventOrder.Add(insertKey);
+                        }
 
                         if (
                             newValue?.ContainsKey("$dtId") == true
-                            || currentEvent.TableName == "Twin"
+                            || insertMessage.Relation.RelationName == "Twin"
                         )
                         {
                             currentEvent.EventType = EventType.TwinCreate;
@@ -394,32 +395,22 @@ public class AgeDigitalTwinsReplication(
                             newValue
                         );
 
-                        // Check if we're starting a new entity operation (and enqueue current event if needed)
+                        // Merge into the transaction's per-entity event so an update lands
+                        // on the same entry as its insert regardless of message order.
+                        var updateKey = (updateMessage.Relation.RelationName, newId);
                         if (
-                            currentEvent != null
-                            && (
-                                currentEvent.Id != newId
-                                || currentEvent.TableName != updateMessage.Relation.RelationName
-                            )
+                            !transactionEvents.TryGetValue(updateKey, out var currentEvent)
                         )
                         {
-                            _logger.LogDebug(
-                                "Entity transition detected in update, enqueueing current event for {CurrentEntityId} and starting new event for {NewEntityId}",
-                                currentEvent.Id,
-                                newId
+                            currentEvent = new EventData(
+                                id: newId,
+                                graphName: updateMessage.Relation.Namespace,
+                                tableName: updateMessage.Relation.RelationName,
+                                timestamp: updateMessage.ServerClock
                             );
-                            // Enqueue the current event and start a new one
-                            EnqueueCurrentEventIfValid(currentEvent);
-                            currentEvent = null;
+                            transactionEvents[updateKey] = currentEvent;
+                            transactionEventOrder.Add(updateKey);
                         }
-
-                        // If currentEvent is null, we need to create a new one
-                        currentEvent ??= new EventData(
-                            id: newId,
-                            graphName: updateMessage.Relation.Namespace,
-                            tableName: updateMessage.Relation.RelationName,
-                            timestamp: updateMessage.ServerClock
-                        );
 
                         currentEvent.OldValue ??= oldValue;
                         currentEvent.NewValue = newValue;
@@ -462,32 +453,20 @@ public class AgeDigitalTwinsReplication(
                             continue;
                         }
 
-                        // Check if we're starting a new entity operation (and enqueue current event if needed)
-                        if (
-                            currentEvent != null
-                            && (
-                                currentEvent.Id != oldId
-                                || currentEvent.TableName != deleteMessage.Relation.RelationName
-                            )
-                        )
+                        // Merge into the transaction's per-entity event so a delete lands
+                        // on the same entry as its insert/update regardless of order.
+                        var deleteKey = (deleteMessage.Relation.RelationName, oldId);
+                        if (!transactionEvents.TryGetValue(deleteKey, out var currentEvent))
                         {
-                            _logger.LogDebug(
-                                "Entity transition detected in delete, enqueueing current event for {CurrentEntityId} and starting new event for {OldEntityId}",
-                                currentEvent.Id,
-                                oldId
+                            currentEvent = new EventData(
+                                id: oldId,
+                                graphName: deleteMessage.Relation.Namespace,
+                                tableName: deleteMessage.Relation.RelationName,
+                                timestamp: deleteMessage.ServerClock
                             );
-                            // Enqueue the current event and start a new one
-                            EnqueueCurrentEventIfValid(currentEvent);
-                            currentEvent = null;
+                            transactionEvents[deleteKey] = currentEvent;
+                            transactionEventOrder.Add(deleteKey);
                         }
-
-                        // If currentEvent is null, we need to create a new one
-                        currentEvent ??= new EventData(
-                            id: oldId,
-                            graphName: deleteMessage.Relation.Namespace,
-                            tableName: deleteMessage.Relation.RelationName,
-                            timestamp: deleteMessage.ServerClock
-                        );
 
                         currentEvent.OldValue ??= oldValue;
 
@@ -508,16 +487,22 @@ public class AgeDigitalTwinsReplication(
                     }
                     else if (message is CommitMessage commitMessage)
                     {
-                        if (currentEvent != null)
+                        if (transactionEventOrder.Count > 0)
                         {
                             _logger.LogDebug(
-                                "Transaction commited, enqueueing current event for {CurrentEntityId}",
-                                currentEvent.Id
+                                "Transaction commited, enqueueing {EventCount} accumulated events",
+                                transactionEventOrder.Count
                             );
 
-                            // Enqueue the final event in this transaction
-                            EnqueueCurrentEventIfValid(currentEvent);
-                            currentEvent = null;
+                            // Enqueue every entity touched in this transaction, in
+                            // first-touch order. Each entry already merged all of its
+                            // messages, so intra-transaction write order no longer matters.
+                            foreach (var key in transactionEventOrder)
+                            {
+                                EnqueueCurrentEventIfValid(transactionEvents[key]);
+                            }
+                            transactionEvents.Clear();
+                            transactionEventOrder.Clear();
                         }
 
                         transactionActivity?.Stop();

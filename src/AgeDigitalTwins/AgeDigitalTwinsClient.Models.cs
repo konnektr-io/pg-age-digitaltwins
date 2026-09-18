@@ -600,7 +600,7 @@ RETURN COUNT(m) AS deletedCount";
                 throw new ModelNotFoundException($"Model with ID {modelId} not found");
             }
         }
-        catch (PostgresException ex) when (ex.Routine == "check_for_connected_edges")
+        catch (PostgresException ex) when (IsModelReferencesNotDeletedError(ex))
         {
             throw new ModelReferencesNotDeletedException();
         }
@@ -622,6 +622,23 @@ RETURN COUNT(m) AS deletedCount";
             throw;
         }
     }
+
+    /// <summary>
+    /// Detects the AGE "cannot delete a vertex that has edges" guard across AGE versions.
+    /// AGE 1.6.x raises it from <c>check_for_connected_edges</c>; AGE 1.8.0 moved the edge
+    /// lookup to an index scan and raises the same SqlState/message from
+    /// <c>process_edges_by_index</c> (GH #108). The SqlState/message match keeps newer
+    /// versions working while the routine-name match keeps older ones working.
+    /// </summary>
+    private static bool IsModelReferencesNotDeletedError(PostgresException ex) =>
+        ex.Routine == "check_for_connected_edges"
+        || (
+            ex.SqlState == "XX000" // internal_error
+            && ex.Message.Contains(
+                "Cannot delete a vertex that has edge(s)",
+                StringComparison.Ordinal
+            )
+        );
 
     /// <summary>
     /// Deletes all models asynchronously.
