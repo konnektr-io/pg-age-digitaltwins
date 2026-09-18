@@ -91,33 +91,25 @@ public static class GraphInitialization
                         RETURN false;
                     END IF;
 
-                    -- Try fast path: use precomputed descendants from model if available
-                    BEGIN
-                        SELECT ag_catalog.agtype_access_operator(m.properties,'""descendants""'::agtype)
-                        INTO model_descendants
-                        FROM {graphName}.""Model"" m
-                        WHERE ag_catalog.agtype_access_operator(m.properties,'""id""'::agtype) = model_id;
-                        
-                        IF model_descendants IS NOT NULL THEN
-                            -- Model has precomputed descendants array, use agtype containment check
-                            -- Check if twin_model_id is in the descendants array using agtype operators
-                            RETURN model_descendants @> ag_catalog.agtype_build_list(twin_model_id);
-                        END IF;
-                    EXCEPTION WHEN others THEN
-                        -- Descendants field missing or error, fall through to legacy traversal
-                    END;
+                    -- Inheritance match: use the precomputed descendants array of the requested
+                    -- model. Models without one (leaf models, unknown ids, or models written by
+                    -- older versions of this library) have no inheritance relation to report.
+                    --
+                    -- NOTE: this deliberately does NOT fall back to a per-twin inheritance
+                    -- traversal. The former fallback ran a nested Cypher query against the Model
+                    -- label for every candidate twin, which made an is_of_model scan cost
+                    -- O(twins x models) and appear to hang on graphs with twins that match
+                    -- nothing (see issue #101).
+                    SELECT ag_catalog.agtype_access_operator(m.properties,'""descendants""'::agtype)
+                    INTO model_descendants
+                    FROM {graphName}.""Model"" m
+                    WHERE ag_catalog.agtype_access_operator(m.properties,'""id""'::agtype) = model_id;
 
-                    -- Fallback: legacy inheritance traversal for backward compatibility
-                    -- (models without descendants field)
-                    -- Check inheritance via bases array
-                    EXECUTE format('SELECT m FROM ag_catalog.cypher(''{graphName}'', $$
-                        MATCH (m:Model)
-                        WHERE %s IN m.bases
-                        RETURN collect(m.id)
-                    $$) AS (m agtype)', model_id)
-                    INTO model_descendants;
-                    
-                    -- Check if twin's model ID is in the collected models array
+                    IF model_descendants IS NULL THEN
+                        RETURN false;
+                    END IF;
+
+                    -- Model has precomputed descendants: check membership via agtype containment
                     RETURN model_descendants @> ag_catalog.agtype_build_list(twin_model_id);
                 END;
                 $function$"
