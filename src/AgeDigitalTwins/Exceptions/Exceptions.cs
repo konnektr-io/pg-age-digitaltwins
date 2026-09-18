@@ -113,6 +113,15 @@ public class ValidationFailedException : AgeDigitalTwinsException
     }
 }
 
+public class PgVectorNotAvailableException : AgeDigitalTwinsException
+{
+    public PgVectorNotAvailableException(string message)
+        : base(message)
+    {
+        StatusCode = HttpStatusCode.ServiceUnavailable;
+    }
+}
+
 public class InvalidAdtQueryException : AgeDigitalTwinsException
 {
     public InvalidAdtQueryException(string message)

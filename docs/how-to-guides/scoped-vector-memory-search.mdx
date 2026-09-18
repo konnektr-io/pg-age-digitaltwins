@@ -1,0 +1,169 @@
+---
+title: Scoped vector memory search
+description: Run scoped pgvector similarity search over digital twins with predicates applied before ranking.
+---
+
+# Scoped vector memory search
+
+Konnektr Graph can store embeddings as twin properties and run nearest-neighbour
+search over them with `pgvector`. The generic `POST /digitaltwins/search` endpoint
+ranks across every twin that carries an embedding property. When a caller must only
+ever see a subset of records — a memory scope, a workspace, a chat session — that
+endpoint is not sufficient: filtering after ranking is both wasteful and unsafe,
+because the caller receives an unfiltered result set it would have to authorize
+locally.
+
+`POST /digitaltwins/memory-search` closes that gap. It is a dedicated, scoped API:
+
+- every scope predicate is applied **in the database, before ranking and `LIMIT`**;
+- the caller never receives records outside its filter;
+- the query vector, limits, scope values and dimensions are validated up front;
+- a missing or unusable pgvector installation fails loudly with a capability error
+  instead of degrading silently.
+
+## Scope attributes are twin properties
+
+The API is deliberately generic: it does not know about any particular domain model.
+Scope attributes (a tenant, workspace, environment, owner or visibility key) are
+**plain twin properties that you manage**. Store them on the twin and pass them back
+as `propertyFilters` on every search.
+
+```json
+{
+  "$dtId": "memory-42",
+  "$metadata": { "$model": "dtmi:example:MemoryRecord;1" },
+  "embedding": [0.11, -0.02, 0.58],
+  "scopeKey": "workspace-a",
+  "ownerId": "user-7",
+  "status": "active",
+  "content": "…"
+}
+```
+
+With a model like:
+
+```json
+{
+  "@context": "dtmi:dtdl:context;3",
+  "@id": "dtmi:example:MemoryRecord;1",
+  "@type": "Interface",
+  "contents": [
+    { "@type": "Property", "name": "embedding", "schema": { "@type": "Array", "elementSchema": "double" } },
+    { "@type": "Property", "name": "scopeKey", "schema": "string" },
+    { "@type": "Property", "name": "ownerId", "schema": "string" },
+    { "@type": "Property", "name": "status", "schema": "string" },
+    { "@type": "Property", "name": "content", "schema": "string" }
+  ]
+}
+```
+
+## Prerequisites
+
+Memory search requires the **pgvector** extension. The deployment image must ship it —
+use a pgvector-enabled image (the `age-pgvector` image family) or install it yourself:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+```
+
+Check availability at runtime before offering search in a UI:
+
+```http
+GET /digitaltwins/memory-search/capability
+```
+
+```json
+{ "vectorSearchAvailable": true }
+```
+
+Search and index operations answer `503 Service Unavailable` with an explanatory
+`detail` when pgvector is absent, so a missing extension can never be mistaken for
+"no results".
+
+## Create the index
+
+For non-trivial data sizes create an HNSW index on the embedding property. The call is
+idempotent, and the dimension must match the stored vectors:
+
+```http
+POST /digitaltwins/memory-search/index
+Content-Type: application/json
+
+{ "embeddingProperty": "embedding", "dimension": 1536, "m": 16, "efConstruction": 64 }
+```
+
+```json
+{ "indexName": "twin_embedding_hnsw_idx", "dimension": 1536 }
+```
+
+The index is built on the twin's embedding property with `vector_l2_ops` (L2 distance).
+`m` and `efConstruction` are optional HNSW tuning parameters; omit them to use server
+defaults. Re-running the call returns the same index name, so it is safe to call on
+startup or from a migration step.
+
+Once an index exists, every search validates the query vector against the indexed
+dimension and rejects mismatches with a `400` rather than returning misleading ranks.
+
+## Search
+
+```http
+POST /digitaltwins/memory-search
+Content-Type: application/json
+
+{
+  "vector": [0.11, -0.02, 0.58],
+  "limit": 5,
+  "modelIds": ["dtmi:example:MemoryRecord;1"],
+  "propertyFilters": { "scopeKey": "workspace-a", "status": "active" },
+  "relatedTwinId": "session-9",
+  "expectedDimension": 3,
+  "excerptLength": 500
+}
+```
+
+```json
+[
+  {
+    "id": "memory-42",
+    "modelId": "dtmi:example:MemoryRecord;1",
+    "distance": 0.013,
+    "excerpt": "{\"scopeKey\":\"workspace-a\",\"ownerId\":\"user-7\",\"status\":\"active\",\"content\":\"…\"}",
+    "lastUpdatedOn": "2026-09-18T08:12:44+00:00"
+  }
+]
+```
+
+| Field | Meaning |
+| --- | --- |
+| `vector` | Query embedding. Required. |
+| `embeddingProperty` | Twin property holding the stored embedding. Defaults to `embedding`. |
+| `limit` | Maximum ranked records, 1–100 (default 10). |
+| `modelIds` | Allow-list of twin models (`$metadata.$model`). |
+| `propertyFilters` | Equality predicates over twin properties — your scope attributes. |
+| `relatedTwinId` | Restrict to twins related (either direction) to this twin. |
+| `expectedDimension` | Optional assertion on the query-vector length. |
+| `excerptLength` | Excerpt size in characters, 1–4000 (default 500). |
+
+Results are ordered by ascending L2 distance. The embedding itself is never echoed
+back; the excerpt contains the remaining properties, bounded by `excerptLength`. Twins
+without a stored embedding are excluded and never consume `LIMIT` slots.
+
+## What this API does not do
+
+Memory search is a **scoped retrieval primitive, not an authorization system**.
+
+- **Ownership and access control stay in the caller.** This API applies equality
+  filters; it does not decide who may see a record. Keep authorization in the service
+  that owns the data, and pass the resulting scope as `propertyFilters`. Granular
+  per-twin permissions do not exist yet — until they do, owner-level matching cannot be
+  delegated to the graph.
+- **Cross-graph fan-out stays outside.** One API instance serves one graph. Querying a
+  per-tenant graph together with a shared admin graph is the caller's (or the
+  operator's) concern, not this endpoint's.
+- **Embedding generation is out of scope.** Embeddings are stored as twin properties;
+  producing them belongs to the embedding pipeline.
+
+## Compatibility
+
+The existing generic hybrid search (`POST /digitaltwins/search`) is unchanged, and both
+endpoints can be used side by side.
