@@ -38,6 +38,16 @@ public static class RelationshipsEndpoints
                         .AsPages(continuationToken, maxItemsPerPage, cancellationToken)
                         .FirstAsync(cancellationToken);
 
+                    // Strip $metadata from relationship responses for ADT compatibility
+                    foreach (var item in page.Value)
+                    {
+                        if (item != null)
+                        {
+                            item.Metadata = null;
+                            item.Properties.Remove(DigitalTwinsJsonPropertyNames.DigitalTwinMetadata);
+                        }
+                    }
+
                     return Results.Json(
                         new PageWithNextLink<BasicRelationship?>(page, httpContext.Request)
                     );
@@ -73,6 +83,16 @@ public static class RelationshipsEndpoints
                         )
                         .AsPages(continuationToken, maxItemsPerPage, cancellationToken)
                         .FirstAsync(cancellationToken);
+
+                    // Strip $metadata from relationship responses for ADT compatibility
+                    foreach (var item in page.Value)
+                    {
+                        if (item != null)
+                        {
+                            item.Metadata = null;
+                            item.Properties.Remove(DigitalTwinsJsonPropertyNames.DigitalTwinMetadata);
+                        }
+                    }
 
                     return Results.Json(
                         new PageWithNextLink<BasicRelationship?>(page, httpContext.Request)
@@ -122,6 +142,7 @@ public static class RelationshipsEndpoints
                 ) =>
                 {
                     string? etag = RequestHelper.ParseETag(httpContext, "If-None-Match");
+                    string? userId = RequestHelper.ParseUserId(httpContext);
                     if (string.IsNullOrEmpty(relationship.SourceId))
                     {
                         relationship.SourceId = id;
@@ -135,6 +156,7 @@ public static class RelationshipsEndpoints
                         relationshipId,
                         relationship,
                         etag,
+                        userId,
                         cancellationToken
                     );
                 }
@@ -159,11 +181,13 @@ public static class RelationshipsEndpoints
                 ) =>
                 {
                     string? etag = RequestHelper.ParseETag(httpContext, "If-Match");
+                    string? userId = RequestHelper.ParseUserId(httpContext);
                     await client.UpdateRelationshipAsync(
                         id,
                         relationshipId,
                         patch,
                         etag,
+                        userId,
                         cancellationToken
                     );
                     return Results.NoContent();
@@ -216,7 +240,12 @@ public static class RelationshipsEndpoints
             .RequirePermission(ResourceType.Relationships, PermissionAction.Write)
             .RequireRateLimiting("HeavyOperations")
             .WithName("CreateOrReplaceRelationshipsBatch")
-            .WithSummary("Creates or replaces multiple relationships in a single batch operation.")
+            .WithSummary(
+                "Creates or replaces relationships in a batch operation. Payloads larger than "
+                + "100 items are split internally into chunks; batches above the configurable "
+                + "ceiling (Parameters:MaxBatchSize, default 2000) are rejected with a 400. "
+                + "Larger imports must use an import job."
+            )
             .Produces<BatchRelationshipResult>();
 
         return app;

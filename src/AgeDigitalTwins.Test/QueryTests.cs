@@ -153,6 +153,53 @@ public class QueryTests : TestBase
     }
 
     [Fact]
+    public async Task QueryAsync_MetadataModelProjection_ReturnsAllTwinModelIds()
+    {
+        await IntializeAsync();
+        Dictionary<string, string> twins =
+            new()
+            {
+                {
+                    "room1",
+                    @"{""$dtId"": ""room1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""Room 1""}"
+                },
+                {
+                    "room2",
+                    @"{""$dtId"": ""room2"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:room;1""}, ""name"": ""Room 2""}"
+                },
+                {
+                    "sensor1",
+                    @"{""$dtId"": ""sensor1"", ""$metadata"": {""$model"": ""dtmi:com:adt:dtsample:tempsensor;1""}, ""name"": ""Sensor 1""}"
+                },
+            };
+
+        foreach (var twin in twins)
+        {
+            await Client.CreateOrReplaceDigitalTwinAsync(twin.Key, twin.Value);
+        }
+
+        // The exact query from the bug report. Before the fix this failed with
+        // "42P02: parameters argument is missing from cypher() function call".
+        var modelIds = new List<string?>();
+        await foreach (
+            var line in Client.QueryAsync<JsonDocument>("SELECT $metadata.$model FROM DIGITALTWINS")
+        )
+        {
+            Assert.NotNull(line);
+            var root = line.RootElement;
+            modelIds.Add(
+                root.ValueKind == JsonValueKind.Object && root.EnumerateObject().Any()
+                    ? root.EnumerateObject().First().Value.GetString()
+                    : root.GetString()
+            );
+        }
+
+        Assert.Equal(3, modelIds.Count);
+        Assert.Contains("dtmi:com:adt:dtsample:room;1", modelIds);
+        Assert.Contains("dtmi:com:adt:dtsample:tempsensor;1", modelIds);
+    }
+
+    [Fact]
     public async Task QueryAsync_SimpleAdtQueryWithUnderscore_ReturnsTwins()
     {
         await IntializeAsync();
@@ -1132,7 +1179,7 @@ public class QueryTests : TestBase
         }
 
         // Bulk create twins (in batches to avoid timeouts)
-        const int batchSize = 100; // MaxBatchSize for CreateOrReplaceDigitalTwinsAsync
+        const int batchSize = 100; // Internal chunk size for CreateOrReplaceDigitalTwinsAsync
         var twinJsonObjects = twins
             .Values.Select(json => JsonNode.Parse(json)?.AsObject())
             .Where(obj => obj != null)
@@ -1672,7 +1719,7 @@ RETURN t";
         }
 
         // Bulk create twins (in batches to avoid timeouts)
-        const int batchSize = 100; // MaxBatchSize for CreateOrReplaceDigitalTwinsAsync
+        const int batchSize = 100; // Internal chunk size for CreateOrReplaceDigitalTwinsAsync
         var twinJsonObjects = twins
             .Values.Select(json => JsonNode.Parse(json)?.AsObject())
             .Where(obj => obj != null)

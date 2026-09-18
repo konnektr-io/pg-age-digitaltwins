@@ -21,6 +21,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           path: source
+          persist-credentials: false
 
       - name: Checkout docs repository
         uses: actions/checkout@v6
@@ -28,6 +29,7 @@ jobs:
           repository: konnektr-io/docs
           token: ${{ secrets.GITHUB_TOKEN }}
           path: docs-repo
+          persist-credentials: false
 
       - name: Remove existing graph docs
         run: |

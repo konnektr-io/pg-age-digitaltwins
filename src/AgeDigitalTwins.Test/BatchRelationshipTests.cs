@@ -1,4 +1,5 @@
 using System.Text.Json;
+using AgeDigitalTwins.Exceptions;
 using Xunit.Abstractions;
 
 namespace AgeDigitalTwins.Test;
@@ -128,11 +129,45 @@ public class BatchRelationshipTests : TestBase
     }
 
     [Fact]
-    public async Task CreateOrReplaceRelationshipsAsync_WithOversizedBatch_ShouldThrowException()
+    public async Task CreateOrReplaceRelationshipsAsync_WithBatchLargerThanChunkSize_ShouldChunkAndSucceed()
+    {
+        // Arrange - Load required models and create source + target twins
+        string[] models = [SampleData.DtdlRoom, SampleData.DtdlTemperatureSensor];
+        await Client.CreateModelsAsync(models);
+        await Client.CreateOrReplaceDigitalTwinAsync("room1", SampleData.TwinRoom1);
+        await Client.CreateOrReplaceDigitalTwinAsync("sensor1", SampleData.TwinTemperatureSensor1);
+
+        // Create 101 relationships (exceeds the internal chunk size of 100)
+        var relationships = new List<string>();
+        for (int i = 0; i < 101; i++)
+        {
+            relationships.Add(
+                $@"{{""$relationshipId"": ""rel{i}"", ""$sourceId"": ""room1"", ""$relationshipName"": ""rel_has_sensors"", ""$targetId"": ""sensor1""}}"
+            );
+        }
+
+        // Act
+        var result = await Client.CreateOrReplaceRelationshipsAsync(relationships);
+
+        // Assert - all relationships succeed across the internally chunked batches
+        Assert.NotNull(result);
+        Assert.Equal(101, result.SuccessCount);
+        Assert.Equal(0, result.FailureCount);
+        Assert.False(result.HasFailures);
+        Assert.Equal(101, result.Results.Count);
+        Assert.All(result.Results, r => Assert.True(r.IsSuccess));
+
+        _output.WriteLine(
+            $"Chunked relationship batch operation completed successfully: {result.SuccessCount} successes"
+        );
+    }
+
+    [Fact]
+    public async Task CreateOrReplaceRelationshipsAsync_WithBatchExceedingMaxBatchSize_ShouldThrow()
     {
         // Arrange
         var relationships = new List<string>();
-        for (int i = 0; i < 101; i++) // Exceed the limit of 100
+        for (int i = 0; i < 2001; i++) // Exceed the hard ceiling of 2000
         {
             relationships.Add(
                 $@"{{""$relationshipId"": ""rel{i}"", ""$sourceId"": ""source{i}"", ""$relationshipName"": ""rel_has_sensors"", ""$targetId"": ""target{i}""}}"
@@ -140,11 +175,12 @@ public class BatchRelationshipTests : TestBase
         }
 
         // Act & Assert
-        var exception = await Assert.ThrowsAsync<System.ArgumentException>(
+        var exception = await Assert.ThrowsAsync<DigitalTwinBatchLimitExceededException>(
             () => Client.CreateOrReplaceRelationshipsAsync(relationships)
         );
 
-        Assert.Contains("Cannot process more than 100 relationships", exception.Message);
+        Assert.Contains("Batch size (2001) exceeds maximum allowed size (2000)", exception.Message);
+        Assert.Contains("import job", exception.Message);
         _output.WriteLine($"Expected exception thrown: {exception.Message}");
     }
 }

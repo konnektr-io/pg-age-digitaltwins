@@ -122,14 +122,19 @@ builder.Services.AddSingleton(sp =>
         "Parameters:DefaultCheckpointInterval",
         50
     );
+    int maxBatchSize = builder.Configuration.GetValue("Parameters:MaxBatchSize", 2000);
+    int batchChunkSize = builder.Configuration.GetValue("Parameters:BatchChunkSize", 100);
     var options = new AgeDigitalTwinsClientOptions
         {
             GraphName = graphName,
             ModelCacheExpiration = TimeSpan.FromSeconds(modelCacheExpiration),
             DefaultBatchSize = defaultBatchSize,
             DefaultCheckpointInterval = defaultCheckpointInterval,
+            MaxBatchSize = maxBatchSize,
+            BatchChunkSize = batchChunkSize,
             TrackLastUpdatedBy = builder.Configuration.GetValue("Parameters:TrackLastUpdatedBy", false),
             ReturnTwinLevelLastUpdatedBy = builder.Configuration.GetValue("Parameters:ReturnTwinLevelLastUpdatedBy", true),
+            ReturnRelationshipMetadata = builder.Configuration.GetValue("Parameters:ReturnRelationshipMetadata", false),
         };
         var client = new AgeDigitalTwinsClient(dataSource, options);
 

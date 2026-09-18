@@ -20,9 +20,11 @@ public class TrackLastUpdatedByAppHostForHttp : DistributedApplicationFactory
         Environment.SetEnvironmentVariable("Parameters__TrackLastUpdatedBy", "true");
         Environment.SetEnvironmentVariable("Parameters__UserIdHeaderName", "X-User-Id");
         Environment.SetEnvironmentVariable("Parameters__ReturnTwinLevelLastUpdatedBy", "true");
+        Environment.SetEnvironmentVariable("Parameters__ReturnRelationshipMetadata", "true");
         applicationBuilder.Configuration["Parameters:TrackLastUpdatedBy"] = "true";
         applicationBuilder.Configuration["Parameters:UserIdHeaderName"] = "X-User-Id";
         applicationBuilder.Configuration["Parameters:ReturnTwinLevelLastUpdatedBy"] = "true";
+        applicationBuilder.Configuration["Parameters:ReturnRelationshipMetadata"] = "true";
 
         applicationBuilder.Services.ConfigureHttpClientDefaults(clientBuilder =>
         {
@@ -55,6 +57,7 @@ public class DigitalTwinsTrackLastUpdatedByIntegrationTests : IAsyncLifetime
         Environment.SetEnvironmentVariable("Parameters__TrackLastUpdatedBy", "true");
         Environment.SetEnvironmentVariable("Parameters__UserIdHeaderName", "X-User-Id");
         Environment.SetEnvironmentVariable("Parameters__ReturnTwinLevelLastUpdatedBy", "true");
+        Environment.SetEnvironmentVariable("Parameters__ReturnRelationshipMetadata", "true");
         _app = new TrackLastUpdatedByAppHostForHttp();
         await _app.StartAsync();
         _httpClient = _app.CreateHttpClient("apiservice");
@@ -320,9 +323,11 @@ public class TrackLastUpdatedByNoReturnAppHost : DistributedApplicationFactory
         Environment.SetEnvironmentVariable("Parameters__TrackLastUpdatedBy", "true");
         Environment.SetEnvironmentVariable("Parameters__UserIdHeaderName", "X-User-Id");
         Environment.SetEnvironmentVariable("Parameters__ReturnTwinLevelLastUpdatedBy", "false");
+        Environment.SetEnvironmentVariable("Parameters__ReturnRelationshipMetadata", "true");
         applicationBuilder.Configuration["Parameters:TrackLastUpdatedBy"] = "true";
         applicationBuilder.Configuration["Parameters:UserIdHeaderName"] = "X-User-Id";
         applicationBuilder.Configuration["Parameters:ReturnTwinLevelLastUpdatedBy"] = "false";
+        applicationBuilder.Configuration["Parameters:ReturnRelationshipMetadata"] = "true";
 
         applicationBuilder.Services.ConfigureHttpClientDefaults(clientBuilder =>
         {
@@ -350,6 +355,7 @@ public class DigitalTwinsTrackLastUpdatedByStrippedIntegrationTests : IAsyncLife
         Environment.SetEnvironmentVariable("Parameters__TrackLastUpdatedBy", "true");
         Environment.SetEnvironmentVariable("Parameters__UserIdHeaderName", "X-User-Id");
         Environment.SetEnvironmentVariable("Parameters__ReturnTwinLevelLastUpdatedBy", "false");
+        Environment.SetEnvironmentVariable("Parameters__ReturnRelationshipMetadata", "true");
         _app = new TrackLastUpdatedByNoReturnAppHost();
         await _app.StartAsync();
         _httpClient = _app.CreateHttpClient("apiservice");
@@ -518,8 +524,200 @@ public class DigitalTwinsTrackLastUpdatedByStrippedIntegrationTests : IAsyncLife
             "$lastUpdateTime should remain in nested twin S metadata"
         );
         Assert.True(
+            sMeta.TryGetProperty("$lastUpdateTime", out _),
+            "$lastUpdateTime should remain in nested twin S metadata"
+        );
+        Assert.True(
             sMeta.TryGetProperty("temperature", out _),
             "per-property metadata should remain in nested twin S"
         );
+    }
+
+    private HttpRequestMessage CreatePutRelationshipRequest(string sourceId, string relationshipId, string body)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Put, $"/digitaltwins/{sourceId}/relationships/{relationshipId}")
+        {
+            Content = new StringContent(body, Encoding.UTF8, "application/json"),
+        };
+        request.Headers.Add("X-User-Id", TestUserId);
+        return request;
+    }
+
+    private HttpRequestMessage CreateGetRelationshipRequest(string sourceId, string relationshipId)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get, $"/digitaltwins/{sourceId}/relationships/{relationshipId}");
+        request.Headers.Add("X-User-Id", TestUserId);
+        return request;
+    }
+
+    [Fact]
+    public async Task CreateRelationship_WithXUserIdHeader_ResponseHasLastUpdatedBy()
+    {
+        // Arrange - create source and target twins first
+        var sourceJson = $$"""
+            {
+                "$dtId": "tlby-rel-create-src",
+                "$metadata": { "$model": "dtmi:com:adt:dtsample:room;1" },
+                "name": "Source Room",
+                "temperature": 22.0
+            }
+            """;
+        var sourcePut = await _httpClient!.SendAsync(CreatePutRequest("tlby-rel-create-src", sourceJson));
+        sourcePut.EnsureSuccessStatusCode();
+
+        var targetJson = $$"""
+            {
+                "$dtId": "tlby-rel-create-tgt",
+                "$metadata": { "$model": "dtmi:com:adt:dtsample:tempsensor;1" },
+                "temperature": 25.0
+            }
+            """;
+        var targetPut = await _httpClient!.SendAsync(CreatePutRequest("tlby-rel-create-tgt", targetJson));
+        targetPut.EnsureSuccessStatusCode();
+
+        var relBody = new JsonObject
+        {
+            ["$targetId"] = "tlby-rel-create-tgt",
+            ["$relationshipName"] = "rel_has_sensors",
+        };
+
+        // Act
+        var relPut = await _httpClient!.SendAsync(
+            CreatePutRelationshipRequest("tlby-rel-create-src", "rel-create-test", relBody.ToJsonString())
+        );
+        var content = await relPut.Content.ReadAsStringAsync();
+        Assert.Equal(HttpStatusCode.OK, relPut.StatusCode);
+
+        var root = JsonDocument.Parse(content).RootElement;
+
+        Assert.True(root.TryGetProperty("$metadata", out JsonElement metadata),
+            "$metadata should exist on relationship");
+
+        Assert.True(
+            metadata.TryGetProperty("$lastUpdatedBy", out JsonElement lastUpdatedBy),
+            "$lastUpdatedBy should be inside relationship $metadata"
+        );
+        Assert.Equal(TestUserId, lastUpdatedBy.GetString());
+    }
+
+    [Fact]
+    public async Task GetRelationship_AfterCreateWithUserId_LastUpdatedByInMetadata()
+    {
+        // Arrange
+        var sourceJson = $$"""
+            {
+                "$dtId": "tlby-rel-get-src",
+                "$metadata": { "$model": "dtmi:com:adt:dtsample:room;1" },
+                "name": "Source Room",
+                "temperature": 22.0
+            }
+            """;
+        var sourcePut = await _httpClient!.SendAsync(CreatePutRequest("tlby-rel-get-src", sourceJson));
+        sourcePut.EnsureSuccessStatusCode();
+
+        var targetJson = $$"""
+            {
+                "$dtId": "tlby-rel-get-tgt",
+                "$metadata": { "$model": "dtmi:com:adt:dtsample:tempsensor;1" },
+                "temperature": 25.0
+            }
+            """;
+        var targetPut = await _httpClient!.SendAsync(CreatePutRequest("tlby-rel-get-tgt", targetJson));
+        targetPut.EnsureSuccessStatusCode();
+
+        var relBody = new JsonObject
+        {
+            ["$targetId"] = "tlby-rel-get-tgt",
+            ["$relationshipName"] = "rel_has_sensors",
+        };
+
+        var relPut = await _httpClient!.SendAsync(
+            CreatePutRelationshipRequest("tlby-rel-get-src", "rel-get-test", relBody.ToJsonString())
+        );
+        relPut.EnsureSuccessStatusCode();
+
+        // Act
+        var getResponse = await _httpClient!.SendAsync(
+            CreateGetRelationshipRequest("tlby-rel-get-src", "rel-get-test")
+        );
+        var content = await getResponse.Content.ReadAsStringAsync();
+        Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
+
+        var root = JsonDocument.Parse(content).RootElement;
+
+        Assert.True(root.TryGetProperty("$metadata", out JsonElement metadata),
+            "$metadata should exist on relationship");
+
+        Assert.True(
+            metadata.TryGetProperty("$lastUpdatedBy", out JsonElement lastUpdatedBy),
+            "$lastUpdatedBy should be inside relationship $metadata"
+        );
+        Assert.Equal(TestUserId, lastUpdatedBy.GetString());
+    }
+
+    [Fact]
+    public async Task PatchRelationship_LastUpdatedByStillPresent()
+    {
+        // Arrange
+        var sourceJson = $$"""
+            {
+                "$dtId": "tlby-rel-patch-src",
+                "$metadata": { "$model": "dtmi:com:adt:dtsample:room;1" },
+                "name": "Source Room",
+                "temperature": 22.0
+            }
+            """;
+        var sourcePut = await _httpClient!.SendAsync(CreatePutRequest("tlby-rel-patch-src", sourceJson));
+        sourcePut.EnsureSuccessStatusCode();
+
+        var targetJson = $$"""
+            {
+                "$dtId": "tlby-rel-patch-tgt",
+                "$metadata": { "$model": "dtmi:com:adt:dtsample:tempsensor;1" },
+                "temperature": 25.0
+            }
+            """;
+        var targetPut = await _httpClient!.SendAsync(CreatePutRequest("tlby-rel-patch-tgt", targetJson));
+        targetPut.EnsureSuccessStatusCode();
+
+        var relBody = new JsonObject
+        {
+            ["$targetId"] = "tlby-rel-patch-tgt",
+            ["$relationshipName"] = "rel_has_sensors",
+        };
+
+        var relPut = await _httpClient!.SendAsync(
+            CreatePutRelationshipRequest("tlby-rel-patch-src", "rel-patch-test", relBody.ToJsonString())
+        );
+        relPut.EnsureSuccessStatusCode();
+
+        // Act - patch the relationship
+        var patchBody = """[{ "op": "add", "path": "/temperature", "value": 23.5 }]""";
+        var patchRequest = new HttpRequestMessage(HttpMethod.Patch,
+            "/digitaltwins/tlby-rel-patch-src/relationships/rel-patch-test")
+        {
+            Content = new StringContent(patchBody, Encoding.UTF8, "application/json-patch+json"),
+        };
+        patchRequest.Headers.Add("X-User-Id", TestUserId);
+        var patchResponse = await _httpClient!.SendAsync(patchRequest);
+        Assert.Equal(HttpStatusCode.NoContent, patchResponse.StatusCode);
+
+        // Assert - verify $lastUpdatedBy is still present
+        var getResponse = await _httpClient!.SendAsync(
+            CreateGetRelationshipRequest("tlby-rel-patch-src", "rel-patch-test")
+        );
+        var content = await getResponse.Content.ReadAsStringAsync();
+        Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
+
+        var root = JsonDocument.Parse(content).RootElement;
+
+        Assert.True(root.TryGetProperty("$metadata", out JsonElement metadata),
+            "$metadata should exist on relationship after patch");
+
+        Assert.True(
+            metadata.TryGetProperty("$lastUpdatedBy", out JsonElement lastUpdatedBy),
+            "$lastUpdatedBy should be inside relationship $metadata after patch"
+        );
+        Assert.Equal(TestUserId, lastUpdatedBy.GetString());
     }
 }

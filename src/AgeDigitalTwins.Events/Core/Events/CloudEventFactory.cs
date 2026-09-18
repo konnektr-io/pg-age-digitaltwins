@@ -463,6 +463,15 @@ public static class CloudEventFactory
                     eventData.NewValue?[DigitalTwinsJsonPropertyNames.RelationshipTargetId]?.ToString()
                     ?? eventData.OldValue?[DigitalTwinsJsonPropertyNames.RelationshipTargetId]?.ToString(),
             };
+        if (trackLastUpdatedBy)
+        {
+            var lastUpdatedBy = eventData.NewValue?[DigitalTwinsJsonPropertyNames.DigitalTwinMetadata]?[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy]?.ToString()
+                ?? eventData.OldValue?[DigitalTwinsJsonPropertyNames.DigitalTwinMetadata]?[DigitalTwinsJsonPropertyNames.MetadataLastUpdatedBy]?.ToString();
+            if (lastUpdatedBy != null)
+            {
+                body["updatedBy"] = lastUpdatedBy;
+            }
+        }
         var type = typeMapping.TryGetValue(SinkEventType.RelationshipLifecycle, out var t)
             ? t
             : DefaultDataHistoryTypeMapping[SinkEventType.RelationshipLifecycle];
@@ -640,6 +649,25 @@ public static class CloudEventFactory
             if (lastUpdatedByValue != null)
             {
                 body["updatedBy"] = lastUpdatedByValue;
+            }
+            else if (eventData.NewValue != null)
+            {
+                // Fallback: read lastUpdatedBy directly from NewValue's $metadata.
+                // The JSON Patch only contains a lastUpdatedBy operation when the value
+                // actually changed. If the same user updates the same property twice, the
+                // userId is identical, so it won't appear in the patch — but we still want
+                // to report it in the property event.
+                var propertyName = metadataKeyPath.TrimEnd('/').Split('/').Last();
+                if (
+                    eventData.NewValue.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.DigitalTwinMetadata, out var metaNode)
+                    && metaNode is JsonObject metadata
+                    && metadata.TryGetPropertyValue(propertyName, out var propMetaNode)
+                    && propMetaNode is JsonObject propertyMetadata
+                    && propertyMetadata.TryGetPropertyValue(DigitalTwinsJsonPropertyNames.MetadataPropertyLastUpdatedBy, out var fallbackVal)
+                )
+                {
+                    body["updatedBy"] = fallbackVal?.DeepClone();
+                }
             }
         }
 

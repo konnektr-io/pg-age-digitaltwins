@@ -31,6 +31,7 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
 
     private readonly bool _trackLastUpdatedBy;
     private readonly bool _returnTwinLevelLastUpdatedBy;
+    private readonly bool _returnRelationshipMetadata;
 
     private static readonly ActivitySource ActivitySource = new("AgeDigitalTwins.SDK", "1.0.0");
 
@@ -38,6 +39,19 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
     /// Gets the default batch size for import operations.
     /// </summary>
     public int DefaultBatchSize { get; }
+
+    /// <summary>
+    /// Gets the maximum number of items accepted by a single batch
+    /// create/replace call. Batches larger than this are rejected with a
+    /// <see cref="DigitalTwinBatchLimitExceededException"/> (400).
+    /// </summary>
+    public int MaxBatchSize { get; }
+
+    /// <summary>
+    /// Gets the internal chunk size used to split oversized batch
+    /// create/replace calls before they are written to the database.
+    /// </summary>
+    public int BatchChunkSize { get; }
 
     /// <summary>
     /// Gets the default checkpoint interval for import operations.
@@ -68,9 +82,11 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
         DefaultBatchSize = options.DefaultBatchSize;
         DefaultCheckpointInterval = options.DefaultCheckpointInterval;
         DefaultHeartbeatInterval = options.DefaultHeartbeatInterval;
+        MaxBatchSize = options.MaxBatchSize;
+        BatchChunkSize = options.BatchChunkSize;
         _trackLastUpdatedBy = options.TrackLastUpdatedBy;
         _returnTwinLevelLastUpdatedBy = options.ReturnTwinLevelLastUpdatedBy;
-        _returnTwinLevelLastUpdatedBy = options.ReturnTwinLevelLastUpdatedBy;
+        _returnRelationshipMetadata = options.ReturnRelationshipMetadata;
         _modelParser = new(
             new ParsingOptions()
             {
@@ -104,6 +120,8 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
         DefaultBatchSize = 50; // Default batch size
         DefaultCheckpointInterval = 50; // Default checkpoint interval
         DefaultHeartbeatInterval = TimeSpan.FromSeconds(30); // Default heartbeat interval
+        MaxBatchSize = 2000; // Maximum batch create/replace size
+        BatchChunkSize = 100; // Internal chunk size for oversized batches
         _returnTwinLevelLastUpdatedBy = true; // Default
         _modelParser = new(
             new ParsingOptions()
@@ -198,6 +216,22 @@ public partial class AgeDigitalTwinsClient : IAsyncDisposable
             }
         }
     }
+
+    /// <summary>
+    /// Strips the entire <c>$metadata</c> block from a relationship response JSON.
+    /// Relationships in Azure Digital Twins do not have a <c>$metadata</c> block,
+    /// so this is removed for ADT compatibility when
+    /// <see cref="ReturnRelationshipMetadata"/> is <c>false</c>.
+    /// </summary>
+    internal static string StripRelationshipMetadata(string responseJson)
+    {
+        var node = JsonNode.Parse(responseJson)!;
+        if (node is JsonObject obj)
+        {
+            obj.Remove(DigitalTwinsJsonPropertyNames.DigitalTwinMetadata);
+        }
+        return node.ToJsonString();
+    }
 }
 
 public class AgeDigitalTwinsClientOptions
@@ -221,6 +255,25 @@ public class AgeDigitalTwinsClientOptions
     /// Gets or sets the default batch size for import operations.
     /// </summary>
     public int DefaultBatchSize { get; set; } = 50;
+
+    /// <summary>
+    /// Gets or sets the maximum number of items accepted by a single batch
+    /// create/replace call (<c>CreateOrReplaceDigitalTwinsAsync</c> and
+    /// <c>CreateOrReplaceRelationshipsAsync</c>). Batches larger than this
+    /// are rejected with a <c>400 Bad Request</c> (problem details stating
+    /// the limit); large imports must use an import job. Defaults to
+    /// <c>2000</c>.
+    /// </summary>
+    public int MaxBatchSize { get; set; } = 2000;
+
+    /// <summary>
+    /// Gets or sets the internal chunk size used to split an oversized batch
+    /// create/replace call into smaller batches before it is written to the
+    /// database. The SDK never writes more than this many items in a single
+    /// database operation, but still returns an aggregated result for the
+    /// whole request. Defaults to <c>100</c>.
+    /// </summary>
+    public int BatchChunkSize { get; set; } = 100;
 
     /// <summary>
     /// Gets or sets the default checkpoint interval for import operations.
@@ -251,4 +304,16 @@ public class AgeDigitalTwinsClientOptions
     /// Defaults to <c>true</c>.
     /// </summary>
     public bool ReturnTwinLevelLastUpdatedBy { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether relationship-level <c>$metadata</c> with
+    /// <c>$lastUpdatedBy</c> is included in relationship API responses. When <c>false</c>
+    /// (default), the entire <c>$metadata</c> block is stripped from relationship responses
+    /// for ADT compatibility — the Azure Digital Twins API does not return <c>$metadata</c>
+    /// on relationships. The <c>$lastUpdatedBy</c> value is still stored in the database
+    /// and emitted in event/Kusto sinks. Set to <c>true</c> to include relationship
+    /// <c>$metadata</c> in API responses.
+    /// Defaults to <c>false</c>.
+    /// </summary>
+    public bool ReturnRelationshipMetadata { get; set; } = false;
 }

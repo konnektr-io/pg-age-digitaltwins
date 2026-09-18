@@ -159,7 +159,15 @@ public static partial class AdtQueryHelpers
                 var match = ExtractDigitalTwinNameRegex().Match(adtQuery);
                 if (match.Success)
                 {
-                    matchClause = $"({match.Groups[1].Value}:Twin)";
+                    var twinAlias = match.Groups[1].Value;
+                    matchClause = $"({twinAlias}:Twin)";
+                    // Process RETURN clause to add the (user-supplied) alias so
+                    // bare $-property projections like $metadata.$model are
+                    // correctly prefixed (e.g. T['$metadata']['$model']).
+                    if (!returnClause.Contains('*'))
+                    {
+                        returnClause = PrependAliasToProjections(returnClause, twinAlias);
+                    }
                 }
                 else
                 {
@@ -398,7 +406,14 @@ public static partial class AdtQueryHelpers
             .Replace(whereClause, m => $"{graphName}.is_string({m.Groups[1].Value})");
 
         // Replace property access with $ character
-        whereClause = DollarSignPropertyRegex().Replace(whereClause, m => $"['{m.Value[1..]}']");
+        whereClause = DollarSignPropertyRegex()
+            .Replace(
+                whereClause,
+                m =>
+                    m.Value.StartsWith('.')
+                        ? $"['{m.Value[1..]}']"
+                        : $"['{m.Value}']"
+            );
 
         // Process != operator
         whereClause = InequalityOperatorRegex()
@@ -511,7 +526,10 @@ public static partial class AdtQueryHelpers
     [GeneratedRegex(@"IS_BOOL\(([^)]+)\)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex IsBoolFunctionRegex();
 
-    [GeneratedRegex(@"(\.\$[\w]+)")]
+    [GeneratedRegex(
+        @"(\.\$[\w]+|(?<![\w.\['])\$[\w]+)",
+        RegexOptions.CultureInvariant
+    )]
     private static partial Regex DollarSignPropertyRegex();
 
     [GeneratedRegex(@"\((\w+)\)")]
@@ -558,8 +576,42 @@ public static partial class AdtQueryHelpers
                 columnAlias = asMatch.Groups[2].Value;
             }
 
+            // The projection is exactly the alias (e.g. SELECT T FROM DIGITALTWINS T)
+            // — it refers to the whole node/edge, so leave it untouched.
+            if (part.Equals(alias, StringComparison.OrdinalIgnoreCase))
+            {
+                parts[i] = columnAlias != null ? $"{part} AS {columnAlias}" : part;
+                continue;
+            }
+
+            // The projection is already alias-qualified (e.g. SELECT T.name ...)
+            // — do not prepend the alias again.
+            if (
+                part.StartsWith(alias + ".", StringComparison.OrdinalIgnoreCase)
+                || part.StartsWith(alias + "[", StringComparison.OrdinalIgnoreCase)
+            )
+            {
+                parts[i] = columnAlias != null ? $"{part} AS {columnAlias}" : part;
+                continue;
+            }
+
             part = PropertyAccessWhereClauseRegex().Replace(part, m => $"{alias}.{m.Value}");
-            part = DollarSignPropertyRegex().Replace(part, m => $"['{m.Value[1..]}']");
+            part = DollarSignPropertyRegex()
+                .Replace(
+                    part,
+                    m =>
+                        m.Value.StartsWith('.')
+                            ? $"['{m.Value[1..]}']"
+                            : $"['{m.Value}']"
+                );
+
+            // A leading $-property that was already converted to bracket
+            // notation (e.g. ['$metadata']['$model']) still needs the
+            // collection alias prefix (the same alias passed in).
+            if (part.StartsWith("[", StringComparison.Ordinal))
+            {
+                part = $"{alias}{part}";
+            }
 
             parts[i] = columnAlias != null ? $"{part} AS {columnAlias}" : part;
         }

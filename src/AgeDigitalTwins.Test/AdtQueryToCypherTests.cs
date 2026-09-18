@@ -5,7 +5,27 @@ public class AdtQueryToCypherTests
     [Theory]
     [InlineData("SELECT T FROM DIGITALTWINS T", "MATCH (T:Twin) RETURN T")]
     [InlineData("SELECT * FROM DIGITALTWINS", "MATCH (T:Twin) RETURN *")]
-    [InlineData("SELECT * FROM RELATIONSHIPS", "MATCH (:Twin)-[R]->(:Twin) RETURN *")]
+    [InlineData(
+        "SELECT $metadata.$model FROM DIGITALTWINS",
+        "MATCH (T:Twin) RETURN T['$metadata']['$model']"
+    )]
+    [InlineData(
+        "SELECT $metadata.$model AS modelId FROM DIGITALTWINS",
+        "MATCH (T:Twin) RETURN T['$metadata']['$model'] AS modelId"
+    )]
+    [InlineData(
+        "SELECT $metadata.$model, $dtId FROM DIGITALTWINS",
+        "MATCH (T:Twin) RETURN T['$metadata']['$model'], T['$dtId']"
+    )]
+    [InlineData(
+        "SELECT $metadata FROM DIGITALTWINS",
+        "MATCH (T:Twin) RETURN T['$metadata']"
+    )]
+    [InlineData("SELECT $dtId FROM DIGITALTWINS", "MATCH (T:Twin) RETURN T['$dtId']")]
+    [InlineData(
+        "SELECT * FROM RELATIONSHIPS",
+        "MATCH (:Twin)-[R]->(:Twin) RETURN *"
+    )]
     [InlineData(
         "SELECT T.name FROM DIGITALTWINS T WHERE T.$metadata.$model = 'dtmi:com:adt:dtsample:room;1'",
         "MATCH (T:Twin) WHERE T['$metadata']['$model'] = 'dtmi:com:adt:dtsample:room;1' RETURN T.name"
@@ -112,6 +132,14 @@ public class AdtQueryToCypherTests
         "MATCH (E:Twin)-[]->(T:Twin) WHERE NOT (T.size = 1) AND NOT (E['$dtId'] = 'def') RETURN T"
     )]
     [InlineData(
+        "SELECT T,R FROM DIGITALTWINS MATCH (current)-[R]->(T) WHERE current.$dtId='09a11073-409c-41fb-8f2e-a5c96991c608'AND T.$metadata.$model = 'dtmi:com:arcadis:climaterisk:AssessmentGroupAssetsFile;1'",
+        "MATCH (current:Twin)-[R]->(T:Twin) WHERE current['$dtId']='09a11073-409c-41fb-8f2e-a5c96991c608'AND T['$metadata']['$model'] = 'dtmi:com:arcadis:climaterisk:AssessmentGroupAssetsFile;1' RETURN T,R"
+    )]
+    [InlineData(
+        "SELECT T,R FROM DIGITALTWINS MATCH (current)-[R]->(T) WHERE current.$dtId='x' AND T.$metadata.$model = 'dtmi:test;1'",
+        "MATCH (current:Twin)-[R]->(T:Twin) WHERE current['$dtId']='x' AND T['$metadata']['$model'] = 'dtmi:test;1' RETURN T,R"
+    )]
+    [InlineData(
         "SELECT B, R FROM DIGITALTWINS DT JOIN B RELATED DT.has R WHERE DT.$dtId = 'root2'",
         "MATCH (DT:Twin)-[R:has]->(B:Twin) WHERE DT['$dtId'] = 'root2' RETURN B, R"
     )]
@@ -216,12 +244,16 @@ public class AdtQueryToCypherTests
         "MATCH (T:Twin) WHERE T['$metadata']['$model'] = 'dtmi:test;1' RETURN T['$dtId'] AS id, T.name AS n LIMIT 10"
     )]
     [InlineData(
-        "SELECT R.$sourceId AS src, R.$targetId AS tgt FROM RELATIONSHIPS R",
-        "MATCH (:Twin)-[R]->(:Twin) RETURN R['$sourceId'] AS src, R['$targetId'] AS tgt"
-    )]
-    [InlineData(
         "SELECT $sourceId AS src FROM RELATIONSHIPS WHERE $sourceId = 'root'",
         "MATCH (:Twin)-[R]->(:Twin) WHERE R['$sourceId'] = 'root' RETURN R['$sourceId'] AS src"
+    )]
+    [InlineData(
+        "SELECT $metadata.$model FROM DIGITALTWINS T",
+        "MATCH (T:Twin) RETURN T['$metadata']['$model']"
+    )]
+    [InlineData(
+        "SELECT T.$metadata.$model FROM DIGITALTWINS T",
+        "MATCH (T:Twin) RETURN T['$metadata']['$model']"
     )]
     public void ConvertAdtQueryToCypher_ReturnsExpectedCypher(
         string adtQuery,

@@ -7,6 +7,7 @@ using AgeDigitalTwins.Events.Sinks.Kafka;
 using AgeDigitalTwins.Events.Sinks.Kusto;
 using AgeDigitalTwins.Events.Sinks.Mqtt;
 using AgeDigitalTwins.Events.Sinks.Nats;
+using AgeDigitalTwins.Events.Sinks.Postgres;
 using AgeDigitalTwins.Events.Sinks.Webhook;
 using Azure.Identity;
 
@@ -177,6 +178,39 @@ public class EventSinkFactory(
                     logger.LogError(
                         ex,
                         "Failed to create Kusto event sink. Check the configuration for errors."
+                    );
+                }
+            }
+        }
+
+        var postgresSinks = _configuration
+            .GetSection("EventSinks:Postgres")
+            .Get<List<PostgresSinkOptions>>();
+        if (postgresSinks != null && postgresSinks.Count > 0)
+        {
+            var logger = _loggerFactory.CreateLogger<PostgresEventSink>();
+            var graphConnectionString =
+                _configuration.GetConnectionString("agedb")
+                ?? _configuration["ConnectionStrings:agedb"]
+                ?? _configuration["AgeConnectionString"];
+            foreach (var postgresSink in postgresSinks)
+            {
+                try
+                {
+                    postgresSink.TrackLastUpdatedBy = _configuration.GetValue(
+                        "Parameters:TrackLastUpdatedBy",
+                        false
+                    );
+                    postgresSink.ConnectionString ??= graphConnectionString;
+                    var sink = new PostgresEventSink(postgresSink, logger);
+                    // Wrap with resilient wrapper for retry logic
+                    sinks.Add(new ResilientEventSinkWrapper(sink, wrapperLogger, _dlqService));
+                }
+                catch (ArgumentException ex)
+                {
+                    logger.LogError(
+                        ex,
+                        "Failed to create Postgres event sink. Check the configuration for errors."
                     );
                 }
             }

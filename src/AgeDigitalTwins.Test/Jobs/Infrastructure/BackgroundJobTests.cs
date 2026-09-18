@@ -47,10 +47,10 @@ public class BackgroundJobTests : ImportJobTestBase
         );
         var endTime = DateTime.UtcNow;
 
-        // Assert - Should return immediately with job in Running status
+        // Assert - Should return immediately with job in Notstarted status
         Assert.NotNull(result);
         Assert.Equal(jobId, result.Id);
-        Assert.Equal(JobStatus.Running, result.Status);
+        Assert.Equal(JobStatus.Notstarted, result.Status);
 
         // Should complete very quickly (under 1 second) since it returns immediately
         var duration = endTime - startTime;
@@ -77,6 +77,53 @@ public class BackgroundJobTests : ImportJobTestBase
         Output.WriteLine(
             $"✓ Background job {finalResult.Id} completed with status: {finalResult.Status}"
         );
+    }
+
+    [Fact]
+    public async Task ImportGraphAsync_WithBackgroundExecution_AndStreamFactoryFailure_ShouldEndFailed_NotRunning()
+    {
+        // Arrange - simulate blob access failure (e.g. a 403 on the input blob).
+        // The job should never report Running: it is Notstarted when created and
+        // transitions straight to Failed because the streams can never be opened.
+        var jobId = GenerateJobId("blob-403");
+
+        Func<CancellationToken, Task<(Stream inputStream, Stream outputStream)>> failingFactory = (
+            ct
+        ) => throw new UnauthorizedAccessException("Access denied on blob storage (403)");
+
+        // Act - Execute with background execution enabled
+        var result = await Client.ImportGraphAsync<JobRecord>(
+            jobId,
+            failingFactory,
+            null,
+            request: default,
+            executeInBackground: true,
+            cancellationToken: default
+        );
+
+        // Assert - should return immediately with job in Notstarted status (never Running)
+        Assert.NotNull(result);
+        Assert.Equal(jobId, result.Id);
+        Assert.Equal(JobStatus.Notstarted, result.Status);
+
+        // Wait for the background task to fail the job
+        var maxWaitTime = TimeSpan.FromSeconds(10);
+        var startTime = DateTime.UtcNow;
+        JobRecord? finalResult = null;
+
+        while (DateTime.UtcNow - startTime < maxWaitTime)
+        {
+            finalResult = await Client.GetImportJobAsync(jobId);
+            if (finalResult?.Status != JobStatus.Running && finalResult?.Status != JobStatus.Notstarted)
+                break;
+            await Task.Delay(300);
+        }
+
+        // Assert - the job must have failed (never reported Running during this time)
+        Assert.NotNull(finalResult);
+        Assert.Equal(JobStatus.Failed, finalResult.Status);
+
+        Output.WriteLine($"✓ Blob-access-failing background job {finalResult.Id} ended with status: {finalResult.Status}");
     }
 
     [Fact]
@@ -145,7 +192,7 @@ public class BackgroundJobTests : ImportJobTestBase
 
         // Assert - Caller should not be blocked
         Assert.NotNull(backgroundResult);
-        Assert.Equal(JobStatus.Running, backgroundResult.Status);
+        Assert.Equal(JobStatus.Notstarted, backgroundResult.Status);
 
         // Caller can continue with other work immediately
         var otherWorkCompleted = await SimulateOtherWork();
@@ -162,7 +209,7 @@ public class BackgroundJobTests : ImportJobTestBase
         while (DateTime.UtcNow - startTime < maxWaitTime)
         {
             finalResult = await Client.GetImportJobAsync(jobId);
-            if (finalResult?.Status != JobStatus.Running)
+            if (finalResult?.Status != JobStatus.Running && finalResult?.Status != JobStatus.Notstarted)
                 break;
             await Task.Delay(500);
         }
@@ -222,7 +269,7 @@ public class BackgroundJobTests : ImportJobTestBase
             result =>
             {
                 Assert.NotNull(result);
-                Assert.Equal(JobStatus.Running, result.Status);
+                Assert.Equal(JobStatus.Notstarted, result.Status);
             }
         );
 
@@ -277,7 +324,7 @@ public class BackgroundJobTests : ImportJobTestBase
                     continue;
 
                 var result = await Client.GetImportJobAsync(jobId);
-                if (result?.Status != JobStatus.Running)
+                if (result?.Status != JobStatus.Running && result?.Status != JobStatus.Notstarted)
                 {
                     completedJobs.Add(jobId);
                     Output.WriteLine($"✓ Job {jobId} completed with status: {result?.Status}");

@@ -51,6 +51,14 @@ public class BasicRelationship
     public string? ETag { get; set; }
 
     /// <summary>
+    /// Information about the relationship metadata, including last updated by and last update time.
+    /// This field is only present when <c>$metadata</c> is included in the response.
+    /// </summary>
+    [JsonPropertyName(DigitalTwinsJsonPropertyNames.DigitalTwinMetadata)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RelationshipMetadata? Metadata { get; set; }
+
+    /// <summary>
     /// Additional, custom properties defined in the DTDL model.
     /// This property will contain any relationship properties that are not
     /// already defined in this class.
