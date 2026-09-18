@@ -2539,4 +2539,149 @@ RETURN t";
             result.RootElement.GetProperty("$dtId").GetString()
         );
     }
+
+    /// <summary>
+    /// Regression test for https://github.com/konnektr-io/pg-age-digitaltwins/issues/101.
+    /// <para>
+    /// Filtering twins with <c>is_of_model(twin, model)</c> for a model that matches no twin used
+    /// to be pathologically slow: for every candidate twin the PL/pgSQL function ran the legacy
+    /// inheritance fallback — a nested Cypher query against the <c>Model</c> label — so a scan over
+    /// N twins issued N nested queries and the query appeared to hang until the client timed out.
+    /// The most expensive shape is exactly the one reported in the issue: a query that returns no
+    /// results at all, because every scanned twin pays for the fallback lookup.
+    /// </para>
+    /// <para>
+    /// The test seeds a representative number of twins and asserts that both "no matching twins"
+    /// shapes complete within <c>IsOfModelBudgetMs</c>: a model without a precomputed
+    /// <c>descendants</c> property (legacy graphs) and a model that has one.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Performance_IsOfModel_NoMatchingTwins_DoesNotHang()
+    {
+        await IntializeAsync();
+
+        var graphName = Client.GetGraphName();
+
+        // Seed a representative number of twins across inherited models.
+        const int twinsPerModel = IsOfModelTwinCount / 4;
+        var twins = new List<JsonObject>(IsOfModelTwinCount);
+
+        void AddTwins(string prefix, string modelId)
+        {
+            for (int i = 1; i <= twinsPerModel; i++)
+            {
+                twins.Add(
+                    JsonNode
+                        .Parse(
+                            $@"{{""$dtId"": ""{prefix}{i}"", ""$metadata"": {{""$model"": ""{modelId}""}}, ""name"": ""{prefix} {i}""}}"
+                        )!
+                        .AsObject()
+                );
+            }
+        }
+
+        AddTwins("perfcb", "dtmi:com:contoso:CelestialBody;1");
+        AddTwins("perfp", "dtmi:com:contoso:Planet;1");
+        AddTwins("perfhp", "dtmi:com:contoso:HabitablePlanet;1");
+        AddTwins("perfroom", "dtmi:com:adt:dtsample:room;1");
+
+        const int batchSize = 100;
+        for (int i = 0; i < twins.Count; i += batchSize)
+        {
+            var result = await Client.CreateOrReplaceDigitalTwinsAsync<JsonObject>(
+                twins.Skip(i).Take(batchSize).ToList()
+            );
+            Assert.False(result.HasFailures, $"Batch insert failed at offset {i}");
+        }
+
+        // Simulate a legacy model: a Model vertex without the precomputed `descendants` property,
+        // as written by library versions predating that optimisation. Reading it pushes the
+        // function down the inheritance fallback path for every candidate twin.
+        const string legacyModelId = "dtmi:com:example:legacy;1";
+        await using (var connection = await Client.GetDataSource().OpenConnectionAsync())
+        await using (
+            var command = new Npgsql.NpgsqlCommand(
+                $@"
+SELECT * FROM ag_catalog.cypher('{graphName}', $cypher$
+    CREATE (m:Model {{id: '{legacyModelId}', bases: []}})
+    RETURN m
+$cypher$) AS (m agtype);",
+                connection
+            )
+        )
+        {
+            await command.ExecuteNonQueryAsync();
+        }
+
+        (string name, string modelId, int expectedCount)[] cases =
+        [
+            // Legacy model (no descendants property) that no twin uses: worst case, every scanned
+            // twin used to run a nested Cypher query in the fallback traversal.
+            ("legacy model without descendants, no matching twins", legacyModelId, 0),
+            // Model with a precomputed (empty) descendants array and no matching twins: the
+            // function must not do per-twin inheritance work here either.
+            (
+                "model with descendants, no matching twins",
+                "dtmi:com:adt:dtsample:tempsensor;1",
+                0
+            ),
+        ];
+
+        foreach (var (name, modelId, expectedCount) in cases)
+        {
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            using var cts = new CancellationTokenSource(IsOfModelTimeoutMs);
+            int count = 0;
+
+            try
+            {
+                await foreach (
+                    var _ in Client.QueryAsync<JsonDocument>(
+                        $"MATCH (t:Twin) WHERE {graphName}.is_of_model(t, '{modelId}') RETURN t",
+                        cts.Token
+                    )
+                )
+                {
+                    count++;
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                Assert.Fail(
+                    $"is_of_model over {IsOfModelTwinCount} twins did not finish within "
+                        + $"{IsOfModelTimeoutMs}ms ({name}) — the query is doing per-twin work "
+                        + "that must be removed."
+                );
+            }
+
+            stopwatch.Stop();
+            Console.WriteLine(
+                $"[is_of_model] {name}: {count} result(s) in {stopwatch.ElapsedMilliseconds}ms"
+            );
+
+            Assert.Equal(expectedCount, count);
+            Assert.True(
+                stopwatch.ElapsedMilliseconds < IsOfModelBudgetMs,
+                $"is_of_model over {IsOfModelTwinCount} twins took "
+                    + $"{stopwatch.ElapsedMilliseconds}ms ({name}); budget is "
+                    + $"{IsOfModelBudgetMs}ms."
+            );
+        }
+    }
+
+    /// <summary>Number of twins seeded by <see cref="Performance_IsOfModel_NoMatchingTwins_DoesNotHang"/>.</summary>
+    private const int IsOfModelTwinCount = 2000;
+
+    /// <summary>Wall-clock budget for one is_of_model scan over <see cref="IsOfModelTwinCount"/> twins.</summary>
+    /// <remarks>
+    /// The fixed implementation runs the scan in ~100ms (of which most is query plumbing, not the
+    /// predicate), so the budget carries a wide margin for slower CI runners while still failing
+    /// loudly if per-twin work is reintroduced: the pre-fix implementation needed ~4.5ms per
+    /// scanned twin, i.e. ~9s here and minutes on graphs with the twin counts reported in #101.
+    /// </remarks>
+    private const int IsOfModelBudgetMs = 2_000;
+
+    /// <summary>Hard ceiling after which the scan is treated as hung (pre-fix behaviour).</summary>
+    private const int IsOfModelTimeoutMs = 60_000;
 }
