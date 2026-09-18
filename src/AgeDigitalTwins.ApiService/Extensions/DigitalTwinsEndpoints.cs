@@ -1,9 +1,12 @@
+using System.Text.Json;
 using AgeDigitalTwins.ApiService.Helpers;
 using AgeDigitalTwins.ApiService.Models;
+using AgeDigitalTwins.Exceptions;
 using AgeDigitalTwins.Models;
 using AgeDigitalTwins.ServiceDefaults.Authorization;
 using AgeDigitalTwins.ServiceDefaults.Authorization.Models;
 using Json.Patch;
+using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AgeDigitalTwins.ApiService.Extensions;
@@ -161,6 +164,202 @@ public static class DigitalTwinsEndpoints
                 "Performs a hybrid search on digital twins using vector similarity and metadata filter."
             );
 
+        // POST /digitaltwins/memory-search - Scoped vector memory search.
+        // Scope predicates are applied in the database before ranking and Limit.
+        // Scope attributes are caller-managed twin properties; cross-graph fan-out
+        // and owner-level access control stay outside this API (see how-to guide).
+        digitalTwinsGroup
+            .MapPost(
+                "/memory-search",
+                async Task<
+                    Results<Ok<List<MemorySearchResultDto>>, ValidationProblem, ProblemHttpResult>
+                > (
+                    [FromBody] MemorySearchRequest request,
+                    [FromServices] AgeDigitalTwinsClient client,
+                    CancellationToken cancellationToken
+                ) =>
+                {
+                    if (request.Vector == null)
+                    {
+                        return TypedResults.ValidationProblem(
+                            new Dictionary<string, string[]>
+                            {
+                                ["vector"] = ["Query vector is required."],
+                            }
+                        );
+                    }
+
+                    string embeddingProperty = request.EmbeddingProperty ?? "embedding";
+                    int excerptLength = request.ExcerptLength ?? 500;
+                    if (excerptLength < 1 || excerptLength > 4000)
+                    {
+                        return TypedResults.ValidationProblem(
+                            new Dictionary<string, string[]>
+                            {
+                                ["excerptLength"] = ["Excerpt length must be between 1 and 4000."],
+                            }
+                        );
+                    }
+
+                    var options = new MemorySearchOptions
+                    {
+                        Vector = request.Vector,
+                        EmbeddingProperty = embeddingProperty,
+                        Limit = request.Limit ?? 10,
+                        ModelIds = request.ModelIds,
+                        PropertyFilters = request.PropertyFilters,
+                        RelatedTwinId = request.RelatedTwinId,
+                        ExpectedDimension = request.ExpectedDimension,
+                    };
+
+                    IReadOnlyList<MemorySearchResult> results;
+                    try
+                    {
+                        results = await client.MemorySearchAsync(options, cancellationToken);
+                    }
+                    catch (ValidationFailedException ex)
+                    {
+                        return TypedResults.ValidationProblem(
+                            new Dictionary<string, string[]> { ["request"] = [ex.Message] }
+                        );
+                    }
+                    catch (PgVectorNotAvailableException ex)
+                    {
+                        return TypedResults.Problem(
+                            detail: ex.Message,
+                            statusCode: StatusCodes.Status503ServiceUnavailable
+                        );
+                    }
+
+                    var response = results
+                        .Select(r => new MemorySearchResultDto(
+                            r.Twin.Id,
+                            r.Twin.Metadata?.ModelId,
+                            r.Distance,
+                            BuildMemorySearchExcerpt(r.Twin, embeddingProperty, excerptLength),
+                            r.Twin.LastUpdatedOn
+                        ))
+                        .ToList();
+
+                    return TypedResults.Ok(response);
+                }
+            )
+            .RequirePermission(ResourceType.DigitalTwins, PermissionAction.Read)
+            .RequireRateLimiting("LightOperations")
+            .WithName("SearchDigitalTwinMemory")
+            .WithSummary(
+                "Performs a scoped vector search over digital twins. Scope predicates "
+                    + "(model allow-list, property equality filters, related-twin predicate) "
+                    + "are applied before ranking and Limit."
+            )
+            .Produces<List<MemorySearchResultDto>>()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
+
+        // GET /digitaltwins/memory-search/capability - Report whether the backing
+        // database can serve scoped vector memory search (pgvector availability).
+        digitalTwinsGroup
+            .MapGet(
+                "/memory-search/capability",
+                async Task<Ok<MemorySearchCapability>> (
+                    [FromServices] AgeDigitalTwinsClient client,
+                    CancellationToken cancellationToken
+                ) =>
+                {
+                    bool available = await client.IsVectorSearchAvailableAsync(cancellationToken);
+                    return TypedResults.Ok(new MemorySearchCapability(available));
+                }
+            )
+            .RequirePermission(ResourceType.DigitalTwins, PermissionAction.Read)
+            .RequireRateLimiting("LightOperations")
+            .WithName("GetDigitalTwinMemorySearchCapability")
+            .WithSummary(
+                "Reports whether pgvector is available for scoped vector memory search. "
+                    + "Search and index operations return 503 when it is not."
+            )
+            .Produces<MemorySearchCapability>();
+
+        // POST /digitaltwins/memory-search/index - Create the HNSW index behind
+        // scoped vector memory search. Idempotent.
+        digitalTwinsGroup
+            .MapPost(
+                "/memory-search/index",
+                async Task<Results<Ok<MemorySearchIndex>, ValidationProblem, ProblemHttpResult>> (
+                    [FromBody] MemorySearchIndexRequest request,
+                    [FromServices] AgeDigitalTwinsClient client,
+                    CancellationToken cancellationToken
+                ) =>
+                {
+                    if (request.Dimension == null)
+                    {
+                        return TypedResults.ValidationProblem(
+                            new Dictionary<string, string[]>
+                            {
+                                ["dimension"] = ["Index dimension is required."],
+                            }
+                        );
+                    }
+
+                    var options = new MemorySearchIndexOptions
+                    {
+                        EmbeddingProperty = request.EmbeddingProperty ?? "embedding",
+                        Dimension = request.Dimension.Value,
+                        M = request.M,
+                        EfConstruction = request.EfConstruction,
+                    };
+
+                    string indexName;
+                    try
+                    {
+                        indexName = await client.EnsureMemorySearchIndexAsync(
+                            options,
+                            cancellationToken
+                        );
+                    }
+                    catch (ValidationFailedException ex)
+                    {
+                        return TypedResults.ValidationProblem(
+                            new Dictionary<string, string[]> { ["request"] = [ex.Message] }
+                        );
+                    }
+                    catch (PgVectorNotAvailableException ex)
+                    {
+                        return TypedResults.Problem(
+                            detail: ex.Message,
+                            statusCode: StatusCodes.Status503ServiceUnavailable
+                        );
+                    }
+
+                    return TypedResults.Ok(
+                        new MemorySearchIndex(indexName, options.Dimension)
+                    );
+                }
+            )
+            .RequirePermission(ResourceType.DigitalTwins, PermissionAction.Write)
+            .RequireRateLimiting("HeavyOperations")
+            .WithName("EnsureDigitalTwinMemorySearchIndex")
+            .WithSummary(
+                "Creates the HNSW index for scoped vector memory search (idempotent). "
+                    + "The dimension must match the stored embedding vectors."
+            )
+            .Produces<MemorySearchIndex>()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
+
         return app;
+    }
+
+    private static string BuildMemorySearchExcerpt(
+        BasicDigitalTwin twin,
+        string embeddingProperty,
+        int maxLength
+    )
+    {
+        var contents = twin.Contents
+            .Where(kv => !string.Equals(kv.Key, embeddingProperty, StringComparison.Ordinal))
+            .ToDictionary(kv => kv.Key, kv => kv.Value);
+
+        string excerpt = JsonSerializer.Serialize(contents);
+        return excerpt.Length <= maxLength ? excerpt : excerpt[..maxLength];
     }
 }
