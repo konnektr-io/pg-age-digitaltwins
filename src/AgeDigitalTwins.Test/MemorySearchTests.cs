@@ -103,6 +103,16 @@ public class MemorySearchTests : TestBase
         return node.ToJsonString();
     }
 
+    /// <summary>
+    /// Reports whether the backing database can serve vector search. Vector-dependent
+    /// tests return early when it cannot, so they stay green on images that do not
+    /// ship pgvector (the <c>CnpgOnlyFact</c> gate only sees the <c>CNPG_TEST</c> flag).
+    /// </summary>
+    private async Task<bool> VectorSearchAvailableAsync()
+    {
+        return await Client.IsVectorSearchAvailableAsync();
+    }
+
     private async Task DropIndexAsync(string indexName)
     {
         await using var connection = await Client.GetDataSource().OpenConnectionAsync();
@@ -121,6 +131,11 @@ public class MemorySearchTests : TestBase
     [CnpgOnlyFact]
     public async Task MemorySearch_RanksByDistance_ClosestFirst()
     {
+        if (!await VectorSearchAvailableAsync())
+        {
+            return;
+        }
+
         await LoadModelsAsync();
         await Client.CreateOrReplaceDigitalTwinAsync("r1", RecordJson("r1", [1.0, 0.0, 0.0]));
         await Client.CreateOrReplaceDigitalTwinAsync("r2", RecordJson("r2", [0.0, 1.0, 0.0]));
@@ -142,6 +157,11 @@ public class MemorySearchTests : TestBase
     [CnpgOnlyFact]
     public async Task MemorySearch_ScopePredicateAppliedBeforeRankingAndLimit()
     {
+        if (!await VectorSearchAvailableAsync())
+        {
+            return;
+        }
+
         await LoadModelsAsync();
 
         // The out-of-scope record is the CLOSEST match, so a filter applied after
@@ -194,6 +214,11 @@ public class MemorySearchTests : TestBase
     [CnpgOnlyFact]
     public async Task MemorySearch_OwnerPredicateAndStatusFilter_AreApplied()
     {
+        if (!await VectorSearchAvailableAsync())
+        {
+            return;
+        }
+
         await LoadModelsAsync();
         await Client.CreateOrReplaceDigitalTwinAsync(
             "owner-a",
@@ -228,6 +253,11 @@ public class MemorySearchTests : TestBase
     [CnpgOnlyFact]
     public async Task MemorySearch_ModelAllowList_ExcludesOtherModels()
     {
+        if (!await VectorSearchAvailableAsync())
+        {
+            return;
+        }
+
         await LoadModelsAsync();
         await Client.CreateOrReplaceDigitalTwinAsync("record", RecordJson("record", [1.0, 0.0, 0.0]));
         await Client.CreateOrReplaceDigitalTwinAsync(
@@ -247,6 +277,11 @@ public class MemorySearchTests : TestBase
     [CnpgOnlyFact]
     public async Task MemorySearch_RelatedTwinPredicate_ReturnsOnlyRelatedTwins()
     {
+        if (!await VectorSearchAvailableAsync())
+        {
+            return;
+        }
+
         await LoadModelsAsync();
         await Client.CreateOrReplaceDigitalTwinAsync(
             "group1",
@@ -291,6 +326,11 @@ public class MemorySearchTests : TestBase
     [CnpgOnlyFact]
     public async Task MemorySearch_TwinsWithoutEmbedding_DoNotConsumeLimit()
     {
+        if (!await VectorSearchAvailableAsync())
+        {
+            return;
+        }
+
         await LoadModelsAsync();
         await Client.CreateOrReplaceDigitalTwinAsync("with1", RecordJson("with1", [1.0, 0.0, 0.0]));
         await Client.CreateOrReplaceDigitalTwinAsync("with2", RecordJson("with2", [0.9, 0.1, 0.0]));
@@ -307,6 +347,11 @@ public class MemorySearchTests : TestBase
     [CnpgOnlyFact]
     public async Task MemorySearch_NoMatch_ReturnsEmpty()
     {
+        if (!await VectorSearchAvailableAsync())
+        {
+            return;
+        }
+
         await LoadModelsAsync();
         await Client.CreateOrReplaceDigitalTwinAsync("r1", RecordJson("r1", [1.0, 0.0, 0.0]));
 
@@ -325,6 +370,11 @@ public class MemorySearchTests : TestBase
     [CnpgOnlyFact]
     public async Task EnsureMemorySearchIndex_IsIdempotent_AndSearchWorksWithIndex()
     {
+        if (!await VectorSearchAvailableAsync())
+        {
+            return;
+        }
+
         await LoadModelsAsync();
         await Client.CreateOrReplaceDigitalTwinAsync("r1", RecordJson("r1", [0.5, 0.5, 0.5]));
 
@@ -362,6 +412,11 @@ public class MemorySearchTests : TestBase
     [CnpgOnlyFact]
     public async Task MemorySearch_DimensionMismatchAgainstIndex_Throws()
     {
+        if (!await VectorSearchAvailableAsync())
+        {
+            return;
+        }
+
         await LoadModelsAsync();
         await Client.CreateOrReplaceDigitalTwinAsync("r1", RecordJson("r1", [0.5, 0.5, 0.5]));
 
