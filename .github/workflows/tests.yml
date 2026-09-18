@@ -30,24 +30,17 @@ jobs:
           - age_image: release_PG16_1.6.0
             type: apache
             pg_version: 16
-          - age_image: release_PG17_1.6.0
-            type: apache
-            pg_version: 17
-          - age_image: release_PG18_1.7.0
+          - age_image: release_PG18_1.8.0
             type: apache
             pg_version: 18
           - age_image: 16-1.6.0-standard-trixie
             type: cnpg
             pg_version: 16
             container_repo: ghcr.io/konnektr-io/age-pgvector
-          - age_image: 17-1.6.0-standard-trixie
-            type: cnpg
-            pg_version: 17
-            container_repo: ghcr.io/konnektr-io/age-pgvector
-          - age_image: 18-1.7.0-standard-trixie
+          - age_image: 18-1.8.0-standard-trixie
             type: cnpg
             pg_version: 18
-            container_repo: ghcr.io/konnektr-io/age-pgvector
+            container_repo: ghcr.io/konnektr-io/age-pgvector-postgis-timescale
     steps:
       - name: Checkout
         uses: actions/checkout@v6
