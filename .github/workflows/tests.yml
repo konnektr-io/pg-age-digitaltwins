@@ -37,6 +37,10 @@ jobs:
             type: cnpg
             pg_version: 16
             container_repo: ghcr.io/konnektr-io/age-pgvector
+          - age_image: 18-1.7.0
+            type: cnpg
+            pg_version: 18
+            container_repo: ghcr.io/konnektr-io/age-pgvector-postgis-timescale
           - age_image: 18-1.8.0
             type: cnpg
             pg_version: 18
