@@ -149,57 +149,22 @@ public class SharedEventConsumer
 
         foreach (var eventData in eventDataBatch)
         {
-            // Find matching routes for this event
-            var matchingRoutes = eventRoutes
-                .Where(route => ShouldRouteEvent(route, eventData))
-                .ToList();
-
-            foreach (var route in matchingRoutes)
+            // Isolate per-event failures: one malformed event must not drop the
+            // whole batch (GH #108 — a partial relationship insert used to poison
+            // every batch it landed in, hiding all other events with it).
+            try
             {
-                // Find the sink for this route
-                var sink = eventSinks.FirstOrDefault(s => s.Name == route.SinkName);
-                if (sink == null)
-                {
-                    _logger.LogWarning("Sink {SinkName} not found for event route", route.SinkName);
-                    continue;
-                }
-
-                // Generate cloud events for this route
-                var cloudEvents = route.EventFormat switch
-                {
-                    EventFormat.EventNotification =>
-                        CloudEventFactory.CreateEventNotificationEvents(
-                            eventData,
-                            _sourceUri,
-                            route.TypeMappings ?? []
-                        ),
-                    EventFormat.DataHistory => CloudEventFactory.CreateDataHistoryEvents(
-                        eventData,
-                        _sourceUri,
-                        route.TypeMappings ?? [],
-                        _trackLastUpdatedBy
-                    ),
-                    EventFormat.Telemetry => CloudEventFactory.CreateTelemetryEvents(
-                        eventData,
-                        _sourceUri,
-                        route.TypeMappings ?? []
-                    ),
-                    _ => throw new ArgumentException(
-                        $"Unknown route event format: '{route.EventFormat}'"
-                    ),
-                };
-
-                if (cloudEvents.Count == 0)
-                    continue;
-
-                // Add events to the sink's batch
-                if (!sinkEventGroups.TryGetValue(sink, out List<CloudEvent>? value))
-                {
-                    value = [];
-                    sinkEventGroups[sink] = value;
-                }
-
-                value.AddRange(cloudEvents);
+                ProcessSingleEventData(eventData, eventSinks, eventRoutes, sinkEventGroups);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Skipping malformed event {EventType} for entity {EntityId} in table {TableName}; continuing with the rest of the batch",
+                    eventData.EventType,
+                    eventData.Id,
+                    eventData.TableName
+                );
             }
         }
 
@@ -252,6 +217,67 @@ public class SharedEventConsumer
                 failureCount,
                 failedSinks
             );
+        }
+    }
+
+    /// <summary>
+    /// Route a single event to its sinks, collecting the generated cloud events
+    /// per sink. Throws on malformed events; the caller isolates such failures
+    /// per event so the rest of the batch still flows.
+    /// </summary>
+    private void ProcessSingleEventData(
+        EventData eventData,
+        List<IEventSink> eventSinks,
+        List<EventRoute> eventRoutes,
+        Dictionary<IEventSink, List<CloudEvent>> sinkEventGroups
+    )
+    {
+        // Find matching routes for this event
+        var matchingRoutes = eventRoutes.Where(route => ShouldRouteEvent(route, eventData)).ToList();
+
+        foreach (var route in matchingRoutes)
+        {
+            // Find the sink for this route
+            var sink = eventSinks.FirstOrDefault(s => s.Name == route.SinkName);
+            if (sink == null)
+            {
+                _logger.LogWarning("Sink {SinkName} not found for event route", route.SinkName);
+                continue;
+            }
+
+            // Generate cloud events for this route
+            var cloudEvents = route.EventFormat switch
+            {
+                EventFormat.EventNotification => CloudEventFactory.CreateEventNotificationEvents(
+                    eventData,
+                    _sourceUri,
+                    route.TypeMappings ?? []
+                ),
+                EventFormat.DataHistory => CloudEventFactory.CreateDataHistoryEvents(
+                    eventData,
+                    _sourceUri,
+                    route.TypeMappings ?? [],
+                    _trackLastUpdatedBy
+                ),
+                EventFormat.Telemetry => CloudEventFactory.CreateTelemetryEvents(
+                    eventData,
+                    _sourceUri,
+                    route.TypeMappings ?? []
+                ),
+                _ => throw new ArgumentException($"Unknown route event format: '{route.EventFormat}'"),
+            };
+
+            if (cloudEvents.Count == 0)
+                continue;
+
+            // Add events to the sink's batch
+            if (!sinkEventGroups.TryGetValue(sink, out List<CloudEvent>? value))
+            {
+                value = [];
+                sinkEventGroups[sink] = value;
+            }
+
+            value.AddRange(cloudEvents);
         }
     }
 
