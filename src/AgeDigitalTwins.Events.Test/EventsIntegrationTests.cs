@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using AgeDigitalTwins.Jobs;
 using AgeDigitalTwins.Test;
+using Npgsql.Age;
 using Xunit.Abstractions;
 using SdkBasicDigitalTwin = Azure.DigitalTwins.Core.BasicDigitalTwin;
 using SdkBasicRelationship = Azure.DigitalTwins.Core.BasicRelationship;
@@ -1586,4 +1587,345 @@ public class EventsIntegrationTests : IClassFixture<EventsFixture>
         );
         _output.WriteLine($"updatedBy: {propertyEventData["updatedBy"]}");
     }
+
+    #region GH #111 — cross-transaction ordering of rapid delete → recreate
+
+    private const string RelLifecycleType = "Konnektr.Graph.Relationship.Lifecycle";
+    private const string TwinLifecycleType = "Konnektr.Graph.Twin.Lifecycle";
+
+    private static DateTime OrderingReadTimestamp(JsonObject body, DateTime fallback) =>
+        body["timeStamp"] is JsonValue v && v.TryGetValue<DateTime>(out var ts) ? ts : fallback;
+
+    private List<(DateTime Timestamp, string Action)> OrderingReadSeries(
+        string subject,
+        string eventType
+    ) =>
+        TestSink
+            .GetCapturedEvents()
+            .Where(e => e.Subject == subject && e.Type == eventType)
+            .Select(e =>
+            {
+                var body = e.Data as JsonObject ?? new JsonObject();
+                return (
+                    Timestamp: OrderingReadTimestamp(body, e.Time!.Value.UtcDateTime),
+                    Action: body["action"]?.ToString() ?? "?"
+                );
+            })
+            .ToList();
+
+    private static string OrderingDescribe(IEnumerable<(DateTime Timestamp, string Action)> series) =>
+        string.Join(", ", series.Select(e => $"{e.Action}@{e.Timestamp:HH:mm:ss.ffffff}"));
+
+    private async Task<List<(DateTime Timestamp, string Action)>> OrderingWaitForSeriesAsync(
+        string subject,
+        string eventType,
+        int expected,
+        TimeSpan timeout
+    )
+    {
+        var endTime = DateTime.UtcNow.Add(timeout);
+        while (DateTime.UtcNow < endTime)
+        {
+            var events = OrderingReadSeries(subject, eventType);
+            if (events.Count >= expected)
+            {
+                return events;
+            }
+
+            await Task.Delay(100);
+        }
+
+        var partial = OrderingReadSeries(subject, eventType);
+        throw new TimeoutException(
+            $"Expected {expected} '{eventType}' events for subject '{subject}' within "
+                + $"{timeout.TotalSeconds:0}s but captured {partial.Count}. "
+                + $"Arrival order so far: {OrderingDescribe(partial)}"
+        );
+    }
+
+    /// <summary>
+    /// Drains the queue up to and including the initial create event, so the cycles measured
+    /// afterwards are the only events in the sink.
+    ///
+    /// The sink is fed asynchronously (the consumer polls every 100 ms), so clearing straight
+    /// after the create returns would race: the initial Create can land in the sink AFTER the
+    /// clear and then be read as the first Create of a measured cycle. Waiting for that event
+    /// makes the baseline deterministic — the queue is FIFO, so nothing earlier is pending.
+    /// </summary>
+    private async Task OrderingDrainThroughInitialCreateAsync(string subject, string eventType)
+    {
+        var delivered = await TestSink.WaitForEventAsync(subject, eventType, TimeSpan.FromSeconds(30));
+        Assert.True(
+            delivered is not null,
+            $"Initial create event for '{subject}' was never delivered, cannot establish a clean baseline"
+        );
+        TestSink.ClearEvents();
+    }
+
+    private async Task<(string SourceId, string TargetId)> OrderingCreateRoomAndSensorAsync()
+    {
+        // Created one at a time on purpose: a batch containing an already-existing model fails as
+        // a whole, which would leave the other model missing.
+        foreach (var model in new[] { SampleData.DtdlRoom, SampleData.DtdlTemperatureSensor })
+        {
+            try
+            {
+                await Client.CreateModelsAsync([model]);
+            }
+            catch (Exceptions.ModelAlreadyExistsException)
+            {
+                // Already present from an earlier test in this collection.
+            }
+        }
+
+        var sourceTwinId = $"room_{Guid.NewGuid():N}";
+        var targetTwinId = $"sensor_{Guid.NewGuid():N}";
+
+        var sourceTwin = JsonSerializer.Deserialize<SdkBasicDigitalTwin>(SampleData.TwinRoom1);
+        sourceTwin!.Id = sourceTwinId;
+        await Client.CreateOrReplaceDigitalTwinAsync(sourceTwin.Id, sourceTwin);
+
+        var targetTwin = JsonSerializer.Deserialize<SdkBasicDigitalTwin>(SampleData.TwinTemperatureSensor1);
+        targetTwin!.Id = targetTwinId;
+        await Client.CreateOrReplaceDigitalTwinAsync(targetTwin.Id, targetTwin);
+
+        return (sourceTwinId, targetTwinId);
+    }
+
+    /// <summary>
+    /// GH #111: a relationship deleted and re-created within milliseconds must emit its lifecycle
+    /// events in operation order when sorted by TimeStamp.
+    ///
+    /// Operation order is Delete, Create, Delete, Create, ...; the TimeStamp-ascending stream must
+    /// read exactly that. This is the invariant the documented DataHistory reconstruction depends on:
+    /// <code>
+    /// AdtRelationshipLifeCycleEvents
+    /// | where TimeStamp &lt;= targetTime
+    /// | summarize arg_max(TimeStamp, *) by Source, Target
+    /// | where Action != 'Delete';
+    /// </code>
+    /// </summary>
+    [Fact]
+    public async Task RelationshipDeleteThenRecreate_ShouldEmitLifecycleEventsInTimeStampOrder()
+    {
+        await _fixture.WaitForReplicationHealthy();
+
+        var (sourceTwinId, targetTwinId) = await OrderingCreateRoomAndSensorAsync();
+        var relationshipId = $"rel_{Guid.NewGuid():N}";
+        var subject = $"{sourceTwinId}/relationships/{relationshipId}";
+
+        var relationship = new SdkBasicRelationship
+        {
+            Id = relationshipId,
+            SourceId = sourceTwinId,
+            TargetId = targetTwinId,
+            Name = "rel_has_sensors",
+        };
+
+        const int cycles = 3;
+        await Client.CreateOrReplaceRelationshipAsync(sourceTwinId, relationshipId, relationship);
+        await OrderingDrainThroughInitialCreateAsync(subject, RelLifecycleType);
+
+        for (var i = 0; i < cycles; i++)
+        {
+            await Client.DeleteRelationshipAsync(sourceTwinId, relationshipId);
+            await Task.Delay(5);
+            await Client.CreateOrReplaceRelationshipAsync(sourceTwinId, relationshipId, relationship);
+            if (i < cycles - 1)
+            {
+                await Task.Delay(5);
+            }
+        }
+
+        var arrival = await OrderingWaitForSeriesAsync(
+            subject,
+            RelLifecycleType,
+            expected: cycles * 2,
+            timeout: TimeSpan.FromSeconds(30)
+        );
+
+        var series = arrival.OrderBy(e => e.Timestamp).ToList();
+
+        _output.WriteLine($"Relationship '{subject}' lifecycle series");
+        _output.WriteLine($"  arrival order : {OrderingDescribe(arrival)}");
+        _output.WriteLine($"  TimeStamp asc : {OrderingDescribe(series)}");
+
+        var expected = new List<string>();
+        for (var i = 0; i < cycles; i++)
+        {
+            expected.Add("Delete");
+            expected.Add("Create");
+        }
+
+        Assert.Equal(expected, series.Select(e => e.Action).ToList());
+
+        for (var i = 1; i < series.Count; i++)
+        {
+            Assert.True(
+                series[i].Timestamp > series[i - 1].Timestamp,
+                $"Event {i} ({series[i].Action} @{ series[i].Timestamp:O}) must be strictly later than "
+                    + $"event {i - 1} ({series[i - 1].Action} @{ series[i - 1].Timestamp:O})"
+            );
+        }
+    }
+
+    /// <summary>
+    /// GH #111 (acceptance criterion 4): a delete and an insert of the SAME relationship inside ONE
+    /// transaction. The insert branch replaces the dictionary entry for the key, so the pending
+    /// Delete event could be silently dropped and Data History would never learn the relationship
+    /// existed.
+    ///
+    /// <c>CreateOrReplaceRelationshipAsync</c> uses MERGE, so this shape is not reachable through
+    /// that API — it is exercised here with raw Cypher to pin the behaviour down.
+    /// </summary>
+    [Fact]
+    public async Task DeleteAndInsertInSameTransaction_ShouldEmitBothLifecycleEvents()
+    {
+        await _fixture.WaitForReplicationHealthy();
+
+        var (sourceTwinId, targetTwinId) = await OrderingCreateRoomAndSensorAsync();
+        var relationshipId = $"rel_{Guid.NewGuid():N}";
+        var subject = $"{sourceTwinId}/relationships/{relationshipId}";
+
+        var relationship = new SdkBasicRelationship
+        {
+            Id = relationshipId,
+            SourceId = sourceTwinId,
+            TargetId = targetTwinId,
+            Name = "rel_has_sensors",
+        };
+
+        await Client.CreateOrReplaceRelationshipAsync(sourceTwinId, relationshipId, relationship);
+        await OrderingDrainThroughInitialCreateAsync(subject, RelLifecycleType);
+
+        await using (var connection = await Client.GetDataSource().OpenConnectionAsync())
+        {
+            await using var transaction = await connection.BeginTransactionAsync();
+            var edgeName = $"rel_{Guid.NewGuid():N}";
+
+            await using (var delete = connection.CreateCypherCommand(
+                Client.GetGraphName(),
+                "MATCH (:Twin {`$dtId`: $sourceId})-[rel {`$relationshipId`: $relId}]->(:Twin) DELETE rel RETURN COUNT(rel) AS deletedCount",
+                new Dictionary<string, object?> { { "sourceId", sourceTwinId }, { "relId", relationshipId } }
+            ))
+            {
+                delete.Transaction = transaction;
+                await using var reader = await delete.ExecuteReaderAsync();
+                Assert.True(await reader.ReadAsync(), "DELETE matched no relationship to remove");
+            }
+
+            await using (var insert = connection.CreateCypherCommand(
+                Client.GetGraphName(),
+                "MATCH (s:Twin {`$dtId`: $sourceId}),(t:Twin {`$dtId`: $targetId}) CREATE (s)-[rel:"
+                    + edgeName
+                    + " {`$relationshipId`: $relId,`$sourceId`: $sourceId,`$targetId`: $targetId,`$relationshipName`: $relName}]->(t) RETURN rel",
+                new Dictionary<string, object?>
+                {
+                    { "sourceId", sourceTwinId },
+                    { "targetId", targetTwinId },
+                    { "relId", relationshipId },
+                    { "relName", relationship.Name },
+                }
+            ))
+            {
+                insert.Transaction = transaction;
+                await using var reader = await insert.ExecuteReaderAsync();
+                Assert.True(await reader.ReadAsync(), "INSERT did not create the relationship");
+            }
+
+            await transaction.CommitAsync();
+        }
+
+        var arrival = await OrderingWaitForSeriesAsync(
+            subject,
+            RelLifecycleType,
+            expected: 2,
+            timeout: TimeSpan.FromSeconds(30)
+        );
+
+        _output.WriteLine($"Same-transaction delete+insert '{subject}':");
+        _output.WriteLine($"  arrival order : {OrderingDescribe(arrival)}");
+
+        Assert.Equal(
+            new List<string> { "Delete", "Create" },
+            arrival.OrderBy(e => e.Timestamp).Select(e => e.Action).ToList()
+        );
+
+        // Nothing else may follow: if the insert were overwriting the pending delete entry, the
+        // count would settle at 1 (delete lost) or keep growing.
+        await Task.Delay(1000);
+        var settled = OrderingReadSeries(subject, RelLifecycleType);
+        _output.WriteLine($"  after settle   : {OrderingDescribe(settled)}");
+        Assert.Equal(2, settled.Count);
+    }
+
+    /// <summary>
+    /// GH #111: the same invariant for twins, which the reporter expected to be affected too.
+    /// </summary>
+    [Fact]
+    public async Task TwinDeleteThenRecreate_ShouldEmitLifecycleEventsInTimeStampOrder()
+    {
+        await _fixture.WaitForReplicationHealthy();
+
+        try
+        {
+            await Client.CreateModelsAsync([SampleData.DtdlCrater]);
+        }
+        catch (Exceptions.ModelAlreadyExistsException)
+        {
+            // Already present from an earlier test in this collection.
+        }
+
+        var twinId = $"crater_{Guid.NewGuid():N}";
+        var twin = JsonSerializer.Deserialize<SdkBasicDigitalTwin>(SampleData.TwinCrater);
+        twin!.Id = twinId;
+
+        const int cycles = 3;
+        await Client.CreateOrReplaceDigitalTwinAsync(twin.Id, twin);
+        await OrderingDrainThroughInitialCreateAsync(twinId, TwinLifecycleType);
+
+        for (var i = 0; i < cycles; i++)
+        {
+            await Client.DeleteDigitalTwinAsync(twin.Id);
+            await Task.Delay(5);
+            await Client.CreateOrReplaceDigitalTwinAsync(twin.Id, twin);
+            if (i < cycles - 1)
+            {
+                await Task.Delay(5);
+            }
+        }
+
+        var arrival = await OrderingWaitForSeriesAsync(
+            twinId,
+            TwinLifecycleType,
+            expected: cycles * 2,
+            timeout: TimeSpan.FromSeconds(30)
+        );
+
+        var series = arrival.OrderBy(e => e.Timestamp).ToList();
+
+        _output.WriteLine($"Twin '{twinId}' lifecycle series");
+        _output.WriteLine($"  arrival order : {OrderingDescribe(arrival)}");
+        _output.WriteLine($"  TimeStamp asc : {OrderingDescribe(series)}");
+
+        var expected = new List<string>();
+        for (var i = 0; i < cycles; i++)
+        {
+            expected.Add("Delete");
+            expected.Add("Create");
+        }
+
+        Assert.Equal(expected, series.Select(e => e.Action).ToList());
+
+        for (var i = 1; i < series.Count; i++)
+        {
+            Assert.True(
+                series[i].Timestamp > series[i - 1].Timestamp,
+                $"Event {i} ({series[i].Action} @{ series[i].Timestamp:O}) must be strictly later than "
+                    + $"event {i - 1} ({series[i - 1].Action} @{ series[i - 1].Timestamp:O})"
+            );
+        }
+    }
+
+    #endregion
 }
