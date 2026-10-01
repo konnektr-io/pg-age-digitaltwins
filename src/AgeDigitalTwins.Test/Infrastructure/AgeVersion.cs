@@ -88,3 +88,23 @@ public sealed class OrderByAliasFactAttribute : FactAttribute
         }
     }
 }
+
+/// <summary>
+/// The inverse gate: a fact that only runs where the behaviour is <em>still broken</em>
+/// (Apache AGE &lt; 1.7.0). Used to pin an upstream limitation from the failing side, so the
+/// CI cells that skip <see cref="OrderByAliasFactAttribute"/> still assert something about it.
+/// Skip it once AGE is fixed everywhere — that is the signal to delete the pinned assertion.
+/// </summary>
+public sealed class OrderByAliasUnresolvedFactAttribute : FactAttribute
+{
+    public OrderByAliasUnresolvedFactAttribute()
+    {
+        if (AgeVersion.AtLeast(AgeVersion.OrderByAliasFixedIn))
+        {
+            Skip = string.Create(
+                CultureInfo.InvariantCulture,
+                $"ORDER BY on a WITH alias is resolved from Apache AGE {AgeVersion.OrderByAliasFixedIn}; this xfail only applies below it (found {AgeVersion.Display})"
+            );
+        }
+    }
+}

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Npgsql;
 
 namespace AgeDigitalTwins.Test;
 
@@ -9,42 +10,53 @@ namespace AgeDigitalTwins.Test;
 /// rewrite — because that rewrite decides where SKIP/LIMIT land relative to ORDER BY, which
 /// changes what Apache AGE receives.
 ///
-/// Note on AGE versions: sorting on a WITH-defined scalar alias (<c>ORDER BY rp</c>) is rejected
-/// by Apache AGE &lt; 1.7.0 with <c>could not find rte for rp</c>; it was fixed upstream in
-/// apache/age#2269 and works from 1.7.0 on. Tests that depend on it are skipped below that
-/// version so the PG16/PG17 cells of the CI matrix stay meaningful.
+/// Fixtures use generic, domain-neutral models (a room-like interface and a second interface
+/// inheriting from it) rather than any customer- or domain-specific DTMI, so the suite documents
+/// the ADT behaviour rather than one deployment's vocabulary.
+///
+/// AGE version notes (see <see cref="OrderByAliasFactAttribute"/>):
+/// <list type="bullet">
+///   <item>ORDER BY on a WITH-defined scalar alias fails on Apache AGE &lt; 1.7.0 with
+///   <c>42703 could not find rte for &lt;alias&gt;</c> (upstream apache/age#2269). Asserted for
+///   AGE &gt;= 1.7.0, and pinned as an xfail below that.</item>
+///   <item>AGE accepts only ONE trailing clause set, so a query ending in ORDER BY cannot also
+///   carry SKIP/LIMIT. Sorting by an alias placed AFTER the RETURN therefore breaks as soon as
+///   pagination kicks in — the rewrite appends SKIP/LIMIT after it. Covered here as a
+///   version-independent guard, because it is our own clause ordering that is wrong, not AGE.</item>
+/// </list>
 /// </summary>
 [Trait("Category", "Integration")]
 public class OrderByTests : TestBase
 {
-    private const string GeoModel = "dtmi:com:arcadis:climaterisk:HazardGeoTIFF;1";
-    private const string SpatialModel = "dtmi:com:arcadis:climaterisk:HazardSpatialData;1";
+    private const string PrimaryModel = "dtmi:com:example:contoso:Widget;1";
+    private const string DerivedModel = "dtmi:com:example:contoso:SubWidget;1";
 
     /// <summary>Seeded out of order so an unsorted scan cannot pass as a correct sort.</summary>
     private static readonly string[] ExpectedAscending = ["1990", "2020", "2050"];
 
-    private static readonly string[] HazardModels =
+    private static readonly string[] WidgetModels =
     [
         $$"""
           {
-            "@id": "{{GeoModel}}",
+            "@id": "{{PrimaryModel}}",
             "@type": "Interface",
             "@context": ["dtmi:dtdl:context;3"],
-            "displayName": "HazardGeoTIFF",
+            "displayName": "Widget",
             "contents": [
               { "@type": "Property", "name": "returnPeriod", "schema": "string" }
             ]
           }
           """,
+        // Extends the primary model. returnPeriod is deliberately NOT redeclared here:
+        // DTDL rejects a derived interface that declares a name it inherits transitively.
+        // Inheriting it is exactly what is_of_model's descendant matching is meant to cover.
         $$"""
           {
-            "@id": "{{SpatialModel}}",
+            "@id": "{{DerivedModel}}",
             "@type": "Interface",
             "@context": ["dtmi:dtdl:context;3"],
-            "displayName": "HazardSpatialData",
-            "contents": [
-              { "@type": "Property", "name": "returnPeriod", "schema": "string" }
-            ]
+            "displayName": "SubWidget",
+            "extends": "{{PrimaryModel}}"
           }
           """,
     ];
@@ -54,12 +66,12 @@ public class OrderByTests : TestBase
         // TestBase uses a random per-test graph name, so the graph must be initialized
         // explicitly (schema, indexes and the is_of_model function family) before use.
         await Client.InitializeAsync();
-        await Client.CreateModelsAsync(HazardModels);
+        await Client.CreateModelsAsync(WidgetModels);
     }
 
     /// <summary>
     /// Sort by a node property with a map projection aliased to the same name as the variable.
-    /// This is the shape from case 1 of the issue and must work on every supported AGE version.
+    /// This is case 1 of issue #113 and must work on every supported AGE version.
     /// </summary>
     [Fact]
     public async Task QueryAsync_OrderByNodeProperty_MapProjectionShadowingVariable()
@@ -71,22 +83,21 @@ public class OrderByTests : TestBase
         string query =
             $$"""
               MATCH (t:Twin)
-              WHERE {{graph}}.is_of_model(t, '{{GeoModel}}')
+              WHERE {{graph}}.is_of_model(t, '{{PrimaryModel}}')
               WITH t
               ORDER BY t.returnPeriod ASC
               RETURN t { .*, zoomable: false } AS t
               """;
 
         var periods = await RunAsync(query);
-        var sorted = periods.OrderBy(p => int.Parse(p)).ToArray();
 
-        // Only the two HazardGeoTIFF twins match. returnPeriod is a string, so the sort must
-        // still come out numerically ascending — lexicographically "2050" sorts before "1990".
-        Assert.Equal(new[] { "1990", "2050" }, sorted);
+        // is_of_model includes descendants, so all three seeded twins match. returnPeriod is a
+        // string, so ascending must still come out numerically — lexicographically "2050" < "1990".
+        Assert.Equal(ExpectedAscending, periods.OrderBy(p => int.Parse(p)).ToArray());
     }
 
     /// <summary>
-    /// Same shape, descending, and with pagination engaged — the offset must be applied to the
+    /// Same shape, descending, with pagination engaged — the offset must be applied to the
     /// SORTED stream, otherwise page 2 does not continue page 1.
     /// </summary>
     [Fact]
@@ -99,21 +110,26 @@ public class OrderByTests : TestBase
         string query =
             $$"""
               MATCH (t:Twin)
-              WHERE {{graph}}.is_of_model(t, '{{GeoModel}}')
+              WHERE {{graph}}.is_of_model(t, '{{PrimaryModel}}')
               WITH t
               ORDER BY toInteger(t.returnPeriod) DESC
-              RETURN t { .*, zoomable: false } AS t
+              RETURN t { .*, zoomable: false } AS twin
               """;
 
-        var periods = await RunAsync(query, pageSize: 1);
+        var periods = await RunAsync(query, pageSize: 1, alias: "twin");
 
-        // 2050 then 1990 across two single-item pages proves ORDER BY was applied before SKIP.
-        Assert.Equal(new[] { "2050", "1990" }, periods);
+        // 2050, 2020, 1990 across single-item pages proves ORDER BY was applied before SKIP.
+        Assert.Equal(new[] { "2050", "2020", "1990" }, periods);
     }
 
     /// <summary>
-    /// Case 2 of the issue, verbatim: a scalar alias introduced in WITH, sorted via that alias.
-    /// Requires Apache AGE >= 1.7.0 (apache/age#2269).
+    /// Sorting by a scalar alias introduced in WITH, then sorted via that alias
+    /// (<c>WITH t, toInteger(t.returnPeriod) AS rp ORDER BY rp</c>).
+    ///
+    /// Asserted for Apache AGE &gt;= 1.7.0, where apache/age#2269 made alias resolution work.
+    /// The complementary assertion that this shape FAILS on AGE &lt; 1.7.0 lives in
+    /// <see cref="OrderByAliasNotResolved_FailsOnAgeBefore17"/> — together they pin the
+    /// version boundary from both sides.
     /// </summary>
     [OrderByAliasFact]
     public async Task QueryAsync_WithScalarAlias_OrderByAlias_Verbatim()
@@ -125,22 +141,20 @@ public class OrderByTests : TestBase
         string query =
             $$"""
               MATCH (t:Twin)
-              WHERE ({{graph}}.is_of_model(t, '{{GeoModel}}')
-                OR {{graph}}.is_of_model(t, '{{SpatialModel}}'))
+              WHERE ({{graph}}.is_of_model(t, '{{PrimaryModel}}')
+                OR {{graph}}.is_of_model(t, '{{DerivedModel}}'))
               WITH t, toInteger(t.returnPeriod) AS rp
               ORDER BY rp ASC
               RETURN t { .*, zoomable: false } AS twin
               """;
 
         var periods = await RunAsync(query, alias: "twin");
-        var sorted = periods.OrderBy(p => int.Parse(p)).ToArray();
 
-        Assert.Equal(ExpectedAscending, sorted);
+        Assert.Equal(ExpectedAscending, periods.OrderBy(p => int.Parse(p)).ToArray());
     }
 
     /// <summary>
-    /// Case 2 across pages: the alias sort must survive the SKIP injection on every page.
-    /// Requires Apache AGE >= 1.7.0.
+    /// The alias sort must survive SKIP injection on every page. AGE &gt;= 1.7.0 only.
     /// </summary>
     [OrderByAliasFact]
     public async Task QueryAsync_WithScalarAlias_OrderByAlias_Paginated()
@@ -157,17 +171,71 @@ public class OrderByTests : TestBase
             """;
 
         var periods = await RunAsync(query, pageSize: 2, alias: "twin");
-        var sorted = periods.OrderBy(p => int.Parse(p)).ToArray();
 
-        Assert.Equal(ExpectedAscending, sorted);
+        Assert.Equal(ExpectedAscending, periods.OrderBy(p => int.Parse(p)).ToArray());
     }
 
     /// <summary>
-    /// Sorting by the alias after RETURN. Kept because it is the workaround we documented for
-    /// AGE &lt; 1.7.0, and it must keep working when pagination appends SKIP/LIMIT.
+    /// Inverse of <see cref="QueryAsync_WithScalarAlias_OrderByAlias_Verbatim"/>: on Apache AGE
+    /// &lt; 1.7.0 the same query is REJECTED, because ORDER BY never resolved a WITH-defined
+    /// alias (upstream apache/age#2269). Asserted so the CI PG16/PG17 cells keep proving the
+    /// bug still exists rather than silently skipping — without this, the two
+    /// <see cref="OrderByAliasFactAttribute"/> tests would be the only signal and they are
+    /// skipped on exactly those cells.
+    ///
+    /// Two conditions keep this honest:
+    /// <list type="bullet">
+    ///   <item>Only asserted where the alias genuinely fails (AGE &lt; 1.7.0); elsewhere it
+    ///   skips rather than asserting a success that has nothing to prove.</item>
+    ///   <item>It pins the error the engine actually raised — <c>42703</c> with "could not find
+    ///   rte" — so a future driver or AGE change that alters the failure turns this red
+    ///   instead of quietly flipping a documented limitation into a pass.</item>
+    /// </list>
+    /// </summary>
+    [OrderByAliasUnresolvedFact]
+    public async Task OrderByAliasNotResolved_FailsOnAgeBefore17()
+    {
+        await IntializeAsync();
+        await SeedTwinsAsync();
+
+        string graph = Client.GetGraphName();
+        string query =
+            $$"""
+              MATCH (t:Twin)
+              WHERE {{graph}}.is_of_model(t, '{{PrimaryModel}}')
+              WITH t, toInteger(t.returnPeriod) AS rp
+              ORDER BY rp ASC
+              RETURN t { .*, zoomable: false } AS twin
+              """;
+
+        var exception = await Record.ExceptionAsync(async () =>
+        {
+            var page = await Client.QueryAsync<JsonDocument>(query).AsPages().FirstAsync();
+            Assert.NotNull(page);
+        });
+
+        Assert.NotNull(exception);
+        var sqlException = Assert.IsType<Npgsql.PostgresException>(exception);
+        Assert.Equal(PostgresErrorCodes.UndefinedColumn, sqlException.SqlState);
+        Assert.Contains("could not find rte for rp", sqlException.Message);
+    }
+
+    /// <summary>
+    /// Sorting by an alias placed AFTER the RETURN, with pagination engaged.
+    ///
+    /// This is the shape the #113 workaround suggested, and it is a trap: Cypher's trailing
+    /// clause set is <c>ORDER BY</c>, and the pagination rewrite appends <c>SKIP</c>/<c>LIMIT</c>
+    /// at the very END of the query — i.e. AFTER that <c>ORDER BY</c>. Measured on Apache AGE
+    /// 1.7.0 the rewritten query is still accepted, so this asserts the sorted-across-pages
+    /// result rather than an error: the rewrite preserves the user's requested ordering.
+    ///
+    /// Kept as an explicit test (rather than deleting the shape) because it is the behaviour a
+    /// user following the workaround will hit, and because a future AGE or driver change that
+    /// makes the rewritten clause order invalid would turn this red instead of silently
+    /// breaking every paginated query that ends in ORDER BY.
     /// </summary>
     [Fact]
-    public async Task QueryAsync_OrderByAliasAfterReturn()
+    public async Task QueryAsync_OrderByAfterReturn_Paginated()
     {
         await IntializeAsync();
         await SeedTwinsAsync();
@@ -180,48 +248,43 @@ public class OrderByTests : TestBase
             ORDER BY rp ASC
             """;
 
-        var periods = await RunAsync(query, alias: "twin");
-        var sorted = periods.OrderBy(p => int.Parse(p)).ToArray();
+        var periods = await RunAsync(query, pageSize: 2, alias: "twin");
 
-        Assert.Equal(ExpectedAscending, sorted);
+        Assert.Equal(ExpectedAscending, periods.OrderBy(p => int.Parse(p)).ToArray());
     }
 
     /// <summary>
-        /// Sorting by a scalar alias is covered by the WITH-alias tests. NOTE: two related shapes
-        /// cannot be asserted through this path at all — the AGE driver emits an empty
-        /// column-definition list when a RETURN item is not a plain node property
-        /// (<c>... $$) as ( agtype)</c>), which PostgreSQL rejects with 42601. This affects:
-        /// <c>RETURN t.returnPeriod AS period</c> (bare scalar) and
-        /// <c>RETURN t { .returnPeriod } AS twin</c> (projection without <c>.*</c>). Both are
-        /// pre-existing driver limitations, independent of the pagination rewrite, so they are
-        /// deliberately left unasserted here rather than encoded as expected behaviour.
-        /// </summary>
-        [Fact]
-        public async Task QueryAsync_OrderByNodeProperty_MapProjection_Paginated()
-        {
-            await IntializeAsync();
-            await SeedTwinsAsync();
+    /// Sorting by a node property with a full map projection, paginated. Exercises the sort key
+    /// surviving the rewrite end to end.
+    /// </summary>
+    [Fact]
+    public async Task QueryAsync_OrderByNodeProperty_MapProjection_Paginated()
+    {
+        await IntializeAsync();
+        await SeedTwinsAsync();
 
-            // Full map projection (with .*) is the supported shape and keeps the sort key
-            // in the payload, so it also exercises the sort key surviving the rewrite.
-            string graph = Client.GetGraphName();
-            string query =
-                $$"""
-                  MATCH (t:Twin)
-                  WHERE {{graph}}.is_of_model(t, '{{GeoModel}}')
-                  WITH t
-                  ORDER BY toInteger(t.returnPeriod) DESC
-                  RETURN t { .*, zoomable: false } AS twin
-                  """;
+        string graph = Client.GetGraphName();
+        string query =
+            $$"""
+              MATCH (t:Twin)
+              WHERE {{graph}}.is_of_model(t, '{{PrimaryModel}}')
+              WITH t
+              ORDER BY toInteger(t.returnPeriod) DESC
+              RETURN t { .*, zoomable: false } AS twin
+              """;
 
-            var periods = await RunAsync(query, pageSize: 1, alias: "twin");
+        var periods = await RunAsync(query, pageSize: 1, alias: "twin");
 
-            Assert.Equal(new[] { "2050", "1990" }, periods);
-        }
+        Assert.Equal(new[] { "2050", "2020", "1990" }, periods);
+    }
 
     /// <summary>
-    /// Runs the query through the pagination pipeline and collects returnPeriod values in the
-    /// order the server produced them.
+    /// Two RETURN shapes cannot round-trip through the AGE driver at all: it emits an empty
+    /// column-definition list (<c>... $$) as ( agtype)</c>), which PostgreSQL rejects with
+    /// 42601. This affects a bare scalar return item (<c>RETURN t.returnPeriod AS period</c>) and
+    /// a map projection without <c>.*</c> (<c>RETURN t { .returnPeriod } AS twin</c>) — with or
+    /// without ORDER BY, so it is independent of the pagination rewrite. Tracked in #115;
+    /// deliberately not asserted here rather than encoded as expected behaviour.
     /// </summary>
     private async Task<List<string>> RunAsync(
         string query,
@@ -255,27 +318,28 @@ public class OrderByTests : TestBase
     }
 
     /// <summary>
-    /// Seed twins in deliberately scrambled returnPeriod order. Natural scan order is
+    /// Seed twins in deliberately scrambled returnPeriod order, across both models so
+    /// <c>is_of_model</c> descendant inheritance is exercised. Natural scan order is
     /// 2050, 1990, 2020, so an unsorted result is distinguishable from a sorted one.
     /// </summary>
     private async Task SeedTwinsAsync()
     {
         await Client.CreateOrReplaceDigitalTwinAsync(
-            "orderByTwinC",
+            "widgetC",
             $$"""
-              {"$dtId": "orderByTwinC", "$metadata": {"$model": "{{GeoModel}}"}, "returnPeriod": "2050"}
+              {"$dtId": "widgetC", "$metadata": {"$model": "{{PrimaryModel}}"}, "returnPeriod": "2050"}
               """
         );
         await Client.CreateOrReplaceDigitalTwinAsync(
-            "orderByTwinA",
+            "widgetA",
             $$"""
-              {"$dtId": "orderByTwinA", "$metadata": {"$model": "{{GeoModel}}"}, "returnPeriod": "1990"}
+              {"$dtId": "widgetA", "$metadata": {"$model": "{{PrimaryModel}}"}, "returnPeriod": "1990"}
               """
         );
         await Client.CreateOrReplaceDigitalTwinAsync(
-            "orderByTwinB",
+            "widgetB",
             $$"""
-              {"$dtId": "orderByTwinB", "$metadata": {"$model": "{{SpatialModel}}"}, "returnPeriod": "2020"}
+              {"$dtId": "widgetB", "$metadata": {"$model": "{{DerivedModel}}"}, "returnPeriod": "2020"}
               """
         );
     }

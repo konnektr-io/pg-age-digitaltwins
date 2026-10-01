@@ -183,8 +183,8 @@ public class CypherPaginationRewriterTests
     {
         const string cypher =
             "MATCH (t:Twin)\n"
-            + "WHERE (digitaltwins.is_of_model(t, 'dtmi:com:arcadis:climaterisk:HazardGeoTIFF;1')\n"
-            + "  OR digitaltwins.is_of_model(t, 'dtmi:com:arcadis:climaterisk:HazardSpatialData;1'))\n"
+            + "WHERE (digitaltwins.is_of_model(t, 'dtmi:com:example:contoso:Widget;1')\n"
+            + "  OR digitaltwins.is_of_model(t, 'dtmi:com:example:contoso:SubWidget;1'))\n"
             + "WITH t, toInteger(t.returnPeriod) AS rp\n"
             + "ORDER BY rp ASC\n"
             + "RETURN t { .*, zoomable: false } AS twin";
