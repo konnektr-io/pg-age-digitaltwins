@@ -16,6 +16,12 @@ namespace AgeDigitalTwins.Test;
 ///   <item>a bare scalar return item — <c>RETURN t.returnPeriod AS period</c></item>
 ///   <item>a map projection WITHOUT <c>.*</c> — <c>RETURN t { .returnPeriod } AS twin</c></item>
 /// </list>
+///
+/// Most tests here are unconditional, so the column-list fix is proven on every supported AGE
+/// version including 1.6.0. The one exception is
+/// <see cref="QueryAsync_ScalarReturnItem_OrderByAlias_Paginated"/>, which sorts on a RETURN
+/// alias and therefore inherits the separate AGE 1.6.0 limitation (apache/age#2269) and is
+/// version-gated.
 /// </summary>
 [Trait("Category", "Integration")]
 public class ReturnItemColumnListTests : TestBase
@@ -90,8 +96,14 @@ public class ReturnItemColumnListTests : TestBase
     /// <summary>
     /// The same scalar item WITH an ORDER BY on the alias and a page size, so both the driver's
     /// column derivation and the pagination rewrite are in play.
+    ///
+    /// Requires Apache AGE &gt;= 1.7.0: <c>ORDER BY &lt;alias&gt;</c> is unresolvable on AGE 1.6.0
+    /// (<c>42703 could not find rte for period</c>, upstream apache/age#2269), which is a
+    /// separate AGE defect from the driver issue this file covers. The other four tests here are
+    /// unconditional because they carry no ORDER BY on an alias, so they prove the column-list
+    /// fix on every supported version — including 1.6.0.
     /// </summary>
-    [Fact]
+    [OrderByAliasFact]
     public async Task QueryAsync_ScalarReturnItem_OrderByAlias_Paginated()
     {
         await IntializeAsync();
