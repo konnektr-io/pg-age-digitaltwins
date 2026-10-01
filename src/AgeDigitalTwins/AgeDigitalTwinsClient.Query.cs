@@ -89,8 +89,6 @@ public partial class AgeDigitalTwinsClient
                     activity?.SetTag("cypher", query);
 
                     string nextContinuationQuery = cypher;
-                    var limitMatch = LimitRegex().Match(cypher);
-                    var skipMatch = SkipRegex().Match(cypher);
                     // Enforce read-only queries by blocking forbidden keywords
                     string[] forbiddenKeywords =
                     {
@@ -113,37 +111,21 @@ public partial class AgeDigitalTwinsClient
                         }
                     }
 
-                    if (skipMatch.Success)
-                    {
-                        int existingSkip = int.Parse(skipMatch.Groups[1].Value);
-                        int newSkip = existingSkip + (continuationToken?.RowNumber ?? 0);
-                        cypher = SkipRegex().Replace(cypher, $"SKIP {newSkip}");
-                    }
-                    else if (limitMatch.Success && continuationToken != null)
-                    {
-                        cypher = LimitRegex().Replace(cypher, "");
-
-                        cypher +=
-                            $" SKIP {continuationToken.RowNumber} LIMIT {limitMatch.Groups[1].Value}";
-                    }
-                    else if (continuationToken != null)
-                    {
-                        cypher += $" SKIP {continuationToken.RowNumber}";
-                    }
-
                     int existingLimit = int.MaxValue;
-                    if (limitMatch.Success)
+                    var existingLimitMatch = LimitRegex().Match(cypher);
+                    if (existingLimitMatch.Success)
                     {
-                        existingLimit = int.Parse(limitMatch.Groups[1].Value);
-                        if (maxItemsPerPage.HasValue && maxItemsPerPage.Value < existingLimit)
-                        {
-                            cypher = LimitRegex().Replace(cypher, $"LIMIT {maxItemsPerPage.Value}");
-                        }
+                        existingLimit = int.Parse(existingLimitMatch.Groups[1].Value);
                     }
-                    else if (maxItemsPerPage.HasValue)
-                    {
-                        cypher += $" LIMIT {maxItemsPerPage.Value}";
-                    }
+
+                    // NOTE: the clause ORDER matters. ORDER BY must be attached before SKIP/LIMIT
+                    // for offset pagination to be correct, and Cypher only accepts SKIP/LIMIT at the
+                    // very end of the query — so a trailing ORDER BY has to be moved ahead of them.
+                    cypher = CypherPaginationRewriter.Apply(
+                        cypher,
+                        continuationToken?.RowNumber ?? 0,
+                        maxItemsPerPage
+                    );
 
                     var isVariableLengthEdgeQuery = VariableLengthEdgeRegex().IsMatch(cypher);
 
