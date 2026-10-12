@@ -1,3 +1,5 @@
+using AgeDigitalTwins.Exceptions;
+
 namespace AgeDigitalTwins.Test;
 
 public class AdtQueryToCypherTests
@@ -255,6 +257,93 @@ public class AdtQueryToCypherTests
         "SELECT T.$metadata.$model FROM DIGITALTWINS T",
         "MATCH (T:Twin) RETURN T['$metadata']['$model']"
     )]
+    // https://github.com/konnektr-io/pg-age-digitaltwins/issues/118 — the two-argument
+    // IS_OF_MODEL(twin, 'model') form was translated with the twin collection as the model id
+    // (is_of_model(T,T)), a predicate that matches no twin and returns an empty result set.
+    [InlineData(
+        "SELECT * FROM DIGITALTWINS T WHERE IS_OF_MODEL(T, 'dtmi:com:example:Thing;1')",
+        "MATCH (T:Twin) WHERE testgraph.is_of_model(T,'dtmi:com:example:Thing;1') RETURN *"
+    )]
+    [InlineData(
+        "SELECT * FROM DIGITALTWINS DT WHERE IS_OF_MODEL(DT, 'dtmi:com:example:Thing;1')",
+        "MATCH (DT:Twin) WHERE testgraph.is_of_model(DT,'dtmi:com:example:Thing;1') RETURN *"
+    )]
+    [InlineData(
+        "SELECT * FROM DIGITALTWINS T WHERE IS_OF_MODEL(T, 'dtmi:com:contoso:CelestialBody;1', exact)",
+        "MATCH (T:Twin) WHERE testgraph.is_of_model(T,'dtmi:com:contoso:CelestialBody;1',true) RETURN *"
+    )]
+    [InlineData(
+        "SELECT * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:contoso:CelestialBody;1', exact)",
+        "MATCH (T:Twin) WHERE testgraph.is_of_model(T,'dtmi:com:contoso:CelestialBody;1',true) RETURN *"
+    )]
+    [InlineData(
+        "SELECT T FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:example:Thing;1')",
+        "MATCH (T:Twin) WHERE testgraph.is_of_model(T,'dtmi:com:example:Thing;1') RETURN T"
+    )]
+    [InlineData(
+        "SELECT B FROM DIGITALTWINS DT JOIN B RELATED DT.has R WHERE IS_OF_MODEL(B, 'dtmi:com:example:Thing;1')",
+        "MATCH (DT:Twin)-[R:has]->(B:Twin) WHERE testgraph.is_of_model(B,'dtmi:com:example:Thing;1') RETURN B"
+    )]
+    // An alias-qualified property must not be prefixed with the implicit alias again
+    // (it used to become T.T['$dtId']).
+    [InlineData(
+        "SELECT * FROM DIGITALTWINS T WHERE T.$dtId = 'thing-1'",
+        "MATCH (T:Twin) WHERE T['$dtId'] = 'thing-1' RETURN *"
+    )]
+    [InlineData(
+        "SELECT * FROM DIGITALTWINS T WHERE T.name = 'foo'",
+        "MATCH (T:Twin) WHERE T.name = 'foo' RETURN *"
+    )]
+    [InlineData(
+        "SELECT * FROM DIGITALTWINS MATCH (a)-[R]->(b) WHERE a.$dtId = 'x'",
+        "MATCH (a:Twin)-[R]->(b:Twin) WHERE a['$dtId'] = 'x' RETURN *"
+    )]
+    // ORDER BY belongs after the projection in Cypher (it used to stay inside the WHERE
+    // clause, producing "T.ORDER T.BY T.order"), and its property is emitted in bracket
+    // notation because AGE cannot parse a dotted property whose name is a Cypher keyword
+    // (ORDER BY T.order is a syntax error, ORDER BY T['order'] sorts).
+    [InlineData(
+        "SELECT * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:example:Thing;1') ORDER BY order",
+        "MATCH (T:Twin) WHERE testgraph.is_of_model(T,'dtmi:com:example:Thing;1') RETURN * ORDER BY T['order']"
+    )]
+    [InlineData(
+        "SELECT * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:example:Thing;1') ORDER BY name DESC",
+        "MATCH (T:Twin) WHERE testgraph.is_of_model(T,'dtmi:com:example:Thing;1') RETURN * ORDER BY T['name'] DESC"
+    )]
+    [InlineData(
+        "SELECT TOP(5) * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:example:Thing;1') ORDER BY order ASC",
+        "MATCH (T:Twin) WHERE testgraph.is_of_model(T,'dtmi:com:example:Thing;1') RETURN * ORDER BY T['order'] ASC LIMIT 5"
+    )]
+    [InlineData(
+        "SELECT $dtId FROM DIGITALTWINS ORDER BY $dtId",
+        "MATCH (T:Twin) RETURN T['$dtId'] ORDER BY T['$dtId']"
+    )]
+    [InlineData(
+        "SELECT * FROM DIGITALTWINS WHERE name = 'foo' ORDER BY name DESC, $dtId",
+        "MATCH (T:Twin) WHERE T.name = 'foo' RETURN * ORDER BY T['name'] DESC, T['$dtId']"
+    )]
+    [InlineData(
+        "SELECT * FROM DIGITALTWINS T WHERE T.name = 'foo' ORDER BY T.name DESC",
+        "MATCH (T:Twin) WHERE T.name = 'foo' RETURN * ORDER BY T['name'] DESC"
+    )]
+    [InlineData(
+        "SELECT $metadata.$model FROM DIGITALTWINS ORDER BY $metadata.$model",
+        "MATCH (T:Twin) RETURN T['$metadata']['$model'] ORDER BY T['$metadata']['$model']"
+    )]
+    // Boolean (and negative numeric) literals are values, not properties: they used to be
+    // rewritten into T.true / T.false / T.-1.
+    [InlineData(
+        "SELECT * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:example:Thing;1') AND enabled = true",
+        "MATCH (T:Twin) WHERE testgraph.is_of_model(T,'dtmi:com:example:Thing;1') AND T.enabled = true RETURN *"
+    )]
+    [InlineData(
+        "SELECT * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:example:Thing;1') AND enabled = false",
+        "MATCH (T:Twin) WHERE testgraph.is_of_model(T,'dtmi:com:example:Thing;1') AND T.enabled = false RETURN *"
+    )]
+    [InlineData(
+        "SELECT * FROM DIGITALTWINS WHERE offset > -1",
+        "MATCH (T:Twin) WHERE T.offset > -1 RETURN *"
+    )]
     public void ConvertAdtQueryToCypher_ReturnsExpectedCypher(
         string adtQuery,
         string expectedCypher
@@ -262,5 +351,23 @@ public class AdtQueryToCypherTests
     {
         var actualCypher = AdtQueryHelpers.ConvertAdtQueryToCypher(adtQuery, "testgraph");
         Assert.Equal(expectedCypher, actualCypher);
+    }
+
+    /// <summary>
+    /// A MATCH query names its own twin variables, so the single-argument form cannot tell which
+    /// twin to test. It used to throw an <see cref="IndexOutOfRangeException"/> (HTTP 500);
+    /// ADT-compatible behaviour is to reject the query with a clear error.
+    /// </summary>
+    [Fact]
+    public void ConvertAdtQueryToCypher_IsOfModelWithoutTwinCollection_Throws()
+    {
+        var exception = Assert.Throws<InvalidAdtQueryException>(() =>
+            AdtQueryHelpers.ConvertAdtQueryToCypher(
+                "SELECT T,R FROM DIGITALTWINS MATCH (a)-[R]->(T) WHERE IS_OF_MODEL('dtmi:com:example:Thing;1')",
+                "testgraph"
+            )
+        );
+
+        Assert.Contains("IS_OF_MODEL", exception.Message);
     }
 }

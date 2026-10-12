@@ -13,11 +13,22 @@ public static partial class AdtQueryHelpers
         // Clean up the query from line breaks and extra spaces
         adtQuery = WhitespaceTrimmerRegex().Replace(adtQuery, " ").Trim();
 
+        // Extract a trailing ORDER BY clause before anything else. The WHERE clause
+        // regex is greedy, so it would otherwise swallow the clause into the predicate
+        // ("... ORDER BY order" became "T.ORDER T.BY T.order"), and ADT writes ORDER BY
+        // after the projection while Cypher requires it after RETURN.
+        string? adtOrderByClause = null;
+        var orderByMatch = OrderByRegex().Match(adtQuery);
+        if (orderByMatch.Success)
+        {
+            adtOrderByClause = orderByMatch.Groups["orderby"].Value.Trim();
+            adtQuery = adtQuery[..orderByMatch.Index].TrimEnd();
+        }
+
         // Prepare RETURN and LIMIT clauses
         string returnClause;
         var selectMatch = SelectRegex().Match(adtQuery);
         string limitClause;
-        bool usesWildcard = false;
         if (selectMatch.Success)
         {
             limitClause = selectMatch.Groups["limit"].Success
@@ -39,16 +50,16 @@ public static partial class AdtQueryHelpers
             {
                 returnClause = "COUNT(*)";
             }
-            if (returnClause == "*")
-            {
-                usesWildcard = true;
-            }
         }
         else
             throw new InvalidAdtQueryException("Invalid query format.");
 
         // Prepare MATCH clause
         string matchClause;
+        // The twin/relationship variable the WHERE clause and ORDER BY refer to, or null
+        // when the query names its own variable(s) in a MATCH/JOIN and the projection is
+        // explicit (then the caller qualifies every property itself).
+        string? implicitAlias = null;
         // MultiLabel Edge WHERE clause
         List<string> multiLabelEdgeWhereClauses = new();
         // Handle relationships
@@ -59,11 +70,12 @@ public static partial class AdtQueryHelpers
             if (match.Success)
             {
                 var relationshipAlias = match.Groups[1].Success ? match.Groups[1].Value : "R";
+                implicitAlias = relationshipAlias;
                 matchClause = $"(:Twin)-[{relationshipAlias}]->(:Twin)";
             }
             else
             {
-                usesWildcard = true;
+                implicitAlias = "R";
                 matchClause = $"(:Twin)-[R]->(:Twin)";
                 // Process RETURN clause to add alias (in case return does not contain *)
                 if (!returnClause.Contains('*'))
@@ -77,6 +89,9 @@ public static partial class AdtQueryHelpers
         {
             if (adtQuery.Contains("MATCH", StringComparison.OrdinalIgnoreCase))
             {
+                // With an explicit MATCH the query names its own twin variables, so only a
+                // wildcard projection leaves a single implicit variable to qualify against.
+                implicitAlias = returnClause == "*" ? "T" : null;
                 // Find twin collection/alias
                 var match = GetDigitalTwinsMatchClauseRegex().Match(adtQuery);
                 if (match.Success)
@@ -122,6 +137,7 @@ public static partial class AdtQueryHelpers
             }
             else if (adtQuery.Contains("JOIN", StringComparison.OrdinalIgnoreCase))
             {
+                implicitAlias = returnClause == "*" ? "T" : null;
                 var joinMatches = GetJoinRelatedRegex().Matches(adtQuery);
                 List<string> matchClauses = new();
 
@@ -157,9 +173,12 @@ public static partial class AdtQueryHelpers
             {
                 // Find digitaltwins collection/alias
                 var match = ExtractDigitalTwinNameRegex().Match(adtQuery);
-                if (match.Success)
+                var twinAlias = match.Groups[1].Success ? match.Groups[1].Value : string.Empty;
+                if (!string.IsNullOrEmpty(twinAlias))
                 {
-                    var twinAlias = match.Groups[1].Value;
+                    // The query names its twin variable, so the WHERE clause and ORDER BY
+                    // refer to that variable (and not to the fallback "T").
+                    implicitAlias = twinAlias;
                     matchClause = $"({twinAlias}:Twin)";
                     // Process RETURN clause to add the (user-supplied) alias so
                     // bare $-property projections like $metadata.$model are
@@ -171,7 +190,7 @@ public static partial class AdtQueryHelpers
                 }
                 else
                 {
-                    usesWildcard = true;
+                    implicitAlias = "T";
                     matchClause = $"(T:Twin)";
                     // Process RETURN clause to add alias (in case return does not contain *)
                     if (!returnClause.Contains('*'))
@@ -196,18 +215,7 @@ public static partial class AdtQueryHelpers
                 var adtWhereClause = match.Groups[1].Value;
 
                 // Process WHERE clause
-                whereClause = ProcessWhereClause(
-                    adtWhereClause,
-                    graphName,
-                    usesWildcard
-                        && adtQuery.Contains(
-                            "FROM RELATIONSHIPS",
-                            StringComparison.OrdinalIgnoreCase
-                        )
-                            ? "R"
-                        : usesWildcard ? "T"
-                        : null
-                );
+                whereClause = ProcessWhereClause(adtWhereClause, graphName, implicitAlias);
             }
             else
                 throw new InvalidAdtQueryException("Invalid query format: {adtQuery}");
@@ -237,6 +245,11 @@ public static partial class AdtQueryHelpers
             cypher += " WHERE " + string.Join(" AND ", multiLabelEdgeWhereClauses);
         }
         cypher += " RETURN " + returnClause;
+        if (!string.IsNullOrEmpty(adtOrderByClause))
+        {
+            cypher +=
+                " ORDER BY " + TranslateOrderByClause(adtOrderByClause, graphName, implicitAlias);
+        }
         if (!string.IsNullOrEmpty(limitClause))
         {
             cypher += " " + limitClause;
@@ -271,52 +284,28 @@ public static partial class AdtQueryHelpers
                     whereClause,
                     m =>
                     {
+                        // Leave accesses that already name their own variable alone
+                        // (T.$dtId, DT.name, current.$dtId): the caller wrote them
+                        // explicitly, and prefixing again yields T.T['$dtId'].
+                        if (QualifiedPropertyAccessRegex().IsMatch(m.Value))
+                        {
+                            return m.Value;
+                        }
                         return $"{prependAlias}.{m.Value}";
                     }
                 );
+        }
 
-            // Process IS_OF_MODEL function
-            whereClause = IsOfModelRegex()
-                .Replace(
-                    whereClause,
-                    m =>
-                    {
-                        var args = m.Groups[1].Value.Split(',');
-                        var modelId = args[0].Trim();
-                        // We need to remove T.exact (not exact), because the prependAlias was already added
-                        if (
-                            args.Length > 1
-                            && args[1].Trim().Equals("T.exact", StringComparison.OrdinalIgnoreCase)
-                        )
-                        {
-                            return $"{graphName}.is_of_model({prependAlias},{modelId},true)";
-                        }
-                        return $"{graphName}.is_of_model({prependAlias},{modelId})";
-                    }
-                );
-        }
-        else
-        {
-            // Process IS_OF_MODEL function without prepend alias (alias/twin collection should already be defined in caught group)
-            whereClause = IsOfModelRegex()
-                .Replace(
-                    whereClause,
-                    m =>
-                    {
-                        var args = m.Groups[1].Value.Split(',');
-                        var twinCollection = args[0].Trim();
-                        var modelId = args[1].Trim();
-                        if (
-                            args.Length > 2
-                            && args[2].Trim().Equals("exact", StringComparison.OrdinalIgnoreCase)
-                        )
-                        {
-                            return $"{graphName}.is_of_model({twinCollection},{modelId},true)";
-                        }
-                        return $"{graphName}.is_of_model({twinCollection},{modelId})";
-                    }
-                );
-        }
+        // Process IS_OF_MODEL. This runs after the alias-prepend pass above, which may have
+        // qualified the call's arguments (a bare `exact` becomes T.exact, a twin collection
+        // reference becomes T.T); TranslateIsOfModelCall undoes that, so every ADT form maps
+        // onto the graph function:
+        //   IS_OF_MODEL('model')           -> is_of_model(<twin>,'model')
+        //   IS_OF_MODEL('model', exact)    -> is_of_model(<twin>,'model',true)
+        //   IS_OF_MODEL(T, 'model')        -> is_of_model(T,'model')      [issue #118]
+        //   IS_OF_MODEL(T, 'model', exact) -> is_of_model(T,'model',true)
+        whereClause = IsOfModelRegex()
+            .Replace(whereClause, m => TranslateIsOfModelCall(m, graphName, prependAlias));
 
         // Process ARRAY_CONTAINS function
         whereClause = ArrayContainsFunctionRegex()
@@ -430,6 +419,151 @@ public static partial class AdtQueryHelpers
         return whereClause;
     }
 
+    /// <summary>
+    /// Translates an ADT <c>IS_OF_MODEL</c> call into the graph's <c>is_of_model</c> SQL function.
+    /// </summary>
+    /// <remarks>
+    /// ADT accepts <c>IS_OF_MODEL([twin-collection,] '&lt;model-ID&gt;' [, exact])</c> — every
+    /// argument is optional except the model id. The twin collection only disambiguates which twin
+    /// to test when the query has more than one (a JOIN/MATCH), so when the query leaves the twin
+    /// variable implicit <paramref name="prependAlias"/> wins.
+    /// </remarks>
+    private static string TranslateIsOfModelCall(
+        Match match,
+        string graphName,
+        string? prependAlias
+    )
+    {
+        var rawArgs = match
+            .Groups[1]
+            .Value.Split(',')
+            // The alias-prepend pass qualifies bare references (T -> T.T); undo that so the
+            // arguments are parsed exactly as the caller wrote them.
+            .Select(arg => arg.Trim())
+            .Select(arg =>
+                prependAlias != null
+                && arg.StartsWith(prependAlias + ".", StringComparison.Ordinal)
+                    ? arg[(prependAlias.Length + 1)..]
+                    : arg
+            )
+            .ToArray();
+        var exact = rawArgs.Any(arg => IsExactArgument(arg));
+        var operands = rawArgs.Where(arg => arg.Length > 0 && !IsExactArgument(arg)).ToList();
+
+        string? modelId;
+        string? twinRef;
+        var quoted = operands.Where(operand => operand.StartsWith('\'')).ToList();
+        if (quoted.Count > 0)
+        {
+            // Model ids are always quoted string literals; anything unquoted next to one is
+            // the twin collection reference.
+            modelId = quoted[0];
+            twinRef = operands.FirstOrDefault(operand => !operand.StartsWith('\''));
+        }
+        else if (operands.Count > 1)
+        {
+            // Legacy/unquoted form: <twin-collection>, <model-id>
+            twinRef = operands[0];
+            modelId = operands[^1];
+        }
+        else
+        {
+            modelId = operands.FirstOrDefault();
+            twinRef = null;
+        }
+
+        if (modelId == null)
+        {
+            // Nothing to translate — leave the call as it is and let the graph report it.
+            return match.Value;
+        }
+
+        // An explicit twin collection argument wins: that is the whole point of ADT's optional
+        // first argument (it disambiguates which twin to test in a JOIN/MATCH).
+        var twin = twinRef ?? prependAlias;
+        if (twin == null)
+        {
+            throw new InvalidAdtQueryException(
+                "IS_OF_MODEL requires a twin collection when the query names its own twin "
+                    + "variable(s), e.g. IS_OF_MODEL(T, 'dtmi:com:example:Thing;1')."
+            );
+        }
+
+        return exact
+            ? $"{graphName}.is_of_model({twin},{modelId},true)"
+            : $"{graphName}.is_of_model({twin},{modelId})";
+    }
+
+    /// <summary>
+    /// True when an <c>IS_OF_MODEL</c> argument is the ADT <c>exact</c> keyword.
+    /// </summary>
+    /// <remarks>
+    /// The alias-prepend pass may already have qualified a bare <c>exact</c> into <c>T.exact</c>
+    /// (that is what the translation used to work around), so both shapes are accepted.
+    /// </remarks>
+    private static bool IsExactArgument(string argument) =>
+        argument.Equals("exact", StringComparison.OrdinalIgnoreCase)
+        || argument.EndsWith(".exact", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Translates an ADT <c>ORDER BY</c> expression (e.g. <c>name DESC, $dtId</c>) into Cypher.
+    /// </summary>
+    /// <remarks>
+    /// Each term is translated separately, with the <c>ASC</c>/<c>DESC</c> direction keyword split
+    /// off first so it is not treated as a property, and joined back with commas.
+    /// </remarks>
+    private static string TranslateOrderByClause(
+        string orderByClause,
+        string graphName,
+        string? prependAlias
+    )
+    {
+        var terms = orderByClause.Split(',');
+        for (int i = 0; i < terms.Length; i++)
+        {
+            var term = terms[i].Trim();
+            var direction = string.Empty;
+            var directionMatch = OrderByDirectionRegex().Match(term);
+            if (directionMatch.Success)
+            {
+                term = directionMatch.Groups["expression"].Value.Trim();
+                direction = " " + directionMatch.Groups["direction"].Value.ToUpperInvariant();
+            }
+
+            terms[i] = TranslateOrderByTerm(term, graphName, prependAlias) + direction;
+        }
+
+        return string.Join(", ", terms);
+    }
+
+    /// <summary>
+    /// Translates one ORDER BY term, using bracket notation for the property (<c>T['order']</c>).
+    /// </summary>
+    /// <remarks>
+    /// Bracket notation is not cosmetic here. AGE's parser reads a dotted property whose name is a
+    /// Cypher keyword — a twin property called <c>order</c>, for instance — as the start of the
+    /// clause itself and then fails on the following token: <c>ORDER BY T.order</c> is a syntax
+    /// error, while <c>ORDER BY T['order']</c> sorts. It is the same escape the converter already
+    /// uses for <c>$</c>-properties.
+    /// </remarks>
+    private static string TranslateOrderByTerm(string term, string graphName, string? prependAlias)
+    {
+        var simple = SimplePropertyAccessRegex().Match(term);
+        if (simple.Success)
+        {
+            var alias = simple.Groups["alias"].Success
+                ? simple.Groups["alias"].Value
+                : prependAlias;
+            if (alias != null)
+            {
+                return $"{alias}['{simple.Groups["property"].Value}']";
+            }
+        }
+
+        // $-properties and anything else go through the regular translation.
+        return ProcessWhereClause(term, graphName, prependAlias);
+    }
+
     [GeneratedRegex(
         @"SELECT\s*(?:TOP\s*\(\s*(?<limit>\d+)\s*\)\s*)?(?<projections>.*?)\s+FROM",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
@@ -473,10 +607,41 @@ public static partial class AdtQueryHelpers
     private static partial Regex FunctionCallRegex();
 
     [GeneratedRegex(
-        @"(?<=\s|\[|\(|^)(?!AND\b|OR\b|IN\b|NOT\b|\d+|'[^']*'|""[^""]*"")[^\[\]""\s=<>!()]+(?=\s*=\s*'|\s|\)|$|\])",
+        @"(?<=\s|\[|\(|^)(?!AND\b|OR\b|IN\b|NOT\b|true\b|false\b|-?\d+|'[^']*'|""[^""]*"")[^\[\]""\s=<>!()]+(?=\s*=\s*'|\s|\)|$|\])",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
     )]
     private static partial Regex PropertyAccessWhereClauseRegex();
+
+    /// <summary>
+    /// A property access that already names its own variable (<c>T.$dtId</c>, <c>DT.name</c>,
+    /// <c>current.$dtId</c>) and therefore must not be prefixed with the implicit alias again.
+    /// </summary>
+    [GeneratedRegex(@"^\w+[.\[]", RegexOptions.CultureInvariant)]
+    private static partial Regex QualifiedPropertyAccessRegex();
+
+    /// <summary>A trailing ADT <c>ORDER BY</c> clause, captured without the leading keyword.</summary>
+    [GeneratedRegex(
+        @"\bORDER\s+BY\s+(?<orderby>.+)$",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+    )]
+    private static partial Regex OrderByRegex();
+
+    /// <summary>A single ORDER BY term with an explicit sort direction.</summary>
+    [GeneratedRegex(
+        @"^(?<expression>.+?)\s+(?<direction>ASC|DESC)$",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+    )]
+    private static partial Regex OrderByDirectionRegex();
+
+    /// <summary>
+    /// An ORDER BY term that is a single property access: <c>name</c>, <c>T.name</c> (not
+    /// <c>$</c>-properties, which are translated by the regular property path).
+    /// </summary>
+    [GeneratedRegex(
+        @"^(?:(?<alias>\w+)\.)?(?<property>[A-Za-z_]\w*)$",
+        RegexOptions.CultureInvariant
+    )]
+    private static partial Regex SimplePropertyAccessRegex();
 
     [GeneratedRegex(
         @"IS_OF_MODEL\(([^)]+)\)",
