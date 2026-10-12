@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using AgeDigitalTwins.Exceptions;
 
 namespace AgeDigitalTwins.Test;
 
@@ -675,6 +676,124 @@ public class QueryTests : TestBase
             count++;
         }
         Assert.Equal(2, count);
+    }
+
+    /// <summary>
+    /// Regression test for https://github.com/konnektr-io/pg-age-digitaltwins/issues/118.
+    /// <para>
+    /// The two-argument <c>IS_OF_MODEL(twin, 'model')</c> form — valid ADT SQL, and the form used in
+    /// Microsoft's own examples — was translated with the twin collection argument as the model id
+    /// (<c>is_of_model(T,T)</c>). That predicate matches no twin, so the query answered HTTP 200 with
+    /// an empty result set: indistinguishable from "there are no twins of this model".
+    /// </para>
+    /// <para>
+    /// The same test pins the rest of the ADT query surface reported in the issue: an
+    /// alias-qualified property, an ORDER BY clause (which ADT does not have, so it is rejected),
+    /// and a boolean literal in the predicate.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task QueryAsync_IsOfModel_TwoArgumentForm_ReturnsTwins()
+    {
+        await IntializeAsync();
+
+        // Isolate the graph: the assertions below are on counts and on ordering.
+        await foreach (var twin in Client.QueryAsync<JsonDocument>(@"SELECT * FROM DIGITALTWINS"))
+        {
+            await Client.DeleteDigitalTwinAsync(
+                twin!.RootElement.GetProperty("$dtId")!.GetString()!
+            );
+        }
+
+        try
+        {
+            await Client.CreateModelsAsync(
+                [
+                    @"{""@id"": ""dtmi:com:example:Thing;1"", ""@type"": ""Interface"", ""@context"": ""dtmi:dtdl:context;3"", ""displayName"": ""Thing"", ""contents"": [{""@type"": ""Property"", ""name"": ""name"", ""schema"": ""string""}, {""@type"": ""Property"", ""name"": ""order"", ""schema"": ""integer""}, {""@type"": ""Property"", ""name"": ""enabled"", ""schema"": ""boolean""}]}",
+                ]
+            );
+        }
+        catch { }
+
+        await Client.CreateOrReplaceDigitalTwinAsync(
+            "thing-1",
+            @"{""$dtId"": ""thing-1"", ""$metadata"": {""$model"": ""dtmi:com:example:Thing;1""}, ""name"": ""thing one"", ""order"": 2, ""enabled"": true}"
+        );
+        await Client.CreateOrReplaceDigitalTwinAsync(
+            "thing-2",
+            @"{""$dtId"": ""thing-2"", ""$metadata"": {""$model"": ""dtmi:com:example:Thing;1""}, ""name"": ""thing two"", ""order"": 1, ""enabled"": false}"
+        );
+
+        async Task<int> CountAsync(string adtQuery)
+        {
+            var count = 0;
+            await foreach (var _ in Client.QueryAsync<JsonDocument>(adtQuery))
+            {
+                count++;
+            }
+            return count;
+        }
+
+        // The single-argument form already worked and must keep working.
+        Assert.Equal(
+            2,
+            await CountAsync(
+                @"SELECT * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:example:Thing;1')"
+            )
+        );
+
+        // The reported bug: every two-argument shape returned an empty result set.
+        Assert.Equal(
+            2,
+            await CountAsync(
+                @"SELECT * FROM DIGITALTWINS T WHERE IS_OF_MODEL(T, 'dtmi:com:example:Thing;1')"
+            )
+        );
+        Assert.Equal(
+            2,
+            await CountAsync(
+                @"SELECT * FROM DIGITALTWINS DT WHERE IS_OF_MODEL(DT, 'dtmi:com:example:Thing;1')"
+            )
+        );
+        Assert.Equal(
+            2,
+            await CountAsync(
+                @"SELECT * FROM DIGITALTWINS T WHERE IS_OF_MODEL(T, 'dtmi:com:example:Thing;1', exact)"
+            )
+        );
+
+        // Alias-qualified property access (used to be emitted as T.T['$dtId']).
+        Assert.Equal(
+            1,
+            await CountAsync(@"SELECT * FROM DIGITALTWINS T WHERE T.$dtId = 'thing-1'")
+        );
+
+        // ORDER BY is not part of the ADT query language — a real ADT instance fails its SQL
+        // parser on it — so the translator rejects the clause instead of letting it be mangled
+        // into the WHERE predicate ("... T.ORDER T.BY T.order"). Ordering is a Cypher feature.
+        var orderByException = await Assert.ThrowsAsync<InvalidAdtQueryException>(async () =>
+        {
+            await foreach (
+                var _ in Client.QueryAsync<JsonDocument>(
+                    @"SELECT * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:example:Thing;1') ORDER BY order"
+                )
+            ) { }
+        });
+        Assert.Contains("ORDER BY", orderByException.Message);
+
+        // Boolean literals in the predicate (used to be emitted as T.true / T.false).
+        Assert.Equal(
+            1,
+            await CountAsync(
+                @"SELECT * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:example:Thing;1') AND enabled = true"
+            )
+        );
+        Assert.Equal(
+            1,
+            await CountAsync(
+                @"SELECT * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:example:Thing;1') AND enabled = false"
+            )
+        );
     }
 
     [Fact]
