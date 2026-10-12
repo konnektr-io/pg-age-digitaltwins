@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using AgeDigitalTwins.Exceptions;
 
 namespace AgeDigitalTwins.Test;
 
@@ -687,7 +688,8 @@ public class QueryTests : TestBase
     /// </para>
     /// <para>
     /// The same test pins the rest of the ADT query surface reported in the issue: an
-    /// alias-qualified property, ORDER BY, and a boolean literal in the predicate.
+    /// alias-qualified property, an ORDER BY clause (which ADT does not have, so it is rejected),
+    /// and a boolean literal in the predicate.
     /// </para>
     /// </summary>
     [Fact]
@@ -766,17 +768,18 @@ public class QueryTests : TestBase
             await CountAsync(@"SELECT * FROM DIGITALTWINS T WHERE T.$dtId = 'thing-1'")
         );
 
-        // ORDER BY over a twin property (used to be emitted inside the WHERE clause).
-        var ordered = new List<string>();
-        await foreach (
-            var twin in Client.QueryAsync<JsonDocument>(
-                @"SELECT * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:example:Thing;1') ORDER BY order"
-            )
-        )
+        // ORDER BY is not part of the ADT query language — a real ADT instance fails its SQL
+        // parser on it — so the translator rejects the clause instead of letting it be mangled
+        // into the WHERE predicate ("... T.ORDER T.BY T.order"). Ordering is a Cypher feature.
+        var orderByException = await Assert.ThrowsAsync<InvalidAdtQueryException>(async () =>
         {
-            ordered.Add(twin!.RootElement.GetProperty("$dtId")!.GetString()!);
-        }
-        Assert.Equal(new[] { "thing-2", "thing-1" }, ordered);
+            await foreach (
+                var _ in Client.QueryAsync<JsonDocument>(
+                    @"SELECT * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:example:Thing;1') ORDER BY order"
+                )
+            ) { }
+        });
+        Assert.Contains("ORDER BY", orderByException.Message);
 
         // Boolean literals in the predicate (used to be emitted as T.true / T.false).
         Assert.Equal(

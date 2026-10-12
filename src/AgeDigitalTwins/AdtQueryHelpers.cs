@@ -13,16 +13,16 @@ public static partial class AdtQueryHelpers
         // Clean up the query from line breaks and extra spaces
         adtQuery = WhitespaceTrimmerRegex().Replace(adtQuery, " ").Trim();
 
-        // Extract a trailing ORDER BY clause before anything else. The WHERE clause
-        // regex is greedy, so it would otherwise swallow the clause into the predicate
-        // ("... ORDER BY order" became "T.ORDER T.BY T.order"), and ADT writes ORDER BY
-        // after the projection while Cypher requires it after RETURN.
-        string? adtOrderByClause = null;
-        var orderByMatch = OrderByRegex().Match(adtQuery);
-        if (orderByMatch.Success)
+        // ORDER BY is not part of the ADT query language: a real ADT instance rejects it in
+        // its SQL parser ("mismatched input 'ORDER' expecting {<EOF>, GROUP}"). Reject it here
+        // too, instead of letting the greedy WHERE regex swallow the clause and mangle it into
+        // "... T.ORDER T.BY T.order". Sorting belongs to a Cypher query, which supports it.
+        if (OrderByRegex().IsMatch(adtQuery))
         {
-            adtOrderByClause = orderByMatch.Groups["orderby"].Value.Trim();
-            adtQuery = adtQuery[..orderByMatch.Index].TrimEnd();
+            throw new InvalidAdtQueryException(
+                "ORDER BY is not supported in an ADT query: it is not part of the ADT query "
+                    + "language. Use a Cypher query if you need ordered results."
+            );
         }
 
         // Prepare RETURN and LIMIT clauses
@@ -56,7 +56,7 @@ public static partial class AdtQueryHelpers
 
         // Prepare MATCH clause
         string matchClause;
-        // The twin/relationship variable the WHERE clause and ORDER BY refer to, or null
+        // The twin/relationship variable the WHERE clause refers to, or null
         // when the query names its own variable(s) in a MATCH/JOIN and the projection is
         // explicit (then the caller qualifies every property itself).
         string? implicitAlias = null;
@@ -176,8 +176,8 @@ public static partial class AdtQueryHelpers
                 var twinAlias = match.Groups[1].Success ? match.Groups[1].Value : string.Empty;
                 if (!string.IsNullOrEmpty(twinAlias))
                 {
-                    // The query names its twin variable, so the WHERE clause and ORDER BY
-                    // refer to that variable (and not to the fallback "T").
+                    // The query names its twin variable, so the WHERE clause refers to
+                    // that variable (and not to the fallback "T").
                     implicitAlias = twinAlias;
                     matchClause = $"({twinAlias}:Twin)";
                     // Process RETURN clause to add the (user-supplied) alias so
@@ -245,11 +245,6 @@ public static partial class AdtQueryHelpers
             cypher += " WHERE " + string.Join(" AND ", multiLabelEdgeWhereClauses);
         }
         cypher += " RETURN " + returnClause;
-        if (!string.IsNullOrEmpty(adtOrderByClause))
-        {
-            cypher +=
-                " ORDER BY " + TranslateOrderByClause(adtOrderByClause, graphName, implicitAlias);
-        }
         if (!string.IsNullOrEmpty(limitClause))
         {
             cypher += " " + limitClause;
@@ -505,65 +500,6 @@ public static partial class AdtQueryHelpers
         argument.Equals("exact", StringComparison.OrdinalIgnoreCase)
         || argument.EndsWith(".exact", StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>
-    /// Translates an ADT <c>ORDER BY</c> expression (e.g. <c>name DESC, $dtId</c>) into Cypher.
-    /// </summary>
-    /// <remarks>
-    /// Each term is translated separately, with the <c>ASC</c>/<c>DESC</c> direction keyword split
-    /// off first so it is not treated as a property, and joined back with commas.
-    /// </remarks>
-    private static string TranslateOrderByClause(
-        string orderByClause,
-        string graphName,
-        string? prependAlias
-    )
-    {
-        var terms = orderByClause.Split(',');
-        for (int i = 0; i < terms.Length; i++)
-        {
-            var term = terms[i].Trim();
-            var direction = string.Empty;
-            var directionMatch = OrderByDirectionRegex().Match(term);
-            if (directionMatch.Success)
-            {
-                term = directionMatch.Groups["expression"].Value.Trim();
-                direction = " " + directionMatch.Groups["direction"].Value.ToUpperInvariant();
-            }
-
-            terms[i] = TranslateOrderByTerm(term, graphName, prependAlias) + direction;
-        }
-
-        return string.Join(", ", terms);
-    }
-
-    /// <summary>
-    /// Translates one ORDER BY term, using bracket notation for the property (<c>T['order']</c>).
-    /// </summary>
-    /// <remarks>
-    /// Bracket notation is not cosmetic here. AGE's parser reads a dotted property whose name is a
-    /// Cypher keyword — a twin property called <c>order</c>, for instance — as the start of the
-    /// clause itself and then fails on the following token: <c>ORDER BY T.order</c> is a syntax
-    /// error, while <c>ORDER BY T['order']</c> sorts. It is the same escape the converter already
-    /// uses for <c>$</c>-properties.
-    /// </remarks>
-    private static string TranslateOrderByTerm(string term, string graphName, string? prependAlias)
-    {
-        var simple = SimplePropertyAccessRegex().Match(term);
-        if (simple.Success)
-        {
-            var alias = simple.Groups["alias"].Success
-                ? simple.Groups["alias"].Value
-                : prependAlias;
-            if (alias != null)
-            {
-                return $"{alias}['{simple.Groups["property"].Value}']";
-            }
-        }
-
-        // $-properties and anything else go through the regular translation.
-        return ProcessWhereClause(term, graphName, prependAlias);
-    }
-
     [GeneratedRegex(
         @"SELECT\s*(?:TOP\s*\(\s*(?<limit>\d+)\s*\)\s*)?(?<projections>.*?)\s+FROM",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
@@ -619,29 +555,12 @@ public static partial class AdtQueryHelpers
     [GeneratedRegex(@"^\w+[.\[]", RegexOptions.CultureInvariant)]
     private static partial Regex QualifiedPropertyAccessRegex();
 
-    /// <summary>A trailing ADT <c>ORDER BY</c> clause, captured without the leading keyword.</summary>
-    [GeneratedRegex(
-        @"\bORDER\s+BY\s+(?<orderby>.+)$",
-        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
-    )]
-    private static partial Regex OrderByRegex();
-
-    /// <summary>A single ORDER BY term with an explicit sort direction.</summary>
-    [GeneratedRegex(
-        @"^(?<expression>.+?)\s+(?<direction>ASC|DESC)$",
-        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
-    )]
-    private static partial Regex OrderByDirectionRegex();
-
     /// <summary>
-    /// An ORDER BY term that is a single property access: <c>name</c>, <c>T.name</c> (not
-    /// <c>$</c>-properties, which are translated by the regular property path).
+    /// An <c>ORDER BY</c> clause, which the ADT query language does not have. Used to reject it
+    /// with a clear message instead of emitting mangled Cypher for it.
     /// </summary>
-    [GeneratedRegex(
-        @"^(?:(?<alias>\w+)\.)?(?<property>[A-Za-z_]\w*)$",
-        RegexOptions.CultureInvariant
-    )]
-    private static partial Regex SimplePropertyAccessRegex();
+    [GeneratedRegex(@"\bORDER\s+BY\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex OrderByRegex();
 
     [GeneratedRegex(
         @"IS_OF_MODEL\(([^)]+)\)",

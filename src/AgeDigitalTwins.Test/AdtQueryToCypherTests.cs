@@ -298,38 +298,6 @@ public class AdtQueryToCypherTests
         "SELECT * FROM DIGITALTWINS MATCH (a)-[R]->(b) WHERE a.$dtId = 'x'",
         "MATCH (a:Twin)-[R]->(b:Twin) WHERE a['$dtId'] = 'x' RETURN *"
     )]
-    // ORDER BY belongs after the projection in Cypher (it used to stay inside the WHERE
-    // clause, producing "T.ORDER T.BY T.order"), and its property is emitted in bracket
-    // notation because AGE cannot parse a dotted property whose name is a Cypher keyword
-    // (ORDER BY T.order is a syntax error, ORDER BY T['order'] sorts).
-    [InlineData(
-        "SELECT * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:example:Thing;1') ORDER BY order",
-        "MATCH (T:Twin) WHERE testgraph.is_of_model(T,'dtmi:com:example:Thing;1') RETURN * ORDER BY T['order']"
-    )]
-    [InlineData(
-        "SELECT * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:example:Thing;1') ORDER BY name DESC",
-        "MATCH (T:Twin) WHERE testgraph.is_of_model(T,'dtmi:com:example:Thing;1') RETURN * ORDER BY T['name'] DESC"
-    )]
-    [InlineData(
-        "SELECT TOP(5) * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:example:Thing;1') ORDER BY order ASC",
-        "MATCH (T:Twin) WHERE testgraph.is_of_model(T,'dtmi:com:example:Thing;1') RETURN * ORDER BY T['order'] ASC LIMIT 5"
-    )]
-    [InlineData(
-        "SELECT $dtId FROM DIGITALTWINS ORDER BY $dtId",
-        "MATCH (T:Twin) RETURN T['$dtId'] ORDER BY T['$dtId']"
-    )]
-    [InlineData(
-        "SELECT * FROM DIGITALTWINS WHERE name = 'foo' ORDER BY name DESC, $dtId",
-        "MATCH (T:Twin) WHERE T.name = 'foo' RETURN * ORDER BY T['name'] DESC, T['$dtId']"
-    )]
-    [InlineData(
-        "SELECT * FROM DIGITALTWINS T WHERE T.name = 'foo' ORDER BY T.name DESC",
-        "MATCH (T:Twin) WHERE T.name = 'foo' RETURN * ORDER BY T['name'] DESC"
-    )]
-    [InlineData(
-        "SELECT $metadata.$model FROM DIGITALTWINS ORDER BY $metadata.$model",
-        "MATCH (T:Twin) RETURN T['$metadata']['$model'] ORDER BY T['$metadata']['$model']"
-    )]
     // Boolean (and negative numeric) literals are values, not properties: they used to be
     // rewritten into T.true / T.false / T.-1.
     [InlineData(
@@ -369,5 +337,29 @@ public class AdtQueryToCypherTests
         );
 
         Assert.Contains("IS_OF_MODEL", exception.Message);
+    }
+
+    /// <summary>
+    /// The ADT query language has no <c>ORDER BY</c>: a real ADT instance fails its SQL parser on
+    /// it ("mismatched input 'ORDER' expecting {&lt;EOF&gt;, GROUP}"). The translator used to let the
+    /// greedy WHERE regex swallow the clause and mangle it into <c>T.ORDER T.BY T.order</c>; it now
+    /// rejects it up front, so the caller gets one clear error instead of URL-encoded Cypher
+    /// fragments. Ordering is available in Cypher queries.
+    /// </summary>
+    [Theory]
+    [InlineData("SELECT * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:example:Thing;1') ORDER BY order")]
+    [InlineData("SELECT * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:example:Thing;1') ORDER BY name DESC")]
+    [InlineData("SELECT TOP(5) * FROM DIGITALTWINS WHERE IS_OF_MODEL('dtmi:com:example:Thing;1') ORDER BY order ASC")]
+    [InlineData("SELECT $dtId FROM DIGITALTWINS ORDER BY $dtId")]
+    [InlineData("SELECT * FROM DIGITALTWINS WHERE name = 'foo' ORDER BY name DESC, $dtId")]
+    [InlineData("SELECT * FROM DIGITALTWINS T WHERE T.name = 'foo' ORDER BY T.name DESC")]
+    [InlineData("SELECT $metadata.$model FROM DIGITALTWINS ORDER BY $metadata.$model")]
+    public void ConvertAdtQueryToCypher_OrderBy_Throws(string adtQuery)
+    {
+        var exception = Assert.Throws<InvalidAdtQueryException>(() =>
+            AdtQueryHelpers.ConvertAdtQueryToCypher(adtQuery, "testgraph")
+        );
+
+        Assert.Contains("ORDER BY", exception.Message);
     }
 }
